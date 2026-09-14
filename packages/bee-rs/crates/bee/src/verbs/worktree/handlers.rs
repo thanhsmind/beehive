@@ -125,26 +125,39 @@ pub(crate) fn emit_pi_transition_marker_if_present(transition: &Value) {
 }
 
 pub(crate) fn enter_worktree_core(
-    main_root: &Path,
+    control_root: &Path,
+    source_root: &Path,
     id: &str,
 ) -> Result<(Value, String), String> {
-    let grants = read_grants_strict(&main_root.join(".bee"))
+    let control_canon = dunce::canonicalize(control_root)
+        .map_err(|e| format!("cannot canonicalize control root {}: {}", control_root.display(), e))?;
+    let source_canon = dunce::canonicalize(source_root)
+        .map_err(|e| format!("cannot canonicalize source root {}: {}", source_root.display(), e))?;
+
+    let grants = read_grants_strict(&control_canon.join(".bee"))
         .ok_or_else(|| "cannot read worktree grants".to_string())?;
     if grants.get(id) != Some(&Value::Bool(true)) {
         return Err(format!(
             "no granted worktree found for id \"{id}\". Run \"bee worktree list\" to see granted worktrees."
         ));
     }
-    let target_root = resolve_worktree_by_id(main_root, id).ok_or_else(|| {
+    let target_root = resolve_worktree_by_id(&control_canon, id).ok_or_else(|| {
         format!(
             "no matching, bidirectionally-valid git worktree link was found for id \"{id}\"."
         )
     })?;
+
+    if crate::path_identity::canonical_paths_equal(&target_root, &source_canon) {
+        return Err(format!(
+            "cannot enter worktree \"{id}\": target directory is identical to source directory"
+        ));
+    }
+
     let feature_info = resolve_worktree_feature(&target_root);
     let feature = feature_info.feature;
     let transition = build_session_transition(
         "enter-worktree",
-        main_root,
+        &source_canon,
         &target_root,
         id,
         feature.as_deref(),
@@ -159,8 +172,13 @@ pub(crate) fn enter_worktree_core(
     }
     result.insert("sessionTransition".into(), transition);
 
+    let stay_desc = if crate::path_identity::canonical_paths_equal(&source_canon, &control_canon) {
+        "this session stays on main until relocated."
+    } else {
+        "this session stays in the worktree until relocated."
+    };
     let text = format!(
-        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — this session stays on main until relocated.",
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — {stay_desc}",
         feature.as_deref().unwrap_or(id),
         p(&target_root),
         p(&target_root)
@@ -180,14 +198,23 @@ pub(crate) fn run_enter(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
-    if ctx.kind != "ordinary" {
-        return Some(ctx.fail(&format!(
-            "\"bee worktree enter\" must be run from inside the main checkout, not a \"{}\" checkout — run it from the main repo root to switch to a granted worktree.",
-            ctx.kind
-        )));
-    }
-    let main_root = ctx.work_root.clone();
-    match enter_worktree_core(&main_root, &id) {
+    let (control_root, source_root) = match ctx.kind {
+        "ordinary" => (ctx.work_root.clone(), ctx.work_root.clone()),
+        "linked-valid" => {
+            let main_root = match ctx.main_root.as_deref() {
+                Some(r) => r.to_path_buf(),
+                None => return Some(ctx.fail("Cannot resolve main checkout root")),
+            };
+            (main_root, ctx.work_root.clone())
+        }
+        _ => {
+            return Some(ctx.fail(&format!(
+                "\"bee worktree enter\" must be run from inside the main checkout or a linked worktree, not a \"{}\" checkout — run it from a granted repository root to switch to a worktree.",
+                ctx.kind
+            )));
+        }
+    };
+    match enter_worktree_core(&control_root, &source_root, &id) {
         Ok((result, text)) => {
             if let Some(transition) = result.get("sessionTransition") {
                 emit_pi_transition_marker_if_present(transition);

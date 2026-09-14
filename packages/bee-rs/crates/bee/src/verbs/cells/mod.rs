@@ -153,6 +153,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "list" => Verb::List,
         "ready" => Verb::Ready,
         "show" => Verb::Show,
+        "reroute" => return run_reroute_cli(&args[2..], t0),
         other => return try_mutating(other, &args[2..], t0),
     };
     let flags = parse_flags(verb, &args[2..])?;
@@ -165,6 +166,16 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
     run(verb, flags, t0)
 }
+
+fn run_reroute_cli(rest: &[OsString], t0: Instant) -> Option<ExitCode> {
+    let toks: Vec<&str> = rest.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
+    if toks.iter().any(|t| *t == "--help") {
+        return None;
+    }
+    let (flags, use_json) = rsv::parse_flags(&toks)?;
+    run_reroute(flags, use_json, t0)
+}
+
 
 /// bee.mjs parseFlags, narrowed to the three verbs' own registry flags.
 ///

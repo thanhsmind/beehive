@@ -6519,7 +6519,7 @@ exit 0
 
     #[test]
     fn run_dispatch_prepare_refuses_malformed_expertise_line() {
-        let (flags, use_json) = parse_flags(&[
+        let (flags, _use_json) = parse_flags(&[
             "--runtime",
             "claude",
             "--kind",
@@ -10073,3 +10073,882 @@ advance_on — falling to another model there hides the defect (D11)"
         assert_eq!(e_session.get("effective_model_status"), Some(&json!("inherited-or-unknown")));
         assert_eq!(e_session.get("requested_model"), Some(&Value::Null));
     }
+
+    // ── slr-4: Semantic role routing dispatch prepare wire contract ────────
+
+    fn v2_role_plan_repo(
+        tmp: &tempfile::TempDir,
+        feature: &str,
+        runtime: &str,
+        stages: &[Value],
+        cells: &[Value],
+    ) -> (PathBuf, String, String) {
+        let config = serde_json::json!({
+            "team": {
+                runtime: {
+                    "plan": { "model": "sonnet", "description": "Planning work" },
+                    "code": { "model": "sonnet", "description": "Coding work" },
+                    "test": { "model": "haiku", "description": "Testing work" },
+                    "review": { "model": "opus", "description": "Reviewing work" },
+                    "supervisor": { "model": "opus", "description": "Supervising work" }
+                }
+            }
+        });
+        let root = repo(tmp, &config.to_string());
+        let table_val = crate::verbs::models_group::team_table(&root, Some(runtime)).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == runtime).unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": runtime,
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+
+        let packet = serde_json::json!({
+            "feature": feature,
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, &format!(".bee/lanes/{feature}.json"), &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": feature,
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        (root, roster_sha, plan_sha)
+    }
+
+    #[test]
+    fn test_v2_cell_explicit_role_mismatch_refused_before_payload_or_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"feat-v2","title":"implement v2","role":"code","status":"claimed","trace":{"worker":"w-1"}}"#,
+        );
+
+        // 1. Mismatched role --role review: MUST be refused with planned_role_mismatch
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("review"), Some("c-1"), Some("w-1"), false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        assert_eq!(refusal.get("ok"), Some(&json!(false)));
+        assert_eq!(refusal.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(refusal.get("cell"), Some(&json!("c-1")));
+        assert_eq!(refusal.get("planned_role"), Some(&json!("code")));
+        assert_eq!(refusal.get("declared_role"), Some(&json!("review")));
+
+        // Truth 1: refused BEFORE payload creation or logging — dispatch.jsonl must not exist!
+        assert!(!root.join(".bee").join("logs").join("dispatch.jsonl").exists(), "dispatch.jsonl must not be written on refusal");
+
+        // 2. Matching role --role code: MUST succeed
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("code"), Some("c-1"), Some("w-1"), false, None, None, true, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt.starts_with("[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]"), "prompt was: {prompt}");
+        assert_eq!(payload.get("planned_role"), Some(&json!("code")));
+        assert_eq!(payload.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(payload.get("plan_sha256"), Some(&json!(plan_sha)));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("planned_role"), Some(&json!("code")));
+        assert_eq!(econ.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(econ.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert_eq!(econ.get("roster_sha256"), Some(&json!(roster_sha)));
+
+        // And logging succeeded
+        assert!(root.join(".bee").join("logs").join("dispatch.jsonl").exists());
+    }
+
+    #[test]
+    fn test_v2_cell_with_reroute_uses_effective_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // Cell was rerouted from code to test via decision d-rr-1
+        let cell_data = serde_json::json!({
+            "id": "c-1",
+            "feature": "feat-v2",
+            "title": "implement v2",
+            "role": "test",
+            "status": "claimed",
+            "trace": { "worker": "w-1" },
+            "role_reroutes": [
+                {
+                    "from": "code",
+                    "to": "test",
+                    "decision": "d-rr-1",
+                    "at": "2026-09-14T01:00:00Z",
+                    "plan_sha256": plan_sha
+                }
+            ]
+        });
+        w(&root, ".bee/cells/c-1.json", &serde_json::to_string_pretty(&cell_data).unwrap());
+
+        // 1. Explicit old role --role code: refused with planned_role_mismatch (effective is test)
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "cell", Some("code"), Some("c-1"), Some("w-1"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(refusal.get("planned_role"), Some(&json!("test")));
+        assert_eq!(refusal.get("declared_role"), Some(&json!("code")));
+
+        // 2. Without --role: dispatches automatically under effective role "test"
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", None, Some("c-1"), Some("w-1"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt.starts_with("[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]"), "prompt: {prompt}");
+        assert_eq!(payload.get("planned_role"), Some(&json!("test")));
+        assert_eq!(payload.get("role_reroute_decision"), Some(&json!("d-rr-1")));
+
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("planned_role"), Some(&json!("test")));
+        assert_eq!(econ.get("role_reroute_decision"), Some(&json!("d-rr-1")));
+    }
+
+    #[test]
+    fn test_v2_non_cell_without_stage_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, _plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // Truth 2: An approved v2 non-cell dispatch without a stage is refused.
+        // Explicit --feature without stage:
+        let Prepared::Value(refusal) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, Some("researching"), false, None, None, Some("feat-v2"), None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal.get("reason"), Some(&json!("stage_required")));
+        assert_eq!(refusal.get("feature"), Some(&json!("feat-v2")));
+
+        // Calling session bound lane without explicit --feature:
+        std::fs::create_dir_all(root.join(".bee/sessions")).unwrap();
+        w(&root, ".bee/sessions/s-1.json", r#"{"id":"s-1","lane":"feat-v2"}"#);
+        let Prepared::Value(refusal_sess) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, Some("researching"), false, None, None, None, None, Some("s-1"), None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(refusal_sess.get("reason"), Some(&json!("stage_required")));
+        assert_eq!(refusal_sess.get("feature"), Some(&json!("feat-v2")));
+    }
+
+    #[test]
+    fn test_v2_non_cell_stage_checks_and_role_enforcement() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, roster_sha, plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // 1. Unknown stage: stage_unknown
+        let Prepared::Value(ref_unknown) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("unknown-stage"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_unknown.get("reason"), Some(&json!("stage_unknown")));
+
+        // 2. Not-applicable stage: stage_not_applicable
+        let Prepared::Value(ref_na) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("supervision"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_na.get("reason"), Some(&json!("stage_not_applicable")));
+
+        // 3. Stage role mismatch with explicit --role: planned_role_mismatch
+        let Prepared::Value(ref_mismatch) = prepare_dispatch_wire(
+            &root, "claude", "gather", Some("code"), None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_mismatch.get("reason"), Some(&json!("planned_role_mismatch")));
+        assert_eq!(ref_mismatch.get("stage"), Some(&json!("planning")));
+        assert_eq!(ref_mismatch.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(ref_mismatch.get("declared_role"), Some(&json!("code")));
+
+        // 4. Truth 3: Required stage dispatch uses the approved runtime role ("plan")
+        let Prepared::Value(v_req) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload_req = v_req.get("payload").unwrap();
+        let prompt_req = payload_req.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt_req.starts_with("[bee-tier: plan] [bee-feature: feat-v2] [bee-stage: planning]"), "prompt: {prompt_req}");
+        assert_eq!(payload_req.get("stage"), Some(&json!("planning")));
+        assert_eq!(payload_req.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(payload_req.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(payload_req.get("plan_sha256"), Some(&json!(plan_sha)));
+
+        let econ_req = v_req.get("economics").unwrap();
+        assert_eq!(econ_req.get("stage"), Some(&json!("planning")));
+        assert_eq!(econ_req.get("planned_role"), Some(&json!("plan")));
+        assert_eq!(econ_req.get("feature"), Some(&json!("feat-v2")));
+        assert_eq!(econ_req.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert_eq!(econ_req.get("roster_sha256"), Some(&json!(roster_sha)));
+
+        // 5. Truth 3: Conditional stage dispatch uses the approved runtime role ("review")
+        let Prepared::Value(v_cond) = prepare_dispatch_wire(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("independent-review"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let payload_cond = v_cond.get("payload").unwrap();
+        let prompt_cond = payload_cond.get("prompt").and_then(Value::as_str).unwrap();
+        assert!(prompt_cond.starts_with("[bee-tier: review] [bee-feature: feat-v2] [bee-stage: independent-review]"), "prompt: {prompt_cond}");
+        assert_eq!(payload_cond.get("stage"), Some(&json!("independent-review")));
+        assert_eq!(payload_cond.get("planned_role"), Some(&json!("review")));
+    }
+
+    #[test]
+    fn test_v2_runtime_mismatch_and_stale_roster() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let (root, _roster_sha, _plan_sha) = v2_role_plan_repo(&tmp, "feat-v2", "claude", &stages, &cells);
+
+        // 1. Runtime mismatch: plan is for claude, dispatch asks for codex
+        let Prepared::Value(ref_rt) = prepare_dispatch_wire(
+            &root, "codex", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_rt.get("reason"), Some(&json!("role_plan_runtime_mismatch")));
+        assert_eq!(ref_rt.get("runtime"), Some(&json!("codex")));
+        assert_eq!(ref_rt.get("plan_runtime"), Some(&json!("claude")));
+
+        // 2. Stale roster: change roster_sha256 in approved lane record to a mismatch
+        let lane_path = root.join(".bee").join("lanes").join("feat-v2.json");
+        let mut lane_val: Value = serde_json::from_str(&std::fs::read_to_string(&lane_path).unwrap()).unwrap();
+        lane_val["approved_cell_packet"]["role_plan"]["roster_sha256"] = json!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        w(&root, ".bee/lanes/feat-v2.json", &serde_json::to_string_pretty(&lane_val).unwrap());
+
+        let Prepared::Value(ref_stale) = prepare_dispatch_wire(
+            &root, "claude", "gather", None, None, None, false, None, None, false, None, None, Some("feat-v2"), Some("planning"), None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_stale.get("reason"), Some(&json!("role_plan_roster_stale")));
+    }
+
+    #[test]
+    fn test_v2_legacy_plan_without_role_plan_stays_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"team":{"claude":{"generation":{"model":"sonnet"},"code":{"model":"sonnet"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-leg.json",
+            r#"{"id":"c-leg","feature":"leg","title":"legacy cell","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        // Non-v2 lane record without role_plan
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/leg.json", r#"{"feature":"leg","approved_cell_packet":{"cells":[{"id":"c-leg","role":"code"}]}}"#);
+
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "cell", None, Some("c-leg"), Some("w"), false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+
+        let payload = v.get("payload").unwrap();
+        let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
+        // Legacy prompt starts with [bee-tier: code] with NO [bee-feature:] or [bee-cell:] markers
+        assert!(prompt.starts_with("[bee-tier: code]\n"), "legacy prompt was: {prompt}");
+        assert!(!prompt.contains("[bee-feature:"), "legacy prompt must not contain bee-feature");
+        assert!(payload.get("planned_role").is_none());
+        assert!(payload.get("plan_sha256").is_none());
+
+        let econ = v.get("economics").unwrap();
+        assert!(econ.get("planned_role").is_none());
+        assert!(econ.get("plan_sha256").is_none());
+    }
+
+    #[test]
+    fn test_dispatch_prepare_cli_routing_feature_stage_session_id() {
+        let t0 = Instant::now();
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        // --session-id on non-cell kind is now accepted and handled natively (does NOT return None)
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--session-id", "s-1"]),
+            t0
+        ).is_some());
+
+        // --feature and --stage are accepted
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--feature", "demo", "--stage", "planning"]),
+            t0
+        ).is_some());
+
+        // --session-id without --claim on --kind cell remains unproven (returns None)
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "cell", "--session-id", "s"]),
+            t0
+        ).is_none());
+    }
+
+    // ── slr-6: Release deploy-role authorization protocol ──────────────────
+
+    #[test]
+    fn test_deploy_authorization_prepare_release_version_gates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-rel",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-rel.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-rel",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        // 1. --release-version on non-deployment stage returns release_version_not_permitted
+        let Prepared::Value(ref_not_perm) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("planning"), None, Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_not_perm.get("reason"), Some(&json!("release_version_not_permitted")));
+
+        // 2. stage deployment without --release-version returns release_version_required
+        let Prepared::Value(ref_req) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("deployment"), None, None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_req.get("reason"), Some(&json!("release_version_required")));
+
+        // 3. stage deployment with invalid semver returns release_version_invalid
+        let Prepared::Value(ref_inv) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-rel"), Some("deployment"), None, Some("invalid.v"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(ref_inv.get("reason"), Some(&json!("release_version_invalid")));
+
+        // 4. valid deployment dispatch prepare binds fields and exports variables
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-rel"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        assert_eq!(v_deploy.get("tool"), Some(&json!("Bash")));
+        let payload = v_deploy.get("payload").unwrap();
+        let cmd = payload.get("command").and_then(Value::as_str).unwrap();
+        assert!(cmd.contains("export BEE_DISPATCH_ID="), "command must export BEE_DISPATCH_ID: {cmd}");
+        assert!(cmd.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "command must export BEE_RELEASE_VERSION: {cmd}");
+        assert_eq!(payload.get("release_version"), Some(&json!("2.38.0")));
+
+        // Verify dispatch.jsonl was written with audit fields
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+        assert!(log_path.exists());
+        let log_content = std::fs::read_to_string(&log_path).unwrap();
+        let last_line = log_content.lines().last().unwrap();
+        let log_val: Value = serde_json::from_str(last_line).unwrap();
+        assert_eq!(log_val.get("stage"), Some(&json!("deployment")));
+        assert_eq!(log_val.get("planned_role"), Some(&json!("deploy")));
+        assert_eq!(log_val.get("release_version"), Some(&json!("2.38.0")));
+        assert_eq!(log_val.get("feature"), Some(&json!("feat-rel")));
+        assert_eq!(log_val.get("plan_sha256"), Some(&json!(plan_sha)));
+        assert!(log_val.get("main_commit").is_some());
+        assert!(log_val.get("expires_at").is_some());
+    }
+
+    #[test]
+    fn test_deploy_authorization_authorize_success_and_reuse_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-auth",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-auth.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-auth",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-auth.json", &serde_json::json!({
+            "id": "sess-auth",
+            "lane": "feat-auth",
+        }).to_string());
+
+        // Prepare dispatch
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-auth"), Some("deployment"), Some("sess-auth"), Some("2.39.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        // 1. First authorize succeeds
+        let res = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res.is_ok(), "expected authorize to succeed, got {res:?}");
+        let auth_val = res.unwrap();
+        assert_eq!(auth_val.get("ok"), Some(&json!(true)));
+        assert_eq!(auth_val.get("authorized"), Some(&json!(true)));
+
+        // Consumed marker exists
+        let marker_path = root.join(".bee").join("authorizations").join(format!("{dispatch_id}.json"));
+        assert!(marker_path.exists());
+
+        // 2. Second authorize on same ID refuses with deploy_authorization_consumed
+        let res_replay = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res_replay.is_err());
+        let ref_replay = res_replay.unwrap_err();
+        assert_eq!(ref_replay.get("reason"), Some(&json!("deploy_authorization_consumed")));
+    }
+
+    #[test]
+    fn test_deploy_authorization_refusals_matrix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "test" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-matrix",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-matrix.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-matrix",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-matrix.json", &serde_json::json!({
+            "id": "sess-matrix",
+            "lane": "feat-matrix",
+        }).to_string());
+
+        // Prepare valid dispatch
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-matrix"), Some("deployment"), Some("sess-matrix"), Some("2.40.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+
+        let mutate_last_record = |mutator: &dyn Fn(&mut Value)| {
+            let content = std::fs::read_to_string(&log_path).unwrap();
+            let mut lines: Vec<Value> = content
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| serde_json::from_str(l).unwrap())
+                .collect();
+            let last_idx = lines.len() - 1;
+            mutator(&mut lines[last_idx]);
+            let new_content: Vec<String> = lines.iter().map(|l| serde_json::to_string(l).unwrap()).collect();
+            std::fs::write(&log_path, new_content.join("\n") + "\n").unwrap();
+        };
+
+        // 1. Unknown dispatch ID
+        let err_unk = authorize_dispatch_permit(
+            &root,
+            "00000000-0000-4000-8000-000000000000",
+            "2.40.0",
+            Some("sess-matrix"),
+        )
+        .unwrap_err();
+        assert_eq!(err_unk.get("reason"), Some(&json!("deploy_authorization_unknown")));
+
+        // A forged matching record must refuse before its ID can escape the authorization directory.
+        mutate_last_record(&|r| {
+            r["dispatch_id"] = json!("../escaped");
+        });
+        let err_forged = authorize_dispatch_permit(
+            &root,
+            "../escaped",
+            "2.40.0",
+            Some("sess-matrix"),
+        )
+        .unwrap_err();
+        assert_eq!(err_forged.get("reason"), Some(&json!("deploy_authorization_unknown")));
+        assert!(!root.join(".bee/escaped.json").exists());
+        mutate_last_record(&|r| {
+            r["dispatch_id"] = json!(dispatch_id);
+        });
+
+        // 2. Wrong version
+        let err_ver = authorize_dispatch_permit(&root, dispatch_id, "2.40.1", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_ver.get("reason"), Some(&json!("deploy_authorization_wrong_version")));
+
+        // 3. Stale dispatch (simulate expired > 2 hours)
+        mutate_last_record(&|r| {
+            r["ts"] = json!("2020-01-01T00:00:00.000Z");
+            r["expires_at"] = json!("2020-01-01T02:00:00.000Z");
+        });
+        let err_stale = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_stale.get("reason"), Some(&json!("deploy_authorization_stale")));
+
+        // 4. Malformed expiry (invalid RFC3339 in expires_at)
+        mutate_last_record(&|r| {
+            r["ts"] = json!(chrono::Utc::now().to_rfc3339());
+            r["expires_at"] = json!("malformed-timestamp-string");
+        });
+        let err_malformed_exp = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_malformed_exp.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // 5. Malformed expiry (invalid RFC3339 in ts)
+        mutate_last_record(&|r| {
+            r["ts"] = json!("malformed-ts");
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339());
+        });
+        let err_malformed_ts = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_malformed_ts.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // The expiry must describe one bounded two-hour lifetime, not only be in the future.
+        mutate_last_record(&|r| {
+            r["ts"] = json!(chrono::Utc::now().to_rfc3339());
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(3)).to_rfc3339());
+        });
+        let err_long_lived = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_long_lived.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // A future creation time is forged, even when its expiry is also in the future.
+        mutate_last_record(&|r| {
+            r["ts"] = json!((chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339());
+            r["expires_at"] = json!((chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339());
+        });
+        let err_future = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_future.get("reason"), Some(&json!("deploy_authorization_malformed_expiry")));
+
+        // 6. Wrong commit
+        let now_str = chrono::Utc::now().to_rfc3339();
+        let exp_str = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        mutate_last_record(&|r| {
+            r["ts"] = json!(now_str);
+            r["expires_at"] = json!(exp_str);
+            r["main_commit"] = json!("wrongcommit00000000000000000000000000000");
+        });
+        let err_commit = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_commit.get("reason"), Some(&json!("deploy_authorization_wrong_commit")));
+
+        // Restore valid commit
+        let current_commit = resolve_main_commit(&root).unwrap();
+        mutate_last_record(&|r| {
+            r["main_commit"] = json!(current_commit);
+        });
+
+        // 7. Wrong stage
+        mutate_last_record(&|r| {
+            r["stage"] = json!("planning");
+        });
+        let err_stage = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_stage.get("reason"), Some(&json!("deploy_authorization_wrong_stage")));
+        mutate_last_record(&|r| {
+            r["stage"] = json!("deployment");
+        });
+
+        // 8. Wrong role
+        mutate_last_record(&|r| {
+            r["planned_role"] = json!("code");
+        });
+        let err_role = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_role.get("reason"), Some(&json!("deploy_authorization_wrong_role")));
+        mutate_last_record(&|r| {
+            r["planned_role"] = json!("deploy");
+        });
+
+        // 9. Runtime mismatch
+        mutate_last_record(&|r| {
+            r["runtime"] = json!("codex");
+        });
+        let err_runtime = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_runtime.get("reason"), Some(&json!("deploy_authorization_wrong_runtime")));
+        mutate_last_record(&|r| {
+            r["runtime"] = json!("pi");
+        });
+
+        // 10. Unknown / wrong feature
+        mutate_last_record(&|r| {
+            r["feature"] = json!("nonexistent-feature");
+        });
+        let err_feat = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_feat.get("reason"), Some(&json!("deploy_authorization_wrong_feature")));
+        mutate_last_record(&|r| {
+            r["feature"] = json!("feat-matrix");
+        });
+
+        // 11. Wrong approved plan SHA
+        mutate_last_record(&|r| {
+            r["plan_sha256"] = json!("badplansha000000000000000000000000000000000000000000000000000000");
+        });
+        let err_plan = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_plan.get("reason"), Some(&json!("deploy_authorization_wrong_plan")));
+        mutate_last_record(&|r| {
+            r["plan_sha256"] = json!(plan_sha);
+        });
+
+        // 12. Missing issuer session
+        mutate_last_record(&|r| {
+            r.as_object_mut().unwrap().remove("issuer_session");
+        });
+        let err_no_sess = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", None).unwrap_err();
+        assert_eq!(err_no_sess.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // 13. Mismatched issuer session
+        mutate_last_record(&|r| {
+            r["issuer_session"] = json!("sess-matrix");
+        });
+        let err_mismatch_sess = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-other")).unwrap_err();
+        assert_eq!(err_mismatch_sess.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // The permit is session-bound, so an absent acting session cannot consume it.
+        let err_absent_caller = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", None).unwrap_err();
+        assert_eq!(err_absent_caller.get("reason"), Some(&json!("deploy_authorization_wrong_session")));
+
+        // 14. Storage failure for authorization marker
+        let auth_dir = root.join(".bee").join("authorizations");
+        std::fs::remove_dir_all(&auth_dir).ok();
+        std::fs::write(&auth_dir, "block-dir-creation").unwrap();
+        let err_storage = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_storage.get("reason"), Some(&json!("deploy_authorization_storage_error")));
+        std::fs::remove_file(&auth_dir).ok();
+    }
+
+    #[test]
+    fn test_direct_release_script_call_refuses_before_mutation() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let script = repo_root.join("scripts").join("release.sh");
+        if !script.exists() {
+            return;
+        }
+        let out = Command::new("bash")
+            .arg(&script)
+            .env_remove("BEE_DISPATCH_ID")
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("release authorization required") && stderr.contains("BEE_DISPATCH_ID is unset"),
+            "expected refusal on direct release call, got: {stderr}"
+        );
+    }
+
+    #[test]
+    fn test_deploy_authorization_cli_routing() {
+        let t0 = Instant::now();
+        let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+
+        // dispatch prepare accepts --release-version
+        assert!(try_native(
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "gather", "--feature", "demo", "--stage", "deployment", "--role", "deploy", "--release-version", "2.38.0"]),
+            t0
+        ).is_some());
+
+        // dispatch authorize routes natively
+        assert!(try_native(
+            &os(&["dispatch", "authorize", "--id", "disp-1", "--release-version", "2.38.0"]),
+            t0
+        ).is_some());
+    }
+
+

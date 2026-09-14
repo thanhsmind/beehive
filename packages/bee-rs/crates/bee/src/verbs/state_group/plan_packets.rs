@@ -5,6 +5,7 @@
 use super::*;
 use crate::jsjson;
 use crate::verbs::cells::{id_pattern_ok, LANES};
+use crate::verbs::knowledge::{parse_frontmatter, Fm};
 use crate::verbs::reservations::{
     finish, js_disp, keys_known, now_iso, parse_flags, truthy,
     Err2, Flags, Out, R2,
@@ -12,13 +13,14 @@ use crate::verbs::reservations::{
 use crate::verbs::workflow_store::list_workflows;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-/// `## Some title` -> `Some title`, for 1-6 hashes followed by whitespace.
-fn heading_title(line: &str) -> Option<&str> {
+/// `## Some title` -> `(2, "Some title")`, for 1-6 hashes followed by whitespace.
+fn heading_level_and_title(line: &str) -> Option<(usize, &str)> {
     let t = line.trim();
     let hashes = t.len() - t.trim_start_matches('#').len();
     if hashes == 0 || hashes > 6 {
@@ -28,7 +30,12 @@ fn heading_title(line: &str) -> Option<&str> {
     if !rest.starts_with(char::is_whitespace) {
         return None;
     }
-    Some(rest.trim())
+    Some((hashes, rest.trim()))
+}
+
+/// `## Some title` -> `Some title`, for 1-6 hashes followed by whitespace.
+fn heading_title(line: &str) -> Option<&str> {
+    heading_level_and_title(line).map(|(_, title)| title)
 }
 
 /// Find the `## Cells...` section in plan.md text.
@@ -184,6 +191,211 @@ pub(crate) fn parse_plan_packets(text: &str) -> Result<Vec<Value>, String> {
     Ok(cells)
 }
 
+/// Check if the plan frontmatter specifies `artifact_contract: bee-plan/v2`.
+fn is_v2_plan(text: &str) -> bool {
+    match parse_frontmatter(text) {
+        Fm::Parsed { data, .. } => {
+            data.get("artifact_contract").and_then(Value::as_str) == Some("bee-plan/v2")
+        }
+        _ => false,
+    }
+}
+
+/// Find all `## Role assignments` sections in plan.md text.
+fn find_role_assignments_sections(text: &str) -> Vec<&str> {
+    let mut sections = Vec::new();
+    let mut current_start: Option<usize> = None;
+    let mut offset = 0usize;
+    for line in text.split_inclusive('\n') {
+        let here = offset;
+        offset += line.len();
+        if let Some((hashes, title)) = heading_level_and_title(line) {
+            if let Some(start) = current_start {
+                sections.push(&text[start..here]);
+                current_start = None;
+            }
+            if hashes == 2 && title.eq_ignore_ascii_case("Role assignments") {
+                current_start = Some(offset);
+            }
+        }
+    }
+    if let Some(start) = current_start {
+        sections.push(&text[start..]);
+    }
+    sections
+}
+
+/// Canonical SHA-256 of sorted {role, description} rows from bee team show --runtime <runtime> --json.
+pub(crate) fn compute_canonical_roster_sha256(roles_arr: &[Value]) -> (String, HashSet<String>) {
+    let mut configured_roles = HashSet::new();
+    let mut sorted_roles = Vec::new();
+    for r in roles_arr {
+        if let Some(role_name) = r.get("role").and_then(Value::as_str) {
+            configured_roles.insert(role_name.to_string());
+            let desc = r.get("description").cloned().unwrap_or(Value::Null);
+            sorted_roles.push((role_name.to_string(), desc));
+        }
+    }
+    sorted_roles.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut canonical_rows = Vec::new();
+    for (role, desc) in sorted_roles {
+        let mut row_map = BTreeMap::new();
+        row_map.insert("description".to_string(), desc);
+        row_map.insert("role".to_string(), Value::String(role));
+        canonical_rows.push(row_map);
+    }
+    let json_bytes = serde_json::to_vec(&canonical_rows).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&json_bytes);
+    let sha256_hex = format!("{:x}", hasher.finalize());
+    (sha256_hex, configured_roles)
+}
+
+/// Parse and validate the exact Role-plan packet contract from plan.md.
+pub(crate) fn parse_role_plan(root: &Path, text: &str) -> Result<Option<Value>, String> {
+    let is_v2 = is_v2_plan(text);
+    let sections = find_role_assignments_sections(text);
+
+    if !is_v2 {
+        if !sections.is_empty() {
+            return Err("role_plan_requires_v2: plan carries a \"## Role assignments\" section but lacks \"artifact_contract: bee-plan/v2\" frontmatter. FIX: upgrade plan frontmatter to bee-plan/v2 or remove the role assignments section.".to_string());
+        }
+        return Ok(None);
+    }
+
+    if sections.is_empty() {
+        return Err("role_plan_required: v2 plan requires one valid \"## Role assignments\" section with fenced JSON role_plan. FIX: add \"## Role assignments\" section to plan.md.".to_string());
+    }
+    if sections.len() > 1 {
+        return Err("role_plan_duplicate_section: v2 plan has multiple \"## Role assignments\" sections (expected exactly one). FIX: merge duplicate role assignments sections.".to_string());
+    }
+
+    let section = sections[0];
+    let Some(fenced) = extract_fenced_json(section) else {
+        return Err("role_plan_malformed: \"## Role assignments\" section carries no fenced JSON code block. FIX: provide fenced JSON in ## Role assignments.".to_string());
+    };
+
+    let parsed: Value = serde_json::from_str(&fenced)
+        .map_err(|e| format!("role_plan_malformed: could not parse role plan JSON: {e}"))?;
+
+    let Value::Object(map) = &parsed else {
+        return Err("role_plan_malformed: role plan must be a JSON object".to_string());
+    };
+
+    for key in map.keys() {
+        if !["schema_version", "runtime", "roster_sha256", "stages"].contains(&key.as_str()) {
+            return Err(format!("role_plan_unknown_field: unknown field \"{key}\" in role plan object"));
+        }
+    }
+
+    match map.get("schema_version").and_then(Value::as_str) {
+        Some("1.0") => {}
+        _ => return Err("role_plan_malformed: role plan \"schema_version\" must be exact string \"1.0\"".to_string()),
+    }
+
+    let runtime = match map.get("runtime").and_then(Value::as_str).map(str::trim) {
+        Some(s) if !s.is_empty() => s,
+        _ => return Err("role_plan_malformed: role plan missing required field \"runtime\" (non-empty string)".to_string()),
+    };
+
+    let table_val = crate::verbs::models_group::team_table(root, Some(runtime))
+        .map_err(|e| format!("role_plan_unsupported_runtime: {e}"))?;
+    let runtimes_arr = table_val.get("runtimes").and_then(Value::as_array)
+        .ok_or_else(|| format!("role_plan_unsupported_runtime: no runtimes returned for \"{runtime}\""))?;
+    let rt_entry = runtimes_arr.iter()
+        .find(|r| r.get("runtime").and_then(Value::as_str) == Some(runtime))
+        .ok_or_else(|| format!("role_plan_unsupported_runtime: runtime \"{runtime}\" not found in team table"))?;
+    let roles_arr = rt_entry.get("roles").and_then(Value::as_array)
+        .ok_or_else(|| format!("role_plan_unsupported_runtime: no roles found for runtime \"{runtime}\""))?;
+
+    let (expected_roster_sha, configured_roles) = compute_canonical_roster_sha256(roles_arr);
+
+    let plan_sha = match map.get("roster_sha256").and_then(Value::as_str).map(str::trim) {
+        Some(s) if !s.is_empty() => s,
+        _ => return Err("role_plan_malformed: role plan missing required field \"roster_sha256\" (non-empty string)".to_string()),
+    };
+    if plan_sha != expected_roster_sha {
+        return Err(format!(
+            "role_plan_roster_stale: roster digest mismatch for runtime \"{runtime}\" (expected {expected_roster_sha}, got {plan_sha}). FIX: update plan.md roster_sha256 to {expected_roster_sha}."
+        ));
+    }
+
+    let stages = match map.get("stages").and_then(Value::as_array) {
+        Some(arr) if !arr.is_empty() => arr,
+        _ => return Err("role_plan_malformed: role plan \"stages\" must be a non-empty array".to_string()),
+    };
+
+    let mut seen_stages = HashSet::new();
+    let mut covered_roles = HashSet::new();
+
+    for (idx, stage_val) in stages.iter().enumerate() {
+        let n = idx + 1;
+        let Value::Object(stage_map) = stage_val else {
+            return Err(format!("role_plan_malformed: stage {n} is not a JSON object"));
+        };
+
+        let stage_name = match stage_map.get("stage").and_then(Value::as_str).map(str::trim) {
+            Some(s) if !s.is_empty() => s,
+            _ => return Err(format!("role_plan_missing_field: stage {n} is missing required field \"stage\" (non-empty string)")),
+        };
+        if !seen_stages.insert(stage_name.to_string()) {
+            return Err(format!("role_plan_duplicate_stage: duplicate stage name \"{stage_name}\" in role plan"));
+        }
+
+        let classification = match stage_map.get("classification").and_then(Value::as_str).map(str::trim) {
+            Some(s) if matches!(s, "required" | "conditional" | "not-applicable") => s,
+            Some(s) => return Err(format!("role_plan_invalid_classification: stage \"{stage_name}\" has invalid classification \"{s}\" (must be \"required\", \"conditional\", or \"not-applicable\")")),
+            None => return Err(format!("role_plan_missing_field: stage \"{stage_name}\" is missing required field \"classification\"")),
+        };
+
+        for key in stage_map.keys() {
+            let is_known = match classification {
+                "conditional" => ["stage", "classification", "role", "reason", "condition"].contains(&key.as_str()),
+                _ => ["stage", "classification", "role", "reason"].contains(&key.as_str()),
+            };
+            if !is_known {
+                return Err(format!("role_plan_unknown_field: stage \"{stage_name}\" has unknown field \"{key}\""));
+            }
+        }
+
+        if classification == "conditional" {
+            match stage_map.get("condition").and_then(Value::as_str).map(str::trim) {
+                Some(s) if !s.is_empty() => {}
+                _ => return Err(format!("role_plan_missing_field: conditional stage \"{stage_name}\" is missing required field \"condition\" (non-empty string)")),
+            }
+        }
+
+        let role = match stage_map.get("role").and_then(Value::as_str).map(str::trim) {
+            Some(s) if !s.is_empty() => s,
+            _ => return Err(format!("role_plan_missing_field: stage \"{stage_name}\" is missing required field \"role\" (non-empty string)")),
+        };
+        if !configured_roles.contains(role) {
+            return Err(format!("role_plan_unconfigured_role: stage \"{stage_name}\" references unconfigured role \"{role}\" for runtime \"{runtime}\""));
+        }
+        covered_roles.insert(role.to_string());
+
+        match stage_map.get("reason").and_then(Value::as_str).map(str::trim) {
+            Some(s) if !s.is_empty() => {}
+            _ => return Err(format!("role_plan_missing_field: stage \"{stage_name}\" is missing required field \"reason\" (non-empty string)")),
+        }
+    }
+
+    let missing_roles: Vec<_> = configured_roles
+        .difference(&covered_roles)
+        .cloned()
+        .collect();
+    if !missing_roles.is_empty() {
+        let mut sorted_missing = missing_roles;
+        sorted_missing.sort();
+        return Err(format!(
+            "role_plan_incomplete_coverage: role plan does not cover all configured roles for runtime \"{runtime}\". Missing: {}",
+            sorted_missing.join(", ")
+        ));
+    }
+
+    Ok(Some(parsed))
+}
+
 /// SHA-256 of plan.md bytes.
 pub(crate) fn compute_plan_sha256(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -191,13 +403,37 @@ pub(crate) fn compute_plan_sha256(bytes: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Render preview text showing action, files, read_first, must_haves, and exact verify.
-pub(crate) fn render_preview_text(feature: &str, cells: &[Value], plan_sha256: &str) -> String {
+/// Render preview text showing action, files, read_first, must_haves, exact verify, and role plan.
+pub(crate) fn render_preview_text(
+    feature: &str,
+    cells: &[Value],
+    plan_sha256: &str,
+    role_plan: Option<&Value>,
+) -> String {
     let mut lines = Vec::new();
     lines.push(format!(
         "Gate preview for feature \"{feature}\" ({} cell(s), plan sha256: {plan_sha256}):",
         cells.len()
     ));
+    if let Some(rp) = role_plan {
+        let runtime = rp.get("runtime").and_then(Value::as_str).unwrap_or("?");
+        let roster_sha = rp.get("roster_sha256").and_then(Value::as_str).unwrap_or("?");
+        lines.push(format!("\nRole plan (runtime: {runtime}, roster sha256: {roster_sha}):"));
+        if let Some(stages) = rp.get("stages").and_then(Value::as_array) {
+            for s in stages {
+                let stage = s.get("stage").and_then(Value::as_str).unwrap_or("?");
+                let classification = s.get("classification").and_then(Value::as_str).unwrap_or("?");
+                let role = s.get("role").and_then(Value::as_str).unwrap_or("?");
+                let reason = s.get("reason").and_then(Value::as_str).unwrap_or("");
+                let mut stage_line = format!("  Stage: {stage} \u{2014} classification: {classification}, role: {role}");
+                if let Some(cond) = s.get("condition").and_then(Value::as_str) {
+                    stage_line.push_str(&format!(", condition: {cond}"));
+                }
+                stage_line.push_str(&format!(", reason: {reason}"));
+                lines.push(stage_line);
+            }
+        }
+    }
     for cell in cells {
         let id = cell.get("id").and_then(|v| v.as_str()).unwrap_or("?");
         let title = cell.get("title").and_then(|v| v.as_str()).unwrap_or("");
@@ -293,6 +529,10 @@ pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool)
         Ok(c) => c,
         Err(e) => return Ok(Out::Thrown(format!("gate preview: {e}"))),
     };
+    let role_plan = match parse_role_plan(root, &text) {
+        Ok(rp) => rp,
+        Err(e) => return Ok(Out::Thrown(format!("gate preview: {e}"))),
+    };
     let plan_sha256 = compute_plan_sha256(&bytes);
 
     let mut preview_map = Map::new();
@@ -300,6 +540,9 @@ pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool)
     preview_map.insert("plan_sha256".into(), json!(plan_sha256));
     preview_map.insert("previewed_at".into(), json!(now_iso()));
     preview_map.insert("cells".into(), Value::Array(cells.clone()));
+    if let Some(rp) = &role_plan {
+        preview_map.insert("role_plan".into(), rp.clone());
+    }
     let preview_val = Value::Object(preview_map.clone());
 
     target
@@ -309,7 +552,10 @@ pub(crate) fn run_gate_preview_body(root: &Path, flags: &Flags, _use_json: bool)
     write_through_projection(root, &target, &record, &[])?;
     drop(locks);
 
-    let text_out = format!("{}{lane_note}", render_preview_text(&feature, &cells, &plan_sha256));
+    let text_out = format!(
+        "{}{lane_note}",
+        render_preview_text(&feature, &cells, &plan_sha256, role_plan.as_ref())
+    );
     Ok(Out::Emit(preview_val, text_out, 0))
 }
 
@@ -411,6 +657,12 @@ fn get_approved_preview_cells(root: &Path, feature: &str) -> Option<Vec<Value>> 
         Some(Value::Array(cells)) => Some(cells.clone()),
         _ => None,
     }
+}
+
+#[allow(dead_code)]
+pub(crate) fn get_approved_role_plan(root: &Path, feature: &str) -> Option<Value> {
+    let packet = get_approved_preview_packet(root, feature)?;
+    packet.get("role_plan").cloned()
 }
 
 /// Verify that an incoming cell being added matches the approved preview packet.
@@ -900,5 +1152,494 @@ mod tests {
         let Out::Thrown(err) = out else { panic!("missing plan.md in high-risk lane must refuse shape approval") };
         assert!(err.contains("plan.md does not exist"), "{err}");
         assert!(err.contains("feat-high"), "{err}");
+    }
+
+    fn write_test_config(root: &Path, team_obj: Value) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let cfg = json!({
+            "team": team_obj
+        });
+        std::fs::write(root.join(".bee").join("config.json"), serde_json::to_string(&cfg).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn test_v2_role_plan_preview_stores_and_displays_valid_role_assignments() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard","approved_gates":{"shape":false,"execution":false}}"#,
+        );
+        let team = json!({
+            "my-rt": {
+                "code": { "description": "write the code" },
+                "test": { "description": "test the code" }
+            }
+        });
+        write_test_config(root, team);
+
+        // Compute expected sha:
+        // canonical rows sorted by role:
+        // [{"description":"write the code","role":"code"},{"description":"test the code","role":"test"}]
+        let canonical_rows = json!([
+            {"description":"write the code","role":"code"},
+            {"description":"test the code","role":"test"}
+        ]);
+        let mut hasher = Sha256::new();
+        hasher.update(serde_json::to_vec(&canonical_rows).unwrap());
+        let expected_sha = format!("{:x}", hasher.finalize());
+
+        let plan_text = format!(r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "{expected_sha}",
+  "stages": [
+    {{"stage":"implementation","classification":"required","role":"code","reason":"build features"}},
+    {{"stage":"qa","classification":"conditional","role":"test","condition":"tests are needed","reason":"verify features"}}
+  ]
+}}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {{
+    "id": "c1",
+    "feature": "v2-feat",
+    "title": "Do thing",
+    "lane": "standard",
+    "role": "code",
+    "action": "Implement it",
+    "files": ["src/main.rs"],
+    "read_first": [],
+    "must_haves": {{ "truths": ["It works"] }},
+    "verify": "cargo check"
+  }}
+]
+```
+"#);
+        write_plan(root, "v2-feat", &plan_text);
+
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Emit(val, text, code) = out else {
+            panic!("expected Out::Emit");
+        };
+        assert_eq!(code, 0);
+
+        // Stored role_plan in preview JSON:
+        let role_plan = val.get("role_plan").expect("preview must contain role_plan");
+        assert_eq!(role_plan["schema_version"], "1.0");
+        assert_eq!(role_plan["runtime"], "my-rt");
+        assert_eq!(role_plan["roster_sha256"], json!(expected_sha));
+        let stages = role_plan["stages"].as_array().unwrap();
+        assert_eq!(stages.len(), 2);
+
+        // Visibility in text output:
+        assert!(text.contains("my-rt"), "text must show runtime: {text}");
+        assert!(text.contains(&expected_sha), "text must show roster sha: {text}");
+        assert!(text.contains("implementation"), "text must show stage: {text}");
+        assert!(text.contains("required"), "text must show classification: {text}");
+        assert!(text.contains("code"), "text must show role: {text}");
+        assert!(text.contains("tests are needed"), "text must show condition: {text}");
+        assert!(text.contains("verify features"), "text must show reason: {text}");
+    }
+
+    #[test]
+    fn test_v2_role_plan_refuses_missing_role_section() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard"}"#,
+        );
+        let plan_text = r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Cells, current slice preview
+
+```json
+[
+  {
+    "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code",
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+  }
+]
+```
+"#;
+        write_plan(root, "v2-feat", plan_text);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_required"), "{err}");
+    }
+
+    #[test]
+    fn test_role_section_without_v2_refuses() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v1-feat","mode":"standard"}"#,
+        );
+        let plan_text = r#"---
+artifact_contract: bee-plan/v1
+mode: standard
+---
+
+# Plan: v1-feat
+
+## Role assignments
+
+```json
+{}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {
+    "id": "c1", "feature": "v1-feat", "title": "t", "lane": "standard", "role": "code",
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+  }
+]
+```
+"#;
+        write_plan(root, "v1-feat", plan_text);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_requires_v2"), "{err}");
+    }
+
+    #[test]
+    fn test_v2_role_plan_refuses_duplicate_sections() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard"}"#,
+        );
+        let plan_text = r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{}
+```
+
+## Role assignments
+
+```json
+{}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {
+    "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code",
+    "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check"
+  }
+]
+```
+"#;
+        write_plan(root, "v2-feat", plan_text);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_duplicate_section"), "{err}");
+    }
+
+    #[test]
+    fn test_v2_role_plan_refuses_malformed_json_and_unknown_fields() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard"}"#,
+        );
+        write_test_config(root, json!({ "my-rt": { "code": { "description": "desc" } } }));
+
+        // 1. Malformed JSON
+        let plan_bad_json = r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{ invalid json
+```
+
+## Cells, current slice preview
+
+```json
+[
+  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+]
+```
+"#;
+        write_plan(root, "v2-feat", plan_bad_json);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_malformed"), "{err}");
+
+        // 2. Unknown field in top-level
+        let plan_unknown_top = r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "abc",
+  "stages": [],
+  "unexpected_extra": true
+}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  { "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+]
+```
+"#;
+        write_plan(root, "v2-feat", plan_unknown_top);
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_unknown_field"), "{err}");
+    }
+
+    #[test]
+    fn test_v2_role_plan_refuses_duplicate_stages_and_unconfigured_roles() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard"}"#,
+        );
+        write_test_config(root, json!({ "my-rt": { "code": { "description": "desc" } } }));
+
+        let canonical_rows = json!([{"description":"desc","role":"code"}]);
+        let mut hasher = Sha256::new();
+        hasher.update(serde_json::to_vec(&canonical_rows).unwrap());
+        let expected_sha = format!("{:x}", hasher.finalize());
+
+        // 1. Duplicate stages
+        let plan_dup_stage = format!(r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "{expected_sha}",
+  "stages": [
+    {{"stage":"build","classification":"required","role":"code","reason":"r1"}},
+    {{"stage":"build","classification":"required","role":"code","reason":"r2"}}
+  ]
+}}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+]
+```
+"#);
+        write_plan(root, "v2-feat", &plan_dup_stage);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_duplicate_stage"), "{err}");
+
+        // 2. Unconfigured role
+        let plan_unconf = format!(r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "{expected_sha}",
+  "stages": [
+    {{"stage":"build","classification":"required","role":"code","reason":"r1"}},
+    {{"stage":"deploy","classification":"required","role":"ghost-role","reason":"r2"}}
+  ]
+}}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+]
+```
+"#);
+        write_plan(root, "v2-feat", &plan_unconf);
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_unconfigured_role"), "{err}");
+    }
+
+    #[test]
+    fn test_v2_role_plan_refuses_stale_roster_and_incomplete_coverage() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v2-feat","mode":"standard"}"#,
+        );
+        write_test_config(root, json!({
+            "my-rt": {
+                "code": { "description": "desc1" },
+                "test": { "description": "desc2" }
+            }
+        }));
+
+        let canonical_rows = json!([{"description":"desc1","role":"code"},{"description":"desc2","role":"test"}]);
+        let mut hasher = Sha256::new();
+        hasher.update(serde_json::to_vec(&canonical_rows).unwrap());
+        let expected_sha = format!("{:x}", hasher.finalize());
+
+        // 1. Stale roster sha
+        let plan_stale_sha = format!(r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  "stages": [
+    {{"stage":"build","classification":"required","role":"code","reason":"r1"}},
+    {{"stage":"qa","classification":"required","role":"test","reason":"r2"}}
+  ]
+}}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+]
+```
+"#);
+        write_plan(root, "v2-feat", &plan_stale_sha);
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_roster_stale"), "{err}");
+
+        // 2. Incomplete coverage (omits "test" role from stages)
+        let plan_incomplete = format!(r#"---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: v2-feat
+
+## Role assignments
+
+```json
+{{
+  "schema_version": "1.0",
+  "runtime": "my-rt",
+  "roster_sha256": "{expected_sha}",
+  "stages": [
+    {{"stage":"build","classification":"required","role":"code","reason":"r1"}}
+  ]
+}}
+```
+
+## Cells, current slice preview
+
+```json
+[
+  {{ "id": "c1", "feature": "v2-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": {{ "truths": ["t"] }}, "verify": "cargo check" }}
+]
+```
+"#);
+        write_plan(root, "v2-feat", &plan_incomplete);
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Thrown(err) = out else { panic!("expected Out::Thrown") };
+        assert!(err.contains("role_plan_incomplete_coverage"), "{err}");
+    }
+
+    #[test]
+    fn test_legacy_plan_without_role_plan_keeps_byte_identical_behavior() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"planning","feature":"v1-feat","mode":"standard"}"#,
+        );
+        let legacy_plan = sample_plan_with_cells("v1-feat", r#"[
+  { "id": "c1", "feature": "v1-feat", "title": "t", "lane": "standard", "role": "code", "action": "a", "files": ["src/main.rs"], "read_first": [], "must_haves": { "truths": ["t"] }, "verify": "cargo check" }
+]"#);
+        write_plan(root, "v1-feat", &legacy_plan);
+
+        let flags = parse_flags(&["--no-lane"]).unwrap().0;
+        let out = run_gate_preview_body(root, &flags, false).unwrap();
+        let Out::Emit(val, text, 0) = out else { panic!("expected Out::Emit") };
+        assert!(val.get("role_plan").is_none(), "legacy preview must have no role_plan key");
+        assert!(!text.contains("Role plan"), "legacy text output must not contain Role plan");
     }
 }

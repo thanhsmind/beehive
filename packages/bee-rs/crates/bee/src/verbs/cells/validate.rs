@@ -851,3 +851,91 @@ pub(crate) fn check_cell_budgets(cell: &Map<String, Value>) -> MR<BudgetCheck> {
     }
     Ok(BudgetCheck::Ok)
 }
+
+/// Resolves the approved preview packet from `.bee/lanes/<feature>.json` or `.bee/state.json`.
+pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
+    let lane_file = lanes_dir(root).join(format!("{feature}.json"));
+    if let Ok(text) = std::fs::read_to_string(&lane_file) {
+        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
+            if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                return Some(p.clone());
+            }
+        }
+    }
+    let state_file = root.join(".bee").join("state.json");
+    if let Ok(text) = std::fs::read_to_string(&state_file) {
+        if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
+            let feat_match = m.get("feature").and_then(Value::as_str) == Some(feature);
+            if feat_match {
+                if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                    return Some(p.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Validates the `role_reroutes` history chain of a cell starting from `original_role`.
+/// Returns Ok(effective_role) on success, or Err(refusal_message) on chain failure.
+pub(crate) fn validate_cell_role_chain(original_role: &str, cell: &Value) -> Result<String, String> {
+    let current_role = cell.get("role").and_then(Value::as_str)
+        .ok_or_else(|| "role_reroute_history_invalid: cell has no role".to_string())?;
+
+    let reroutes = match cell.get("role_reroutes") {
+        None => {
+            if current_role != original_role {
+                return Err(format!(
+                    "role_reroute_history_invalid: cell has role \"{current_role}\" without any recorded re-routes, but approved plan role is \"{original_role}\""
+                ));
+            }
+            return Ok(current_role.to_string());
+        }
+        Some(Value::Array(arr)) if arr.is_empty() => {
+            if current_role != original_role {
+                return Err(format!(
+                    "role_reroute_history_invalid: cell has role \"{current_role}\" without any recorded re-routes, but approved plan role is \"{original_role}\""
+                ));
+            }
+            return Ok(current_role.to_string());
+        }
+        Some(Value::Array(arr)) => arr,
+        Some(_) => return Err("role_reroute_history_invalid: role_reroutes must be an array".to_string()),
+    };
+
+    let mut prev_role = original_role;
+    for (idx, entry_val) in reroutes.iter().enumerate() {
+        let Value::Object(entry) = entry_val else {
+            return Err(format!("role_reroute_history_invalid: reroute entry {idx} is not an object"));
+        };
+        let from = entry.get("from").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'from'"))?;
+        let to = entry.get("to").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'to'"))?;
+        let decision = entry.get("decision").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'decision'"))?;
+        let at = entry.get("at").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'at'"))?;
+        let plan_sha = entry.get("plan_sha256").and_then(Value::as_str)
+            .ok_or_else(|| format!("role_reroute_history_invalid: reroute entry {idx} missing 'plan_sha256'"))?;
+
+        if from.is_empty() || to.is_empty() || decision.is_empty() || at.is_empty() || plan_sha.is_empty() {
+            return Err(format!("role_reroute_history_invalid: reroute entry {idx} has empty field"));
+        }
+        if from != prev_role {
+            return Err(format!(
+                "role_reroute_history_invalid: reroute entry {idx} 'from' is \"{from}\" but previous role was \"{prev_role}\""
+            ));
+        }
+        prev_role = to;
+    }
+
+    if current_role != prev_role {
+        return Err(format!(
+            "role_reroute_history_invalid: cell role \"{current_role}\" does not match final reroute 'to' \"{prev_role}\""
+        ));
+    }
+
+    Ok(current_role.to_string())
+}
+

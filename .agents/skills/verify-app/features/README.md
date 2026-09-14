@@ -79,6 +79,9 @@ required state, commands, and observable proof.
   capping a cell, and the red-proof refusal that is bee's core promise.
 - [Worktree and close](./worktree-and-close.md) covers creating a feature
   worktree, merging it back, and the close doors.
+- [Semantic role routing](./semantic-role-routing.md) covers plan-time role
+  assignment, dispatch stage and role enforcement, structured cell rerouting,
+  and release deploy authorization.
 - [Codex runtime](./codex-runtime.md) covers installed hook guards, deny and
   allow paths, model-guard enforcement, read-only CLI sandbox fallback, and turn
   completion tracking.

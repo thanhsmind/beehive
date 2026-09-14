@@ -98,6 +98,14 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 HEAD_VERSION="$(git show "HEAD:$PLUGIN_JSON" 2>/dev/null | read_version /dev/stdin || true)"
 
+AUTH_VERSION="${ARG_VERSION:-$VERSION}"
+[ -n "${BEE_DISPATCH_ID:-}" ] \
+  || fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"
+[ -x "$BEE_BIN" ] \
+  || fail "$BEE_BIN not found or not executable — cannot verify release authorization; nothing was changed"
+"$BEE_BIN" dispatch authorize --id "$BEE_DISPATCH_ID" --release-version "$AUTH_VERSION" \
+  || fail "release authorization denied for version $AUTH_VERSION; nothing was changed"
+
 # ---------- 3. bump + regen + test + commit (only with a VERSION argument) ----------
 if [ -n "$ARG_VERSION" ] && [ "$ARG_VERSION" = "$HEAD_VERSION" ]; then
   # Idempotent re-run: the release commit already exists. Never re-bump, never

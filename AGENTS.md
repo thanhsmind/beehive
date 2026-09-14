@@ -160,10 +160,9 @@ context before planning or executing.
   cli is config, never the leader's choice. Never hand-pick `subagent_type`, a
   `model` param, or a leading `[bee-tier: …]` marker: those are what prepare
   RETURNS, and the model-guard hook refuses or rewrites anything else.
-- Dispatches must follow the cell's recorded role from the approved plan
-  assignment. A re-route requires a logged decision with tag `role-reroute`
-  (`bee decisions log --relation touches:<id> --tag role-reroute`), never an
-  ad hoc role choice mid-run.
+- Dispatches follow the cell or stage role in the approved plan. Changed work
+  requires a decision tagged `role-reroute` and `bee cells reroute`; never
+  select a different role ad hoc during execution.
 - The internal consult is ONE thing: the plan-step **hat wave**, fixed
   perspectives dispatched `--kind advisor` at the plan step, once per
   feature. Its synthesis is the plan check AND the high-risk gate's

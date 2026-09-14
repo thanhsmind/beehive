@@ -10111,3 +10111,251 @@ use std::time::Instant;
         assert!(err.1[0].problems[0].contains("plan.md changed since preview was approved"), "{:?}", err.1[0].problems);
     }
 
+    #[test]
+    fn test_cell_reroute_success_and_chaining() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-rr");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("decisions")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-rr",
+            "gate_preview": {
+                "feature": "feat-rr",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [
+                        {"stage": "dev", "classification": "required", "role": "code", "reason": "r1"},
+                        {"stage": "qa", "classification": "required", "role": "test", "reason": "r2"}
+                    ]
+                },
+                "cells": [
+                    {"id": "c-1", "feature": "feat-rr", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-rr.json"), lane_data.to_string()).unwrap();
+
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku",
+                    "advisor": "opus"
+                }
+            }
+        });
+        std::fs::write(root.join(".bee").join("config.json"), config.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-1",
+            "feature": "feat-rr",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-1.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-1",
+                "feature": "feat-rr",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-2",
+                "feature": "feat-rr",
+                "tags": ["role-reroute", "p1"],
+                "at": "2026-09-14T02:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Reroute c-1 from code to test
+        let res1 = crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-1", "test", "dec-1").unwrap();
+        assert_eq!(res1["role"], "test");
+        let rr1 = res1["role_reroutes"].as_array().unwrap();
+        assert_eq!(rr1.len(), 1);
+        assert_eq!(rr1[0]["from"], "code");
+        assert_eq!(rr1[0]["to"], "test");
+        assert_eq!(rr1[0]["decision"], "dec-1");
+        assert_eq!(rr1[0]["plan_sha256"], plan_sha);
+
+        // 2. Chained reroute c-1 from test to advisor
+        let res2 = crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-1", "advisor", "dec-2").unwrap();
+        assert_eq!(res2["role"], "advisor");
+        let rr2 = res2["role_reroutes"].as_array().unwrap();
+        assert_eq!(rr2.len(), 2);
+        assert_eq!(rr2[1]["from"], "test");
+        assert_eq!(rr2[1]["to"], "advisor");
+        assert_eq!(rr2[1]["decision"], "dec-2");
+
+        // 3. Verify history chain validation
+        let chain_ok = crate::verbs::cells::validate::validate_cell_role_chain("code", &res2);
+        assert_eq!(chain_ok.unwrap(), "advisor");
+    }
+
+    fn fail_msg(f: crate::verbs::cells::util::Fail) -> String {
+        match f {
+            crate::verbs::cells::util::Fail::Thrown(m) => m,
+            crate::verbs::cells::util::Fail::Delegate => panic!("expected Fail::Thrown, got Delegate"),
+        }
+    }
+
+    #[test]
+    fn test_cell_reroute_typed_refusals() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-refuse");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-refuse",
+            "gate_preview": {
+                "feature": "feat-refuse",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": []
+                },
+                "cells": [
+                    {"id": "c-refuse", "feature": "feat-refuse", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-refuse.json"), lane_data.to_string()).unwrap();
+
+        let config = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku"
+                }
+            }
+        });
+        std::fs::write(root.join(".bee").join("config.json"), config.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-valid",
+                "feature": "feat-refuse",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-other",
+                "feature": "other-feat",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-notag",
+                "feature": "feat-refuse",
+                "tags": ["architecture"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Unchanged role refuses role_unchanged
+        let err_unchanged = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "code", "dec-valid").unwrap_err());
+        assert!(err_unchanged.contains("role_unchanged"), "{err_unchanged}");
+
+        // 2. Unconfigured target role refuses role_reroute_unconfigured_role
+        let err_unconf = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "alien-role", "dec-valid").unwrap_err());
+        assert!(err_unconf.contains("role_reroute_unconfigured_role"), "{err_unconf}");
+
+        // 3. Decision not found refuses role_reroute_decision_not_found
+        let err_no_dec = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-ghost").unwrap_err());
+        assert!(err_no_dec.contains("role_reroute_decision_not_found"), "{err_no_dec}");
+
+        // 4. Decision feature mismatch refuses role_reroute_decision_feature_mismatch
+        let err_feat_mismatch = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-other").unwrap_err());
+        assert!(err_feat_mismatch.contains("role_reroute_decision_feature_mismatch"), "{err_feat_mismatch}");
+
+        // 5. Decision missing tag refuses role_reroute_decision_missing_tag
+        let err_no_tag = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-notag").unwrap_err());
+        assert!(err_no_tag.contains("role_reroute_decision_missing_tag"), "{err_no_tag}");
+
+        // 6. Claimed cell refuses role_reroute_claimed
+        std::fs::create_dir_all(root.join(".bee").join("claims")).unwrap();
+        std::fs::write(root.join(".bee").join("claims").join("c-refuse.json"), "{\"worker\": \"w1\"}\n").unwrap();
+        let err_claimed = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_claimed.contains("role_reroute_claimed"), "{err_claimed}");
+        std::fs::remove_file(root.join(".bee").join("claims").join("c-refuse.json")).unwrap();
+
+        // 7. Capped cell refuses role_reroute_status
+        let cell_capped = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "capped"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_capped.to_string()).unwrap();
+        let err_status = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_status.contains("role_reroute_status"), "{err_status}");
+
+        // 8. Stale plan hash refuses role_reroute_plan_hash_mismatch
+        let cell_open = json!({
+            "id": "c-refuse",
+            "feature": "feat-refuse",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-refuse.json"), cell_open.to_string()).unwrap();
+        std::fs::write(plan_dir.join("plan.md"), "# Plan modified\n").unwrap();
+        let err_plan_stale = fail_msg(crate::verbs::cells::handlers_write::reroute_cell_core(root, "c-refuse", "test", "dec-valid").unwrap_err());
+        assert!(err_plan_stale.contains("role_reroute_plan_hash_mismatch"), "{err_plan_stale}");
+    }
+
+    #[test]
+    fn test_cell_reroute_cli_flag_validation() {
+        let (flags_unknown, _) = crate::verbs::reservations::parse_flags(&["--id", "c-cli", "--unknown-flag", "val"]).unwrap();
+        assert!(crate::verbs::cells::handlers_write::run_reroute(flags_unknown, true, std::time::Instant::now()).is_none());
+
+        let (flags_missing, _) = crate::verbs::reservations::parse_flags(&["--id", "c-cli", "--role", "test"]).unwrap();
+        assert!(crate::verbs::cells::handlers_write::run_reroute(flags_missing, true, std::time::Instant::now()).is_none());
+    }

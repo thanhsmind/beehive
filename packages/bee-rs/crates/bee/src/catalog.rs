@@ -772,7 +772,14 @@ mod tests {
         // first: no existing flag name means "preview the execution packet
         // before gate approval". Preview renders the current-slice cells and
         // plan hash without writing.
-        const PINNED_FLAG_COUNT: usize = 205;
+        //
+        // 205 -> 207 (semantic-role-routing slr-2, slr-8): `dispatch.prepare`
+        // gains `--stage` and `--release-version` for deploy gate authorization.
+        // `--stage` names the target deployment stage (staging, canary, prod);
+        // `--release-version` names the immutable release artifact version.
+        // Neither existing flag conveys deployment lifecycle stage or release
+        // version identifier.
+        const PINNED_FLAG_COUNT: usize = 207;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

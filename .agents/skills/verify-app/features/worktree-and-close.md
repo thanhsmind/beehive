@@ -9,6 +9,7 @@ which of them still block.
 
 - `worktree-new` creates and registers a sibling worktree on its own branch, emitting enter transition intent.
 - `worktree-enter` enters an existing verified and granted worktree with zero mutation, emitting enter transition intent.
+- `worktree-linked-enter` enters an existing granted worktree B directly from linked worktree A, resolving main through git metadata and emitting A as sourceCwd.
 - `worktree-linked-exit` emits zero-mutation exit-before-merge transition intent with typed continuation when merge runs inside a worktree.
 - `worktree-relocate-pi` relocates the active Pi session across worktree boundaries without mutating process cwd.
 - `worktree-relocate-recovery` handles post-exit merge refusal in Pi, keeping the worktree and reporting the re-entry command.
@@ -21,7 +22,7 @@ which of them still block.
 ## How to get to it (user POV)
 
 - Run `bee worktree new --feature <slug> --json` from the main checkout.
-- Run `bee worktree enter --id <id> --json` from the main checkout.
+- Run `bee worktree enter --id <id> --json` from the main checkout or another linked worktree.
 - Run `bee worktree list --json`.
 - Inside a linked worktree, run `bee worktree merge [--id <id>] --json` to emit exit intent before merge.
 - Run `bee worktree merge --id <id> --json` from the main checkout to execute the merge.
@@ -54,6 +55,13 @@ Preconditions:
   metadata. Confirm zero mutation: `control-bee sh -- git status --porcelain` and
   `VERIFY_CWD=repo--wt--wt-demo control-bee sh -- git status --porcelain` both
   remain completely clean.
+- **Enter worktree B from linked worktree A.** Create a second worktree:
+  `control-bee cli -- worktree new --feature wt-second --json`. Inside the first worktree,
+  run `VERIFY_CWD=repo--wt--wt-demo control-bee cli -- worktree enter --id repo--wt--wt-second --json`.
+  The payload reports `ok: true`, `id: "repo--wt--wt-second"`, and `sessionTransition` with
+  `operation: "enter-worktree"`, `sourceCwd` pointing at `repo--wt--wt-demo`, and `targetCwd`
+  pointing at `repo--wt--wt-second`. Same-worktree entry (`--id repo--wt--wt-demo`) is refused
+  with `same_worktree` before transition marker emission.
 - **Work inside the worktree.** Aim the harness at it with `VERIFY_CWD`. Run
   `printf 'work\n' | VERIFY_CWD=repo--wt--wt-demo control-bee put WORK.md`, then
   `VERIFY_CWD=repo--wt--wt-demo control-bee sh -- git add -A` and

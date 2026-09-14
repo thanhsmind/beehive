@@ -473,6 +473,64 @@ fn a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
     assert!(stderr(&out).contains("FIX"), "{}", stderr(&out));
 }
 
+#[test]
+fn model_guard_semantic_role_mismatch_reaches_the_host_as_exit_two_on_stderr() {
+    let fx = fixture();
+    std::fs::create_dir_all(fx.root.join(".bee").join("lanes")).unwrap();
+    std::fs::write(
+        fx.root.join(".bee").join("lanes").join("demo.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "demo",
+            "approved_cell_packet": {
+                "cells": [
+                    { "id": "c1", "role": "builder" }
+                ],
+                "role_plan": {
+                    "schema": 2,
+                    "feature": "demo",
+                    "runtime": "claude",
+                    "cells": [
+                        { "id": "c1", "role": "builder" }
+                    ]
+                }
+            }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .unwrap();
+
+    std::fs::write(
+        fx.root.join(".bee").join("cells").join("c1.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": "c1",
+            "feature": "demo",
+            "title": "Cell 1",
+            "role": "builder",
+            "status": "open"
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "tool_name": "Agent",
+        "tool_input": {
+            "prompt": "[bee-feature: demo][bee-cell: c1][bee-tier: review] do work",
+            "description": "some description",
+            "subagent_type": "reviewer"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let out = run_hook("model-guard", input.as_bytes(), &fx.root);
+    assert!(ran_native("model-guard", &out, "semantic-role-mismatch-deny"));
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(stderr(&out).contains("effective role is \"builder\""), "{}", stderr(&out));
+    assert!(stderr(&out).contains("FIX: use planned role"), "{}", stderr(&out));
+}
+
 // ── 5. a hook never fails closed over missing infrastructure ─────────────
 // Provenance: hooks/mod.rs — "A hook must NEVER fail closed over
 // infrastructure: exit 0 silently." Run from a directory with no bee root at

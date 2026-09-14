@@ -53,7 +53,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    selects its model (`role`, required at `cells add`) — escalate onto the
    session model only where the work earns it
    (`bee cells escalate --id <id>`; rubric:
-   `references/swarming-reference.md`).
+   `references/swarming-reference.md`). Dispatches must follow the cell's
+   recorded role from the approved plan assignment. A re-route requires a
+   logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`)
+   and `bee cells reroute --id <id> --role <role> --decision <id>`, never an ad hoc
+   role choice mid-run.
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a
    worker two cells.
@@ -205,6 +209,7 @@ included: add guidance beside those words, never over them.
 - One cell per worker; the claim guard refuses a worker that claims, browses, or self-selects.
 - Conflicts are fixed in scope or reservations, never by being careful.
 - Never build on a red base — a red becomes its own fix-first cell (rule: agents-never-build-on-red).
+- Dispatches must follow the cell's recorded role from the approved plan assignment. A re-route requires a logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`) and `bee cells reroute --id <id> --role <role> --decision <id>`, never an ad hoc role choice mid-run.
 - Two workers failing on one root cause stop the wave: dispatch nothing new, let in-flight work finish, open a fix-first cell, and resume after it caps.
 
 ## Headless
