@@ -298,6 +298,8 @@ can ever travel under — is warned by name instead of dying silently.
   never "should this be delegated".
 
 
+**B18 — Plan-time role assignment is an explicit planning output** (semantic-role-routing D1, decision `fc2bb09a`). After locked decisions are cited, the planner reads team role descriptions (`bee team show`), assigns each stage and job to the semantically fitting role, and records the assignment in `plan.md` (under `## Role assignments`) or the scoping synthesis. Execution dispatches must follow this approved assignment. A newly discovered stage or a required role change during execution needs a logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`), never an ad hoc role choice at dispatch time. This does not change the open set of roles (B2), the cell's role as sole selector (B4), or the fall-through resolution (B2/B9) — only the step at which the assignment is made, from dispatch-time leader prose to planning-time structured output.
+
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
 The premise behind `pi_requires_herding` is that Pi ships no **built-in**
