@@ -71,7 +71,9 @@ Then each consumer normalizes its own key, in one of three postures:
 
 ### Finish
 
+<!-- bee:not-a-deferral: “Later” states the read order; it makes no future-work promise. -->
 The value is used and forgotten. The next invocation, one millisecond later, reads both files again.
+<!-- /bee:not-a-deferral -->
 
 ## The keys an agent meets
 
