@@ -1,0 +1,195 @@
+{
+  "id": "pprf-4",
+  "feature": "pi-parity-review-fixes",
+  "title": "Report Pi runtime health fail closed",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7da86fdb-40de-415c-b3ac-ae84a4c89d60"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    "docs/product-description/observability/status.md",
+    "docs/product-description/verification/areas.md",
+    "docs/product-description/cross-cutting/configuration.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "read_first": [
+    "docs/history/pi-parity-review-fixes/CONTEXT.md",
+    "docs/history/pi-parity-review-fixes/plan.md",
+    "docs/knowledge/areas/hook-runtime/overview.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    "docs/product-description/observability/status.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Apply red-before-green for F4 and D5-D6. Add tests showing doctor rejects runtime pi today. Add Runtime::Pi, its .pi/extensions/bee-guard.ts and .agents/skills paths, and a Pi-specific row builder. Embed the canonical extension with compile-time include_str! and compare exact installed bytes. Reuse transport_kind_at and herding_transport_probe_for for one herding rule. Preserve common binary checks; in host repos compare the installed binary release version with .claude-plugin/plugin.json even when source mtime checks do not apply. Preserve row fields row/status/detail, return blocked and exit 1 for any required not_ok or unknown, ready and exit 0 only when all required rows are ok, and keep attestation null. Test absent, unreadable, drifted, malformed-config, missing-pane, stale-binary, and ready cases. Add the missing Pi runtime verify-app recipe. The existing worktree-and-close recipe was last modified 2026-09-13 22:39:09 +0700 and has no Pi health recipe; treat this as a new map, not trusted coverage. Update existing doctor contract docs and the one knowledge home.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor::tests",
+  "must_haves": {
+    "truths": [
+      "bee doctor --runtime pi returns the standard structured report instead of unsupported_argument_shape.",
+      "Pi doctor checks installed extension bytes, shared skills, binary presence and freshness, and configured herding readiness.",
+      "Every unavailable or failed required fact is named as not_ok or unknown and prevents ready.",
+      "A complete current Pi installation reports ready and exits zero.",
+      "The user-driving map covers success and each refusal class without claiming TUI evidence."
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "Pi runtime rows and fail-closed verdict"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "substantive": "Pi row and exit truth table"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/pi-runtime.md",
+        "substantive": "installed Pi runtime driving recipe"
+      },
+      {
+        "path": "docs/product-description/observability/status.md",
+        "substantive": "public Pi doctor contract"
+      }
+    ],
+    "key_links": [
+      "doctor Pi paths match onboarded Pi extension and shared skill locations",
+      "extension comparison uses bytes compiled into the running Bee binary",
+      "herding row calls the same transport configuration and environment probe as dispatch prepare",
+      "product description, verification map, and tests assert the same row statuses and exit codes"
+    ],
+    "prohibitions": [
+      "Do not report ready from presence alone.",
+      "Do not add Pi trust attestation.",
+      "Do not create a second herding readiness rule.",
+      "Do not mutate the repository during doctor."
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pprf-4",
+    "outcome": "Pi doctor now reports fail-closed runtime health and has an accurate installed verification recipe.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      "docs/product-description/observability/status.md",
+      "docs/product-description/verification/areas.md",
+      "docs/product-description/cross-cutting/configuration.md",
+      "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+    ],
+    "deviations": [
+      "Retried the verification recipe after the user authorized release — two earlier worker results missed its complete JSON contract — hit an unforeseen obstacle",
+      "sync-ack: Doctor behavior and its existing hook-runtime knowledge home changed together; no skill workflow changed."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T02:30:27.510Z",
+    "behavior_change": true,
+    "verification_evidence": "32 doctor tests cover ready and all required Pi refusal classes",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor::tests",
+    "claimed_at": "2026-09-14T02:27:12.072Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-09-13T17:38:05.832Z",
+        "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+        "claimed_at": "2026-09-13T17:37:29.080Z",
+        "acquired_at": "2026-09-13T16:34:43.981Z",
+        "worker": "w-pprf-4",
+        "verdict": "blocked",
+        "failure_signature": "81512c5fb302",
+        "note": "Task miss after first re-dispatch: .bee/verify/verify-app/features/pi-runtime.md still lacks explicit installed-sandbox steps for absent, unreadable, drifted, malformed-config, missing-pane, stale-binary, and ready outcomes; preserve the existing pprf-4 commit and amend it."
+      },
+      {
+        "n": 2,
+        "at": "2026-09-13T17:44:01.578Z",
+        "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+        "claimed_at": "2026-09-13T17:43:28.793Z",
+        "acquired_at": "2026-09-13T17:38:13.928Z",
+        "worker": "w-pprf-4",
+        "verdict": "blocked",
+        "failure_signature": "bb7662a134d3",
+        "note": "Retry limit reached. First result omitted explicit installed-sandbox refusal steps. The retry added them but asserted JSON field verdict instead of run_doctor's overall_status. A separate pprf-5 fix cell was refused because it was not in the approved gate packet."
+      }
+    ],
+    "blocked_reason": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-09-14T02:26:50.634Z",
+    "reopened_reason": "User authorized completion and patch release; correct the documented JSON field and finish the approved cell.",
+    "sync_ack": "Doctor behavior and its existing hook-runtime knowledge home changed together; no skill workflow changed.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi doctor checks extension bytes, skills, binary freshness, and herding readiness with fail-closed results.",
+      "commit": "5c61c85edabed323035aca00b5d19e9a6c4442bf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        "docs/product-description/observability/status.md",
+        "docs/product-description/verification/areas.md",
+        "docs/product-description/cross-cutting/configuration.md",
+        "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor::tests — green:unit — 32 doctor tests cover ready and all required Pi refusal classes",
+      "deviations": [
+        "Retried the verification recipe after the user authorized release — two earlier worker results missed its complete JSON contract — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pi-runtime-report-shape",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/doctor.rs:49-84,302-333,801-866` accepts Runtime::Pi and emits hooks_file, hook_handler, skills_installed, wiring_matches_binary, binary_freshness, and herding_transport with blocked/ready and null attestation behavior."
+          },
+          {
+            "id": "fail-closed-health-matrix",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/doctor/tests.rs:734-929` covers ready, absent, unreadable, drifted extension, malformed transport, missing pane, stale binary, tmux, and Pi attestation refusal. The focused doctor tests passed: 32 passed, 0 failed."
+          },
+          {
+            "id": "embedded-extension-and-shared-transport",
+            "status": "PASS",
+            "evidence": "`packages/bee-rs/crates/bee/src/doctor.rs:28,302-332,603-621` compares exact embedded extension bytes and reuses the herding transport probe; `sha256sum .pi/extensions/bee-guard.ts` matches the release manifest at `docs/history/codex-harness-hardening/release-manifest.json:1650-1654`."
+          },
+          {
+            "id": "user-driving-map",
+            "status": "PASS",
+            "evidence": "`.bee/verify/verify-app/features/pi-runtime.md:1-140` covers installed dispatch, lifecycle, doctor success, and each refusal class; `.bee/verify/verify-app/features/README.md:85` indexes it. The full Rust suite passed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-14T02:49:19.513Z"
+      }
+    ]
+  }
+}

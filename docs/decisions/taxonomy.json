@@ -496,6 +496,7 @@
     "pi-harness",
     "workflow-gates",
     "worktree-isolation",
-    "gate-2"
+    "gate-2",
+    "pi-runtime"
   ]
 }

@@ -14,7 +14,12 @@
   "next_action": "User validates the merged Pi workflow parity behavior on main.",
   "created_at": "2026-09-11T11:36:38.241Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "question",
+    "subject": "Dismiss the stale pi-harness-workflow-parity pause handoff and continue pi-parity-review-fixes?",
+    "asked_at": "2026-09-13T15:45:04.035Z",
+    "session": "01a09b51-8c9f-7737-b6f6-7655a5700cc9"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
