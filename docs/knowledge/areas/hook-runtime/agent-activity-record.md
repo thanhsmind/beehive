@@ -240,6 +240,19 @@ guess.
   The no-activity-on-child rule is unchanged. Parent `Stop` sets `waiting_on` to `turn-end`
   in `.bee/state.json` (requiring a persisted transcript) and marks activity `idle`; child
   `SubagentStop` is isolated so child completion does not alter the parent's idle state.
+- In the shipped Pi extension (`.pi/extensions/bee-guard.ts`), `hook activity` is
+  wired on `before_agent_start` (`UserPromptSubmit`), `tool_execution_start`
+  (`PreToolUse`), `tool_result` (`PostToolUse` / `PostToolUseFailure`),
+  `ui_prompt_start` (`Notification` with `notification_type: agent_needs_input`),
+  `ui_prompt_end` (`UserPromptSubmit` without prompt text), `agent_settled`
+  (`Stop`), and `session_shutdown` (`SessionEnd` with reason `quit`). The extension
+  tracks nested UI-prompt depth so only the outermost start enters `waiting_input`
+  and only the matching outermost end returns activity to `working` without
+  authoring an artificial conversation turn in `work`. Unmatched prompt ends are
+  ignored, and an unended prompt remains `waiting_input` until `agent_settled`
+  (`Stop`). Generic extension UI prompts are never classified as typed
+  `PermissionRequest`s. Every activity handler fails open, preserving fail-closed
+  guarantees on the separate `tool_call` write-guard path.
 - Nothing sweeps a `waiting_input` or `blocked` state left behind by a
   session that vanished without a turn boundary. Its heartbeat going stale,
   and then the session being swept, is what retires it.

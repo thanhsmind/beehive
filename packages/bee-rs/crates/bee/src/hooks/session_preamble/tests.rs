@@ -1681,3 +1681,47 @@ use crate::version::BEE_VERSION;
         let text_none = render(tmp_none.path());
         assert!(!text_none.contains(warning_line), "{text_none}");
     }
+
+    #[test]
+    fn dispatch_door_renders_selected_runtime_and_falls_back_for_unknown() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            &json!({
+                "team": {
+                    "claude": {"generation": {"model": "opus"}},
+                    "codex": {"generation": {"model": "gpt-5.6"}},
+                    "pi": {"generation": {"kind": "herding", "agent": "pi-agent"}}
+                }
+            }).to_string(),
+        );
+
+        // 1. Explicit "pi" runtime renders --runtime pi and team.pi
+        let text_pi = build_session_preamble_with_runtime(tmp.path(), None, None, "pi");
+        assert!(text_pi.contains("--runtime pi"), "{text_pi}");
+        assert!(text_pi.contains("team.pi"), "{text_pi}");
+        assert!(!text_pi.contains("--runtime claude"), "{text_pi}");
+
+        // 2. Explicit "codex" runtime renders --runtime codex and team.codex
+        let text_codex = build_session_preamble_with_runtime(tmp.path(), None, None, "codex");
+        assert!(text_codex.contains("--runtime codex"), "{text_codex}");
+        assert!(text_codex.contains("team.codex"), "{text_codex}");
+        assert!(!text_codex.contains("--runtime claude"), "{text_codex}");
+
+        // 3. Explicit "claude" runtime renders --runtime claude and team.claude
+        let text_claude = build_session_preamble_with_runtime(tmp.path(), None, None, "claude");
+        assert!(text_claude.contains("--runtime claude"), "{text_claude}");
+        assert!(text_claude.contains("team.claude"), "{text_claude}");
+
+        // 4. Unknown/malformed runtime falls back to claude
+        let text_unknown = build_session_preamble_with_runtime(tmp.path(), None, None, "unknown-runtime");
+        assert!(text_unknown.contains("--runtime claude"), "{text_unknown}");
+        assert!(text_unknown.contains("team.claude"), "{text_unknown}");
+        assert!(!text_unknown.contains("--runtime unknown-runtime"), "{text_unknown}");
+
+        // 5. Default 3-arg builder renders claude
+        let text_default = build_session_preamble(tmp.path(), None, None);
+        assert!(text_default.contains("--runtime claude"), "{text_default}");
+        assert!(text_default.contains("team.claude"), "{text_default}");
+    }

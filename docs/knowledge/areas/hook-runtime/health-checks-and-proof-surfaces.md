@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "codex-runtime-parity D1, D2"]
+  decisions: [a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "codex-runtime-parity D1, D2", "pi-parity-review-fixes D5, D6"]
   sources: ["codex-sandbox-baseline cells codex-sandbox-baseline-2/codex-sandbox-baseline-4 (nested test entrypoints use the shared isolated runner; external integration keeps real status/output grading, 2026-07-16)", "codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", codex-native-runtime-v2 cnr2-13/cnr2-14 (read-only doctor rows; conformance suite over real binaries with negative-state assertions), gh22-completion g22-3/g22-4/g22-6 (three-state doctor verdict and static attestation; deep skill-inventory audit; scripted real-CLI canary), pre-162-fixes p162-1 (doctor resolves hook handlers at host topology), "docs/specs/hook-runtime.md#E2", "docs/specs/hook-runtime.md#E3", "docs/specs/hook-runtime.md#E9", "docs/specs/hook-runtime.md#E10", "docs/specs/hook-runtime.md#E11", "docs/specs/hook-runtime.md#E12", "docs/specs/hook-runtime.md#E13", "docs/specs/hook-runtime.md#E14", "docs/specs/hook-runtime.md#P1", "docs/specs/hook-runtime.md#P2", "docs/specs/hook-runtime.md#P9"]
   authoritative_for: "hook-runtime: health reporting and the proof surfaces behind the guardrails"
 ---
@@ -104,6 +104,17 @@ against isolated fixtures, asserting that a denied action changed nothing.
   requires the isolated canary suite. Trust wording is probe-version-scoped:
   a CLI version other than the probed one reads `unprobed_version` (re-probe
   suggested), never a blanket "unsupported".
+
+- `bee doctor --runtime pi` returns a fail-closed health report across mechanical
+  rows (`hooks_file`, `hook_handler`, `skills_installed`,
+  `wiring_matches_binary`, `binary_freshness`, `herding_transport`). Pi has no
+  structurally unprovable trust rows; `doctor attest --runtime pi` is refused.
+  Whole-file equality verifies `.pi/extensions/bee-guard.ts` against the
+  embedded extension bytes. Binary freshness checks the release version against
+  `.claude-plugin/plugin.json` in both source and host repositories. Herding
+  transport validates configured agent pane transport readiness (tmux or
+  direct). Any required row that is not ok or unknown results in a `blocked`
+  verdict (exit 1) (pi-parity-review-fixes D5, D6).
 
 - Doctor resolves hook handlers at HOST topology: each handler filename is
   checked at both `.bee/bin/hooks/` and `hooks/` (dual-location, evidence

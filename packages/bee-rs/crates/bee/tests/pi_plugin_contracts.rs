@@ -2174,6 +2174,228 @@ fn the_session_preamble_is_injected_once_and_a_reload_never_re_runs_session_init
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
+    node_or_skip!("injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for harness");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir for test repo");
+    write_real_bee(dir.path());
+
+    let config = json!({
+        "team": {
+            "pi": {
+                "extraction": {
+                    "kind": "herding",
+                    "agent": "pi-worker-1"
+                }
+            },
+            "claude": {
+                "extraction": {
+                    "model": "haiku"
+                }
+            },
+            "codex": {
+                "extraction": {
+                    "kind": "native",
+                    "model": "gpt-5.6-sol"
+                }
+            }
+        },
+        "herding": {
+            "agents": {
+                "pi-worker-1": ["pi", "--model", "dummy"]
+            }
+        }
+    });
+    std::fs::write(
+        dir.path().join(".bee").join("config.json"),
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .expect("write config.json");
+
+    // 1. Normal injected preamble through real Pi extension harness
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("session_start", dir.path(), "sess-pi-inj", json!({"reason": "new"})),
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                "sess-pi-inj",
+                json!({"prompt": "first turn", "systemPrompt": "BASE"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw, "session_start threw: {:?}", run.results[0]);
+    assert!(!run.results[1].threw, "before_agent_start threw: {:?}", run.results[1]);
+
+    let normal_system_prompt = run.results[1]
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .expect("normal systemPrompt must be present");
+
+    let run_session_init = |payload: Value| -> String {
+        let mut child = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(["hook", "session-init"])
+            .env_remove("BEE_HERDING_WORKER")
+            .env_remove("BEE_HERDING_JOB_ID")
+            .current_dir(dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn session-init");
+        {
+            let mut stdin = child.stdin.take().expect("stdin");
+            stdin.write_all(payload.to_string().as_bytes()).expect("write stdin");
+        }
+        let out = child.wait_with_output().expect("wait_with_output");
+        assert!(
+            out.status.success(),
+            "session-init failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    // 2. Compact injected text through session-init with source=compact
+    let compact_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-pi-compact",
+        "runtime": "pi"
+    }));
+
+    let extract_args = |label: &str, text: &str, expected_runtime: &str| -> Vec<String> {
+        let line = text
+            .lines()
+            .find(|l| l.contains("Every subagent/worker dispatch starts with `"))
+            .unwrap_or_else(|| panic!("{label}: dispatch guidance line not found in injected text:\n{text}"));
+        let cmd = line
+            .split('`')
+            .nth(1)
+            .unwrap_or_else(|| panic!("{label}: no command found in backticks on line: {line}"));
+        assert!(
+            cmd.contains(&format!("--runtime {expected_runtime}")),
+            "{label}: extracted command must contain '--runtime {expected_runtime}', got: {cmd}"
+        );
+        let runnable = cmd
+            .replace("cell|gather|reviewer|advisor", "gather")
+            .replace("[--role <name>]", "--role extraction");
+        runnable
+            .split_whitespace()
+            .skip(1)
+            .map(String::from)
+            .collect()
+    };
+
+    // Verify both normal and compact Pi injection publish --runtime pi and execute team.pi herding
+    for (label, injected_text) in [("normal", normal_system_prompt), ("compact", compact_text.as_str())] {
+        let args = extract_args(label, injected_text, "pi");
+        let out = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(&args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap_or_else(|e| panic!("{label}: failed to execute dispatch prepare: {e}"));
+        assert!(
+            out.status.success(),
+            "{label}: dispatch prepare with args {:?} failed (exit code {:?}): stdout={}, stderr={}",
+            args,
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let val: Value = serde_json::from_slice(&out.stdout).expect("parse dispatch prepare JSON");
+        assert_eq!(val["tool"], "Bash", "{label}: expected tool 'Bash' (herding only, no Agent tool)");
+        let cmd = val["payload"]["command"].as_str().expect("payload.command");
+        assert!(cmd.contains("herding run"), "{label}: payload command must be herding run: {cmd}");
+        assert!(cmd.contains("pi-worker-1"), "{label}: payload command must resolve team.pi agent pi-worker-1: {cmd}");
+        assert_eq!(val["economics"]["channel"], "herding-exec", "{label}: expected herding-exec channel");
+    }
+
+    // Default runtime (absent runtime field) must fall back to Claude
+    let default_claude_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-default-claude"
+    }));
+    let args_default = extract_args("default-claude", &default_claude_text, "claude");
+    let out_default = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_default)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare default");
+    assert!(out_default.status.success());
+    let val_default: Value = serde_json::from_slice(&out_default.stdout).expect("parse JSON");
+    assert_eq!(val_default["tool"], "Agent", "default dispatch prepare must select Claude Agent tool");
+    assert_eq!(val_default["payload"]["model"], "haiku", "default dispatch prepare must resolve team.claude model");
+
+    // Explicit Claude must remain Claude
+    let explicit_claude_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-explicit-claude",
+        "runtime": "claude"
+    }));
+    let args_claude = extract_args("explicit-claude", &explicit_claude_text, "claude");
+    let out_claude = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_claude)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare claude");
+    assert!(out_claude.status.success());
+    let val_claude: Value = serde_json::from_slice(&out_claude.stdout).expect("parse JSON");
+    assert_eq!(val_claude["tool"], "Agent", "explicit claude dispatch prepare must select Claude Agent tool");
+    assert_eq!(val_claude["payload"]["model"], "haiku", "explicit claude dispatch prepare must resolve team.claude model");
+
+    // Explicit Codex must remain Codex
+    let explicit_codex_text = run_session_init(json!({
+        "hook_event_name": "SessionStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-explicit-codex",
+        "runtime": "codex"
+    }));
+    let args_codex = extract_args("explicit-codex", &explicit_codex_text, "codex");
+    let out_codex = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        .args(&args_codex)
+        .current_dir(dir.path())
+        .output()
+        .expect("dispatch prepare codex");
+    assert!(out_codex.status.success());
+    let val_codex: Value = serde_json::from_slice(&out_codex.stdout).expect("parse JSON");
+    let codex_cmd = val_codex["payload"]["command"].as_str().expect("payload.command");
+    assert!(
+        codex_cmd.contains("codex exec") && codex_cmd.contains("gpt-5.6-sol"),
+        "explicit codex dispatch prepare must resolve team.codex model: {codex_cmd}"
+    );
+
+    // Malformed, unknown, non-string, or null runtime input must fall back to Claude
+    for malformed_val in [json!("unknown-runtime"), json!(12345), json!(null)] {
+        let malformed_text = run_session_init(json!({
+            "hook_event_name": "SessionStart",
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": "sess-malformed",
+            "runtime": malformed_val
+        }));
+        let args_malformed = extract_args("malformed", &malformed_text, "claude");
+        let out_malformed = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+            .args(&args_malformed)
+            .current_dir(dir.path())
+            .output()
+            .expect("dispatch prepare malformed fallback");
+        assert!(out_malformed.status.success());
+        let val_malformed: Value = serde_json::from_slice(&out_malformed.stdout).expect("parse JSON");
+        assert_eq!(val_malformed["tool"], "Agent", "malformed fallback must select Claude Agent tool");
+        assert_eq!(val_malformed["payload"]["model"], "haiku", "malformed fallback must resolve team.claude model");
+    }
+}
+
 /// Every ADVISORY event the belt wires (D2's event map), including
 /// deliberately shapeless payloads: a `tool_result` with no toolName and no
 /// input, and a `session_start` with no reason at all.
@@ -2189,8 +2411,13 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("session_start", json!({})),
         ("before_agent_start", json!({"prompt": "hello", "systemPrompt": "BASE"})),
         ("before_agent_start", json!({})),
+        ("tool_execution_start", json!({"toolName": "write", "toolCallId": "call-1", "args": {"path": "/tmp/x"}})),
+        ("tool_execution_start", json!({})),
         ("tool_result", json!({"toolName": "write", "input": {"path": "/tmp/x", "content": "hi"}})),
         ("tool_result", json!({})),
+        ("ui_prompt_start", json!({"reason": "ui_prompt", "kind": "select", "title": "Pick option"})),
+        ("ui_prompt_start", json!({})),
+        ("ui_prompt_end", json!({})),
         ("agent_settled", json!({})),
         ("session_before_compact", json!({})),
         ("session_shutdown", json!({"reason": "quit"})),
@@ -2935,6 +3162,368 @@ fn activity_state_transitions_per_mapped_event() {
     assert_eq!(t_lines[1]["event"].as_str(), Some("Stop"));
     assert_eq!(t_lines[2]["state"].as_str(), Some("exited"));
     assert_eq!(t_lines[2]["event"].as_str(), Some("SessionEnd"));
+}
+
+#[cfg(unix)]
+#[test]
+fn activity_pre_tool_and_ui_prompt_spans_and_nesting_contracts() {
+    node_or_skip!("activity_pre_tool_and_ui_prompt_spans_and_nesting_contracts");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+
+    const SESSION_ID: &str = "sess-act-span";
+    let session_file = dir.path().join(".bee").join("sessions").join(format!("{SESSION_ID}.json"));
+
+    // 1. Initial before_agent_start transitions to working
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                SESSION_ID,
+                json!({"prompt": "start working", "systemPrompt": "BASE"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+
+    // 2. tool_execution_start (PreToolUse) -> state working, event PreToolUse, tool_name mapped, tool_use_id recorded
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_execution_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "toolName": "write",
+                    "toolCallId": "call-pre-1",
+                    "args": {"path": "/tmp/test.txt", "content": "hello"}
+                }),
+            ),
+        ],
+    );
+    assert!(run.results[0].registered, "tool_execution_start must be registered by the belt");
+    assert!(!run.results[0].threw, "tool_execution_start threw: {:?}", run.results[0].message);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("working"));
+    assert_eq!(session_json["activity"]["event"].as_str(), Some("PreToolUse"));
+    assert_eq!(session_json["activity"]["tool_name"].as_str(), Some("Write"));
+    assert_eq!(session_json["activity"]["tool_use_id"].as_str(), Some("call-pre-1"));
+    assert!(session_json["activity"].get("tool_input").is_none(), "tool input must not be stored");
+
+    // Tool execution start with missing toolCallId and unknown tool name
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_execution_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "toolName": "custom_extension_tool",
+                    "args": {"query": "something"}
+                }),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("working"));
+    assert_eq!(session_json["activity"]["event"].as_str(), Some("PreToolUse"));
+    assert_eq!(
+        session_json["activity"]["tool_name"].as_str(),
+        Some("Write"),
+        "unknown tool name follows fail-safe mapping to Write"
+    );
+    assert!(session_json["activity"].get("tool_use_id").is_none());
+
+    // 3. UI Prompt Start (outer) -> enters waiting_input, event Notification
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "reason": "ui_prompt",
+                    "kind": "select",
+                    "title": "Select an option"
+                }),
+            ),
+        ],
+    );
+    assert!(run.results[0].registered, "ui_prompt_start must be registered by the belt");
+    assert!(!run.results[0].threw);
+
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("waiting_input"),
+        "outer ui_prompt_start must transition activity to waiting_input"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("Notification")
+    );
+
+    // 4. Nested prompts: outer start -> inner start -> inner end leaves state as waiting_input
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "reason": "ui_prompt",
+                    "kind": "select",
+                    "title": "Outer prompt"
+                }),
+            ),
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "reason": "ui_prompt",
+                    "kind": "confirm",
+                    "title": "Nested confirmation"
+                }),
+            ),
+            advisory_call(
+                "ui_prompt_end",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    assert!(!run.results[1].threw);
+    assert!(!run.results[2].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("waiting_input"),
+        "inner ui_prompt_end must not end waiting_input while outer prompt is still open"
+    );
+
+    // Capture work text before outer ui_prompt_end
+    let work_text_before = session_json["work"]["text"].as_str().unwrap_or("").to_string();
+
+    // 5. Matching outer UI Prompt End -> transitions back to working (event UserPromptSubmit, no prompt text added)
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "reason": "ui_prompt",
+                    "kind": "select",
+                    "title": "Outer prompt"
+                }),
+            ),
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({
+                    "reason": "ui_prompt",
+                    "kind": "confirm",
+                    "title": "Nested confirmation"
+                }),
+            ),
+            advisory_call(
+                "ui_prompt_end",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+            advisory_call(
+                "ui_prompt_end",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    assert!(!run.results[1].threw);
+    assert!(!run.results[2].threw);
+    assert!(!run.results[3].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("working"),
+        "matching outer ui_prompt_end must transition activity to working"
+    );
+    assert_eq!(
+        session_json["activity"]["event"].as_str(),
+        Some("UserPromptSubmit")
+    );
+    let work_text_after = session_json["work"]["text"].as_str().unwrap_or("").to_string();
+    assert_eq!(
+        work_text_before, work_text_after,
+        "ui_prompt_end must not append any prompt text or create a work-record turn"
+    );
+
+    // 7. Unmatched UI Prompt End -> ignored, remains working
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "ui_prompt_end",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("working"));
+
+    // 8. Unended UI prompt start remains waiting_input until Stop (agent_settled)
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "ui_prompt_start",
+                dir.path(),
+                SESSION_ID,
+                json!({"reason": "ui_prompt", "kind": "input", "title": "Unended prompt"}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(session_json["activity"]["state"].as_str(), Some("waiting_input"));
+
+    // Stop transitions to idle
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "agent_settled",
+                dir.path(),
+                SESSION_ID,
+                json!({}),
+            ),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    let content = std::fs::read_to_string(&session_file).expect("read session file");
+    let session_json: Value = serde_json::from_str(&content).expect("valid JSON");
+    assert_eq!(
+        session_json["activity"]["state"].as_str(),
+        Some("idle"),
+        "unended ui_prompt_start must transition to idle on agent_settled (Stop)"
+    );
+
+    // 9. Missing fields / shapeless payloads do not throw
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("tool_execution_start", dir.path(), SESSION_ID, json!({})),
+            advisory_call("ui_prompt_start", dir.path(), SESSION_ID, json!({})),
+            advisory_call("ui_prompt_end", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+    assert!(!run.results[0].threw);
+    assert!(!run.results[1].threw);
+    assert!(!run.results[2].threw);
+}
+
+#[cfg(unix)]
+#[test]
+fn activity_advisory_fail_open_and_tool_call_fail_closed() {
+    node_or_skip!("activity_advisory_fail_open_and_tool_call_fail_closed");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+
+    // When bee denies, crashes, or produces unparseable output:
+    for behavior in [
+        StubBehavior::Deny("forbidden".to_string()),
+        StubBehavior::Crash,
+        StubBehavior::UnparseableVerdict,
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_stub_bee(dir.path(), &behavior);
+
+        // 1. Advisory tool_execution_start, ui_prompt_start, ui_prompt_end do NOT throw and do NOT block
+        let run = run_harness(
+            &harness,
+            vec![
+                advisory_call(
+                    "tool_execution_start",
+                    dir.path(),
+                    "sess-fail-open",
+                    json!({"toolName": "write", "toolCallId": "call-1", "args": {"path": "/tmp/f"}}),
+                ),
+                advisory_call(
+                    "ui_prompt_start",
+                    dir.path(),
+                    "sess-fail-open",
+                    json!({"reason": "ui_prompt", "kind": "confirm"}),
+                ),
+                advisory_call(
+                    "ui_prompt_end",
+                    dir.path(),
+                    "sess-fail-open",
+                    json!({}),
+                ),
+            ],
+        );
+        assert!(run.results[0].registered, "tool_execution_start must be registered");
+        assert!(!run.results[0].threw);
+        assert!(!run.results[0].blocked());
+
+        assert!(run.results[1].registered, "ui_prompt_start must be registered");
+        assert!(!run.results[1].threw);
+        assert!(!run.results[1].blocked());
+
+        assert!(run.results[2].registered, "ui_prompt_end must be registered");
+        assert!(!run.results[2].threw);
+        assert!(!run.results[2].blocked());
+
+        // 2. tool_call stays fail-closed: it MUST block
+        let run_block = run_harness(
+            &harness,
+            vec![
+                json!({
+                    "event": "tool_call",
+                    "event_arg": {
+                        "toolName": "write",
+                        "input": {"path": "/tmp/f", "content": "data"}
+                    },
+                    "cwd": dir.path().to_string_lossy(),
+                    "session_id": "sess-fail-closed",
+                }),
+            ],
+        );
+        assert!(run_block.results[0].registered);
+        assert!(
+            run_block.results[0].blocked(),
+            "tool_call must block under fail-closed write-guard when bee fails"
+        );
+    }
 }
 
 #[cfg(unix)]

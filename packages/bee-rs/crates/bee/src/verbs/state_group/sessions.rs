@@ -426,10 +426,11 @@ pub(crate) fn resolve_handoff_workflow_id(
     lane_feature: Option<&str>,
     session_id_flag: Option<&str>,
 ) -> Result<Option<String>, Err2> {
-    let workflows = list_workflows(root)?;
+    let mut workflows = list_workflows(root)?;
     if workflows.is_empty() {
         return Ok(None); // C1: no workflow records anywhere.
     }
+    workflows_list_sort(&mut workflows)?;
     if let Some(f) = lane_feature {
         return match find_live_workflow(&workflows, f) {
             Some(wf) => Ok(Some(wf_id(wf))),
@@ -451,7 +452,13 @@ pub(crate) fn resolve_handoff_workflow_id(
     let default_record = read_state_strict(root)?;
     if let Some(v) = default_record.get("feature") {
         if truthy(v) {
-            if let Some(wf) = find_live_workflow(&workflows, &js_disp(v)) {
+            let feat = js_disp(v);
+            if let Some(wf) = find_live_workflow(&workflows, &feat) {
+                return Ok(Some(wf_id(wf)));
+            }
+            if let Some(wf) = workflows.iter().find(|w| {
+                w.get("feature").unwrap_or(&Value::Null) == &Value::String(feat.clone())
+            }) {
                 return Ok(Some(wf_id(wf)));
             }
         }

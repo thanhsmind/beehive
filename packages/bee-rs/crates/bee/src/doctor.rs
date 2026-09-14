@@ -44,11 +44,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const ATTEST_REL: &str = ".bee/doctor-attest.json";
+const PI_EXTENSION_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Runtime {
     Claude,
     Codex,
+    Pi,
 }
 
 impl Runtime {
@@ -56,12 +58,14 @@ impl Runtime {
         match self {
             Runtime::Claude => "claude",
             Runtime::Codex => "codex",
+            Runtime::Pi => "pi",
         }
     }
     fn parse(s: &str) -> Option<Self> {
         match s {
             "claude" => Some(Runtime::Claude),
             "codex" => Some(Runtime::Codex),
+            "pi" => Some(Runtime::Pi),
             _ => None,
         }
     }
@@ -70,12 +74,14 @@ impl Runtime {
         match self {
             Runtime::Claude => ".claude/settings.json",
             Runtime::Codex => ".codex/hooks.json",
+            Runtime::Pi => ".pi/extensions/bee-guard.ts",
         }
     }
     fn skills_rel(self) -> &'static str {
         match self {
             Runtime::Claude => ".claude/skills",
             Runtime::Codex => ".agents/skills",
+            Runtime::Pi => ".agents/skills",
         }
     }
 }
@@ -137,17 +143,38 @@ fn sha256_of(bytes: &[u8]) -> String {
 /// so `binary_freshness` reports unknown there rather than repeating the
 /// same verdict under a second name.
 fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
+    mechanical_rows_with_env(root, runtime, &|k| std::env::var(k).ok())
+}
+
+fn mechanical_rows_with_env(
+    root: &Path,
+    runtime: Runtime,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Vec<Row> {
     let mut rows = Vec::new();
 
     let hooks_path = root.join(runtime.hooks_rel());
-    let hooks_bytes = std::fs::read(&hooks_path).ok();
+    let (hooks_ok, hooks_detail, hooks_bytes) = match std::fs::read(&hooks_path) {
+        Ok(b) => (
+            Some(true),
+            format!("{} present ({} bytes)", runtime.hooks_rel(), b.len()),
+            Some(b),
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            Some(false),
+            format!("{} is missing — the runtime loads no bee hooks", runtime.hooks_rel()),
+            None,
+        ),
+        Err(e) => (
+            None,
+            format!("{} cannot be read ({e})", runtime.hooks_rel()),
+            None,
+        ),
+    };
     rows.push(Row {
         key: "hooks_file",
-        ok: Some(hooks_bytes.is_some()),
-        detail: match &hooks_bytes {
-            Some(b) => format!("{} present ({} bytes)", runtime.hooks_rel(), b.len()),
-            None => format!("{} is missing — the runtime loads no bee hooks", runtime.hooks_rel()),
-        },
+        ok: hooks_ok,
+        detail: hooks_detail,
     });
 
     // Hook-handler resolvability: the path every wired command names must
@@ -164,60 +191,76 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
     });
 
     let skills_dir = root.join(runtime.skills_rel());
-    let skill_count = std::fs::read_dir(&skills_dir)
-        .map(|e| e.filter_map(|x| x.ok()).filter(|x| x.path().is_dir()).count())
-        .unwrap_or(0);
+    let (skills_ok, skills_detail) = match std::fs::read_dir(&skills_dir) {
+        Ok(entries) => {
+            let skill_count = entries.filter_map(|x| x.ok()).filter(|x| x.path().is_dir()).count();
+            if skill_count > 0 {
+                (
+                    Some(true),
+                    format!("{} skill(s) under {}", skill_count, runtime.skills_rel()),
+                )
+            } else {
+                (
+                    Some(false),
+                    format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel()),
+                )
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            Some(false),
+            format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel()),
+        ),
+        Err(e) => (
+            None,
+            format!("{} cannot be enumerated ({e})", runtime.skills_rel()),
+        ),
+    };
     rows.push(Row {
         key: "skills_installed",
-        ok: Some(skill_count > 0),
-        detail: if skill_count > 0 {
-            format!("{} skill(s) under {}", skill_count, runtime.skills_rel())
-        } else {
-            format!("no skills under {} — the agent has no bee craft to load", runtime.skills_rel())
-        },
+        ok: skills_ok,
+        detail: skills_detail,
     });
 
     // The byte match. See the header: this stands in for the retired
     // capability baseline, against an artifact that still exists.
     //
-    // THE TWO RUNTIMES ARE NOT THE SAME SHAPE, and treating them alike is a
+    // THE THREE RUNTIMES ARE NOT THE SAME SHAPE, and treating them alike is a
     // false FAIL. `.codex/hooks.json` IS the rendered artifact, so whole-file
     // equality is the right question. `.claude/settings.json` is the user's
     // settings file that onboarding MERGES a `hooks` key into — it also
     // carries permissions and anything else the host put there, none of which
     // bee renders. Comparing the whole file there fails every correctly
     // installed repo. Only the `hooks` subtree is bee's to answer for.
-    let rendered = crate::devtools::render_projection_text_for(runtime.name());
-    rows.push(match runtime {
-        // `.codex/hooks.json` IS the rendered artifact — onboarding copies it,
-        // so whole-file equality is exactly the question, and a host running a
-        // different bee is caught.
-        Runtime::Codex => match (hooks_bytes.as_ref(), rendered) {
-            (Some(on_disk), Some(expected)) => {
-                let same = sha256_of(on_disk) == sha256_of(expected.as_bytes());
-                Row {
-                    key: "wiring_matches_binary",
-                    ok: Some(same),
-                    detail: if same {
-                        ".codex/hooks.json is byte-identical to what this bee renders".to_string()
-                    } else {
-                        ".codex/hooks.json differs from what this bee renders — re-run the installer to refresh it".to_string()
-                    },
+    // `.pi/extensions/bee-guard.ts` is a TypeScript extension whose canonical
+    // text is embedded at compile time — exact byte equality against the
+    // compiled extension is the right question.
+    match runtime {
+        Runtime::Codex => {
+            let rendered = crate::devtools::render_projection_text_for(runtime.name());
+            rows.push(match (hooks_bytes.as_ref(), rendered) {
+                (Some(on_disk), Some(expected)) => {
+                    let same = sha256_of(on_disk) == sha256_of(expected.as_bytes());
+                    Row {
+                        key: "wiring_matches_binary",
+                        ok: Some(same),
+                        detail: if same {
+                            ".codex/hooks.json is byte-identical to what this bee renders".to_string()
+                        } else {
+                            ".codex/hooks.json differs from what this bee renders — re-run the installer to refresh it".to_string()
+                        },
+                    }
                 }
+                _ => Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "no .codex/hooks.json to compare".to_string(),
+                },
+            });
+
+            if let Some(row) = binary_freshness_row(root) {
+                rows.push(row);
             }
-            _ => Row {
-                key: "wiring_matches_binary",
-                ok: Some(false),
-                detail: "no .codex/hooks.json to compare".to_string(),
-            },
-        },
-        // `.claude/settings.json` is the USER's file, with a hooks key merged
-        // in; it also carries permissions and whatever else the host put
-        // there, and the per-repo renderer feature-detects bee vs bee.exe. So
-        // byte equality against a shipped projection is the wrong question and
-        // fails every correct install. What must hold is that the wiring is
-        // bee's and points at the vendored binary — which is precisely what
-        // broke when the installer copied the binary in after onboarding.
+        }
         Runtime::Claude => {
             let parsed: Option<Value> =
                 hooks_bytes.as_ref().and_then(|b| serde_json::from_slice(b).ok());
@@ -236,7 +279,7 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
                     }
                 }
             }
-            Row {
+            rows.push(Row {
                 key: "wiring_points_at_the_binary",
                 ok: Some(total > 0 && wrong.is_empty()),
                 detail: if total == 0 {
@@ -250,12 +293,44 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
                         wrong.join("; ")
                     )
                 },
+            });
+
+            if let Some(row) = binary_freshness_row(root) {
+                rows.push(row);
             }
         }
-    });
+        Runtime::Pi => {
+            let extension_match = match hooks_bytes.as_ref() {
+                Some(on_disk) => {
+                    let same = on_disk.as_slice() == PI_EXTENSION_SOURCE.as_bytes();
+                    Row {
+                        key: "wiring_matches_binary",
+                        ok: Some(same),
+                        detail: if same {
+                            ".pi/extensions/bee-guard.ts is byte-identical to what this bee embeds".to_string()
+                        } else {
+                            ".pi/extensions/bee-guard.ts differs from what this bee embeds — re-run the installer to refresh it".to_string()
+                        },
+                    }
+                }
+                None => match hooks_ok {
+                    Some(false) => Row {
+                        key: "wiring_matches_binary",
+                        ok: Some(false),
+                        detail: "no .pi/extensions/bee-guard.ts to compare".to_string(),
+                    },
+                    _ => Row {
+                        key: "wiring_matches_binary",
+                        ok: None,
+                        detail: ".pi/extensions/bee-guard.ts cannot be read to compare".to_string(),
+                    },
+                },
+            };
+            rows.push(extension_match);
 
-    if let Some(row) = binary_freshness_row(root) {
-        rows.push(row);
+            rows.push(pi_binary_freshness_row(root));
+            rows.push(pi_herding_transport_row_with_env(root, env));
+        }
     }
 
     rows
@@ -396,12 +471,21 @@ pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
 /// rather than fresh. The mtime leg still runs first: real evidence of drift
 /// beats "unknown".
 fn binary_freshness_row(root: &Path) -> Option<Row> {
+    binary_freshness_row_impl(root, false)
+}
+
+fn pi_binary_freshness_row(root: &Path) -> Row {
+    binary_freshness_row_impl(root, true).expect("pi binary freshness is always present")
+}
+
+fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
     const KEY: &str = "binary_freshness";
     const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
         -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
 
     let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
-    if !workspace_cargo.is_file() {
+    let is_source_checkout = workspace_cargo.is_file();
+    if !is_source_checkout && !is_pi {
         return None;
     }
 
@@ -454,26 +538,28 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         ProbedBeeVersion::Failed(reason) => probe_failed = Some(reason),
     }
 
-    if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
-        let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
-        for path in source_inputs(root) {
-            let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
-            if mtime > bin_mtime && newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
-                newest = Some((path, mtime));
+    if is_source_checkout {
+        if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
+            let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
+            for path in source_inputs(root) {
+                let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
+                if mtime > bin_mtime && newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
+                    newest = Some((path, mtime));
+                }
             }
-        }
-        if let Some((path, mtime)) = newest {
-            let rel = path.strip_prefix(root).unwrap_or(&path);
-            return Some(Row {
-                key: KEY,
-                ok: Some(false),
-                detail: format!(
-                    "{} was modified {} (binary is {}). {REMEDY}",
-                    rel.display(),
-                    fmt_system_time(mtime),
-                    fmt_system_time(bin_mtime)
-                ),
-            });
+            if let Some((path, mtime)) = newest {
+                let rel = path.strip_prefix(root).unwrap_or(&path);
+                return Some(Row {
+                    key: KEY,
+                    ok: Some(false),
+                    detail: format!(
+                        "{} was modified {} (binary is {}). {REMEDY}",
+                        rel.display(),
+                        fmt_system_time(mtime),
+                        fmt_system_time(bin_mtime)
+                    ),
+                });
+            }
         }
     }
 
@@ -481,21 +567,57 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         return Some(Row {
             key: KEY,
             ok: None,
-            detail: format!(
-                "could not read the installed binary's release version (bee rs-info: {reason}), \
-                 and no source input is newer than it — freshness is unknown. {REMEDY}"
-            ),
+            detail: if is_source_checkout {
+                format!(
+                    "could not read the installed binary's release version (bee rs-info: {reason}), \
+                     and no source input is newer than it — freshness is unknown. {REMEDY}"
+                )
+            } else {
+                format!(
+                    "could not read the installed binary's release version (bee rs-info: {reason}) \
+                     — freshness is unknown. {REMEDY}"
+                )
+            },
         });
     }
 
     Some(Row {
         key: KEY,
         ok: Some(true),
-        detail: format!(
-            "installed binary matches source (version {source_version}), no source input newer \
-             than the binary"
-        ),
+        detail: if is_source_checkout {
+            format!(
+                "installed binary matches source (version {source_version}), no source input newer \
+                 than the binary"
+            )
+        } else {
+            format!("installed binary matches release version {source_version}")
+        },
     })
+}
+
+#[allow(dead_code)]
+fn pi_herding_transport_row(root: &Path) -> Row {
+    pi_herding_transport_row_with_env(root, &|k| std::env::var(k).ok())
+}
+
+fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Row {
+    const KEY: &str = "herding_transport";
+    match crate::herding::transport_kind_at(root) {
+        Ok(kind) => {
+            let (ready, reason, _) =
+                crate::verbs::drivers::herding_transport_probe_for(kind, env);
+            Row {
+                key: KEY,
+                ok: Some(ready),
+                detail: reason,
+            }
+        }
+        Err(reason) => Row {
+            key: KEY,
+            ok: None,
+            detail: reason,
+        },
+    }
 }
 
 /// The release version from `<root>/.claude-plugin/plugin.json`.
@@ -772,7 +894,11 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
 
 fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCode {
     if runtime != Runtime::Codex {
-        let msg = "bee doctor attest: --runtime codex only. Claude has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.";
+        let msg = match runtime {
+            Runtime::Claude => "bee doctor attest: --runtime codex only. Claude has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
+            Runtime::Pi => "bee doctor attest: --runtime codex only. Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest.",
+            Runtime::Codex => unreachable!(),
+        };
         if as_json {
             print!("{}\n", jsjson::stringify(&json!({"error": msg, "kind": "not_applicable"})));
         } else {

@@ -175,6 +175,12 @@ fn unproven_argv_shapes_defer_to_the_catalog() {
     assert!(try_native(&osv(&["status"])).is_none(), "doctor must not claim another verb");
 }
 
+#[test]
+fn doctor_accepts_runtime_pi() {
+    let osv = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
+    assert!(try_native(&osv(&["doctor", "--runtime", "pi"])).is_some(), "doctor must accept runtime pi");
+}
+
 // ─── binary_freshness ───────────────────────────────────────────────────
 
 /// A minimal bee SOURCE checkout: `packages/bee-rs/Cargo.toml` (the
@@ -657,4 +663,301 @@ fn doctor_emits_one_advisory_on_models_only_config_and_none_on_team() {
     // 4. neither key: no advisory emitted
     let root_neither = repo_with_config(&tmp.path().join("neither"), r#"{}"#);
     assert!(team_config_advisory(&root_neither).is_none());
+}
+
+// ═══ Runtime::Pi doctor tests ══════════════════════════════════════════════
+
+fn mock_herdr_env(key: &str) -> Option<String> {
+    match key {
+        "HERDR_ENV" => Some("1".to_string()),
+        "HERDR_PANE_ID" => Some("w1:p1".to_string()),
+        _ => None,
+    }
+}
+
+fn mock_tmux_env(key: &str) -> Option<String> {
+    match key {
+        "TMUX" => Some("1".to_string()),
+        "TMUX_PANE" => Some("%1".to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(unix)]
+fn pi_repo(
+    tmp: &Path,
+    with_binary: bool,
+    with_skills: bool,
+    extension: Option<&str>,
+    plugin_version: Option<&str>,
+    config: Option<&str>,
+) -> PathBuf {
+    let root = tmp.join("repo");
+    std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
+    if with_binary {
+        let bin = root.join(".bee/bin/bee");
+        let ver = plugin_version.unwrap_or("0.1.0");
+        write_executable_binary(&bin, "0.1.0", ver);
+    }
+    if with_skills {
+        std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+    }
+    if let Some(text) = extension {
+        std::fs::create_dir_all(root.join(".pi/extensions")).unwrap();
+        std::fs::write(root.join(".pi/extensions/bee-guard.ts"), text).unwrap();
+    }
+    if let Some(ver) = plugin_version {
+        std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+        std::fs::write(
+            root.join(".claude-plugin/plugin.json"),
+            format!("{{\"name\": \"bee\", \"version\": \"{ver}\"}}\n"),
+        )
+        .unwrap();
+    }
+    if let Some(cfg) = config {
+        std::fs::write(root.join(".bee/config.json"), cfg).unwrap();
+    }
+    root
+}
+
+#[cfg(unix)]
+fn pi_rows_of(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Vec<(String, Option<bool>, String)> {
+    mechanical_rows_with_env(root, Runtime::Pi, env)
+        .into_iter()
+        .map(|r| (r.key.to_string(), r.ok, r.detail))
+        .collect()
+}
+
+/// A complete, current Pi installation reports ready and exits zero.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_ready_case() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    assert_eq!(rows.len(), 6, "Pi doctor must have exactly 6 required rows");
+    for (key, ok, detail) in &rows {
+        assert_eq!(*ok, Some(true), "row {key} failed: {detail}");
+    }
+
+    assert!(rows.iter().all(|(_, ok, _)| *ok == Some(true)));
+}
+
+/// Pi doctor reports not_ok / unknown on absent artifacts: extension, binary, skills, or plugin manifest.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_absent_cases() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // 1. Missing extension
+    let root_no_ext = pi_repo(
+        &tmp.path().join("no_ext"),
+        true,
+        true,
+        None,
+        Some("0.1.0"),
+        None,
+    );
+    let rows = pi_rows_of(&root_no_ext, &mock_herdr_env);
+    let hooks_file = rows.iter().find(|(k, _, _)| k == "hooks_file").unwrap();
+    assert_eq!(hooks_file.1, Some(false), "missing extension must report not_ok");
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "missing extension must report not_ok for wiring");
+
+    // 2. Missing binary
+    let root_no_bin = pi_repo(
+        &tmp.path().join("no_bin"),
+        false,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        None,
+    );
+    let rows_no_bin = pi_rows_of(&root_no_bin, &mock_herdr_env);
+    let hook_handler = rows_no_bin.iter().find(|(k, _, _)| k == "hook_handler").unwrap();
+    assert_eq!(hook_handler.1, Some(false), "missing binary must report not_ok");
+    let freshness = rows_no_bin.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness.1, None, "missing binary freshness must report unknown");
+
+    // 3. Missing skills
+    let root_no_skills = pi_repo(
+        &tmp.path().join("no_skills"),
+        true,
+        false,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        None,
+    );
+    let rows_no_skills = pi_rows_of(&root_no_skills, &mock_herdr_env);
+    let skills = rows_no_skills.iter().find(|(k, _, _)| k == "skills_installed").unwrap();
+    assert_eq!(skills.1, Some(false), "missing skills must report not_ok");
+
+    // 4. Missing plugin manifest in host repo
+    let root_no_plugin = pi_repo(
+        &tmp.path().join("no_plugin"),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        None,
+        None,
+    );
+    let rows_no_plugin = pi_rows_of(&root_no_plugin, &mock_herdr_env);
+    let freshness_no_plugin = rows_no_plugin.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness_no_plugin.1, None, "missing plugin manifest must report unknown");
+}
+
+/// Pi doctor reports unknown on unreadable extension or skills.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_unreadable_cases() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    // Unreadable extension
+    let ext_path = root.join(".pi/extensions/bee-guard.ts");
+    let orig_perms = std::fs::metadata(&ext_path).unwrap().permissions();
+    let mut zero_perms = orig_perms.clone();
+    zero_perms.set_mode(0o000);
+    std::fs::set_permissions(&ext_path, zero_perms).unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let hooks_file = rows.iter().find(|(k, _, _)| k == "hooks_file").unwrap();
+    assert_eq!(hooks_file.1, None, "unreadable hooks_file must be unknown: {:?}", hooks_file.2);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, None, "unreadable wiring must be unknown: {:?}", wiring.2);
+
+    // Restore permissions
+    std::fs::set_permissions(&ext_path, orig_perms).unwrap();
+
+    // Unreadable skills directory
+    let skills_dir = root.join(".agents/skills");
+    let orig_skills_perms = std::fs::metadata(&skills_dir).unwrap().permissions();
+    let mut zero_skills_perms = orig_skills_perms.clone();
+    zero_skills_perms.set_mode(0o000);
+    std::fs::set_permissions(&skills_dir, zero_skills_perms).unwrap();
+
+    let rows_skills = pi_rows_of(&root, &mock_herdr_env);
+    let skills = rows_skills.iter().find(|(k, _, _)| k == "skills_installed").unwrap();
+    assert_eq!(skills.1, None, "unreadable skills must be unknown: {:?}", skills.2);
+
+    // Restore permissions
+    std::fs::set_permissions(&skills_dir, orig_skills_perms).unwrap();
+}
+
+/// Pi doctor reports not_ok on drifted extension bytes.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_drifted_extension() {
+    let tmp = tempfile::tempdir().unwrap();
+    let drifted = format!("{PI_EXTENSION_SOURCE}\n// modification");
+    let root = pi_repo(tmp.path(), true, true, Some(&drifted), Some("0.1.0"), None);
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "drifted extension bytes must report not_ok");
+    assert!(wiring.2.contains("differs from what this bee embeds"), "{}", wiring.2);
+}
+
+/// Pi doctor reports unknown on malformed transport config.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_malformed_config() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(
+        tmp.path(),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        Some(r#"{"herding": {"transport": "invalid_transport"}}"#),
+    );
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let transport = rows.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport.1, None, "malformed transport config must report unknown");
+    assert!(transport.2.contains("herding.transport is \"invalid_transport\""), "{}", transport.2);
+}
+
+/// Pi doctor reports not_ok on missing herding pane.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_missing_pane() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+
+    // 1. Completely missing environment
+    let rows_none = pi_rows_of(&root, &|_| None);
+    let transport_none = rows_none.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_none.1, Some(false), "missing HERDR_ENV must report not_ok");
+    assert!(transport_none.2.contains("HERDR_ENV is not set"), "{}", transport_none.2);
+
+    // 2. HERDR_ENV set but missing HERDR_PANE_ID
+    let rows_no_pane = pi_rows_of(&root, &|k| if k == "HERDR_ENV" { Some("1".to_string()) } else { None });
+    let transport_no_pane = rows_no_pane.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_no_pane.1, Some(false), "missing HERDR_PANE_ID must report not_ok");
+    assert!(transport_no_pane.2.contains("HERDR_PANE_ID is not set"), "{}", transport_no_pane.2);
+}
+
+/// Pi doctor reports not_ok on stale binary release version.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_stale_binary() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "0.1.0", "0.0.9");
+    std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+    std::fs::create_dir_all(root.join(".pi/extensions")).unwrap();
+    std::fs::write(root.join(".pi/extensions/bee-guard.ts"), PI_EXTENSION_SOURCE).unwrap();
+    std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+    std::fs::write(
+        root.join(".claude-plugin/plugin.json"),
+        "{\"name\": \"bee\", \"version\": \"0.1.0\"}\n",
+    )
+    .unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let freshness = rows.iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    assert_eq!(freshness.1, Some(false), "stale binary version must report not_ok");
+    assert!(freshness.2.contains("0.0.9"), "{}", freshness.2);
+    assert!(freshness.2.contains("0.1.0"), "{}", freshness.2);
+}
+
+/// Pi doctor refuses attest because Pi has no trust-unknown rows to attest.
+#[test]
+fn pi_doctor_attest_is_refused() {
+    let code = run_attest(Runtime::Pi, None, true);
+    assert_ne!(
+        format!("{code:?}"),
+        format!("{:?}", ExitCode::SUCCESS),
+        "attesting pi must refuse"
+    );
+}
+
+/// Pi doctor supports tmux transport when configured.
+#[cfg(unix)]
+#[test]
+fn pi_doctor_supports_configured_tmux_transport() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(
+        tmp.path(),
+        true,
+        true,
+        Some(PI_EXTENSION_SOURCE),
+        Some("0.1.0"),
+        Some(r#"{"herding": {"transport": "tmux"}}"#),
+    );
+
+    // When tmux environment is present: ok
+    let rows_ok = pi_rows_of(&root, &mock_tmux_env);
+    let transport_ok = rows_ok.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_ok.1, Some(true), "tmux transport with env present must be ok");
+
+    // When tmux environment is missing: not_ok
+    let rows_fail = pi_rows_of(&root, &mock_herdr_env);
+    let transport_fail = rows_fail.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(transport_fail.1, Some(false), "tmux transport without tmux env must be not_ok");
 }

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Two read-only verbs answer two different questions. `bee status` answers "what is true in this repo right now": onboarding health, phase, gates, cells, lanes, live workers, pending queues, staleness warnings, and one recommended next step — the widest single view bee has of its own store. `bee doctor --runtime <claude|codex>` answers a narrower and colder question: "is the harness actually wired up" — is the hooks file there, does it point at the vendored binary, are the skills installed, and (on Codex only) is the trust state anything bee is allowed to believe. Doctor is the only bee command that grades itself in three states — `ready`, `degraded`, `blocked` — and the only one whose verdict decides its exit code. `bee orient` reshapes status's facts into a session-start packet and is owned by [orient](../lifecycle/orient.md); this document owns the payload and the health verdict.
+Two read-only verbs answer two different questions. `bee status` answers "what is true in this repo right now": onboarding health, phase, gates, cells, lanes, live workers, pending queues, staleness warnings, and one recommended next step — the widest single view bee has of its own store. `bee doctor --runtime <claude|codex|pi>` answers a narrower and colder question: "is the harness actually wired up" — is the hooks file there, does it point at the vendored binary, are the skills installed, and (on Codex only) is the trust state anything bee is allowed to believe. Doctor is the only bee command that grades itself in three states — `ready`, `degraded`, `blocked` — and the only one whose verdict decides its exit code. `bee orient` reshapes status's facts into a session-start packet and is owned by [orient](../lifecycle/orient.md); this document owns the payload and the health verdict.
 
 ## The simple case
 
@@ -64,7 +64,7 @@ stateDiagram-v2
 
 `status` accepts exactly six argv shapes and no more: `status`, `status --json`, `status --lanes-full`, `status --lanes-full --json`, `orient`, `orient --json`. `--brief` is matched earlier, by a separate fast path that accepts `status` plus any mix of `--brief` and `--json` with `--brief` present. Anything else falls through to the router's refusal. `--brief` and `--lanes-full` are mutually exclusive fast and full paths — pass both and `--brief` wins, silently.
 
-`doctor` requires `--runtime`, whose value must be exactly `claude` or `codex`; it also takes `--json` and, on the `attest` verb, `--session`. Any other token refuses. The subcommand `attest` must come first, immediately after `doctor`.
+`doctor` requires `--runtime`, whose value must be exactly `claude`, `codex`, or `pi`; it also takes `--json` and, on the `attest` verb, `--session`. Any other token refuses. The subcommand `attest` must come first, immediately after `doctor`.
 
 Root resolution differs between the two, and the difference is visible. `status` and `orient` are worktree-native: they resolve the worktree's own store and redirect control-plane reads to main when the worktree is granted ([worktrees](../foundations/worktrees.md)). `status --brief` resolves through the ordinary door. `doctor` does neither — it walks up looking only for a `.bee/` **directory**, and its no-repo message is its own: `bee doctor: no bee repo here (looked upward for a .bee/ directory). FIX: run it inside an onboarded project.`
 
@@ -86,7 +86,7 @@ Both verbs are read-only reports; there is no long path to leave. The short answ
 
 `status` walks a lot of store: `.bee/cells/*.json` (every file, every call), the lane records, session records and claims, the decisions log, the capture queue, the scribing ledger, `.bee/logs/contention.jsonl` (last 64 KB), `docs/discovery/`, `docs/history/`. On a repo with hundreds of finished features that is hundreds of milliseconds, which is why status carries its own retirement nudge (see below). Corrupt JSON anywhere on the path fails open: one `bee: could not parse JSON at …` line is buffered and the reader takes its `null` fallback; the payload, its shape, and the exit code are unchanged. A concurrent invocation sees whatever the store held at the moment each file was read — status takes no lock, so the report is a set of consistent files, not one consistent instant.
 
-`doctor` stats four or five files and, in a bee source checkout only, spawns the installed binary once (`bee rs-info`) and stats every `.rs` and `Cargo.toml` under `packages/bee-rs/crates`. On Codex it also spawns `codex --version`.
+`doctor` stats four or five files and, in a bee source checkout only, spawns the installed binary once (`bee rs-info`) and stats every `.rs` and `Cargo.toml` under `packages/bee-rs/crates`. On Codex it also spawns `codex --version`. On Pi it compares installed extension bytes against the embedded extension and inspects configured herding transport readiness.
 
 ### Finish
 
@@ -130,28 +130,29 @@ Doctor grades **mechanical rows** — things it can read — and, on Codex only,
 
 | Row | Question | not_ok when |
 | --- | --- | --- |
-| `hooks_file` | Is the wiring file present? (`.claude/settings.json`, or `.codex/hooks.json`) | The file is missing — the runtime loads no bee hooks. |
+| `hooks_file` | Is the wiring file present? (`.claude/settings.json`, `.codex/hooks.json`, or `.pi/extensions/bee-guard.ts`) | The file is missing — the runtime loads no bee hooks or extension. |
 | `hook_handler` | Does `.bee/bin/bee[.exe]` exist? | Missing — every wired hook command points at nothing. |
 | `skills_installed` | Are there skill directories under `.claude/skills` / `.agents/skills`? | Zero — the agent has no bee craft to load. |
-| `wiring_matches_binary` (Codex) | Is `.codex/hooks.json` byte-identical to what this binary renders? | It differs, or there is nothing to compare. |
+| `wiring_matches_binary` (Codex, Pi) | Is `.codex/hooks.json` or `.pi/extensions/bee-guard.ts` byte-identical to what this binary renders or embeds? | It differs, or there is nothing to compare. |
 | `wiring_points_at_the_binary` (Claude) | Does every wired hook command name `.bee/bin/bee`? | No hooks wired at all, or any command that does not name the vendored binary. |
-| `binary_freshness` (source checkouts only) | Is the installed binary built from the source beside it? | The binary's own `rs-info` version disagrees with `.claude-plugin/plugin.json`, the binary is too old to report a version, or any source input is newer than the binary by mtime. |
+| `binary_freshness` | Is the installed binary built from the source beside it? | In a source checkout: `rs-info` version disagrees with `.claude-plugin/plugin.json`, the binary is too old to report a version, or any source input is newer than the binary by mtime. On Pi, host checkouts also verify release version against `.claude-plugin/plugin.json`. |
+| `herding_transport` (Pi) | Is the configured herding transport (tmux, direct) ready? | The transport binary is missing, `$TMUX` is unset without a running session, or configuration is malformed. |
 
-The two runtimes get *different* byte-match rows on purpose, and treating them alike would be a false FAIL: `.codex/hooks.json` is bee's rendered artifact, so whole-file equality is the right question, while `.claude/settings.json` is the host's own settings file that onboarding merges a `hooks` key into — it also carries permissions and anything else the host put there, and comparing the whole file would fail every correctly installed repo.
+The runtimes get different byte-match rows on purpose. `.codex/hooks.json` and `.pi/extensions/bee-guard.ts` are whole-file artifacts, so exact file equality holds. `.claude/settings.json` is the host settings file with merged hooks; whole-file equality there would fail valid installations.
 
-`binary_freshness` only exists in a bee **source** checkout (detected by `packages/bee-rs/Cargo.toml` under the root); a host project carries no such tree and the row is absent entirely. It reports `unknown`, not `not_ok`, when the probe itself could not run or when the binary is simply missing — a missing binary is `hook_handler`'s verdict to give, and repeating it under a second name would be noise. It never builds or copies anything; it only stats, reads, and asks the installed binary its own version.
+`binary_freshness` in Claude and Codex exists only in a bee **source** checkout (detected by `packages/bee-rs/Cargo.toml` under the root). In host checkouts for Claude and Codex, the row is absent. On Pi, `binary_freshness` checks the release version against `.claude-plugin/plugin.json` in both source and host repositories. It reports `unknown`, not `not_ok`, when the probe could not run or when the binary is missing.
 
 The **verdict ladder**, evaluated and never assumed:
 
-- `blocked` — any mechanical row is not ok. Exit 1. `next: fix the FAIL row(s) above — nothing else can be trusted until they are ok`.
+- `blocked` — any mechanical row is not ok (or on Pi, any required mechanical row is not ok or unknown). Exit 1. `next: fix the FAIL row(s) above — nothing else can be trusted until they are ok`.
 - `degraded` — mechanical rows all ok, but this is Codex and no valid attestation covers its trust rows. Exit 0. `next: the wiring is correct; what is unproven is whether Codex is letting it fire`.
-- `ready` — mechanical rows all ok and, on Codex, a currently-valid attestation. Claude has no trust-unknown rows, so mechanical green alone reaches ready there. Exit 0.
+- `ready` — mechanical rows all ok and, on Codex, a currently-valid attestation. Claude and Pi have no trust-unknown rows, so mechanical green alone reaches ready there. Exit 0.
 
 Never `ready` from file presence alone.
 
 ## Doctor attest
 
-Codex exposes no surface reporting whether it discovered `.codex/hooks.json`, whether the hooks were trusted in its `/hooks` TUI, whether the project is trusted, or whether a hook is still awaiting review. Nothing bee can run answers those four questions, so doctor reports them as four `unknown` rows and offers one way to answer them: a human checks the `/hooks` TUI, and then the agent records what they saw.
+Codex exposes no surface reporting whether it discovered `.codex/hooks.json`, whether the hooks were trusted in its `/hooks` TUI, whether the project is trusted, or whether a hook is still awaiting review. Nothing bee can run answers those four questions, so doctor reports them as four `unknown` rows and offers one way to answer them: a human checks the `/hooks` TUI, and then the agent records what they saw. Claude and Pi have no structurally unprovable trust rows; `doctor attest` refuses on both runtimes.
 
 ```
 bee doctor attest --runtime codex
