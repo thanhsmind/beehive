@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Planning four Pi parity repairs from the locked review findings.",
-  "next_action": "Merge the verified worktree into main for patch release",
+  "next_action": "Merged into main at 855247c; reload the product and test \"pi-parity-review-fixes\", then either approve uat (\"bee gate --name uat --approved true --lane pi-parity-review-fixes\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-13T15:40:47.587Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Authorize an independent delta review of the four Pi parity repair commits before release",
-    "asked_at": "2026-09-14T02:56:10.552Z",
-    "session": "01a09b73-3f97-7737-b6f6-765cf6382c55"
+    "kind": "gate",
+    "subject": "uat: pi-parity-review-fixes",
+    "asked_at": "2026-09-14T03:44:04.108Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "bugfix",
@@ -672,15 +672,6 @@
         },
         "behavior_change": true
       }
-    ]
-  },
-  "merge_ready": {
-    "since": "2026-09-14T02:41:11.033Z",
-    "branch": "wt/pi-parity-review-fixes",
-    "worktree_id": "beehive--wt--pi-parity-review-fixes",
-    "uat": "pending",
-    "blocked_by": [
-      "doc-deferral"
     ]
   },
   "last_scribing_run": {
