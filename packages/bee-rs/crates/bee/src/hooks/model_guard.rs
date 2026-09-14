@@ -82,9 +82,9 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
     let mut verdict = if is_codex_spawn {
-        evaluate_codex_spawn(&tool_input, &models)
+        evaluate_codex_spawn(Some(&root), &tool_input, &models)
     } else {
-        evaluate_claude_dispatch(&tool_input, &models)
+        evaluate_claude_dispatch(Some(&root), &tool_input, &models)
     };
 
     let Some(transport) = verdict.transport else {
@@ -199,23 +199,112 @@ fn is_js_ws(c: char) -> bool {
 // whatever NAME the marker carries, and legality is one question asked in one
 // place: is this role configured for this runtime.
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct PromptAnchoredMarkers {
+    pub tier: Option<String>,
+    pub feature: Option<String>,
+    pub stage: Option<String>,
+    pub cell: Option<String>,
+}
+
+pub(crate) fn parse_anchored_markers(text: &str) -> PromptAnchoredMarkers {
+    let mut markers = PromptAnchoredMarkers::default();
+    let mut rest = text;
+    loop {
+        rest = rest.trim_start_matches(is_js_ws);
+        if !rest.starts_with('[') {
+            break;
+        }
+        if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-tier:") {
+            let tail = tail.trim_start_matches(is_js_ws);
+            if let Some((name, after)) = tail.split_once(']') {
+                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
+                    if markers.tier.is_none() {
+                        markers.tier = Some(name.to_string());
+                    }
+                    rest = after;
+                    continue;
+                }
+            }
+            break;
+        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-feature:") {
+            let tail = tail.trim_start_matches(is_js_ws);
+            if let Some((name, after)) = tail.split_once(']') {
+                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
+                    if markers.feature.is_none() {
+                        markers.feature = Some(name.to_string());
+                    }
+                    rest = after;
+                    continue;
+                }
+            }
+            break;
+        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-stage:") {
+            let tail = tail.trim_start_matches(is_js_ws);
+            if let Some((name, after)) = tail.split_once(']') {
+                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
+                    if markers.stage.is_none() {
+                        markers.stage = Some(name.to_string());
+                    }
+                    rest = after;
+                    continue;
+                }
+            }
+            break;
+        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-cell:") {
+            let tail = tail.trim_start_matches(is_js_ws);
+            if let Some((name, after)) = tail.split_once(']') {
+                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
+                    if markers.cell.is_none() {
+                        markers.cell = Some(name.to_string());
+                    }
+                    rest = after;
+                    continue;
+                }
+            }
+            break;
+        } else {
+            break;
+        }
+    }
+    markers
+}
+
 /// The role name a `[bee-tier: <name>]` marker opens with, exactly as
 /// written. Parsing decides SHAPE only — anchored at the start, one
 /// whitespace-free token, closed by `]` — never legality: under an open role
 /// set there is no closed list to decide legality against.
 fn marker_role_name(value: &Value) -> Option<String> {
     let text = value.as_str()?;
-    let rest = text.trim_start_matches(is_js_ws);
-    let rest = strip_prefix_ascii_ci(rest, "[bee-tier:")?;
-    let rest = rest.trim_start_matches(is_js_ws);
-    let (name, _) = rest.split_once(']')?;
-    // The same strictness the old alternation had: the name ran up to `]`
-    // with nothing between. A candidate carrying whitespace or a second `[`
-    // is prose that happens to open with the marker text, not a role name.
-    if name.is_empty() || name.contains(is_js_ws) || name.contains('[') {
-        return None;
+    parse_anchored_markers(text).tier
+}
+
+fn parse_claude_anchored_markers(tool_input: &Map<String, Value>) -> PromptAnchoredMarkers {
+    let desc_markers = tool_input
+        .get("description")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default();
+    let prompt_markers = tool_input
+        .get("prompt")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default();
+
+    PromptAnchoredMarkers {
+        tier: desc_markers.tier.or(prompt_markers.tier),
+        feature: desc_markers.feature.or(prompt_markers.feature),
+        stage: desc_markers.stage.or(prompt_markers.stage),
+        cell: desc_markers.cell.or(prompt_markers.cell),
     }
-    Some(name.to_string())
+}
+
+fn parse_codex_anchored_markers(tool_input: &Map<String, Value>) -> PromptAnchoredMarkers {
+    tool_input
+        .get("message")
+        .and_then(Value::as_str)
+        .map(parse_anchored_markers)
+        .unwrap_or_default()
 }
 
 fn strip_prefix_ascii_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
@@ -709,7 +798,186 @@ fn is_read_only_role(role: &str) -> bool {
     ) || crate::verbs::drivers::SEAT_ROLES.contains(&role)
 }
 
-fn evaluate_codex_spawn(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+fn evaluate_semantic_role_routing(
+    root: Option<&Path>,
+    runtime: &str,
+    markers: &PromptAnchoredMarkers,
+    declared_role: Option<&str>,
+) -> Result<(), (String, &'static str)> {
+    let Some(root) = root else {
+        return Ok(());
+    };
+
+    let main_root = match crate::roots::resolve_store_root_worktree(root) {
+        crate::roots::RootsWt::Go(store_roots) => store_roots.main_root(),
+        _ => root.to_path_buf(),
+    };
+
+    let mut feature = markers.feature.clone();
+
+    // If cell marker is present, load cell and resolve/check feature
+    let cell_opt = if let Some(cell_id) = markers.cell.as_deref() {
+        let cell = crate::verbs::cells::read_cell(&main_root, cell_id)
+            .map_err(|_| (
+                format!("bee-model-guard: planned_role_mismatch: could not read cell \"{cell_id}\""),
+                "planned-role-mismatch",
+            ))?;
+        if cell.is_none() {
+            return Err((
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" not found in store"),
+                "planned-role-mismatch",
+            ));
+        }
+        cell
+    } else {
+        None
+    };
+
+    if let Some(cell) = &cell_opt {
+        let cell_feat = cell.get("feature").and_then(Value::as_str);
+        if let Some(f) = &feature {
+            if cell_feat != Some(f.as_str()) {
+                return Err((
+                    format!(
+                        "bee-model-guard: planned_role_mismatch: cell \"{}\" belongs to feature \"{}\", but dispatch specified feature \"{f}\"",
+                        markers.cell.as_deref().unwrap_or(""),
+                        cell_feat.unwrap_or("unknown")
+                    ),
+                    "planned-role-mismatch",
+                ));
+            }
+        } else if let Some(cf) = cell_feat {
+            feature = Some(cf.to_string());
+        }
+    }
+
+    if feature.is_none() && markers.stage.is_some() {
+        let state_file = main_root.join(".bee").join("state.json");
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(m)) = crate::fsutil::read_json(&state_file) {
+            if let Some(f) = m.get("feature").and_then(Value::as_str) {
+                feature = Some(f.to_string());
+            }
+        }
+    }
+
+    let Some(feature) = feature else {
+        // Without anchored feature/cell/stage identity, legacy behavior is preserved.
+        return Ok(());
+    };
+
+    let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(&main_root, &feature) else {
+        // Without approved v2 role plan, legacy behavior stays byte-identical.
+        return Ok(());
+    };
+
+    // 1. Runtime validation
+    let plan_runtime = role_plan
+        .get("runtime")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if plan_runtime != runtime {
+        let reason = format!(
+            "bee-model-guard: role_plan_runtime_mismatch: feature \"{feature}\" approved role plan is for runtime \"{plan_runtime}\", not \"{runtime}\". FIX: revise plan.md for runtime \"{runtime}\" and approve a new revision."
+        );
+        return Err((reason, "role-plan-runtime-mismatch"));
+    }
+
+    // 2. Cell dispatch validation
+    if let Some(cell_id) = markers.cell.as_deref() {
+        let cell = cell_opt.unwrap();
+        let approved_packet = crate::verbs::cells::get_approved_preview_packet(&main_root, &feature)
+            .ok_or_else(|| (
+                format!("bee-model-guard: planned_role_mismatch: approved preview packet not found for feature \"{feature}\""),
+                "planned-role-mismatch",
+            ))?;
+
+        let original_role = approved_packet
+            .get("cells")
+            .and_then(Value::as_array)
+            .and_then(|arr| {
+                arr.iter().find(|c| c.get("id").and_then(Value::as_str) == Some(cell_id))
+            })
+            .and_then(|c| c.get("role").and_then(Value::as_str))
+            .ok_or_else(|| (
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" not found in approved preview packet"),
+                "planned-role-mismatch",
+            ))?;
+
+        let effective_role = crate::verbs::cells::validate_cell_role_chain(original_role, &cell)
+            .map_err(|err| (
+                format!("bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" role chain invalid: {err}"),
+                "planned-role-mismatch",
+            ))?;
+
+        let declared = declared_role.unwrap_or_default();
+        if declared != effective_role {
+            return Err((
+                format!(
+                    "bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" planned effective role is \"{effective_role}\", dispatch declared \"{declared}\". FIX: use planned role [bee-tier: {effective_role}] or run bee cells reroute."
+                ),
+                "planned-role-mismatch",
+            ));
+        }
+    } else {
+        // 3. Non-cell stage dispatch validation
+        let Some(stage_name) = markers.stage.as_deref() else {
+            return Err((
+                format!(
+                    "bee-model-guard: stage_required: non-cell dispatch for feature \"{feature}\" with approved v2 role plan requires an anchored [bee-stage: <stage>] marker. FIX: provide the approved stage name."
+                ),
+                "stage-required",
+            ));
+        };
+
+        let stages = role_plan
+            .get("stages")
+            .and_then(Value::as_array)
+            .ok_or_else(|| (
+                format!("bee-model-guard: stage_unknown: no stages found in approved role plan for feature \"{feature}\""),
+                "stage-unknown",
+            ))?;
+
+        let stage_entry = stages.iter().find(|s| {
+            s.get("stage").and_then(Value::as_str) == Some(stage_name)
+        }).ok_or_else(|| (
+            format!(
+                "bee-model-guard: stage_unknown: stage \"{stage_name}\" is not defined in feature \"{feature}\" role plan. FIX: supply one of the approved stages or revise plan.md."
+            ),
+            "stage-unknown",
+        ))?;
+
+        let classification = stage_entry
+            .get("classification")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if classification == "not-applicable" {
+            return Err((
+                format!(
+                    "bee-model-guard: stage_not_applicable: stage \"{stage_name}\" is classified as not-applicable for feature \"{feature}\". FIX: do not dispatch this stage, or revise plan.md."
+                ),
+                "stage-not-applicable",
+            ));
+        }
+
+        let stage_role = stage_entry
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let declared = declared_role.unwrap_or_default();
+        if declared != stage_role {
+            return Err((
+                format!(
+                    "bee-model-guard: planned_role_mismatch: stage \"{stage_name}\" requires role \"{stage_role}\", got \"{declared}\". FIX: dispatch with [bee-tier: {stage_role}]."
+                ),
+                "planned-role-mismatch",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn evaluate_codex_spawn(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
     let Some(message) = obj.get("message").and_then(Value::as_str) else { return no_opinion() };
     if message.is_empty() {
@@ -743,12 +1011,17 @@ or return the refusal to the leader for an escalated cell. Do not retry the same
         }
     };
 
+    let markers = parse_codex_anchored_markers(obj);
     let model_param = obj
         .get("model")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(String::from);
+
+    if let Err((reason, transport)) = evaluate_semantic_role_routing(root, "codex", &markers, Some(&role)) {
+        return deny(reason, transport, Some(role), model_param, None);
+    }
     let effort_param = obj
         .get("reasoning_effort")
         .and_then(Value::as_str)
@@ -935,7 +1208,7 @@ fn dispatch_kind_for_role(role: &str) -> Option<&'static str> {
         })
 }
 
-fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+fn evaluate_claude_dispatch(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
 
     let model_param: Option<String> = obj
@@ -968,6 +1241,12 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Map<String, Value>) -> 
         Some(Marker::Role(role)) => Some(role),
         None => None,
     };
+
+    let markers = parse_claude_anchored_markers(obj);
+    let declared_role = tier.as_deref().or_else(|| subagent_type.as_deref().and_then(role_for_pinned_type));
+    if let Err((reason, transport)) = evaluate_semantic_role_routing(root, "claude", &markers, declared_role) {
+        return deny(reason, transport, tier, model_param, subagent_type);
+    }
 
     // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
     // tier is already stated; which agent file carries it is a lookup the
@@ -3853,5 +4132,218 @@ mod tests {
                 len = line.chars().count()
             );
         }
+    }
+
+    #[test]
+    fn test_parse_anchored_markers() {
+        let text = "[bee-tier: code] [bee-feature: my-feat] [bee-stage: plan] [bee-cell: c-1] Do something";
+        let markers = parse_anchored_markers(text);
+        assert_eq!(markers.tier.as_deref(), Some("code"));
+        assert_eq!(markers.feature.as_deref(), Some("my-feat"));
+        assert_eq!(markers.stage.as_deref(), Some("plan"));
+        assert_eq!(markers.cell.as_deref(), Some("c-1"));
+
+        let reordered = "\n [bee-feature: feat-2] \t [bee-tier: test] \n task";
+        let m2 = parse_anchored_markers(reordered);
+        assert_eq!(m2.tier.as_deref(), Some("test"));
+        assert_eq!(m2.feature.as_deref(), Some("feat-2"));
+        assert!(m2.stage.is_none());
+        assert!(m2.cell.is_none());
+
+        let legacy = "[bee-tier: generation] plain task";
+        let m3 = parse_anchored_markers(legacy);
+        assert_eq!(m3.tier.as_deref(), Some("generation"));
+        assert!(m3.feature.is_none());
+
+        let invalid = "[bee-tier: has space] task";
+        let m4 = parse_anchored_markers(invalid);
+        assert!(m4.tier.is_none());
+    }
+
+    #[test]
+    fn test_model_guard_semantic_role_routing_and_reroute() {
+        use sha2::{Digest, Sha256};
+        let cfg = json!({
+            "team": {
+                "claude": {
+                    "code": "sonnet",
+                    "test": "haiku"
+                },
+                "codex": {
+                    "generation": "gpt-5.5"
+                }
+            }
+        });
+        let fx = fixture(&cfg);
+        let root = fx.path();
+
+        let plan_dir = root.join("docs").join("history").join("feat-v2");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = {
+            let mut h = Sha256::new();
+            h.update(plan_text.as_bytes());
+            format!("{:x}", h.finalize())
+        };
+
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+
+        let lane_data = json!({
+            "feature": "feat-v2",
+            "gate_preview": {
+                "feature": "feat-v2",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [
+                        {"stage": "dev", "classification": "required", "role": "code", "reason": "dev work"},
+                        {"stage": "test", "classification": "required", "role": "test", "reason": "qa work"},
+                        {"stage": "bench", "classification": "not-applicable", "role": "code", "reason": "none"}
+                    ]
+                },
+                "cells": [
+                    {"id": "c-1", "feature": "feat-v2", "role": "code"}
+                ]
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-v2.json"), lane_data.to_string()).unwrap();
+
+        let cell_data = json!({
+            "id": "c-1",
+            "feature": "feat-v2",
+            "role": "code",
+            "status": "open"
+        });
+        std::fs::write(root.join(".bee").join("cells").join("c-1.json"), cell_data.to_string()).unwrap();
+
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide",
+                "id": "dec-rr",
+                "feature": "feat-v2",
+                "tags": ["role-reroute"],
+                "at": "2026-09-14T01:00:00Z"
+            })).unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+
+        // 1. Non-cell dispatch without stage marker refuses stage_required
+        let p_no_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2]",
+                "prompt": "do non cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_no_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_required"), "{stderr}");
+
+        // 2. Unknown stage refuses stage_unknown
+        let p_unknown_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-stage: unknown-stage]",
+                "prompt": "do non cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_unknown_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_unknown"), "{stderr}");
+
+        // 3. Not-applicable stage refuses stage_not_applicable
+        let p_na_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-stage: bench]",
+                "prompt": "do bench work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_na_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("stage_not_applicable"), "{stderr}");
+
+        // 4. Mismatched stage role refuses planned_role_mismatch
+        let p_mismatch_stage = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-stage: dev]",
+                "prompt": "do dev work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_mismatch_stage);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+
+        // 5. Mismatched cell role refuses planned_role_mismatch
+        let p_mismatch_cell = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_mismatch_cell);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+
+        // 6. Matching cell role succeeds
+        let p_match_cell = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_match_cell);
+        assert_eq!(code, 0, "matching cell role must succeed, stderr: {stderr}");
+
+        // 7. Reroute cell from code to test, then verify guard enforces new role
+        crate::verbs::cells::reroute_cell_core(root, "c-1", "test", "dec-rr").unwrap();
+        // Old role now fails
+        let (code, stderr) = run_payload(root, json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        }));
+        assert_eq!(code, 2);
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
+        // New role succeeds
+        let (code, stderr) = run_payload(root, json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: test] [bee-feature: feat-v2] [bee-cell: c-1]",
+                "prompt": "do cell work"
+            }
+        }));
+        assert_eq!(code, 0, "rerouted cell role must succeed, stderr: {stderr}");
+
+        // 8. Runtime mismatch refuses role_plan_runtime_mismatch
+        let p_codex = json!({
+            "tool_name": "spawn_agent",
+            "tool_input": {
+                "message": "[bee-tier: generation] [bee-feature: feat-v2] [bee-cell: c-1] task"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_codex);
+        assert_eq!(code, 2);
+        assert!(stderr.contains("role_plan_runtime_mismatch"), "{stderr}");
+
+        // 9. Legacy dispatch without feature/cell/stage succeeds
+        let p_legacy = json!({
+            "tool_name": "Agent",
+            "tool_input": {
+                "description": "[bee-tier: code]",
+                "prompt": "legacy work"
+            }
+        });
+        let (code, stderr) = run_payload(root, p_legacy);
+        assert_eq!(code, 0, "legacy prompt without feature must succeed, stderr: {stderr}");
     }
 }

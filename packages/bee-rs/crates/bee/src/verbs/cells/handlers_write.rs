@@ -460,9 +460,13 @@ pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "tier" => Some(
             "tier is retired as the model selector — a cell's \"role\" is the job that picks its model, and escalation is the \"escalate\" flag (bee cells escalate --id ID)",
         ),
+        "role" => Some(
+            "a cell role changes only through controlled re-routing (bee cells reroute --id ID --role ROLE --decision DECISION)",
+        ),
         _ => None,
     }
 }
+
 
 pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(&flags, &["id", "file", "stdin"]) {
@@ -2608,3 +2612,165 @@ pub(crate) fn run_backfill_roles(flags: rsv::Flags, use_json: bool, t0: Instant)
         Ok(Out::Emit(role_backfill_json(&report, dry_run), role_backfill_text(&report, dry_run), 0))
     })
 }
+
+pub(crate) fn reroute_cell_core(
+    root: &Path,
+    id: &str,
+    new_role: &str,
+    decision_id: &str,
+) -> MR<Value> {
+    assert_not_archived(root, "cells reroute", id)?;
+
+    let mut _guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+
+    let cell_opt = read_cell_norm(root, id)?;
+    let mut cell = match cell_opt {
+        Some(c) => c,
+        None => return Err(Fail::Thrown(format!("cells reroute: cell \"{id}\" not found."))),
+    };
+
+    let status = cell.get("status").and_then(Value::as_str).unwrap_or("");
+    if status != "open" && status != "blocked" {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_status: cell \"{id}\" has status \"{status}\" — only open or blocked cells can be re-routed."
+        )));
+    }
+
+    if read_claim(root, id)?.is_some() {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_claimed: cell \"{id}\" has an active claim — only unclaimed cells can be re-routed."
+        )));
+    }
+
+    let current_role = cell.get("role").and_then(Value::as_str).unwrap_or("");
+    if current_role == new_role {
+        return Err(Fail::Thrown(format!(
+            "role_unchanged: cell \"{id}\" role is already \"{new_role}\"."
+        )));
+    }
+
+    let feature = cell.get("feature").and_then(Value::as_str)
+        .ok_or_else(|| Fail::Thrown(format!("cells reroute: cell \"{id}\" has no feature.")))?;
+
+    let approved_packet = get_approved_preview_packet(root, feature)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_no_approved_packet: feature \"{feature}\" has no approved preview packet.")))?;
+
+    let role_plan = crate::verbs::state_group::get_approved_role_plan(root, feature)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_no_role_plan: feature \"{feature}\" has no approved role plan.")))?;
+
+    let runtime = role_plan.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let table_val = crate::verbs::models_group::team_table(root, Some(runtime))
+        .map_err(|e| Fail::Thrown(format!("role_reroute_unsupported_runtime: {e}")))?;
+    let runtimes_arr = table_val.get("runtimes").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: no runtimes returned for \"{runtime}\"")))?;
+    let rt_entry = runtimes_arr.iter()
+        .find(|r| r.get("runtime").and_then(Value::as_str) == Some(runtime))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: runtime \"{runtime}\" not found in team table")))?;
+    let roles_arr = rt_entry.get("roles").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_unsupported_runtime: no roles found for runtime \"{runtime}\"")))?;
+    let (_, configured_roles) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+    if !configured_roles.contains(new_role) {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_unconfigured_role: role \"{new_role}\" is not configured for runtime \"{runtime}\"."
+        )));
+    }
+
+    let approved_sha = approved_packet.get("plan_sha256").and_then(Value::as_str).unwrap_or("");
+    let plan_path = crate::verbs::state_group::advisor_plan_path(root, feature);
+    if plan_path.exists() {
+        let bytes = std::fs::read(&plan_path).map_err(|e| Fail::Thrown(format!("role_reroute_plan_read_failed: {e}")))?;
+        let current_sha = crate::verbs::state_group::compute_plan_sha256(&bytes);
+        if !approved_sha.is_empty() && approved_sha != current_sha {
+            return Err(Fail::Thrown(format!(
+                "role_reroute_plan_hash_mismatch: plan.md changed since preview was approved (expected {approved_sha}, got {current_sha})."
+            )));
+        }
+    }
+
+    let candidates = crate::verbs::decisions::decision_target_candidates(root);
+    let resolved_decision_id = crate::verbs::decisions::resolve_tag_target(&candidates, Some(&Value::String(decision_id.to_string())))
+        .map_err(|e| Fail::Thrown(format!("role_reroute_decision_not_found: {e}")))?;
+
+    let all_decisions = crate::verbs::decisions::active_decisions(root, true)
+        .map_err(|_| Fail::Thrown("role_reroute_decision_store_corrupt: cannot read decisions store".to_string()))?;
+    let decision = all_decisions.iter()
+        .find(|d| d.get("id").and_then(Value::as_str) == Some(&resolved_decision_id))
+        .or_else(|| candidates.iter().find(|(k, _)| k == &resolved_decision_id).map(|(_, v)| v))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_decision_not_found: decision \"{resolved_decision_id}\" not found.")))?;
+
+    let dec_feature = decision.get("feature").and_then(Value::as_str).unwrap_or("");
+    if dec_feature != feature {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_decision_feature_mismatch: decision \"{resolved_decision_id}\" belongs to feature \"{dec_feature}\", not cell feature \"{feature}\"."
+        )));
+    }
+
+    let has_tag = decision.get("tags")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().any(|t| t.as_str() == Some("role-reroute")))
+        .unwrap_or(false);
+    if !has_tag {
+        return Err(Fail::Thrown(format!(
+            "role_reroute_decision_missing_tag: decision \"{resolved_decision_id}\" does not carry required tag \"role-reroute\"."
+        )));
+    }
+
+    let approved_cells = approved_packet.get("cells").and_then(Value::as_array)
+        .ok_or_else(|| Fail::Thrown("role_reroute_no_cells: approved preview packet has no cells.".into()))?;
+    let approved_cell = approved_cells.iter()
+        .find(|c| c.get("id").and_then(Value::as_str) == Some(id))
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_cell_not_in_plan: cell \"{id}\" was not declared in approved preview packet.")))?;
+    let original_role = approved_cell.get("role").and_then(Value::as_str)
+        .ok_or_else(|| Fail::Thrown(format!("role_reroute_cell_missing_role: cell \"{id}\" in approved packet has no role.")))?;
+
+    validate_cell_role_chain(original_role, &cell)
+        .map_err(Fail::Thrown)?;
+
+    let now = rsv::now_iso();
+    let reroute_record = json!({
+        "from": current_role,
+        "to": new_role,
+        "decision": resolved_decision_id,
+        "at": now,
+        "plan_sha256": approved_sha
+    });
+
+    let cell_map = cell.as_object_mut().ok_or_else(|| Fail::Thrown("corrupt cell".into()))?;
+    cell_map.insert("role".into(), Value::String(new_role.to_string()));
+
+    let reroutes = cell_map.entry("role_reroutes".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if let Value::Array(arr) = reroutes {
+        arr.push(reroute_record);
+    } else {
+        *reroutes = Value::Array(vec![reroute_record]);
+    }
+
+    let cell_file = cells_dir(root).join(format!("{id}.json"));
+    write_json_atomic(&cell_file, &cell)
+        .map_err(|e| Fail::Thrown(format!("cannot write cell file: {e}")))?;
+
+    Ok(cell)
+}
+
+pub(crate) fn run_reroute(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "role", "decision"]) {
+        return None;
+    }
+    let id = flags.req_str("id")?.to_string();
+    let role = flags.req_str("role")?.to_string();
+    let decision = flags.req_str("decision")?.to_string();
+    dispatch("cells reroute", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let cell = reroute_cell_core(&root, &id, &role, &decision)?;
+        let prev_role = cell.get("role_reroutes")
+            .and_then(Value::as_array)
+            .and_then(|arr| arr.last())
+            .and_then(|e| e.get("from"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let text = format!("Re-routed cell \"{id}\" from \"{prev_role}\" to \"{role}\" (decision {decision}).");
+        Ok(Out::Emit(cell, text, 0))
+    })
+}
+
