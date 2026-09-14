@@ -82,6 +82,9 @@ required state, commands, and observable proof.
 - [Codex runtime](./codex-runtime.md) covers installed hook guards, deny and
   allow paths, model-guard enforcement, read-only CLI sandbox fallback, and turn
   completion tracking.
+- [Pi runtime](./pi-runtime.md) covers installed extension health, fail-closed
+  doctor checks, write protection, turn completion tracking, and herding transport
+  readiness.
 
 Runtime parity across supported runtimes (Claude, Codex, OpenCode, and Pi) is
 exercised through both CLI driving recipes and automated harness contract suites
