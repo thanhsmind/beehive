@@ -33,7 +33,7 @@ dispatch permit.
 - Run `bee cells reroute --id <id> --role <role> --decision <id> --json`.
 - Run `bee dispatch prepare --runtime <rt> --kind gather --feature <f> --stage deployment --role deploy --release-version <semver> --json`.
 - Run `bee dispatch authorize --id <dispatch-id> --release-version <semver> --json`.
-- Run `bash scripts/release.sh --version <semver>` (invoked by deploy role or CI).
+- Run `bash scripts/release.sh <semver>` (invoked by deploy role or CI).
 - Run `bee worktree enter --id <other-worktree> --json` from inside a linked worktree.
 
 ## Driving it with control-bee
@@ -51,7 +51,7 @@ Preconditions:
 - **Enforce cell role equality.** Run `control-bee cli -- dispatch prepare --runtime pi --kind cell --cell demo-1 --worker w1 --role review --json` on a cell whose planned role is `code`. The payload reports `ok: false`, `reason: "planned_role_mismatch"`.
 - **Perform structured cell reroute.** Log a decision tagged `role-reroute`: `control-bee cli -- decisions log --decision "Switch cell to test" --rationale "TDD proof" --relation none --tag role-reroute --json`. Read its `id`. Run `control-bee cli -- cells reroute --id demo-1 --role test --decision <decision-id> --json`. The payload reports `ok: true`, updated `role: "test"`, and `role_reroutes[]` containing the previous role, new role, decision id, and plan hash.
 - **Refuse invalid cell reroutes.** Attempt to reroute demo-1 again with `--role test` (unchanged); it reports `error: "role_reroute_unchanged_role"`. Attempt to reroute with an unconfigured role; it reports `error: "role_reroute_unconfigured_role"`. Claim the cell with `control-bee cli -- cells claim --id demo-1 --worker w1 --json` and attempt reroute; it reports `error: "role_reroute_claimed"`.
-- **Refuse direct release script execution.** Run `control-bee sh -- bash scripts/release.sh --version 9.9.9`. It fails before git mutation or checks with refusal stating deploy authorization is missing.
+- **Refuse direct release script execution.** Run `control-bee sh -- bash scripts/release.sh 9.9.9`. It fails before git mutation or checks with refusal stating deploy authorization is missing.
 - **Authorize deploy permit and reject replay.** Run `control-bee cli -- dispatch prepare --runtime pi --kind gather --feature demo --stage deployment --role deploy --release-version 9.9.9 --json`. Read `dispatch_id`. Run `control-bee cli -- dispatch authorize --id <dispatch-id> --release-version 9.9.9 --json`. The payload reports `authorized: true`. Run the exact same authorize command a second time; it refuses with `reason: "deploy_authorization_consumed"`.
 - **Relocate between linked worktrees in Pi.** Create worktrees `wt-a` and `wt-b`. Symlink `.bee/bin/bee` in the sandbox. Launch an installed Pi 0.84.x runtime in `wt-a` with `.pi/extensions/bee-guard.ts` active. Trigger worktree enter for linked worktree `wt-b` through Pi via `/bee-worktree-enter --id repo--wt--wt-b`. Verify that the extension calls `ctx.switchSession` and changes the active Pi session to `wt-b` while retaining conversation history, and verify that same-worktree enter is refused. A CLI transition marker alone is not acceptance.
 
