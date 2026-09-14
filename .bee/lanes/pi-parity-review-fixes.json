@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "pi-parity-review-fixes",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Planning four Pi parity repairs from the locked review findings.",
-  "next_action": "Merged into main at 855247c; reload the product and test \"pi-parity-review-fixes\", then either approve uat (\"bee gate --name uat --approved true --lane pi-parity-review-fixes\") or fix it in the worktree and merge again.",
+  "next_action": "Close pi-parity-review-fixes before the patch release",
   "created_at": "2026-09-13T15:40:47.587Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pi-parity-review-fixes",
-    "asked_at": "2026-09-14T03:44:04.108Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "Authorize an independent delta review of the four Pi parity repair commits before release",
+    "asked_at": "2026-09-14T02:56:10.552Z",
+    "session": "01a09b73-3f97-7737-b6f6-765cf6382c55"
   },
   "route": {
     "class": "bugfix",
@@ -683,5 +683,12 @@
       "workflow-state"
     ],
     "next_action": "Merge the verified worktree into main for patch release"
+  },
+  "last_compounding_run": {
+    "feature": "pi-parity-review-fixes",
+    "date": "2026-09-14",
+    "at": "2026-09-14T03:46:31.505Z",
+    "learnings": "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+    "next_action": "Close pi-parity-review-fixes before the patch release"
   }
 }
