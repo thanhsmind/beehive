@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"semantic-role-routing\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"semantic-role-routing\" — feature is closed.",
+  "next_action": "Merged into main at 1f97d62; capture what settled, then bee close --feature semantic-role-routing.",
   "created_at": "2026-09-14T04:37:30.158Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "gate_preview": {
     "feature": "semantic-role-routing",
@@ -169,12 +169,5 @@
     "rationale": null,
     "updated_at": "2026-09-14T07:18:31.413Z",
     "feature": "semantic-role-routing"
-  },
-  "merge_ready": {
-    "since": "2026-09-14T07:25:48.733Z",
-    "branch": "wt/semantic-role-routing",
-    "worktree_id": "beehive--wt--semantic-role-routing",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
