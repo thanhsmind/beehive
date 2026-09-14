@@ -1,0 +1,547 @@
+{
+  "schema_version": "1.0",
+  "feature": "deploy-stage-execution",
+  "mode": "high-risk",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"deploy-stage-execution\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"deploy-stage-execution\" (lane).",
+  "created_at": "2026-09-14T11:17:09.746Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "audit-security"
+    ],
+    "product_files": 4,
+    "rationale": "A deployment dispatch currently emits a read-only gather prompt and stale feature-worktree cwd, so the authorized deploy role cannot publish from main.",
+    "updated_at": "2026-09-14T11:17:14.622Z",
+    "feature": "deploy-stage-execution"
+  },
+  "gate_preview": {
+    "feature": "deploy-stage-execution",
+    "plan_sha256": "2244f61cfff34756cf197e91252e0e182a64e2f8706072e3f5ce8f795384eefe",
+    "previewed_at": "2026-09-14T15:21:26.233Z",
+    "cells": [
+      {
+        "id": "dse-1",
+        "feature": "deploy-stage-execution",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Build an executable deployment payload rooted at main",
+        "action": "Write red behavior tests for deployment payload stdin and cwd with and without a granted feature worktree, non-main root refusal, and deployment-shaped requests without an approved v2 plan. Then implement a validated Pi-herding deployment brief and unconditional main-root cwd. Preserve ordinary gather bytes, runtime and role refusals, and all authorization behavior.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "deps": [],
+        "decisions": [
+          "38edea83",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "Deployment stdin permits mutation and names the exact authorized positional release command.",
+            "Deployment herding cwd is main with or without a feature worktree.",
+            "Non-main, wrong-runtime, wrong-role, and no-plan deployment requests refuse before payload creation.",
+            "Ordinary gather stays byte-identical, read-only, and feature-worktree rooted.",
+            "Authorization and replay checks remain unchanged."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Focused driver tests prove an executable deployment payload without changing ordinary gather or authorization behavior."
+      },
+      {
+        "id": "dse-2",
+        "feature": "deploy-stage-execution",
+        "role": "docs",
+        "lane": "standard",
+        "title": "Document the narrow deployment mutation exception",
+        "action": "Update the source delegation contract and doctrine knowledge entry for the authenticated deployment exception. Build the current source candidate, then regenerate host projections with that candidate. Write and check the release manifest; never conceal drift with sync acknowledgement.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee && CANDIDATE=\"$(cargo metadata --no-deps --format-version 1 --manifest-path packages/bee-rs/Cargo.toml | jq -r .target_directory)/release/bee\" && \"$CANDIDATE\" dev regen && \"$CANDIDATE\" dev release-manifest --write && \"$CANDIDATE\" dev release-manifest --check && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "files": [
+          "skills/bee-hive/references/gates-and-delegation.md",
+          ".agents/skills/bee-hive/references/gates-and-delegation.md",
+          ".claude/skills/bee-hive/references/gates-and-delegation.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "deps": [
+          "dse-1"
+        ],
+        "decisions": [
+          "38edea83"
+        ],
+        "must_haves": {
+          "truths": [
+            "The shared contract permits mutation only for an authorized deployment stage.",
+            "Ordinary gather remains explicitly read-only.",
+            "Source and both generated host projections match.",
+            "The release manifest matches all tracked release files."
+          ]
+        },
+        "affects_skills": [
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Worker-facing instructions and durable knowledge describe one narrow deployment exception with generated parity."
+      },
+      {
+        "id": "dse-3",
+        "feature": "deploy-stage-execution",
+        "role": "test",
+        "lane": "high-risk",
+        "title": "Prove deployment payload and authorization live without publication",
+        "action": "Update the semantic-routing verification map, including the positional release command. Build and install the candidate into a fresh disposable repository. Execute the exact prepared herding payload through agy-flash against a harmless release.sh stub that records cwd, argv, dispatch ID, and audit version. Prove ordinary gather isolation, successful authorization, and replay refusal. Do not tag, push, publish, or invoke the real release script. Refresh and check the release manifest.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "deps": [
+          "dse-2"
+        ],
+        "decisions": [
+          "38edea83",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "A fresh installed exact payload executes the harmless stub with the authorized argv, environment, and main cwd.",
+            "An ordinary gather payload remains byte-identical, read-only, and worktree rooted.",
+            "The valid permit authorizes once and replay refuses.",
+            "Feature proof performs no real release mutation or publication."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Retained green:live evidence proves the repaired user-facing deployment path before merge."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "pi",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "planning",
+          "classification": "required",
+          "role": "plan",
+          "reason": "The release boundary needs a precise repair packet."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A narrow implementation fact is needed.",
+          "reason": "This role owns known-location extraction."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A broader read-only digest is needed.",
+          "reason": "This role owns read-only repository lookup."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "The plan must find missing release contract facts."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "A wrong payload can publish or block a release."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "The repair must remain smaller than a new dispatch system."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "The plan must test cheaper safe shapes."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "The deploy worker and release operator observe the payload."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust behavior and tests must change together."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "The prepared payload and release path need behavior proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "The shared contract, knowledge, and generated projections must agree."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The user explicitly requests independent review.",
+          "reason": "Review remains a separate user-invoked pass."
+        },
+        {
+          "stage": "deployment",
+          "classification": "conditional",
+          "role": "deploy",
+          "condition": "The repaired feature is merged and the user-approved patch release is ready.",
+          "reason": "The configured deploy role publishes from main and verifies assets."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The five required hats supply the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended supervisor loop is needed."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every planned job has a specific role."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-14T15:21:13.685Z",
+    "feature": "deploy-stage-execution",
+    "newest_decision_id": "38edea83-fe5a-4d65-98c3-4cc98c34e81e",
+    "plan_sha256": "2244f61cfff34756cf197e91252e0e182a64e2f8706072e3f5ce8f795384eefe",
+    "advisor": "five-hat-wave",
+    "digest_head": "# Advisor digest: Deploy-stage execution\n\n## Consults\n\n- Facts and gaps: `job-1789398696892-1612973-1`\n- Risks: `job-1789398696892-1612974-1`\n- Value: `job-1789397634012-1563183-1`\n- Alternatives: `job-1789398696892-1612982-1`\n- User impact: `job-1789398696892-1612981-1`\n\n## Synthesis\n\nAll five perspectives support one narrow repair after the validated v2 deployment check. The dispatcher must replace the gather brief and worktree cwd only for Pi herding deployment.\n\nThe plan now includes the req"
+  },
+  "approved_cell_packet": {
+    "feature": "deploy-stage-execution",
+    "plan_sha256": "2244f61cfff34756cf197e91252e0e182a64e2f8706072e3f5ce8f795384eefe",
+    "previewed_at": "2026-09-14T15:21:07.188Z",
+    "cells": [
+      {
+        "id": "dse-1",
+        "feature": "deploy-stage-execution",
+        "role": "code",
+        "lane": "high-risk",
+        "title": "Build an executable deployment payload rooted at main",
+        "action": "Write red behavior tests for deployment payload stdin and cwd with and without a granted feature worktree, non-main root refusal, and deployment-shaped requests without an approved v2 plan. Then implement a validated Pi-herding deployment brief and unconditional main-root cwd. Preserve ordinary gather bytes, runtime and role refusals, and all authorization behavior.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "deps": [],
+        "decisions": [
+          "38edea83",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "Deployment stdin permits mutation and names the exact authorized positional release command.",
+            "Deployment herding cwd is main with or without a feature worktree.",
+            "Non-main, wrong-runtime, wrong-role, and no-plan deployment requests refuse before payload creation.",
+            "Ordinary gather stays byte-identical, read-only, and feature-worktree rooted.",
+            "Authorization and replay checks remain unchanged."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Focused driver tests prove an executable deployment payload without changing ordinary gather or authorization behavior."
+      },
+      {
+        "id": "dse-2",
+        "feature": "deploy-stage-execution",
+        "role": "docs",
+        "lane": "standard",
+        "title": "Document the narrow deployment mutation exception",
+        "action": "Update the source delegation contract and doctrine knowledge entry for the authenticated deployment exception. Build the current source candidate, then regenerate host projections with that candidate. Write and check the release manifest; never conceal drift with sync acknowledgement.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee && CANDIDATE=\"$(cargo metadata --no-deps --format-version 1 --manifest-path packages/bee-rs/Cargo.toml | jq -r .target_directory)/release/bee\" && \"$CANDIDATE\" dev regen && \"$CANDIDATE\" dev release-manifest --write && \"$CANDIDATE\" dev release-manifest --check && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          "skills/bee-hive/references/gates-and-delegation.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "files": [
+          "skills/bee-hive/references/gates-and-delegation.md",
+          ".agents/skills/bee-hive/references/gates-and-delegation.md",
+          ".claude/skills/bee-hive/references/gates-and-delegation.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "deps": [
+          "dse-1"
+        ],
+        "decisions": [
+          "38edea83"
+        ],
+        "must_haves": {
+          "truths": [
+            "The shared contract permits mutation only for an authorized deployment stage.",
+            "Ordinary gather remains explicitly read-only.",
+            "Source and both generated host projections match.",
+            "The release manifest matches all tracked release files."
+          ]
+        },
+        "affects_skills": [
+          "skills/bee-hive/references/gates-and-delegation.md"
+        ],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Worker-facing instructions and durable knowledge describe one narrow deployment exception with generated parity."
+      },
+      {
+        "id": "dse-3",
+        "feature": "deploy-stage-execution",
+        "role": "test",
+        "lane": "high-risk",
+        "title": "Prove deployment payload and authorization live without publication",
+        "action": "Update the semantic-routing verification map, including the positional release command. Build and install the candidate into a fresh disposable repository. Execute the exact prepared herding payload through agy-flash against a harmless release.sh stub that records cwd, argv, dispatch ID, and audit version. Prove ordinary gather isolation, successful authorization, and replay refusal. Do not tag, push, publish, or invoke the real release script. Refresh and check the release manifest.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::tests && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+        "read_first": [
+          "docs/history/deploy-stage-execution/CONTEXT.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "deps": [
+          "dse-2"
+        ],
+        "decisions": [
+          "38edea83",
+          "c0a4d406"
+        ],
+        "must_haves": {
+          "truths": [
+            "A fresh installed exact payload executes the harmless stub with the authorized argv, environment, and main cwd.",
+            "An ordinary gather payload remains byte-identical, read-only, and worktree rooted.",
+            "The valid permit authorizes once and replay refuses.",
+            "Feature proof performs no real release mutation or publication."
+          ]
+        },
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/specs/doctrine-layer.md"
+        ],
+        "acceptance": "Retained green:live evidence proves the repaired user-facing deployment path before merge."
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "pi",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "planning",
+          "classification": "required",
+          "role": "plan",
+          "reason": "The release boundary needs a precise repair packet."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A narrow implementation fact is needed.",
+          "reason": "This role owns known-location extraction."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A broader read-only digest is needed.",
+          "reason": "This role owns read-only repository lookup."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "The plan must find missing release contract facts."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "A wrong payload can publish or block a release."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "The repair must remain smaller than a new dispatch system."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "The plan must test cheaper safe shapes."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "The deploy worker and release operator observe the payload."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust behavior and tests must change together."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "The prepared payload and release path need behavior proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "The shared contract, knowledge, and generated projections must agree."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The user explicitly requests independent review.",
+          "reason": "Review remains a separate user-invoked pass."
+        },
+        {
+          "stage": "deployment",
+          "classification": "conditional",
+          "role": "deploy",
+          "condition": "The repaired feature is merged and the user-approved patch release is ready.",
+          "reason": "The configured deploy role publishes from main and verifies assets."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The five required hats supply the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended supervisor loop is needed."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "The fault and expected behavior are reproduced."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every planned job has a specific role."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-09-14T15:20:51.730Z"
+  },
+  "merge_ready": {
+    "since": "2026-09-14T15:54:17.178Z",
+    "branch": "wt/deploy-stage-execution",
+    "worktree_id": "beehive--wt--deploy-stage-execution",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

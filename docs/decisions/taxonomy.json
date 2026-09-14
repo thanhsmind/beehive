@@ -507,6 +507,7 @@
     "pi-worktree",
     "gate-1",
     "role-reroute",
-    "scope-correction"
+    "scope-correction",
+    "deployment"
   ]
 }
