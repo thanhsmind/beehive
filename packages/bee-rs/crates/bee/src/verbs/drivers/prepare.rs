@@ -519,12 +519,17 @@ fn codex_spawn_payload(
     prompt_body: &str,
     model: Option<&str>,
     effort: Option<&str>,
+    extra_markers: Option<&str>,
 ) -> Map<String, Value> {
     let mut payload = Map::new();
     payload.insert("task_name".into(), Value::String(codex_task_name(subject)));
+    let marker_line = match extra_markers {
+        Some(m) if !m.is_empty() => format!("[bee-tier: {tier}] {m}"),
+        _ => format!("[bee-tier: {tier}]"),
+    };
     payload.insert(
         "message".into(),
-        Value::String(format!("[bee-tier: {tier}]\nAssignment: {subject}\n{prompt_body}")),
+        Value::String(format!("{marker_line}\nAssignment: {subject}\n{prompt_body}")),
     );
     payload.insert("fork_turns".into(), Value::String("none".into()));
     if let Some(model) = model {
@@ -1225,15 +1230,53 @@ pub(crate) fn prepare_dispatch_with_brief(
     purpose: Option<&str>,
     record_it: bool,
     expertise: Option<&str>,
+    brief: Option<&str>,
+) -> D<Prepared> {
+    prepare_dispatch_wire(
+        root,
+        runtime,
+        kind,
+        role,
+        cell_id,
+        worker,
+        force_ownership,
+        classification,
+        purpose,
+        record_it,
+        expertise,
+        brief,
+        None,
+        None,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_dispatch_wire(
+    root: &Path,
+    runtime: &str,
+    kind: &str,
+    role: Option<&str>,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    force_ownership: bool,
+    classification: Option<&str>,
+    purpose: Option<&str>,
+    record_it: bool,
+    expertise: Option<&str>,
     // Already resolved and trimmed by `resolve_brief_file`, which refuses
     // every kind but `advisor` — so this is `None` for every other kind by
     // the time it reaches here.
     brief: Option<&str>,
+    feature: Option<&str>,
+    stage: Option<&str>,
+    session_id: Option<&str>,
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
     debug_assert!(RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
 
+    let orig_role = role;
     let mut cell: Option<Value> = None;
     let mut ownership_override: Option<Value> = None;
     let mut resolved_worker: Option<String> = None;
@@ -1323,18 +1366,300 @@ pub(crate) fn prepare_dispatch_with_brief(
         cell = Some(loaded);
     }
 
-    // `find_granted_worktree_for_feature` (status_full/topology.rs) resolved
-    // ONCE here feeds both the envelope (below) and the rendered prompt's
-    // Location block (prompt_body_for) — one resolution, two destinations,
-    // never a second lookup that could drift from the first. `root` here is
-    // always the MAIN checkout: a granted worktree's own `dispatch prepare`
-    // call already refused through the narrow door in run_dispatch_prepare
-    // (Roots::Unsupported(GrantedWorktree)) before reaching this function.
-    let feature_for_worktree = cell
-        .as_ref()
-        .and_then(|c| match vget(c, "feature") {
-            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-            _ => None,
+    let resolved_feature: Option<String> = if kind == "cell" {
+        cell.as_ref()
+            .and_then(|c| match vget(c, "feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            })
+            .or_else(|| {
+                feature
+                    .map(|f| js_trim(f).to_string())
+                    .filter(|f| !f.is_empty())
+            })
+    } else {
+        feature
+            .map(|f| js_trim(f).to_string())
+            .filter(|f| !f.is_empty())
+            .or_else(|| {
+                crate::verbs::state_group::session_binding(session_id, root)
+                    .ok()
+                    .and_then(|(_sid, bound)| bound)
+            })
+    };
+
+    struct V2DispatchInfo {
+        feature: String,
+        stage: Option<String>,
+        planned_role: String,
+        plan_sha256: String,
+        roster_sha256: String,
+        role_reroute_decision: Option<String>,
+    }
+
+    let mut v2_info: Option<V2DispatchInfo> = None;
+    let mut v2_effective_role: Option<String> = None;
+
+    if let Some(feat) = resolved_feature.as_deref() {
+        if let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(root, feat) {
+            // 1. Verify runtime matches
+            let plan_runtime = role_plan
+                .get("runtime")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if plan_runtime != runtime {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("role_plan_runtime_mismatch".into()));
+                r.insert("feature".into(), Value::String(feat.to_string()));
+                r.insert("runtime".into(), Value::String(runtime.to_string()));
+                r.insert("plan_runtime".into(), Value::String(plan_runtime.to_string()));
+                r.insert("fix".into(), Value::String(format!(
+                    "feature \"{feat}\" approved role plan is for runtime \"{plan_runtime}\", not \"{runtime}\". Revise plan.md for runtime \"{runtime}\" and approve a new revision."
+                )));
+                return Ok(Prepared::Value(Value::Object(r)));
+            }
+
+            // 2. Verify roster is fresh
+            let table = crate::verbs::models_group::team_table(root, Some(runtime)).ok();
+            let runtimes_arr = table.as_ref().and_then(|t| t.get("runtimes")).and_then(Value::as_array);
+            let rt_entry = runtimes_arr.and_then(|arr| arr.iter().find(|r| r.get("runtime").and_then(Value::as_str) == Some(runtime)));
+            let roles_arr = rt_entry.and_then(|r| r.get("roles")).and_then(Value::as_array);
+
+            let expected_roster_sha = if let Some(arr) = roles_arr {
+                let (sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(arr);
+                sha
+            } else {
+                String::new()
+            };
+
+            let plan_roster_sha = role_plan
+                .get("roster_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if plan_roster_sha != expected_roster_sha {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("role_plan_roster_stale".into()));
+                r.insert("feature".into(), Value::String(feat.to_string()));
+                r.insert("runtime".into(), Value::String(runtime.to_string()));
+                r.insert("expected_roster_sha256".into(), Value::String(expected_roster_sha.clone()));
+                r.insert("plan_roster_sha256".into(), Value::String(plan_roster_sha.to_string()));
+                r.insert("fix".into(), Value::String(format!(
+                    "roster digest mismatch for runtime \"{runtime}\" (expected {expected_roster_sha}, got {plan_roster_sha}). Update plan.md roster_sha256 to {expected_roster_sha} and approve."
+                )));
+                return Ok(Prepared::Value(Value::Object(r)));
+            }
+
+            let approved_packet = crate::verbs::cells::get_approved_preview_packet(root, feat);
+            let plan_sha256 = role_plan
+                .get("plan_sha256")
+                .or_else(|| approved_packet.as_ref().and_then(|p| p.get("plan_sha256")))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+
+            if kind == "cell" {
+                let approved_packet = match approved_packet {
+                    Some(p) => p,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "approved preview packet not found for feature \"{feat}\""
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let cell_id_str = cell_id.unwrap_or_default();
+                let original_role = approved_packet
+                    .get("cells")
+                    .and_then(Value::as_array)
+                    .and_then(|arr| {
+                        arr.iter().find(|c| c.get("id").and_then(Value::as_str) == Some(cell_id_str))
+                    })
+                    .and_then(|c| c.get("role").and_then(Value::as_str));
+
+                let Some(original_role) = original_role else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "cell \"{cell_id_str}\" not found in approved preview packet for feature \"{feat}\""
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                };
+
+                let effective_role = match crate::verbs::cells::validate_cell_role_chain(original_role, cell.as_ref().unwrap()) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "cell \"{cell_id_str}\" role chain invalid: {err}"
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                if let Some(declared_role) = role {
+                    if declared_role != effective_role {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("cell".into(), Value::String(cell_id_str.to_string()));
+                        r.insert("planned_role".into(), Value::String(effective_role.clone()));
+                        r.insert("declared_role".into(), Value::String(declared_role.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "cell \"{cell_id_str}\" planned effective role is \"{effective_role}\", but dispatch declared \"{declared_role}\". FIX: use planned role or run bee cells reroute."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                let role_reroute_decision = cell.as_ref()
+                    .and_then(|c| c.get("role_reroutes"))
+                    .and_then(Value::as_array)
+                    .filter(|arr| !arr.is_empty())
+                    .and_then(|arr| arr.last())
+                    .and_then(|entry| entry.get("decision"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+
+                v2_effective_role = Some(effective_role.clone());
+                v2_info = Some(V2DispatchInfo {
+                    feature: feat.to_string(),
+                    stage: stage.map(str::to_string),
+                    planned_role: effective_role,
+                    plan_sha256,
+                    roster_sha256: expected_roster_sha,
+                    role_reroute_decision,
+                });
+            } else {
+                let Some(stage_name) = stage else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("stage_required".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "non-cell dispatch for feature \"{feat}\" with approved v2 role plan requires --stage <stage>. FIX: provide the approved stage name."
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                };
+
+                let stages = match role_plan.get("stages").and_then(Value::as_array) {
+                    Some(s) => s,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("stage_unknown".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "no stages found in role plan for feature \"{feat}\""
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let stage_entry = match stages.iter().find(|s| s.get("stage").and_then(Value::as_str) == Some(stage_name)) {
+                    Some(e) => e,
+                    None => {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("stage_unknown".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String(stage_name.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "stage \"{stage_name}\" is not defined in feature \"{feat}\" role plan. FIX: supply one of the approved stages or revise plan.md."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                };
+
+                let classification_str = stage_entry
+                    .get("classification")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if classification_str == "not-applicable" {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("stage_not_applicable".into()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("stage".into(), Value::String(stage_name.to_string()));
+                    r.insert("fix".into(), Value::String(format!(
+                        "stage \"{stage_name}\" is classified as not-applicable for feature \"{feat}\". FIX: do not dispatch this stage, or revise plan.md."
+                    )));
+                    return Ok(Prepared::Value(Value::Object(r)));
+                }
+
+                let stage_role = stage_entry
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+
+                if let Some(declared_role) = role {
+                    if declared_role != stage_role {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("planned_role_mismatch".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String(stage_name.to_string()));
+                        r.insert("planned_role".into(), Value::String(stage_role.to_string()));
+                        r.insert("declared_role".into(), Value::String(declared_role.to_string()));
+                        r.insert("fix".into(), Value::String(format!(
+                            "stage \"{stage_name}\" requires role \"{stage_role}\", got \"{declared_role}\". FIX: dispatch with --role {stage_role}."
+                        )));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                v2_effective_role = Some(stage_role.to_string());
+                v2_info = Some(V2DispatchInfo {
+                    feature: feat.to_string(),
+                    stage: Some(stage_name.to_string()),
+                    planned_role: stage_role.to_string(),
+                    plan_sha256,
+                    roster_sha256: expected_roster_sha,
+                    role_reroute_decision: None,
+                });
+            }
+        }
+    }
+
+    let role = if role.is_some() {
+        role
+    } else {
+        v2_effective_role.as_deref()
+    };
+
+    let feature_for_worktree = resolved_feature
+        .clone()
+        .or_else(|| {
+            cell.as_ref()
+                .and_then(|c| match vget(c, "feature") {
+                    Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                    _ => None,
+                })
         })
         .or_else(|| {
             cell_id
@@ -1343,11 +1668,6 @@ pub(crate) fn prepare_dispatch_with_brief(
                     Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
                     _ => None,
                 })
-        })
-        .or_else(|| {
-            crate::verbs::state_group::session_binding(None, root)
-                .ok()
-                .and_then(|(_sid, bound)| bound)
         })
         .or_else(|| match crate::fsutil::read_json(&root.join(".bee").join("state.json")) {
             crate::fsutil::ReadJson::Parsed(state) => match state.get("feature") {
@@ -1476,19 +1796,30 @@ pub(crate) fn prepare_dispatch_with_brief(
     // changes which value a role-CARRYING cell resolves from, nothing else.
     // `from_role` is what tells the two apart downstream — the observable
     // `tier_source` vocabulary is unchanged at {flag, cell, default}.
-    let (tier_token, tier_source, from_role) = match role {
-        Some(role) => (role, "flag", false),
-        None => {
-            if kind == "cell" {
-                match recorded_str(cell.as_ref(), "role") {
-                    Some(r) => (r, "cell", true),
-                    None => match recorded_str(cell.as_ref(), "tier") {
-                        Some(t) => (t, "cell", false),
-                        None => (default_slot, "default", false),
-                    },
+    let (tier_token, tier_source, from_role) = if let Some(v2) = &v2_info {
+        let ts = if orig_role.is_some() {
+            "flag"
+        } else if kind == "cell" {
+            "cell"
+        } else {
+            "default"
+        };
+        (v2.planned_role.as_str(), ts, true)
+    } else {
+        match role {
+            Some(role) => (role, "flag", false),
+            None => {
+                if kind == "cell" {
+                    match recorded_str(cell.as_ref(), "role") {
+                        Some(r) => (r, "cell", true),
+                        None => match recorded_str(cell.as_ref(), "tier") {
+                            Some(t) => (t, "cell", false),
+                            None => (default_slot, "default", false),
+                        },
+                    }
+                } else {
+                    (default_slot, "default", false)
                 }
-            } else {
-                (default_slot, "default", false)
             }
         }
     };
@@ -1685,9 +2016,7 @@ pub(crate) fn prepare_dispatch_with_brief(
     };
 
     let lane_feature = if kind != "cell" {
-        crate::verbs::state_group::session_binding(None, root)
-            .ok()
-            .and_then(|(_sid, bound)| bound)
+        resolved_feature.clone()
     } else {
         None
     };
@@ -1790,17 +2119,37 @@ pub(crate) fn prepare_dispatch_with_brief(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
+    let extra_markers: Option<String> = v2_info.as_ref().map(|v2| {
+        if kind == "cell" {
+            let cell_id_str = cell_id.unwrap_or_default();
+            let stage_part = v2.stage.as_deref().map(|s| format!(" [bee-stage: {s}]")).unwrap_or_default();
+            format!("[bee-feature: {}]{stage_part} [bee-cell: {cell_id_str}]", v2.feature)
+        } else {
+            let stage_str = v2.stage.as_deref().unwrap_or_default();
+            format!("[bee-feature: {}] [bee-stage: {stage_str}]", v2.feature)
+        }
+    });
+
+    let marker_header = match &extra_markers {
+        Some(extra) => format!("[bee-tier: {marker_role}] {extra}"),
+        None => format!("[bee-tier: {marker_role}]"),
+    };
+
     if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
-            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None);
+            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None, extra_markers.as_deref());
             channel = "session-model".into();
         } else {
             tool = "Agent".into();
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
+            let escalated_header = match &extra_markers {
+                Some(extra) => format!("[bee-tier: {ESCALATION_WORD}] {extra}"),
+                None => format!("[bee-tier: {ESCALATION_WORD}]"),
+            };
             payload.insert(
                 "prompt".into(),
-                Value::String(format!("[bee-tier: {ESCALATION_WORD}]\n{prompt_body}")),
+                Value::String(format!("{escalated_header}\n{prompt_body}")),
             );
             payload.insert(
                 "description".into(),
@@ -1968,6 +2317,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                         &prompt_body,
                         Some(model),
                         effort.as_deref(),
+                        extra_markers.as_deref(),
                     );
                     channel = "codex-native".into();
                     extra_transport = Some("native-override");
@@ -2004,7 +2354,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                     Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
                     _ => (None, None),
                 };
-                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort);
+                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort, extra_markers.as_deref());
                 channel = "codex-native".into();
             }
             _ => {
@@ -2012,7 +2362,7 @@ pub(crate) fn prepare_dispatch_with_brief(
                 payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
                 payload.insert(
                     "prompt".into(),
-                    Value::String(format!("[bee-tier: {marker_role}]\n{prompt_body}")),
+                    Value::String(format!("{marker_header}\n{prompt_body}")),
                 );
                 // `requestedModel || tierToken`
                 let model_tag = requested_model
@@ -2113,6 +2463,29 @@ pub(crate) fn prepare_dispatch_with_brief(
     // destinations rather than two that could drift.
     if let Some(seat) = fallen_through_seat {
         economics.insert("requested_role".into(), Value::String(seat.to_string()));
+    }
+
+    if let Some(v2) = &v2_info {
+        economics.insert("feature".into(), Value::String(v2.feature.clone()));
+        if let Some(st) = &v2.stage {
+            economics.insert("stage".into(), Value::String(st.clone()));
+        }
+        economics.insert("planned_role".into(), Value::String(v2.planned_role.clone()));
+        economics.insert("plan_sha256".into(), Value::String(v2.plan_sha256.clone()));
+        economics.insert("roster_sha256".into(), Value::String(v2.roster_sha256.clone()));
+        if let Some(rr) = &v2.role_reroute_decision {
+            economics.insert("role_reroute_decision".into(), Value::String(rr.clone()));
+        }
+
+        payload.insert("feature".into(), Value::String(v2.feature.clone()));
+        if let Some(st) = &v2.stage {
+            payload.insert("stage".into(), Value::String(st.clone()));
+        }
+        payload.insert("planned_role".into(), Value::String(v2.planned_role.clone()));
+        payload.insert("plan_sha256".into(), Value::String(v2.plan_sha256.clone()));
+        if let Some(rr) = &v2.role_reroute_decision {
+            payload.insert("role_reroute_decision".into(), Value::String(rr.clone()));
+        }
     }
 
     let dispatch_id = pseudo_uuid_v4();
@@ -2633,6 +3006,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "expertise",
             "role",
             "brief-file",
+            "feature",
+            "stage",
         ],
     ) {
         return None;
@@ -2646,14 +3021,21 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if s == "false" => false,
         Some(FlagV::S(_)) => return None,
     };
-    // `--session-id` is documented as ignored WITHOUT --claim; a caller that
-    // passes it anyway is an unproven shape here. With --claim it is the
-    // claim door's own `sessionFlag`.
-    let session_flag: Option<String> = match (claim, flags.get("session-id")) {
-        (_, None) => None,
-        (false, Some(_)) => return None,
-        (true, Some(FlagV::S(s))) => Some(s.clone()),
-        (true, Some(FlagV::Present)) => return None, // String(true) — unproven
+    // validate(): runtime/kind required + enum-checked.
+    let runtime = flags.req_str("runtime")?.to_string();
+    let kind = flags.req_str("kind")?.to_string();
+    if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) || !DISPATCH_KINDS.contains(&kind.as_str()) {
+        return None; // validate()'s enum message
+    }
+    // `--session-id` is accepted for feature lane lookup on non-cell kinds, or
+    // with `--claim` on cell kind.
+    let session_flag: Option<String> = match (claim, kind.as_str(), flags.get("session-id")) {
+        (_, _, None) => None,
+        (false, "cell", Some(_)) => return None,
+        (false, _, Some(FlagV::S(s))) => Some(s.clone()),
+        (false, _, Some(FlagV::Present)) => None,
+        (true, _, Some(FlagV::S(s))) => Some(s.clone()),
+        (true, _, Some(FlagV::Present)) => return None, // String(true) — unproven
     };
     // validate(): boolean-typed --force-ownership given as =value.
     match flags.get("force-ownership") {
@@ -2661,12 +3043,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if s == "true" || s == "false" => {}
         Some(FlagV::S(_)) => return None,
     }
-    // validate(): runtime/kind required + enum-checked.
-    let runtime = flags.req_str("runtime")?.to_string();
-    let kind = flags.req_str("kind")?.to_string();
-    if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) || !DISPATCH_KINDS.contains(&kind.as_str()) {
-        return None; // validate()'s enum message
-    }
+    let feature_flag = flags.truthy_str("feature").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
+    let stage_flag = flags.truthy_str("stage").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     // `typeof flags.cell === 'string' && flags.cell ? flags.cell : null`
     let cell_id = flags.truthy_str("cell").map(str::to_string);
     let worker = flags.truthy_str("worker").map(str::to_string);
@@ -2815,7 +3193,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     let prepared = if arg_error.is_some() || brief_arg_refusal.is_some() {
         Prepared::Value(Value::Null) // unused — the refusal short-circuits below
     } else {
-        prepare_dispatch_with_brief(
+        prepare_dispatch_wire(
             &root,
             &runtime,
             &kind,
@@ -2828,6 +3206,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             false,
             expertise_block.as_deref(),
             brief_text.as_deref(),
+            feature_flag.as_deref(),
+            stage_flag.as_deref(),
+            session_flag.as_deref(),
         )
         .ok()?
     };
@@ -2891,7 +3272,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
-            match prepare_dispatch_with_brief(
+            match prepare_dispatch_wire(
                 &ctx.root,
                 &runtime,
                 &kind,
@@ -2904,6 +3285,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 true,
                 expertise_block.as_deref(),
                 brief_text.as_deref(),
+                feature_flag.as_deref(),
+                stage_flag.as_deref(),
+                session_flag.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
