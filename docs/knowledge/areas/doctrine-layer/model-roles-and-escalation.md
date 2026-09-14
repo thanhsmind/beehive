@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9]
   sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
@@ -300,6 +300,12 @@ can ever travel under — is warned by name instead of dying silently.
 
 **B18 — Plan-time role assignment is an explicit planning output** (semantic-role-routing D1, decision `fc2bb09a`). After locked decisions are cited, the planner reads team role descriptions (`bee team show`), assigns each stage and job to the semantically fitting role, and records the assignment in `plan.md` (under `## Role assignments`) or the scoping synthesis. Execution dispatches must follow this approved assignment. A newly discovered stage or a required role change during execution needs a logged decision with tag `role-reroute` (`bee decisions log --relation touches:<id> --tag role-reroute`), never an ad hoc role choice at dispatch time. This does not change the open set of roles (B2), the cell's role as sole selector (B4), or the fall-through resolution (B2/B9) — only the step at which the assignment is made, from dispatch-time leader prose to planning-time structured output.
 
+**B19 — Approved role plans enforce at dispatch and native guard doors** (semantic-role-routing D3, decision `68bc3484`). Under `bee-plan/v2`, Gate 2 approval stores immutable `role_plan` data alongside cells. Dispatch preparation derives cell role identity from the approved cell, refusing an explicit mismatched `--role` before building a payload. Non-cell dispatches under v2 require an explicit `--stage`, refusing missing, unknown, or not-applicable stages. Native dispatch guards verify anchored feature and stage markers against the approved plan.
+
+**B20 — Structured cell rerouting requires a tagged decision and claim lock** (semantic-role-routing D4, decision `68bc3484`). `bee cells reroute --id <id> --role <role> --decision <id>` acquires the cell claim lock, validates that the cited decision belongs to the feature and carries tag `role-reroute`, ensures the target role is configured for the plan's runtime, and records an audited entry in `role_reroutes[]`. This provides the verified revision door for cell role changes while leaving the approved plan packet immutable.
+
+**B21 — Release execution requires deploy authorization** (semantic-role-routing D6, decision `c0a4d406`). Publishing a release version through `scripts/release.sh` requires an authorized dispatch permit (`bee dispatch authorize`) issued for stage `deployment` and role `deploy`. The permit binds version, plan hash, main commit, and issuer session with a two-hour lifetime; direct script calls and replayed permits are refused.
+
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
 The premise behind `pi_requires_herding` is that Pi ships no **built-in**
@@ -334,5 +340,5 @@ core: the extension factory, `on(session_start|tool_call|tool_result)`,
   sites, but D5's wording still says the ration is "unchanged in force".
 - On opencode the rendered agent file is the enforcement rather than a dispatch
   model param, so a configured `team.opencode.code` is currently ignored.
-- `role` is the one required field with no revision door: it is absent from the
-  cell `UPDATE_FIELDS` list and is not named as frozen either.
+- `role` previously lacked a revision door; this was settled by `bee cells reroute`
+  under decision `68bc3484` (B20).

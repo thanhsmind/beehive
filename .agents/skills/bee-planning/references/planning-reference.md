@@ -63,7 +63,7 @@ id that carries the risk / proof needed). When approach.md exists, drop this
 section and point to it.>
 
 Waves: <the groups that run in parallel, and the reason for each serial edge>
- 
+
 ## Role assignments
 <Required for bee-plan/v2. Classifies each workflow stage and assigns each to a
 configured team role from `bee team show`. Dispatches must follow these approved

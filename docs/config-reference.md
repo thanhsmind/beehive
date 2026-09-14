@@ -91,6 +91,8 @@ Two rules keep the fall-through honest:
 
 One path deliberately does **not** fall through: `bee dispatch prepare --role <name>` names the slot **outright** — the kind's default slot is not consulted, and neither is a cell's own recorded value. A name that runtime cannot resolve is a typed refusal (`role_not_configured`) whose FIX lists the roles it can, because an operator who typed a flag made a typo, not a policy choice.
 
+Under `bee-plan/v2`, role assignments are planned and approved in Gate 2 (`## Role assignments`). Cell dispatches derive the planned role; an explicit `--role` cannot mismatch the cell role (`planned_role_mismatch`). Non-cell dispatches require an approved `--stage` matching its configured role (`stage_required`, `stage_unknown`, `stage_not_applicable`). Changing an open or blocked cell's role requires `bee cells reroute --id <id> --role <role> --decision <id>` citing a decision tagged `role-reroute`. Releasing a version requires dispatch authorization (`bee dispatch authorize`) for stage `deployment` and role `deploy`.
+
 ### Escalation — the cost lever, not a role
 
 Cost is a separate axis from job. Work that must run on your strongest model — integration, architecture, a security call, an ambiguous spec — is **escalated** (D5, store `97ce5225`):
