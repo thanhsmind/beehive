@@ -63,6 +63,16 @@ id that carries the risk / proof needed). When approach.md exists, drop this
 section and point to it.>
 
 Waves: <the groups that run in parallel, and the reason for each serial edge>
+ 
+## Role assignments
+<maps each stage, job, or cell to a team role from `bee team show`. Required
+before execution. Dispatches must follow these approved assignments; any
+change or newly discovered stage requires a logged decision with tag
+`role-reroute`.>
+
+| Stage / Job | Assigned Role | Rationale |
+|---|---|---|
+| <stage, job, or cell id> | <role from `bee team show`> | <why this role fits semantically> |
 
 ## Shape
 <one of the bodies below, by mode>

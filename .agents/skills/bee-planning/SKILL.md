@@ -75,7 +75,15 @@ the cheapest finding of the whole feature.
 
 Draft the smallest honest shape — the smallest that still covers what the
 work endangers (decomposition, walking skeleton, dependency thinking:
-`.bee/expertise/planning.md`). Every locked decision lands in it, cited. By lane:
+`.bee/expertise/planning.md`). Every locked decision lands in it, cited.
+
+After locked decisions are cited, role assignment is a required step: the
+planner reads team role descriptions via `bee team show`, assigns each
+stage and job to the semantically fitting role, and records the assignment
+in `plan.md` (under `## Role assignments`) or the scoping synthesis.
+Dispatches must follow this approved assignment. If execution reveals a
+newly discovered stage or requires changing a role, record an explicit
+re-route decision (`role-reroute` tag) before dispatching. By lane:
 
 | Lane | Shape |
 |---|---|
