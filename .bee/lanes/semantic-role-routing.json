@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"semantic-role-routing\" started at phase \"planning\" (lane).",
-  "next_action": "Execute approved cells slr-3 and slr-7 in parallel",
+  "next_action": "Merged into main at 97d0569; reload the product and test \"semantic-role-routing\", then either approve uat (\"bee gate --name uat --approved true --lane semantic-role-routing\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-14T04:37:30.158Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "Authorize one final slr-6 worker retry to repair incomplete deploy-permit checks",
-    "asked_at": "2026-09-14T09:26:59.370Z",
-    "session": "01a09ebc-3389-747b-a74c-ed61ea9ddf04"
+    "kind": "gate",
+    "subject": "uat: semantic-role-routing",
+    "asked_at": "2026-09-14T10:51:08.372Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "advisor_ref": {
     "consulted_at": "2026-09-14T07:48:16.352Z",
@@ -554,16 +554,5 @@
     "rationale": "Store and enforce approved semantic role assignments, authorize deploy execution, and preserve strict Pi worktree relocation.",
     "updated_at": "2026-09-14T07:49:19.067Z",
     "feature": "semantic-role-routing"
-  },
-  "merge_ready": {
-    "since": "2026-09-14T10:46:48.957Z",
-    "branch": "wt/semantic-role-routing",
-    "worktree_id": "beehive--wt--semantic-role-routing",
-    "uat": "pending",
-    "blocked_by": [
-      "impact",
-      "routing",
-      "doc-deferral"
-    ]
   }
 }
