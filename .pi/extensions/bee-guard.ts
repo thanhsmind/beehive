@@ -66,14 +66,12 @@
 // on eight distinct lifecycle events. The Pi belt maps each row onto the
 // closest honest Pi lifecycle carrier and passes the original Claude event
 // name in hook_event_name (activity is a state machine keyed on Claude names):
-//   1. UserPromptSubmit    -> before_agent_start (session_id, prompt, cwd)
-//   2. PreToolUse          -> NAMED EXCLUSION: no honest advisory carrier on Pi
-//                             (Pi's tool_call is strictly the fail-closed blocking
-//                             path; no advisory pre-tool lifecycle event exists)
+//   1. UserPromptSubmit    -> before_agent_start (session_id, prompt, cwd) and ui_prompt_end
+//   2. PreToolUse          -> tool_execution_start (session_id, tool_name, tool_use_id, cwd)
 //   3. PostToolUse         -> tool_result when !isError (session_id, tool_name, tool_use_id, cwd)
 //   4. PostToolUseFailure  -> tool_result when isError (session_id, tool_name, tool_use_id, cwd)
 //   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
-//   6. Notification        -> NAMED EXCLUSION: Pi 0.84.x has no notification event
+//   6. Notification        -> ui_prompt_start (session_id, cwd; notification_type: agent_needs_input)
 //   7. Stop                -> agent_settled (session_id, cwd)
 //   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
 
@@ -605,6 +603,16 @@ let selfBusy = false
  * so a claim covers the whole turn and not merely the host's acceptance of
  * `sendUserMessage`. */
 const inFlightClaims = new Set<string>()
+
+/**
+ * Nested UI prompt depth tracking across sessions.
+ * Outer ui_prompt_start emits Notification (agent_needs_input) to enter waiting_input.
+ * Inner prompts increment depth without re-emitting.
+ * Inner ends decrement depth without ending the wait span.
+ * Matching outer ui_prompt_end emits UserPromptSubmit (without prompt text) to return to working.
+ * Unmatched ends are ignored. Unended prompts remain waiting until Stop (agent_settled).
+ */
+const promptDepths = new Map<string, number>()
 
 /** Where a previous module instance parked its timer. Pi's `/reload` can hand
  * this file a fresh module scope while the old interval is still armed; the
@@ -1619,6 +1627,8 @@ export default function (pi: ExtensionAPI) {
         cachedPreamble = null
         preambleInjected = false
         sessionInitRun = false
+        const activeSessionId = sessionIdOf(ctx) ?? ""
+        promptDepths.delete(activeSessionId)
       }
       const directory = directoryOf(ctx)
       // D4: the result-inbox drain arms HERE and only here — never at module
@@ -1691,6 +1701,71 @@ export default function (pi: ExtensionAPI) {
     }
   }) as any)
 
+  // ── ADVISORY: pre-tool activity. Maps to PreToolUse in activity.
+  // Records working activity before the blocking tool_call path runs.
+  pi.on("tool_execution_start", (async (event: any, ctx: any) => {
+    try {
+      const directory = directoryOf(ctx)
+      const mapped = mapToolCall(String(event?.toolName ?? ""), event?.args)
+      runAdvisoryHook(directory, "activity", {
+        hook_event_name: "PreToolUse",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        tool_name: mapped.tool_name,
+        tool_use_id: typeof event?.toolCallId === "string" ? event.toolCallId : undefined,
+      })
+    } catch (err: any) {
+      console.error(`bee activity tool_execution_start (advisory): ${err?.message ?? err}`)
+    }
+  }) as any)
+
+  // ── ADVISORY: UI prompt start maps to Notification:agent_needs_input.
+  // Tracks nested UI prompt depth. Only the outermost start enters waiting_input.
+  pi.on("ui_prompt_start", (async (_event: any, ctx: any) => {
+    try {
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      const currentDepth = promptDepths.get(activeSessionId) ?? 0
+      promptDepths.set(activeSessionId, currentDepth + 1)
+      if (currentDepth === 0) {
+        const directory = directoryOf(ctx)
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "Notification",
+          notification_type: "agent_needs_input",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      }
+    } catch (err: any) {
+      console.error(`bee activity ui_prompt_start (advisory): ${err?.message ?? err}`)
+    }
+  }) as any)
+
+  // ── ADVISORY: UI prompt end maps to UserPromptSubmit without prompt text.
+  // Ends the waiting_input span and returns activity to working. Unmatched
+  // ends are ignored. Inner ends decrement depth without ending the wait span.
+  pi.on("ui_prompt_end", (async (_event: any, ctx: any) => {
+    try {
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      const currentDepth = promptDepths.get(activeSessionId) ?? 0
+      if (currentDepth <= 0) {
+        return // unmatched end is ignored
+      }
+      if (currentDepth === 1) {
+        promptDepths.delete(activeSessionId)
+        const directory = directoryOf(ctx)
+        runAdvisoryHook(directory, "activity", {
+          hook_event_name: "UserPromptSubmit",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+        })
+      } else {
+        promptDepths.set(activeSessionId, currentDepth - 1)
+      }
+    } catch (err: any) {
+      console.error(`bee activity ui_prompt_end (advisory): ${err?.message ?? err}`)
+    }
+  }) as any)
+
   // ── ADVISORY: state-sync, tools-logger, and activity after every tool result.
   // Strips and captures session transition markers from successful shell results. ──
   pi.on("tool_result", (async (event: any, ctx: any) => {
@@ -1756,6 +1831,8 @@ export default function (pi: ExtensionAPI) {
     // crash is reclaimed at the next `session_start`, which is what makes this
     // channel at-least-once rather than at-most-once.
     try {
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      promptDepths.delete(activeSessionId)
       selfBusy = false
       turnStartPending = false
       for (const processing of inFlightClaims) rmSync(processing, { force: true })
@@ -1907,6 +1984,8 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee session_shutdown (advisory): ${err?.message ?? err}`)
     }
+    const activeSessionId = sessionIdOf(ctx) ?? ""
+    promptDepths.delete(activeSessionId)
     pendingTransitions.clear()
     pendingRelocationTokens.clear()
     return undefined

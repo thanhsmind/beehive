@@ -250,7 +250,7 @@ Pi enforces bee rules through the extension [`.pi/extensions/bee-guard.ts`](../.
 | `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
 | `session-init` | `session_start` | Advisory | Runs at every real session boundary — a fresh start, a new session, a resume, or a fork — and caches the session preamble. A `/reload` does not run it a second time: the session keeps the preamble it already has. A reload that arrives before it has ever run does run it once, because Pi can hand the extension a fresh copy of itself. It reports a new session as a clear; a resume, a fork, or a reload as a resume; and anything else as a startup. |
 | `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
-| `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution results, turn completion, and session shutdown. |
+| `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_execution_start` (`PreToolUse`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `ui_prompt_start` (`Notification:agent_needs_input`), `ui_prompt_end` (`UserPromptSubmit`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution, extension UI prompts, turn completion, and session shutdown. |
 | `state-sync` | `tool_result` (`PostToolUse`), `agent_settled` (`Stop`) | Advisory | Synchronizes session state after tool execution and on turn completion. |
 | `tools-logger` | `tool_result` (`PostToolUse`) | Advisory | Appends one line per tool call to the tools log, carrying the timestamp and the tool name. Tool arguments and results are never logged. The agent-identity fields the rule can carry on other runtimes stay empty on Pi, because Pi's tool result does not carry them. |
 | `session-close` | `agent_settled` (`Stop`), `session_before_compact` (`PreCompact`), `session_shutdown` (`SessionEnd`) | Advisory | Manages turn-end marks and continuation nudges on settle; the `PreCompact` arm returns undecidable (fail-open) today so the belt is ready when native `PreCompact` becomes real; and marks the session record closed on shutdown for every reason except `reload`, which keeps the same session running. A shutdown that carries no reason at all also closes the record. |
@@ -269,9 +269,7 @@ The following rules from the bee catalog are not wired on Pi:
 
 The Claude hook manifest (`packages/bee/hooks/claude-hooks.json`) fires some rules on lifecycle events that have no equivalent in Pi:
 
-- **`activity` on `PreToolUse`:** Pi's `tool_call` event is strictly the fail-closed blocking path; Pi has no separate advisory pre-tool event.
 - **`activity` on `PermissionRequest`:** Pi 0.84.x provides no interactive permission request event.
-- **`activity` on `Notification`:** Pi 0.84.x provides no notification event.
 - **`state-sync` on `SubagentStop`:** Pi has no `SubagentStop` event (state synchronization runs on `tool_result` and `agent_settled`).
 
 
