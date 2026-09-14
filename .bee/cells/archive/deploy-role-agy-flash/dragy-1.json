@@ -1,0 +1,57 @@
+{
+  "id": "dragy-1",
+  "feature": "deploy-role-agy-flash",
+  "title": "Route Pi deployment work through agy-flash",
+  "action": "Add team.pi.deploy to .bee/config.json as a herding slot that names the existing agy-flash agent and describes approved release work.",
+  "verify": ".bee/bin/bee team show --runtime pi --json | jq -e 'any(.runtimes[0].roles[]; .role == \"deploy\" and .transport == \"herding: agy-flash\" and .description == \"publish an approved release from main, wait for CI, and verify release assets\")'",
+  "lane": "tiny",
+  "role": "code",
+  "files": [
+    ".bee/config.json"
+  ],
+  "read_first": [
+    "docs/config-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "deps": [],
+  "decisions": [
+    "c0a4d406-ccb3-4bf9-8013-68b21f32bd8a"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "deploy-config-worker",
+    "outcome": "Added team.pi.deploy slot in .bee/config.json routing release work through agy-flash",
+    "files_changed": [
+      ".bee/config.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-14T04:13:02.712Z",
+    "behavior_change": false,
+    "verification_evidence": "verified team.pi.deploy configuration",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a09b73-3f97-7737-b6f6-765cf6382c55",
+    "verify_command": ".bee/bin/bee team show --runtime pi --json | jq -e 'any(.runtimes[0].roles[]; .role == \"deploy\" and .transport == \"herding: agy-flash\" and .description == \"publish an approved release from main, wait for CI, and verify release assets\")'",
+    "claimed_at": "2026-09-14T04:11:36.436Z",
+    "verified_at": null,
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Added team.pi.deploy slot in .bee/config.json routing release work through agy-flash",
+      "commit": "2851619f84be71844dec9dff758e0931f5f1bb1a",
+      "files": [
+        ".bee/config.json"
+      ],
+      "tests": ".bee/bin/bee team show --runtime pi --json | jq -e 'any(.runtimes[0].roles[]; .role == \"deploy\" and .transport == \"herding: agy-flash\" and .description == \"publish an approved release from main, wait for CI, and verify release assets\")' — green:live — verified team.pi.deploy configuration",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

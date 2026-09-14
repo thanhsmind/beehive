@@ -1,0 +1,24 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "deploy-role-agy-flash",
+  "closed_at": "2026-09-14T04:13:42.816Z",
+  "sessions": [],
+  "skipped": 1,
+  "totals": {
+    "main": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    }
+  }
+}
