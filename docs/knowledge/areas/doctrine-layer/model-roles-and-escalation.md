@@ -308,6 +308,7 @@ can ever travel under — is warned by name instead of dying silently.
 
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
+<!-- bee:not-a-deferral: This section records rejected transport alternatives and the current decision; it promises no future work. -->
 The premise behind `pi_requires_herding` is that Pi ships no **built-in**
 Task/Agent tool, which is true. The stronger reading — that herding is Pi's only
 possible fan-out — is not. A study of pi 0.84.4 found three unused paths:
@@ -321,6 +322,7 @@ locked decision: Pi dispatch stays herding-only (store `9f5c6d17`), and `pi`
 means the pi binary 0.84.x alone, not omp (store `5d87f14e`). So the rule stands
 on a choice about one transport, not on an absence of alternatives — which is
 what a later reader needs to know before proposing the "obvious" fix again.
+<!-- /bee:not-a-deferral -->
 
 **`pi` and `omp` are two different binaries.** Both were installed side by side
 on the development machine: pi (`@earendil-works/pi-coding-agent`) and omp

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "semantic-role-routing",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"semantic-role-routing\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 97d0569; reload the product and test \"semantic-role-routing\", then either approve uat (\"bee gate --name uat --approved true --lane semantic-role-routing\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"semantic-role-routing\" — feature is closed.",
   "created_at": "2026-09-14T04:37:30.158Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "advisor_ref": {
     "consulted_at": "2026-09-14T07:48:16.352Z",
