@@ -1248,7 +1248,47 @@ pub(crate) fn prepare_dispatch_with_brief(
         None,
         None,
         None,
+        None,
     )
+}
+
+pub(crate) fn is_valid_semver(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    for part in parts {
+        if part.is_empty() {
+            return false;
+        }
+        if !part.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        if part.len() > 1 && part.starts_with('0') {
+            return false;
+        }
+    }
+    true
+}
+
+pub(crate) fn resolve_main_commit(root: &Path) -> Option<String> {
+    let try_ref = |target: &str| -> Option<String> {
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", target])
+            .current_dir(root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    };
+
+    try_ref("refs/heads/main").or_else(|| try_ref("HEAD"))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1271,10 +1311,20 @@ pub(crate) fn prepare_dispatch_wire(
     feature: Option<&str>,
     stage: Option<&str>,
     session_id: Option<&str>,
+    release_version: Option<&str>,
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
     debug_assert!(RUNTIMES.contains(&runtime) && DISPATCH_KINDS.contains(&kind));
+
+    if release_version.is_some() && (kind == "cell" || stage != Some("deployment")) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("release_version_not_permitted".into()));
+        r.insert("fix".into(), Value::String("--release-version is permitted only on stage deployment under role deploy.".into()));
+        return Ok(Prepared::Value(Value::Object(r)));
+    }
 
     let orig_role = role;
     let mut cell: Option<Value> = None;
@@ -1395,6 +1445,8 @@ pub(crate) fn prepare_dispatch_wire(
         plan_sha256: String,
         roster_sha256: String,
         role_reroute_decision: Option<String>,
+        release_version: Option<String>,
+        main_commit: Option<String>,
     }
 
     let mut v2_info: Option<V2DispatchInfo> = None;
@@ -1549,6 +1601,8 @@ pub(crate) fn prepare_dispatch_wire(
                     plan_sha256,
                     roster_sha256: expected_roster_sha,
                     role_reroute_decision,
+                    release_version: None,
+                    main_commit: None,
                 });
             } else {
                 let Some(stage_name) = stage else {
@@ -1633,6 +1687,31 @@ pub(crate) fn prepare_dispatch_wire(
                     }
                 }
 
+                if stage_name == "deployment" {
+                    let Some(ver) = release_version else {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("release_version_required".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        r.insert("fix".into(), Value::String("stage deployment requires --release-version <MAJOR.MINOR.PATCH>.".into()));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    };
+                    if !is_valid_semver(ver) {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("release_version_invalid".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        r.insert("release_version".into(), Value::String(ver.to_string()));
+                        r.insert("fix".into(), Value::String(format!("\"{ver}\" is not valid semver (MAJOR.MINOR.PATCH with no leading zeros).")));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                }
+
+                let main_commit = resolve_main_commit(root);
                 v2_effective_role = Some(stage_role.to_string());
                 v2_info = Some(V2DispatchInfo {
                     feature: feat.to_string(),
@@ -1641,6 +1720,8 @@ pub(crate) fn prepare_dispatch_wire(
                     plan_sha256,
                     roster_sha256: expected_roster_sha,
                     role_reroute_decision: None,
+                    release_version: release_version.map(str::to_string),
+                    main_commit,
                 });
             }
         }
@@ -2109,6 +2190,7 @@ pub(crate) fn prepare_dispatch_wire(
         }
     };
 
+    let dispatch_id = pseudo_uuid_v4();
     let mut tool = String::new();
     let mut payload = Map::new();
     let mut channel = String::new();
@@ -2384,6 +2466,17 @@ pub(crate) fn prepare_dispatch_wire(
         }
     }
 
+    if let Some(v2) = &v2_info {
+        if v2.stage.as_deref() == Some("deployment") {
+            if let Some(ver) = &v2.release_version {
+                if let Some(cmd) = payload.get("command").and_then(Value::as_str) {
+                    let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"; {cmd}");
+                    payload.insert("command".into(), Value::String(new_cmd));
+                }
+            }
+        }
+    }
+
     if let Some(refusal) = refusal {
         return Ok(Prepared::Value(refusal));
     }
@@ -2477,6 +2570,23 @@ pub(crate) fn prepare_dispatch_wire(
             economics.insert("role_reroute_decision".into(), Value::String(rr.clone()));
         }
 
+        if let Some(ver) = &v2.release_version {
+            economics.insert("release_version".into(), Value::String(ver.clone()));
+            payload.insert("release_version".into(), Value::String(ver.clone()));
+        }
+        if let Some(mc) = &v2.main_commit {
+            economics.insert("main_commit".into(), Value::String(mc.clone()));
+            payload.insert("main_commit".into(), Value::String(mc.clone()));
+        }
+        if v2.stage.as_deref() == Some("deployment") {
+            let expires = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+            economics.insert("expires_at".into(), Value::String(expires.clone()));
+            payload.insert("expires_at".into(), Value::String(expires));
+            if let Some(sid) = session_id {
+                economics.insert("issuer_session".into(), Value::String(sid.to_string()));
+            }
+        }
+
         payload.insert("feature".into(), Value::String(v2.feature.clone()));
         if let Some(st) = &v2.stage {
             payload.insert("stage".into(), Value::String(st.clone()));
@@ -2487,8 +2597,6 @@ pub(crate) fn prepare_dispatch_wire(
             payload.insert("role_reroute_decision".into(), Value::String(rr.clone()));
         }
     }
-
-    let dispatch_id = pseudo_uuid_v4();
 
     // slp-blind-lanes E2 (D2b). Byte-identity of the LaneBrief across 2–3
     // parallel lanes has to be CHECKABLE, and the dispatch record is the one
@@ -3008,6 +3116,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "brief-file",
             "feature",
             "stage",
+            "release-version",
         ],
     ) {
         return None;
@@ -3045,6 +3154,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     }
     let feature_flag = flags.truthy_str("feature").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     let stage_flag = flags.truthy_str("stage").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
+    let release_version_flag = flags.truthy_str("release-version").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     // `typeof flags.cell === 'string' && flags.cell ? flags.cell : null`
     let cell_id = flags.truthy_str("cell").map(str::to_string);
     let worker = flags.truthy_str("worker").map(str::to_string);
@@ -3209,6 +3319,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             feature_flag.as_deref(),
             stage_flag.as_deref(),
             session_flag.as_deref(),
+            release_version_flag.as_deref(),
         )
         .ok()?
     };
@@ -3288,6 +3399,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 feature_flag.as_deref(),
                 stage_flag.as_deref(),
                 session_flag.as_deref(),
+                release_version_flag.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
@@ -3779,6 +3891,465 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     let result = Value::Object(result);
     let text = jsjson::stringify_pretty(&result);
     finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}
+
+pub(crate) fn authorize_dispatch_permit(
+    root: &Path,
+    dispatch_id: &str,
+    release_version: &str,
+    session_id: Option<&str>,
+) -> Result<Value, Value> {
+    let id_bytes = dispatch_id.as_bytes();
+    let valid_dispatch_id = id_bytes.len() == 36
+        && id_bytes.iter().enumerate().all(|(idx, byte)| {
+            if matches!(idx, 8 | 13 | 18 | 23) {
+                *byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        });
+    if !valid_dispatch_id {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("fix".into(), Value::String("dispatch id must be a generated UUID.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let auth_dir = root.join(".bee").join("authorizations");
+    let marker_path = auth_dir.join(format!("{dispatch_id}.json"));
+    if marker_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("this dispatch authorization has already been consumed; dispatch a new deployment run.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+    if !log_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("no dispatch log found; dispatch with deployment stage and deploy role first.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let content = match std::fs::read_to_string(&log_path) {
+        Ok(c) => c,
+        Err(e) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+            r.insert("fix".into(), Value::String(format!("failed to read dispatch log: {e}")));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let mut matching_record: Option<Value> = None;
+    for line in content.lines().rev() {
+        if let Ok(val) = serde_json::from_str::<Value>(line) {
+            if val.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
+                matching_record = Some(val);
+                break;
+            }
+        }
+    }
+
+    let Some(record) = matching_record else {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_unknown".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch ID not found in dispatch log; dispatch with deployment stage and deploy role first.".into()));
+        return Err(Value::Object(r));
+    };
+
+    let rec_ver = record.get("release_version").and_then(Value::as_str).unwrap_or("");
+    if rec_ver.is_empty() || rec_ver != release_version {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_version".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("authorized_version".into(), Value::String(rec_ver.to_string()));
+        r.insert("requested_version".into(), Value::String(release_version.to_string()));
+        r.insert("fix".into(), Value::String(format!("dispatch authorized version \"{rec_ver}\", but release requested \"{release_version}\".")));
+        return Err(Value::Object(r));
+    }
+
+    let ts_str = record.get("ts").and_then(Value::as_str);
+    let exp_str = record.get("expires_at").and_then(Value::as_str);
+
+    let ts_dt = match ts_str {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(dt) => dt,
+            Err(_) => {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+                r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                r.insert("fix".into(), Value::String("dispatch timestamp \"ts\" is malformed RFC-3339.".into()));
+                return Err(Value::Object(r));
+            }
+        },
+        None => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String("dispatch timestamp \"ts\" is missing.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let exp_dt = match exp_str {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(dt) => dt,
+            Err(_) => {
+                let mut r = Map::new();
+                r.insert("ok".into(), Value::Bool(false));
+                r.insert("type".into(), Value::String("refused".into()));
+                r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+                r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                r.insert("fix".into(), Value::String("dispatch expiration \"expires_at\" is malformed RFC-3339.".into()));
+                return Err(Value::Object(r));
+            }
+        },
+        None => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String("dispatch expiration \"expires_at\" is missing.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let created_at = ts_dt.with_timezone(&chrono::Utc);
+    let expires_at = exp_dt.with_timezone(&chrono::Utc);
+    let lifetime = expires_at.signed_duration_since(created_at);
+    if created_at > now || lifetime.num_seconds() <= 0 || lifetime.num_seconds() > 2 * 3600 {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_malformed_expiry".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch lifetime must start now or earlier and end no more than two hours later.".into()));
+        return Err(Value::Object(r));
+    }
+    let age = now.signed_duration_since(created_at);
+    if age.num_seconds() > 2 * 3600 || now > expires_at {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_stale".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch authorization expired (> 2 hours old); dispatch a new deployment run.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let current_commit = resolve_main_commit(root);
+    let rec_commit = record.get("main_commit").and_then(Value::as_str).unwrap_or("");
+    if current_commit.is_none() || rec_commit.is_empty() || current_commit.as_deref() != Some(rec_commit) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_commit".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("dispatch_commit".into(), Value::String(rec_commit.to_string()));
+        r.insert("current_commit".into(), Value::String(current_commit.unwrap_or_default()));
+        r.insert("fix".into(), Value::String("current main commit does not match the commit authorized at dispatch; dispatch again on current main.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let stage = record.get("stage").and_then(Value::as_str).unwrap_or("");
+    if stage != "deployment" {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_stage".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("stage".into(), Value::String(stage.to_string()));
+        r.insert("fix".into(), Value::String("dispatch stage must be \"deployment\".".into()));
+        return Err(Value::Object(r));
+    }
+
+    let role = record.get("planned_role").or_else(|| record.get("role")).and_then(Value::as_str).unwrap_or("");
+    if role != "deploy" {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_role".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("role".into(), Value::String(role.to_string()));
+        r.insert("fix".into(), Value::String("dispatch role must be \"deploy\".".into()));
+        return Err(Value::Object(r));
+    }
+
+    let feat = record.get("feature").and_then(Value::as_str).unwrap_or("");
+    if feat.is_empty() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch record is missing feature name.".into()));
+        return Err(Value::Object(r));
+    }
+    let lane_path = root.join(".bee").join("lanes").join(format!("{feat}.json"));
+    if !lane_path.exists() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("feature".into(), Value::String(feat.to_string()));
+        r.insert("fix".into(), Value::String(format!("feature \"{feat}\" lane file not found in store.")));
+        return Err(Value::Object(r));
+    }
+
+    let role_plan = crate::verbs::state_group::get_approved_role_plan(root, feat);
+    let approved_packet = crate::verbs::cells::get_approved_preview_packet(root, feat);
+    let (role_plan, approved_packet) = match (role_plan, approved_packet) {
+        (Some(rp), Some(ap)) => (rp, ap),
+        _ => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_plan".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("feature".into(), Value::String(feat.to_string()));
+            r.insert("fix".into(), Value::String("no approved plan or role plan found for feature.".into()));
+            return Err(Value::Object(r));
+        }
+    };
+    let expected_plan_sha = role_plan
+        .get("plan_sha256")
+        .or_else(|| approved_packet.get("plan_sha256"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let rec_plan_sha = record.get("plan_sha256").and_then(Value::as_str).unwrap_or("");
+    if expected_plan_sha.is_empty() || rec_plan_sha.is_empty() || rec_plan_sha != expected_plan_sha {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_plan".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("expected_plan_sha".into(), Value::String(expected_plan_sha.to_string()));
+        r.insert("dispatch_plan_sha".into(), Value::String(rec_plan_sha.to_string()));
+        r.insert("fix".into(), Value::String("plan digest mismatch; feature plan has changed since dispatch.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let rec_runtime = record.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let expected_runtime = role_plan.get("runtime").and_then(Value::as_str).unwrap_or("");
+    if rec_runtime.is_empty() || expected_runtime.is_empty() || rec_runtime != expected_runtime {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_runtime".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("dispatch_runtime".into(), Value::String(rec_runtime.to_string()));
+        r.insert("expected_runtime".into(), Value::String(expected_runtime.to_string()));
+        r.insert("fix".into(), Value::String("dispatch runtime does not match approved role plan runtime.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let rec_session = record.get("issuer_session").and_then(Value::as_str).unwrap_or("");
+    if rec_session.is_empty() {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String("dispatch record is missing issuer_session; deployment dispatch must be bound to an issuer session.".into()));
+        return Err(Value::Object(r));
+    }
+
+    let Some(acting_session) = session_id.filter(|sid| !sid.is_empty()) else {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+        r.insert("fix".into(), Value::String("an active issuer session is required to consume this authorization.".into()));
+        return Err(Value::Object(r));
+    };
+    if acting_session != rec_session {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+        r.insert("requested_session".into(), Value::String(acting_session.to_string()));
+        r.insert("fix".into(), Value::String("session ID does not match the issuer session recorded at dispatch.".into()));
+        return Err(Value::Object(r));
+    }
+
+    match crate::verbs::state_group::read_session(root, rec_session) {
+        Ok(Some(sess)) => {
+            if let Some(lane) = sess.get("lane").and_then(Value::as_str) {
+                if !lane.is_empty() && lane != feat {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+                    r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+                    r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+                    r.insert("session_lane".into(), Value::String(lane.to_string()));
+                    r.insert("feature".into(), Value::String(feat.to_string()));
+                    r.insert("fix".into(), Value::String("issuer session is bound to a different feature lane.".into()));
+                    return Err(Value::Object(r));
+                }
+            }
+        }
+        Ok(None) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+            r.insert("fix".into(), Value::String(format!("issuer session \"{rec_session}\" does not exist in store.")));
+            return Err(Value::Object(r));
+        }
+        Err(_) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_wrong_session".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("issuer_session".into(), Value::String(rec_session.to_string()));
+            r.insert("fix".into(), Value::String("failed to read issuer session from the workflow store.".into()));
+            return Err(Value::Object(r));
+        }
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&auth_dir) {
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String(format!("failed to create authorizations directory: {e}")));
+        return Err(Value::Object(r));
+    }
+
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&marker_path)
+    {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String("this dispatch authorization has already been consumed; dispatch a new deployment run.".into()));
+            return Err(Value::Object(r));
+        }
+        Err(e) => {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+            r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+            r.insert("fix".into(), Value::String(format!("failed to write authorization marker: {e}")));
+            return Err(Value::Object(r));
+        }
+    };
+
+    use std::io::Write;
+    let marker_json = serde_json::json!({
+        "dispatch_id": dispatch_id,
+        "consumed_at": chrono::Utc::now().to_rfc3339(),
+        "release_version": release_version,
+        "main_commit": current_commit,
+        "issuer_session": rec_session,
+        "feature": feat,
+        "runtime": rec_runtime,
+        "plan_sha256": rec_plan_sha,
+    });
+    if let Err(e) = file
+        .write_all(marker_json.to_string().as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        let _ = std::fs::remove_file(&marker_path);
+        let mut r = Map::new();
+        r.insert("ok".into(), Value::Bool(false));
+        r.insert("type".into(), Value::String("refused".into()));
+        r.insert("reason".into(), Value::String("deploy_authorization_storage_error".into()));
+        r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
+        r.insert("fix".into(), Value::String(format!("failed to persist authorization marker: {e}")));
+        return Err(Value::Object(r));
+    }
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "authorized": true,
+        "dispatch_id": dispatch_id,
+        "release_version": release_version,
+        "main_commit": current_commit,
+        "issuer_session": rec_session,
+        "feature": feat,
+    }))
+}
+
+pub(crate) fn run_dispatch_authorize(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(
+        &flags,
+        &["id", "release-version", "session-id"],
+    ) {
+        return None;
+    }
+    let id = flags.truthy_str("id").unwrap_or_default();
+    let release_version = flags.truthy_str("release-version").unwrap_or_default();
+    let requested_session_id = flags.truthy_str("session-id");
+
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_store_root(&cwd) {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "dispatch authorize", use_json, t0, &why));
+        }
+        Roots::None => {
+            return Some(emit_no_root_error(&cwd, "dispatch authorize", use_json, t0));
+        }
+    };
+    let ctx = match prelude("dispatch authorize", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    let session_id = crate::verbs::state_group::resolve_session_id(requested_session_id, &root)
+        .ok()
+        .flatten();
+
+    match authorize_dispatch_permit(&root, id, release_version, session_id.as_deref()) {
+        Ok(val) => {
+            let text = jsjson::stringify_pretty(&val);
+            finish(&ctx, Ok(Out::Emit(val, text, 0)))
+        }
+        Err(refusal) => {
+            let text = jsjson::stringify_pretty(&refusal);
+            finish(&ctx, Ok(Out::Emit(refusal, text, 1)))
+        }
+    }
 }
 
 // ═══ tests — the slot map's explicit arms (D2 / 06e49368) ══════════════════

@@ -3591,6 +3591,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             match sub {
                 "prepare" => run_dispatch_prepare(flags, use_json, t0),
                 "wave" => run_dispatch_wave(flags, use_json, t0),
+                "authorize" => run_dispatch_authorize(flags, use_json, t0),
                 _ => None,
             }
         }
