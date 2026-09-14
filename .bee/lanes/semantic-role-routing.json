@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"semantic-role-routing\" started at phase \"planning\" (lane).",
   "next_action": "Merged into main at 97d0569; reload the product and test \"semantic-role-routing\", then either approve uat (\"bee gate --name uat --approved true --lane semantic-role-routing\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-14T04:37:30.158Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: semantic-role-routing",
-    "asked_at": "2026-09-14T10:51:08.372Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "advisor_ref": {
     "consulted_at": "2026-09-14T07:48:16.352Z",
     "feature": "semantic-role-routing",

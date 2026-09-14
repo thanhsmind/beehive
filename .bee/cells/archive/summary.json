@@ -1213,5 +1213,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-14T04:13:42.808Z"
+  },
+  "semantic-role-routing": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-09-14T11:05:13.498Z"
   }
 }
