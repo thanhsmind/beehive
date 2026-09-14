@@ -501,6 +501,9 @@
     "role-routing",
     "semantic-role-routing",
     "session-routing",
-    "bug"
+    "bug",
+    "plan-correction",
+    "role-enforcement",
+    "pi-worktree"
   ]
 }

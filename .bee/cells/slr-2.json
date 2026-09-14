@@ -27,7 +27,7 @@
     "docs/specs/doctrine-layer.md"
   ],
   "acceptance": "model-roles-and-escalation.md carries B18 with plan-time role assignment, re-route discipline, and cites D1.",
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
     "outcome": "model-roles-and-escalation.md has B18 covering plan-time role assignment (D1 fc2bb09a) and re-route discipline",
@@ -38,17 +38,17 @@
       "followed the plan"
     ],
     "friction": null,
-    "capped_at": "2026-09-14T07:23:20.805Z",
+    "capped_at": "2026-09-14T07:25:48.711Z",
     "behavior_change": false,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "docs pointer check on knowledge area file",
+    "verify_output": "green:static",
+    "verify_passed": true,
     "claim_session": null,
-    "verify_command": null,
+    "verify_command": "grep -q 'B18' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
     "claimed_at": null,
     "no_mistakes": true,
     "commit_pending": "commit 2f7eb137 has B18 added but missing cell: slr-2 trailer",
-    "inline_reason": "claimed with cells claim not dispatch prepare --claim; herding dispatch to agy-flash interrupted, executed inline",
+    "inline_reason": "claimed with cells claim not dispatch prepare claim; herding interrupted, executed inline",
     "report": {
       "outcome": "model-roles-and-escalation.md has B18 covering plan-time role assignment (D1 fc2bb09a) and re-route discipline",
       "commit": "2f7eb13716b56f45551bcd9be5c85623040b86d1",
