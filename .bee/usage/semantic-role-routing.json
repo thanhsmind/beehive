@@ -1,0 +1,24 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "semantic-role-routing",
+  "closed_at": "2026-09-14T07:25:25.529Z",
+  "sessions": [],
+  "skipped": 4,
+  "totals": {
+    "main": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    }
+  }
+}
