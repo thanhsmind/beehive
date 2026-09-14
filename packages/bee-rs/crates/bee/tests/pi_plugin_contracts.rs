@@ -1372,7 +1372,11 @@ elif [ "$1" = "worktree" ] && [ "$2" = "enter" ]; then
     echo "no granted worktree found for id \"$ENTER_ID\"" >&2
     exit 1
   fi
-  TRANS='{{"schemaVersion":1,"operation":"enter-worktree","sourceCwd":"{main_s}","targetCwd":"{wt_s}","worktreeId":"{worktree_id}","feature":"{feature}","piSessionId":"'"$PI_SESSION_ID"'","continuation":null}}'
+  if [ "$CURRENT_CWD" = "{wt_s}" ] || [ "$CURRENT_CWD" = "$(cd "{wt_s}" 2>/dev/null && pwd -P)" ]; then
+    echo "cannot enter worktree \"$ENTER_ID\": target directory is identical to source directory" >&2
+    exit 1
+  fi
+  TRANS='{{"schemaVersion":1,"operation":"enter-worktree","sourceCwd":"'"$CURRENT_CWD"'","targetCwd":"{wt_s}","worktreeId":"{worktree_id}","feature":"{feature}","piSessionId":"'"$PI_SESSION_ID"'","continuation":null}}'
   if [ -n "$PI_SESSION_ID" ]; then
     echo "@@BEE_SESSION_TRANSITION@@ $TRANS" >&2
   fi
@@ -4272,6 +4276,172 @@ fn direct_user_command_enter_switches_session_and_preserves_history() {
 
 #[cfg(unix)]
 #[test]
+fn direct_user_command_enter_from_linked_worktree_switches_session_and_preserves_history() {
+    node_or_skip!("direct_user_command_enter_from_linked_worktree_switches_session_and_preserves_history");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let main_dir = tempfile::tempdir().expect("tempdir");
+    let wt_a_dir = tempfile::tempdir().expect("tempdir");
+    let wt_b_dir = tempfile::tempdir().expect("tempdir");
+
+    let main_path = dunce::canonicalize(main_dir.path()).unwrap_or_else(|_| main_dir.path().to_path_buf());
+    let wt_a_path = dunce::canonicalize(wt_a_dir.path()).unwrap_or_else(|_| wt_a_dir.path().to_path_buf());
+    let wt_b_path = dunce::canonicalize(wt_b_dir.path()).unwrap_or_else(|_| wt_b_dir.path().to_path_buf());
+
+    write_stub_bee(
+        &main_path,
+        &StubBehavior::WorktreeLifecycle {
+            worktree_id: "repo--wt--b".to_string(),
+            main_root: main_path.clone(),
+            worktree_root: wt_b_path.clone(),
+            feature: "feature-b".to_string(),
+            merge_fails: false,
+            merge_refusal_reason: None,
+        },
+    );
+    write_stub_bee(
+        &wt_a_path,
+        &StubBehavior::WorktreeLifecycle {
+            worktree_id: "repo--wt--b".to_string(),
+            main_root: main_path.clone(),
+            worktree_root: wt_b_path.clone(),
+            feature: "feature-b".to_string(),
+            merge_fails: false,
+            merge_refusal_reason: None,
+        },
+    );
+
+    let session_file = wt_a_path.join("session.jsonl");
+    let header = json!({
+        "type": "session",
+        "id": "sess-src-wt-a",
+        "cwd": wt_a_path.to_string_lossy(),
+        "timestamp": "2026-09-07T12:00:00.000Z"
+    });
+    let msg1 = json!({
+        "type": "message",
+        "id": "msg-1",
+        "parentId": null,
+        "message": {"role": "user", "content": "Work in worktree A"}
+    });
+    let msg2 = json!({
+        "type": "message",
+        "id": "msg-2",
+        "parentId": "msg-1",
+        "message": {"role": "assistant", "content": "Switch to worktree B"}
+    });
+    std::fs::write(
+        &session_file,
+        format!("{}\n{}\n{}\n", header, msg1, msg2),
+    )
+    .expect("write source session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            command_call_with_options(
+                &wt_a_path,
+                "sess-src-wt-a",
+                "bee-worktree-enter",
+                "--id repo--wt--b",
+                true,
+                Some(&session_file),
+                false,
+            ),
+        ],
+    );
+
+    assert_eq!(run.forks.len(), 1, "expected exactly 1 fork");
+    assert_eq!(run.switches.len(), 1, "expected exactly 1 switch");
+    assert!(run.process_cwd_unchanged, "process.cwd() must remain unchanged");
+
+    let switch_target = run.switches[0]["targetPath"].as_str().expect("targetPath");
+    assert!(
+        std::path::Path::new(switch_target).exists(),
+        "switched session file must exist on disk: {switch_target}"
+    );
+
+    let fork_content = std::fs::read_to_string(switch_target).expect("read forked file");
+    let lines: Vec<&str> = fork_content.trim().split('\n').collect();
+    assert_eq!(lines.len(), 3, "fork must preserve all entries: {fork_content}");
+    let fork_header: Value = serde_json::from_str(lines[0]).expect("header json");
+    assert_eq!(
+        fork_header["parentSession"].as_str(),
+        Some(session_file.to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        fork_header["cwd"].as_str(),
+        Some(wt_b_path.to_string_lossy().as_ref())
+    );
+
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Relocated session to worktree repo--wt--b")
+        }),
+        "expected relocation notification: {:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn direct_user_command_enter_same_worktree_refuses_before_fork() {
+    node_or_skip!("direct_user_command_enter_same_worktree_refuses_before_fork");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let main_dir = tempfile::tempdir().expect("tempdir");
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+
+    let main_path = dunce::canonicalize(main_dir.path()).unwrap_or_else(|_| main_dir.path().to_path_buf());
+    let wt_path = dunce::canonicalize(wt_dir.path()).unwrap_or_else(|_| wt_dir.path().to_path_buf());
+
+    write_stub_bee(
+        &wt_path,
+        &StubBehavior::WorktreeLifecycle {
+            worktree_id: "repo--wt--same".to_string(),
+            main_root: main_path.clone(),
+            worktree_root: wt_path.clone(),
+            feature: "same".to_string(),
+            merge_fails: false,
+            merge_refusal_reason: None,
+        },
+    );
+
+    let session_file = wt_path.join("session.jsonl");
+    std::fs::write(&session_file, "{}\n").expect("write session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            command_call_with_options(
+                &wt_path,
+                "sess-same-1",
+                "bee-worktree-enter",
+                "--id repo--wt--same",
+                true,
+                Some(&session_file),
+                false,
+            ),
+        ],
+    );
+
+    assert!(run.forks.is_empty(), "same-worktree enter must not fork");
+    assert!(run.switches.is_empty(), "same-worktree enter must not switch session");
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("target directory is identical to source directory")
+        }),
+        "expected same-worktree rejection: {:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn direct_user_command_exit_before_merge_runs_merge_after_replacement() {
     node_or_skip!("direct_user_command_exit_before_merge_runs_merge_after_replacement");
 
@@ -5404,12 +5574,17 @@ fn transition_intent_exact_schema_and_adversarial_rows() {
     let ext_path = pi_extension_path();
     let temp_main = tempfile::tempdir().expect("tempdir");
     let temp_wt = tempfile::tempdir().expect("tempdir");
+    let temp_wt_b = tempfile::tempdir().expect("tempdir");
     let canon_main = dunce::canonicalize(temp_main.path())
         .unwrap_or_else(|_| temp_main.path().to_path_buf())
         .to_string_lossy()
         .into_owned();
     let canon_wt = dunce::canonicalize(temp_wt.path())
         .unwrap_or_else(|_| temp_wt.path().to_path_buf())
+        .to_string_lossy()
+        .into_owned();
+    let canon_wt_b = dunce::canonicalize(temp_wt_b.path())
+        .unwrap_or_else(|_| temp_wt_b.path().to_path_buf())
         .to_string_lossy()
         .into_owned();
 
@@ -5464,6 +5639,37 @@ const baseExit = {{
 const resEnter = validateTransitionIntent(JSON.stringify(baseEnter), ctx);
 assert(resEnter !== null, "valid enter intent must validate");
 assert.strictEqual(resEnter.operation, "enter-worktree");
+
+// Positive validation: Linked worktree A to linked worktree B
+const wtB = {wt_b:?};
+const ctxWtA = {{
+  cwd: wt,
+  sessionId: "sess-valid-1",
+  sessionManager: {{
+    getSessionId: () => "sess-valid-1",
+  }},
+}};
+const linkedEnter = {{
+  schemaVersion: 1,
+  operation: "enter-worktree",
+  sourceCwd: wt,
+  targetCwd: wtB,
+  worktreeId: "wt--b",
+  feature: "feat-b",
+  piSessionId: "sess-valid-1",
+  continuation: null,
+}};
+const resLinked = validateTransitionIntent(JSON.stringify(linkedEnter), ctxWtA);
+assert(resLinked !== null, "valid linked-to-linked enter intent must validate");
+assert.strictEqual(resLinked.operation, "enter-worktree");
+assert.strictEqual(resLinked.sourceCwd, wt);
+assert.strictEqual(resLinked.targetCwd, wtB);
+
+// Forged source (claims main when ctx.cwd is wt)
+{{
+  const forgedSource = {{ ...linkedEnter, sourceCwd: main }};
+  assert.strictEqual(validateTransitionIntent(JSON.stringify(forgedSource), ctxWtA), null, "forged sourceCwd (main vs wt) must be rejected");
+}}
 
 const resExit = validateTransitionIntent(JSON.stringify(baseExit), ctx);
 assert(resExit !== null, "valid exit intent must validate");
@@ -5572,6 +5778,7 @@ console.log("OK");
 "#,
         main = canon_main,
         wt = canon_wt,
+        wt_b = canon_wt_b,
     );
 
     let output = std::process::Command::new("node")

@@ -5979,7 +5979,7 @@ use std::time::Instant;
         let wt_status_before = git_status_porcelain_str(&created.worktree_root);
         let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
 
-        let (result, text) = enter_worktree_core(&main, &created.id)
+        let (result, text) = enter_worktree_core(&main, &main, &created.id)
             .expect("enter_worktree_core must succeed for valid granted worktree");
 
         // Verify result and transition
@@ -6014,10 +6014,68 @@ use std::time::Instant;
     }
 
     #[test]
+    fn enter_worktree_core_supports_linked_to_linked_transition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created_a = worktree_with_a_real_commit(&main, "demo-a");
+        let created_b = worktree_with_a_real_commit(&main, "demo-b");
+
+        let main_status_before = git_status_porcelain_str(&main);
+        let wt_a_status_before = git_status_porcelain_str(&created_a.worktree_root);
+        let wt_b_status_before = git_status_porcelain_str(&created_b.worktree_root);
+        let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
+
+        let (result, text) = enter_worktree_core(&main, &created_a.worktree_root, &created_b.id)
+            .expect("enter_worktree_core must succeed for linked-to-linked enter");
+
+        assert_eq!(result["id"], json!(created_b.id));
+        assert_eq!(
+            dunce::canonicalize(result["worktreeRoot"].as_str().unwrap()).unwrap(),
+            dunce::canonicalize(&created_b.worktree_root).unwrap()
+        );
+        assert_eq!(result["feature"], json!("demo-b"));
+
+        let trans = &result["sessionTransition"];
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["operation"], json!("enter-worktree"));
+        assert_eq!(trans["worktreeId"], json!(created_b.id));
+        assert_eq!(trans["feature"], json!("demo-b"));
+        assert_eq!(trans["sourceCwd"], json!(canonical_path_str(&created_a.worktree_root).unwrap()));
+        assert_eq!(trans["targetCwd"], json!(canonical_path_str(&created_b.worktree_root).unwrap()));
+        assert_eq!(trans["continuation"], Value::Null);
+
+        assert!(!text.contains("Entered"), "text must not claim entered before Pi acts: {text}");
+        assert!(!text.contains("stays on main until relocated"), "{text}");
+        assert!(text.contains("Session transition intent emitted"), "{text}");
+        assert!(text.contains("stays in the worktree until relocated"), "{text}");
+        assert!(text.contains(&created_b.id));
+        assert!(text.contains(result["worktreeRoot"].as_str().unwrap()));
+
+        // Zero mutations
+        assert_eq!(git_status_porcelain_str(&main), main_status_before);
+        assert_eq!(git_status_porcelain_str(&created_a.worktree_root), wt_a_status_before);
+        assert_eq!(git_status_porcelain_str(&created_b.worktree_root), wt_b_status_before);
+        assert_eq!(read_grants_strict(&main.join(".bee")).unwrap(), grants_before);
+    }
+
+    #[test]
+    fn enter_worktree_core_refuses_same_worktree_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo-same");
+
+        let err = enter_worktree_core(&main, &created.worktree_root, &created.id).unwrap_err();
+        assert!(
+            err.contains("target directory is identical to source directory"),
+            "expected same-worktree rejection: {err}"
+        );
+    }
+
+    #[test]
     fn enter_worktree_core_refuses_ungranted_id() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
-        let err = enter_worktree_core(&main, "nonexistent-id").unwrap_err();
+        let err = enter_worktree_core(&main, &main, "nonexistent-id").unwrap_err();
         assert!(err.contains("no granted worktree found for id \"nonexistent-id\""), "{err}");
     }
 
@@ -6033,7 +6091,7 @@ use std::time::Instant;
         write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
 
         // 1. enter_worktree_core must refuse false-valued grant
-        let enter_err = enter_worktree_core(&main, &created.id).unwrap_err();
+        let enter_err = enter_worktree_core(&main, &main, &created.id).unwrap_err();
         assert!(
             enter_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
             "enter must refuse false-valued grant: {enter_err}"
@@ -6064,8 +6122,27 @@ use std::time::Instant;
         grants.insert("ghost-id".to_string(), json!(true));
         write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
 
-        let err = enter_worktree_core(&main, "ghost-id").unwrap_err();
+        let err = enter_worktree_core(&main, &main, "ghost-id").unwrap_err();
         assert!(err.contains("no matching, bidirectionally-valid git worktree link was found"), "{err}");
+    }
+
+    #[test]
+    fn enter_worktree_core_linked_entry_refuses_ungranted_and_broken_git_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created_a = worktree_with_a_real_commit(&main, "demo-a");
+
+        // Ungranted ID
+        let err1 = enter_worktree_core(&main, &created_a.worktree_root, "nonexistent-id").unwrap_err();
+        assert!(err1.contains("no granted worktree found for id \"nonexistent-id\""), "{err1}");
+
+        // Broken git link
+        let mut grants = read_grants_strict(&main.join(".bee")).unwrap();
+        grants.insert("ghost-id".to_string(), json!(true));
+        write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
+
+        let err2 = enter_worktree_core(&main, &created_a.worktree_root, "ghost-id").unwrap_err();
+        assert!(err2.contains("no matching, bidirectionally-valid git worktree link was found"), "{err2}");
     }
 
     #[test]
