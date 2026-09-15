@@ -2774,3 +2774,234 @@ pub(crate) fn run_reroute(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
     })
 }
 
+// ── cells rebind-session ────────────────────────────────────────────────────
+
+/// Rebind every active claim in `.bee/claims` owned by `--from` session to `--to` session via `adopt_claim`.
+///
+/// A bumped fence_epoch causes any other holder presenting a stale epoch to be refused with CLAIM_FENCE_STALE on subsequent renew or release.
+pub(crate) fn rebind_session_core(control: &Path, from: &str, to: &str) -> MR<Vec<Value>> {
+    let from_id = require_id(from, "from session id")?;
+    let to_id = require_id(to, "to session id")?;
+    let dir = claims_dir(control);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Vec::new());
+        }
+        Err(e) => return Err(Fail::Thrown(format!("cannot read claims directory: {e}"))),
+    };
+
+    let mut cell_ids: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(cell_id) = name.strip_suffix(".json") {
+            cell_ids.push(cell_id.to_string());
+        }
+    }
+    cell_ids.sort();
+
+    let now = rsv::now_ms();
+    let mut rebound = Vec::new();
+
+    for cell_id in cell_ids {
+        let claim = match read_claim(control, &cell_id)? {
+            Some(c) => c,
+            None => continue,
+        };
+        // Claims of any other session, and expired claims, are untouched.
+        if !claim_active(Some(&claim), now)? {
+            continue;
+        }
+        let owner = match claim.get("session") {
+            Some(Value::String(s)) => s,
+            _ => continue,
+        };
+        if owner != &from_id {
+            continue;
+        }
+
+        match adopt_claim(control, &cell_id, &to_id)? {
+            AdoptClaimOutcome::Ok { claim: adopted_val, .. } => {
+                let fence_epoch = match &adopted_val {
+                    Value::Object(m) => {
+                        let f = current_fence_epoch(m);
+                        if f.fract() == 0.0 {
+                            json!(f as u64)
+                        } else {
+                            json!(f)
+                        }
+                    }
+                    _ => json!(1),
+                };
+                rebound.push(json!({
+                    "cell": cell_id,
+                    "from": from_id,
+                    "to": to_id,
+                    "fence_epoch": fence_epoch,
+                }));
+            }
+            AdoptClaimOutcome::Refused(refusal) => {
+                return Err(Fail::Thrown(format!(
+                    "rebind-session: adopt failed for cell \"{cell_id}\": {}",
+                    refusal.reason
+                )));
+            }
+        }
+    }
+
+    Ok(rebound)
+}
+
+/// Rebind active cell claims from one session to another across relocation.
+///
+/// A bumped fence_epoch causes any other holder presenting a stale epoch to be refused with CLAIM_FENCE_STALE on subsequent renew or release.
+pub(crate) fn run_rebind_session(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["from", "to"]) {
+        return None;
+    }
+    let from = flags.req_str("from")?.to_string();
+    let to = flags.req_str("to")?.to_string();
+    dispatch("cells rebind-session", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let control = control_root(&root)?;
+        let rebound = rebind_session_core(&control, &from, &to)?;
+        let text = if rebound.is_empty() {
+            "No claims rebound.".to_string()
+        } else {
+            let lines: Vec<String> = rebound
+                .iter()
+                .filter_map(|r| {
+                    let cell = r.get("cell").and_then(Value::as_str)?;
+                    Some(format!("Rebound cell \"{cell}\" from \"{from}\" to \"{to}\"."))
+                })
+                .collect();
+            lines.join("\n")
+        };
+        let payload = json!({ "rebound": rebound });
+        Ok(Out::Emit(payload, text, 0))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rebind_rewrites_only_active_claims_for_matching_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        // 1. Active claim for session-a
+        match claim_cell_file(control, Some("session-a"), "c-1", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim c-1"),
+        }
+
+        // 2. Active claim for session-b (different session)
+        match claim_cell_file(control, Some("session-b"), "c-2", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim c-2"),
+        }
+
+        // 3. Expired claim for session-a
+        let outcome = claim_cell_file(control, Some("session-a"), "c-3", Some(60.0)).unwrap();
+        let mut claim_map = match outcome {
+            ClaimFileOutcome::Ok { claim } => claim.as_object().unwrap().clone(),
+            _ => panic!("failed to create claim c-3"),
+        };
+        claim_map.insert("claimed_at".into(), Value::String("2020-01-01T00:00:00.000Z".into()));
+        let c3_path = claim_path(control, "c-3").unwrap();
+        write_json_atomic(&c3_path, &Value::Object(claim_map)).unwrap();
+
+        // Rebind session-a to session-new
+        let rebound = rebind_session_core(control, "session-a", "session-new").unwrap();
+
+        // Must rebind exactly c-1
+        assert_eq!(rebound.len(), 1);
+        assert_eq!(rebound[0]["cell"], "c-1");
+        assert_eq!(rebound[0]["from"], "session-a");
+        assert_eq!(rebound[0]["to"], "session-new");
+        assert_eq!(rebound[0]["fence_epoch"], json!(2));
+
+        // Verify c-1 on disk
+        let c1_disk = read_claim(control, "c-1").unwrap().unwrap();
+        assert_eq!(c1_disk.get("session"), Some(&Value::String("session-new".into())));
+        assert_eq!(c1_disk.get("adopted_from"), Some(&Value::String("session-a".into())));
+        assert_eq!(current_fence_epoch(&c1_disk), 2.0);
+
+        // Verify c-2 on disk (untouched)
+        let c2_disk = read_claim(control, "c-2").unwrap().unwrap();
+        assert_eq!(c2_disk.get("session"), Some(&Value::String("session-b".into())));
+        assert_eq!(current_fence_epoch(&c2_disk), 1.0);
+
+        // Verify c-3 on disk (expired, untouched)
+        let c3_disk = read_claim(control, "c-3").unwrap().unwrap();
+        assert_eq!(c3_disk.get("session"), Some(&Value::String("session-a".into())));
+        assert_eq!(current_fence_epoch(&c3_disk), 1.0);
+    }
+
+    #[test]
+    fn rebind_increments_fence_epoch_by_exactly_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        match claim_cell_file(control, Some("sess-old"), "c-epoch", Some(3600.0)).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("failed to create claim"),
+        }
+
+        // Set fence_epoch to 5 manually
+        let mut claim_map = read_claim(control, "c-epoch").unwrap().unwrap();
+        claim_map.insert("fence_epoch".into(), json!(5.0));
+        let path = claim_path(control, "c-epoch").unwrap();
+        write_json_atomic(&path, &Value::Object(claim_map)).unwrap();
+
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert_eq!(rebound.len(), 1);
+        assert_eq!(rebound[0]["fence_epoch"], json!(6));
+
+        let on_disk = read_claim(control, "c-epoch").unwrap().unwrap();
+        assert_eq!(current_fence_epoch(&on_disk), 6.0);
+    }
+
+    #[test]
+    fn rebind_no_matching_claims_is_clean_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+
+        // 1. Directory does not exist yet
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert!(rebound.is_empty());
+
+        // 2. Directory exists, but no claims match
+        std::fs::create_dir_all(claims_dir(control)).unwrap();
+        let rebound = rebind_session_core(control, "sess-old", "sess-new").unwrap();
+        assert!(rebound.is_empty());
+    }
+
+    #[test]
+    fn rebind_flag_validation_and_keys_known() {
+        // Missing --from
+        let toks = vec!["--to=sess-2"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Missing --to
+        let toks = vec!["--from=sess-1"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Unknown flag
+        let toks = vec!["--from=sess-1", "--to=sess-2", "--unknown=foo"];
+        let (flags, json) = rsv::parse_flags(&toks).unwrap();
+        assert!(run_rebind_session(flags, json, Instant::now()).is_none());
+
+        // Valid flags
+        let toks = vec!["--from=sess-1", "--to=sess-2"];
+        let (flags, _) = rsv::parse_flags(&toks).unwrap();
+        assert!(rsv::keys_known(&flags, &["from", "to"]));
+        assert_eq!(flags.req_str("from"), Some("sess-1"));
+        assert_eq!(flags.req_str("to"), Some("sess-2"));
+    }
+}
+

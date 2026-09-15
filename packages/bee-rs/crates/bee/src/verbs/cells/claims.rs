@@ -331,11 +331,10 @@ pub(crate) fn claim_fence_refusal(
 /// change, which is what makes a stale holder's later renew/release
 /// detectable at all.
 ///
-/// Not called from a verb in THIS module: the one native caller today is
-/// `state handoff adopt`, which lives in verbs/state_group.rs (owned by
-/// another in-flight cell) and drives its own narrowed twin. This is the full
+/// Not called from a verb in THIS module until `cells rebind-session` was
+/// added; the earlier native caller was `state handoff adopt`, which lives in
+/// verbs/state_group.rs and drives its own narrowed twin. This is the full
 /// claims-module contract, byte-pinned against the live Node oracle.
-#[allow(dead_code)]
 pub(crate) fn adopt_claim(
     control: &Path,
     cell_id: &str,
