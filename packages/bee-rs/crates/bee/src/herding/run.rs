@@ -187,6 +187,9 @@ struct Options {
     /// marker for the session's drain, no flag writes none and the caller
     /// reads the result off this verb's own output. Never both.
     inbox_session: Option<String>,
+    /// Environment variables forwarded into the worker pane (e.g. deploy
+    /// authorization tokens).
+    pane_env_passthrough: BTreeMap<String, String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -403,6 +406,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         nickname,
         cell_id: cell_id.map(str::to_string),
         inbox_session: inbox_session.map(str::to_string),
+        pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
     })
 }
 
@@ -1241,6 +1245,39 @@ fn shell_single_quote(value: &str) -> String {
 fn build_export_line(env: &BTreeMap<String, String>) -> String {
     let assignments: Vec<String> = env.iter().map(|(k, v)| format!("{k}={}", shell_single_quote(v))).collect();
     format!("export {}", assignments.join(" "))
+}
+
+pub(crate) const PASSTHROUGH_ENV_VARS: [&str; 3] = [
+    "BEE_DISPATCH_ID",
+    "BEE_RELEASE_VERSION",
+    "BEE_SESSION_ID",
+];
+
+pub(crate) fn resolve_pane_env_passthrough_from<F>(lookup: F) -> BTreeMap<String, String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let mut passthrough = BTreeMap::new();
+    let dispatch_id = lookup("BEE_DISPATCH_ID");
+    let has_dispatch_id = dispatch_id
+        .as_deref()
+        .map(str::trim)
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+
+    if !has_dispatch_id {
+        return passthrough;
+    }
+
+    for &var in &PASSTHROUGH_ENV_VARS {
+        if let Some(val) = lookup(var) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                passthrough.insert(var.to_string(), trimmed.to_string());
+            }
+        }
+    }
+    passthrough
 }
 
 /// herding-start-retry D1: a freshly split pane's shell may not have
@@ -2416,6 +2453,11 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     // once, at the fresh spawn, so an exported round would go stale and lie.
     // The hook reads the round from the job's own mailbox instead.
     let mut pane_env = env.clone();
+    // deploy-pane-authorization: a deploy dispatch's permit id, release
+    // version and issuer session reach the pane that runs release.sh. The
+    // map is empty unless the caller had BEE_DISPATCH_ID set, so an ordinary
+    // worker keeps its own identity; the markers below still win.
+    pane_env.extend(opts.pane_env_passthrough.clone());
     pane_env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
     pane_env.insert("BEE_HERDING_JOB_ID".to_string(), opts.job_id.clone());
     let export_line = build_export_line(&pane_env);
@@ -4612,6 +4654,7 @@ mod tests {
             nickname: "job-1".to_string(),
             cell_id: None,
             inbox_session: None,
+            pane_env_passthrough: BTreeMap::new(),
         }
     }
 
@@ -4688,6 +4731,7 @@ mod tests {
             nickname: "job-1".to_string(),
             cell_id: None,
             inbox_session: None,
+            pane_env_passthrough: BTreeMap::new(),
         }
     }
 
@@ -6837,6 +6881,84 @@ mod tests {
         let calls2 = fake2.pane_run_calls.borrow();
         assert_eq!(calls2.len(), 1, "an array-shape entry must still send the marker export, got {calls2:?}");
         assert_eq!(calls2[0].1, "export BEE_HERDING_JOB_ID='job-plain' BEE_HERDING_WORKER='1'");
+    }
+
+    #[test]
+    fn pane_env_passthrough_exports_dispatch_permit_and_session_alongside_markers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "codex-plain": ["codex", "--flag"],
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("codex-plain".to_string());
+        opts.pane_env_passthrough.insert("BEE_DISPATCH_ID".to_string(), "disp-1".to_string());
+        opts.pane_env_passthrough.insert("BEE_RELEASE_VERSION".to_string(), "2.38.0".to_string());
+        opts.pane_env_passthrough.insert("BEE_SESSION_ID".to_string(), "sess-1".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        let calls = fake.pane_run_calls.borrow();
+        assert_eq!(calls.len(), 1, "an export line must be sent, got {calls:?}");
+        assert_eq!(
+            calls[0].1,
+            "export BEE_DISPATCH_ID='disp-1' BEE_HERDING_JOB_ID='job-1' BEE_HERDING_WORKER='1' BEE_RELEASE_VERSION='2.38.0' BEE_SESSION_ID='sess-1'"
+        );
+    }
+
+    #[test]
+    fn resolve_pane_env_passthrough_selection_rules() {
+        // with BEE_DISPATCH_ID set it selects the three non-empty vars
+        let selected = resolve_pane_env_passthrough_from(|k| match k {
+            "BEE_DISPATCH_ID" => Some("disp-1".into()),
+            "BEE_RELEASE_VERSION" => Some("2.38.0".into()),
+            "BEE_SESSION_ID" => Some("sess-1".into()),
+            _ => None,
+        });
+        assert_eq!(selected.get("BEE_DISPATCH_ID").map(String::as_str), Some("disp-1"));
+        assert_eq!(selected.get("BEE_RELEASE_VERSION").map(String::as_str), Some("2.38.0"));
+        assert_eq!(selected.get("BEE_SESSION_ID").map(String::as_str), Some("sess-1"));
+        assert_eq!(selected.len(), 3);
+
+        // empty values for optional passthroughs are skipped when dispatch id is set
+        let partial = resolve_pane_env_passthrough_from(|k| match k {
+            "BEE_DISPATCH_ID" => Some("disp-1".into()),
+            "BEE_RELEASE_VERSION" => Some("  ".into()),
+            "BEE_SESSION_ID" => Some("sess-1".into()),
+            _ => None,
+        });
+        assert_eq!(partial.get("BEE_DISPATCH_ID").map(String::as_str), Some("disp-1"));
+        assert!(!partial.contains_key("BEE_RELEASE_VERSION"));
+        assert_eq!(partial.get("BEE_SESSION_ID").map(String::as_str), Some("sess-1"));
+        assert_eq!(partial.len(), 2);
+
+        // without BEE_DISPATCH_ID it selects nothing even when BEE_SESSION_ID is set
+        let without_disp = resolve_pane_env_passthrough_from(|k| match k {
+            "BEE_SESSION_ID" => Some("sess-1".into()),
+            "BEE_RELEASE_VERSION" => Some("2.38.0".into()),
+            _ => None,
+        });
+        assert!(without_disp.is_empty(), "must select nothing when BEE_DISPATCH_ID is absent");
+
+        // empty/whitespace BEE_DISPATCH_ID also selects nothing
+        let empty_disp = resolve_pane_env_passthrough_from(|k| match k {
+            "BEE_DISPATCH_ID" => Some("   ".into()),
+            "BEE_SESSION_ID" => Some("sess-1".into()),
+            _ => None,
+        });
+        assert!(empty_disp.is_empty(), "must select nothing when BEE_DISPATCH_ID is empty");
     }
 
     // ─── hps-8 (D5): workspace-trust pre-flight ─────────────────────────

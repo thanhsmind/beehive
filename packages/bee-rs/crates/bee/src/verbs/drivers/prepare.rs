@@ -2543,11 +2543,29 @@ pub(crate) fn prepare_dispatch_wire(
         }
     }
 
+    // The issuer session is resolved ONCE, through the same resolver
+    // `dispatch authorize` uses, and feeds both the export below and the
+    // `issuer_session` stamp further down — so the permit's issuer and the
+    // session the worker pane acts as cannot disagree.
+    let deploy_issuer_session = match &v2_info {
+        Some(v2) if v2.stage.as_deref() == Some("deployment") => {
+            crate::verbs::state_group::resolve_session_id(session_id, root).ok().flatten()
+        }
+        _ => None,
+    };
+
     if let Some(v2) = &v2_info {
         if v2.stage.as_deref() == Some("deployment") {
             if let Some(ver) = &v2.release_version {
                 if let Some(cmd) = payload.get("command").and_then(Value::as_str) {
-                    let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"; {cmd}");
+                    // `bee herding run` forwards these into the worker pane
+                    // (only when BEE_DISPATCH_ID is set), where release.sh
+                    // runs `dispatch authorize` as the issuer session.
+                    let session_export = deploy_issuer_session
+                        .as_deref()
+                        .map(|sid| format!(" BEE_SESSION_ID=\"{sid}\""))
+                        .unwrap_or_default();
+                    let new_cmd = format!("export BEE_DISPATCH_ID=\"{dispatch_id}\" BEE_RELEASE_VERSION=\"{ver}\"{session_export}; {cmd}");
                     payload.insert("command".into(), Value::String(new_cmd));
                 }
             }
@@ -2659,11 +2677,8 @@ pub(crate) fn prepare_dispatch_wire(
             let expires = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
             economics.insert("expires_at".into(), Value::String(expires.clone()));
             payload.insert("expires_at".into(), Value::String(expires));
-            if let Some(sid) = crate::verbs::state_group::resolve_session_id(session_id, root)
-                .ok()
-                .flatten()
-            {
-                economics.insert("issuer_session".into(), Value::String(sid));
+            if let Some(sid) = &deploy_issuer_session {
+                economics.insert("issuer_session".into(), Value::String(sid.clone()));
             }
         }
 
