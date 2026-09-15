@@ -154,6 +154,155 @@ follows prd-1, because its test asserts the claim rebind end to end.
 | prd-2 | Carry the inbox token and the claims across a Pi relocation, red-first | code | `.pi/extensions/bee-guard.ts`, `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`, generated embed | prd-1 |
 | prd-4 | Complete the Pi runtime rows in the swarming skills | docs | `skills/bee-swarming/references/worker-details.md`, `skills/bee-swarming/references/swarming-reference.md` | — |
 
+## Cells (current slice)
+
+```json
+[
+  {
+    "id": "prd-1",
+    "feature": "pi-relocation-delivery",
+    "title": "Add bee cells rebind-session --from --to",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": ["52d1e3aa-97d3-4a0d-a89a-67f0822ec695"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "read_first": [
+      "docs/history/pi-relocation-delivery/CONTEXT.md",
+      "docs/history/pi-relocation-delivery/plan.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Add the control-plane verb `bee cells rebind-session --from <old-session> --to <new-session>` (both required, non-empty). It rewrites every ACTIVE claim in .bee/claims whose `session` field equals --from so that it names --to, through the cells module's own rewriter `adopt_claim` (packages/bee-rs/crates/bee/src/verbs/cells/claims.rs:339) — never a second writer, and never the narrowed state_group twin. Claims of any other session, and expired claims, are untouched. No match is a clean no-op: exit 0 with an empty list. Human output names each cell rebound; --json returns {\"rebound\":[{\"cell\":\"<id>\",\"from\":\"<old>\",\"to\":\"<new>\",\"fence_epoch\":<n>}]}. Serve it in the cells verb table (util.rs try_mutating) AND declare it in src/generated/registry_payload.json in the same change — a served-and-undeclared verb reads as unknown to `bee --help --all`, and a declared-and-unserved one fails tests/registry_dispatch.rs. State in one line, in the verb's doc comment, what a bumped fence_epoch means for any other holder of that cell (see CLAIM_FENCE_STALE, claims.rs:234 and :311).",
+    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee rebind",
+    "must_haves": {
+      "truths": [
+        "bee cells rebind-session --from A --to B rewrites only active claims whose session is A",
+        "a rebound claim's fence_epoch is exactly one higher than before",
+        "no matching claim exits 0 and reports an empty list",
+        "the verb is both served and declared in the registry"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs", "substantive": "the handler, with its own unit tests"},
+        {"path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json", "substantive": "the verb declaration with both flags required"}
+      ],
+      "key_links": [
+        "the handler calls claims.rs adopt_claim rather than duplicating the claim rewrite",
+        "util.rs try_mutating routes the verb name to the handler"
+      ],
+      "prohibitions": [
+        "Do not change existing claim, cap, or handoff-adopt behavior",
+        "Do not touch .pi/extensions/bee-guard.ts or the test file pi_plugin_contracts.rs"
+      ]
+    },
+    "behavior_change": true
+  },
+  {
+    "id": "prd-2",
+    "feature": "pi-relocation-delivery",
+    "title": "Carry the inbox token and the claims across a Pi relocation",
+    "lane": "standard",
+    "role": "code",
+    "deps": ["prd-1"],
+    "decisions": [
+      "0833887d-9005-46de-84f4-df265da53cbb",
+      "52d1e3aa-97d3-4a0d-a89a-67f0822ec695",
+      "b527603f-226d-4a19-96e1-7feaecf090d4",
+      "a73c592a-d6c5-4e15-abe6-5ffab20e37c8"
+    ],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/pi-relocation-delivery/CONTEXT.md",
+      "docs/history/pi-relocation-delivery/plan.md",
+      "docs/history/pi-relocation-delivery/reports/hat-wave-synthesis.md",
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "RED FIRST, in this order. (1) Make the contract harness able to tell the two session ids apart: the replaced context currently reports the OLD id (pi_plugin_contracts.rs:701 `createCommandContext(newCwd, ctxSessionId, {`), so have it report the forked session file's own id. (2) Add ONE contract case that dispatches a detached job with --inbox-session <old id>, relocates the session, and asserts: the new session drains that carried marker; a job dispatched AFTER the relocation is also delivered; an already-injected marker (`<job>.json.processing`) is NOT injected a second time; and the claim held by the old session names the new session with no --force-ownership. Run it and watch it FAIL for those reasons. (3) Then change the belt: the new session CARRIES the old token instead of moving files — the drain reads its own result-inbox folder plus the carried one(s), resolved under the MAIN checkout's .bee (the root `herding/run.rs:2243` always writes to), never the worktree's; the carry survives the mid-switch session_shutdown (bee-guard.ts:1961-1962, :1990-1991 clears the other relocation maps — the carry slot is exempt and is mirrored in one small pointer file under the main root); a carried folder is read for unclaimed `<job-id>.json` markers only, and orphan reclaim never runs over it. In performSessionTransition's withSession closure, record the carry and call `bee cells rebind-session --from <old> --to <new>` through execBeeCli FIRST, before handlePostExitMerge; if the switch afterwards reports cancelled or failed, rebind back to the old id. A failed rebind never aborts the transition — it warns in the UI naming the manual verb. When non-zero, the relocation notice names how many claims were rebound and how many jobs were carried. (4) Run the full regen inside this cell — `bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — so the embedded belt bytes and the release manifest match the edit.",
+    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+    "must_haves": {
+      "truths": [
+        "a job dispatched before a relocation is delivered to the relocated session",
+        "a job dispatched after the relocation is delivered too",
+        "an already-injected marker is not injected a second time",
+        "the claim survives the move: a cap after relocation needs no --force-ownership",
+        "the carry and rebind run before handlePostExitMerge, and a cancelled switch undoes the rebind",
+        "doctor --runtime pi reports wiring_matches_binary ok"
+      ],
+      "artifacts": [
+        {"path": ".pi/extensions/bee-guard.ts", "substantive": "carried-token drain, exempt carry slot, pointer file, ordered and compensating rebind, notice counts"},
+        {"path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", "substantive": "harness reports the forked id, plus the new relocation-with-a-job-in-flight case"}
+      ],
+      "key_links": [
+        "the drain resolves carried folders under the main checkout root, not the worktree",
+        "the rebind call goes through the verb prd-1 added"
+      ],
+      "prohibitions": [
+        "Do not move or delete marker files as the delivery mechanism",
+        "Do not change how relocation itself works (session replacement stays)",
+        "Do not touch Claude, Codex or OpenCode paths"
+      ]
+    },
+    "behavior_change": true
+  },
+  {
+    "id": "prd-4",
+    "feature": "pi-relocation-delivery",
+    "title": "Complete the Pi runtime rows in the swarming skills",
+    "lane": "standard",
+    "role": "docs",
+    "deps": [],
+    "decisions": ["3cb3523c-7aef-4b22-aa90-17970371dae7"],
+    "files": [
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/pi-relocation-delivery/CONTEXT.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "affects_skills": ["skills/bee-swarming/SKILL.md"],
+    "affects_specs": [],
+    "action": "Two Pi gaps, text only. (1) worker-details.md around :272-281 offers a model-shaped advisor transport (claude block), a Codex-native one, and a cli-shaped one — but team.pi.advisor is herding-shaped, so a Pi worker handed an `Advisor:` line has no instruction it can run. Add a `bee:only pi` block naming the herding-shaped transport: run the prepared `bee herding run` command with the evidence bundle on stdin, keep the same `advisor-consult <cell-id>: <advisor-model>` attribution the goal-check reads from .bee/logs/dispatch.jsonl, and keep the existing one-slot transport-error rule. (2) swarming-reference.md :397-404 gives Pi one row (Result collection) where Claude (:375-385) and Codex (:386-396) carry seven. Fill the Pi table so all seven row names are present — Spawn, Model, Result collection, Follow-up/rescue, Harness assist, Isolation guarantee, Subagent type — with an explicit n/a and one-line reason where the mechanism does not exist on Pi (Subagent type has none: every Pi worker runs through `bee herding run`, never a native spawn). Model comes from config.team.pi.<role>; follow-up/rescue is the herding pane verbs; harness assist is the bee-guard belt's result drain. Do not touch the Claude or Codex blocks. Then run the full regen inside this cell — `bee dev regen` — so the rendered skill trees and the release manifest match the edit.",
+    "verify": "rg -n 'bee:only pi' skills/bee-swarming/references/worker-details.md && rg -c 'Follow-up|Harness assist|Isolation guarantee|Subagent type' skills/bee-swarming/references/swarming-reference.md && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "a Pi worker reading worker-details.md finds a transport it can run for a herding-shaped advisor",
+        "the Pi spawn-mechanics table carries all seven row names, with explicit n/a where the mechanism does not exist",
+        "the Claude and Codex blocks are unchanged"
+      ],
+      "artifacts": [
+        {"path": "skills/bee-swarming/references/worker-details.md", "substantive": "a bee:only pi advisor transport block"},
+        {"path": "skills/bee-swarming/references/swarming-reference.md", "substantive": "the completed Pi table"}
+      ],
+      "key_links": [
+        "the Pi advisor block keeps the same attribution string the goal-check reads"
+      ],
+      "prohibitions": [
+        "Do not edit the claude or codex bee:only blocks",
+        "Do not touch code or tests"
+      ]
+    },
+    "behavior_change": false
+  }
+]
+```
+
 ## Proof
 
 - prd-1: `cargo test --release -p bee --bin bee` filtered to the new verb's tests — green:unit.
