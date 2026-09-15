@@ -635,7 +635,7 @@ class FakeSessionManager {
     });
     const header = JSON.stringify({
       type: "session",
-      id: "forked-" + Date.now(),
+      id: spec.fork_session_id || ("forked-" + Date.now()),
       cwd: targetCwd,
       parentSession: sourcePath,
       timestamp: new Date().toISOString(),
@@ -690,15 +690,17 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
       if (options?.withSession) {
         orderLog.push("withSession_start");
         let newCwd = ctxCall?.target_cwd;
-        if (!newCwd && targetPath && fs.existsSync(targetPath)) {
+        let newSessionId = ctxSessionId;
+        if (targetPath && fs.existsSync(targetPath)) {
           try {
             const firstLine = fs.readFileSync(targetPath, "utf8").trim().split("\n")[0];
             const parsed = JSON.parse(firstLine);
-            if (parsed.cwd) newCwd = parsed.cwd;
+            if (!newCwd && parsed.cwd) newCwd = parsed.cwd;
+            if (parsed.id) newSessionId = parsed.id;
           } catch {}
         }
         if (!newCwd) newCwd = ctxCwd;
-        const replacedCtx = createCommandContext(newCwd, ctxSessionId, {
+        const replacedCtx = createCommandContext(newCwd, newSessionId, {
           ...ctxCall,
           session_file: targetPath,
           target_cwd: newCwd,
@@ -764,6 +766,12 @@ for (const call of spec.calls) {
   // to let wall-clock pass, to wait for a delivery, and to read the inbox
   // directory at a defined point between ticks.
   switch (call.kind ?? "event") {
+    case "write_file": {
+      fs.mkdirSync(path.dirname(call.path), { recursive: true });
+      fs.writeFileSync(call.path, call.content ?? "", "utf8");
+      results.push(step(null));
+      continue;
+    }
     case "sleep": {
       await sleep(call.ms ?? 0);
       results.push(step(null));
@@ -1339,6 +1347,7 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
             merge_fails,
             merge_refusal_reason,
         } => {
+            let bee_bin_s = bee_bin().to_string_lossy().into_owned();
             let main_s = dunce::canonicalize(main_root)
                 .unwrap_or_else(|_| main_root.to_path_buf())
                 .to_string_lossy()
@@ -1421,6 +1430,8 @@ elif [ "$1" = "worktree" ] && [ "$2" = "merge" ]; then
       exit 0
     fi
   fi
+elif [ "$1" = "cells" ]; then
+  exec "{bee_bin_s}" "$@"
 else
   echo "unhandled stub command: $*" >&2
   exit 1
@@ -7365,6 +7376,229 @@ Parity test plan.
     let orient_raw = String::from_utf8_lossy(&orient_out.stdout);
     assert!(!orient_raw.contains("pending handoff"), "orient output must not contain pending handoff: {orient_raw}");
     assert!(!proj_file.is_file(), ".bee/HANDOFF.json must remain absent after workflow close and orient");
+}
+
+#[cfg(unix)]
+#[test]
+fn relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims() {
+    node_or_skip!("relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims");
+    let git = match git_or_skip("relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims") {
+        Some(g) => g,
+        None => return,
+    };
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for harness");
+    let harness = write_harness(harness_dir.path());
+    let scratch_dir = tempfile::tempdir().expect("tempdir for scratch");
+    let scratch = dunce::canonicalize(scratch_dir.path()).expect("canonicalize tempdir");
+    let main_path = scratch.join("main");
+    let wt_path = scratch.join("repo--wt--feat");
+    std::fs::create_dir_all(&main_path).unwrap();
+
+    let main_str = main_path.to_str().unwrap();
+    let run_git = |args: &[&str], what: &str| {
+        let out = Command::new(&git)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run `git {}`: {e}", args.join(" ")));
+        assert!(
+            out.status.success(),
+            "{what} failed (`git {}`): stdout={} stderr={}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    run_git(&["-C", main_str, "init", "-q"], "git init");
+    run_git(
+        &[
+            "-C",
+            main_str,
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        "empty root commit",
+    );
+    run_git(
+        &["-C", main_str, "worktree", "add", "-q", "--detach", wt_path.to_str().unwrap()],
+        "git worktree add",
+    );
+    let wt_path = dunce::canonicalize(&wt_path).unwrap_or(wt_path);
+
+    write_stub_bee(
+        &main_path,
+        &StubBehavior::WorktreeLifecycle {
+            worktree_id: "repo--wt--feat".to_string(),
+            main_root: main_path.clone(),
+            worktree_root: wt_path.clone(),
+            feature: "feat".to_string(),
+            merge_fails: false,
+            merge_refusal_reason: None,
+        },
+    );
+
+    const OLD_SESSION: &str = "sess-old-reloc";
+    const NEW_SESSION: &str = "sess-new-reloc";
+
+    // 1. Source session file on disk
+    let session_file = main_path.join("session.jsonl");
+    let header = json!({
+        "type": "session",
+        "id": OLD_SESSION,
+        "cwd": main_path.to_string_lossy(),
+        "timestamp": "2026-09-16T00:00:00.000Z"
+    });
+    std::fs::write(&session_file, format!("{header}\n")).expect("write session file");
+
+    // 2. Active claim held by OLD_SESSION
+    let claims_dir = main_path.join(".bee").join("claims");
+    std::fs::create_dir_all(&claims_dir).expect("create claims dir");
+    let claim_path = claims_dir.join("cell-carry-1.json");
+    let claim_initial = json!({
+        "cell": "cell-carry-1",
+        "session": OLD_SESSION,
+        "claimed_at": "2026-09-16T00:00:00.000Z",
+        "acquired_at": "2026-09-16T00:00:00.000Z",
+        "ttl_seconds": 3600.0,
+        "fence_epoch": 1
+    });
+    std::fs::write(&claim_path, serde_json::to_string_pretty(&claim_initial).unwrap() + "\n")
+        .expect("write claim file");
+
+    // 3. Detached job dispatched BEFORE relocation (in OLD_SESSION's inbox)
+    let mb_pre = job_mailbox(&main_path, "job-pre-reloc");
+    write_result(&mb_pre, 1, &result_envelope("ok", "job before relocation finished", "green:unit"));
+    write_marker(&main_path, OLD_SESSION, "job-pre-reloc", &mb_pre, Some("cell-carry-1"));
+
+    // 4. An already-injected marker in OLD_SESSION's inbox (must NOT be re-injected)
+    let mb_injected = job_mailbox(&main_path, "job-already-injected");
+    write_result(&mb_injected, 1, &result_envelope("ok", "already injected job", "green:unit"));
+    let processing_marker = inbox_dir(&main_path, OLD_SESSION).join("job-already-injected.json.processing");
+    let processing_content = json!({
+        "job_id": "job-already-injected",
+        "mailbox": mb_injected.to_string_lossy(),
+        "created_at": "2026-09-16T00:30:00Z",
+        "cell_id": "cell-carry-1",
+    }).to_string();
+
+    // 5. Post-relocation job mailbox (marker written via write_file step after relocation)
+    let mb_post = job_mailbox(&main_path, "job-post-reloc");
+    write_result(&mb_post, 1, &result_envelope("ok", "job after relocation finished", "green:unit"));
+    let post_marker_path = inbox_dir(&main_path, NEW_SESSION).join("job-post-reloc.json");
+    let post_marker_content = json!({
+        "job_id": "job-post-reloc",
+        "mailbox": mb_post.to_string_lossy(),
+        "created_at": "2026-09-16T01:00:00Z",
+        "cell_id": "cell-carry-1",
+    }).to_string();
+
+    let calls = vec![
+        // Arm drain on old session
+        session_start(&main_path, OLD_SESSION, "new"),
+        // Already-injected marker left in OLD_SESSION's inbox
+        json!({
+            "kind": "write_file",
+            "path": processing_marker.to_string_lossy(),
+            "content": processing_content,
+        }),
+        // Relocate session into worktree
+        command_call_with_options(
+            &main_path,
+            OLD_SESSION,
+            "bee-worktree-enter",
+            "--id repo--wt--feat",
+            true,
+            Some(&session_file),
+            false,
+        ),
+        // Relocated session starts in worktree
+        session_start(&wt_path, NEW_SESSION, "new"),
+        // Post-relocation dispatch writes marker into NEW_SESSION's inbox under MAIN checkout
+        json!({
+            "kind": "write_file",
+            "path": post_marker_path.to_string_lossy(),
+            "content": post_marker_content,
+        }),
+        // Await 2 messages: first injection, start the turn to release the F1 latch, then second injection
+        await_injections(1),
+        turn_starts(&wt_path, NEW_SESSION),
+        await_injections(2),
+    ];
+
+    let run = run_harness_spec(
+        &harness,
+        json!({
+            "fork_session_id": NEW_SESSION,
+            "calls": calls,
+        }),
+    );
+
+
+
+    // Assert: the new session drains that carried marker
+    assert!(
+        run.messages.iter().any(|m| m.text.contains("job-pre-reloc")),
+        "new session must drain carried marker from old session inbox, got messages: {:?}",
+        run.messages
+    );
+
+    // Assert: a job dispatched AFTER the relocation is also delivered
+    assert!(
+        run.messages.iter().any(|m| m.text.contains("job-post-reloc")),
+        "new session must deliver job dispatched after relocation, got messages: {:?}",
+        run.messages
+    );
+
+    // Assert: an already-injected marker is NOT injected a second time
+    assert!(
+        !run.messages.iter().any(|m| m.text.contains("job-already-injected")),
+        "already-injected marker (.processing) must not be injected again, got messages: {:?}",
+        run.messages
+    );
+
+    // Assert: exactly 2 messages were injected
+    assert_eq!(
+        run.messages.len(),
+        2,
+        "expected exactly 2 injections (carried + post-move), got {}: {:?}",
+        run.messages.len(),
+        run.messages
+    );
+
+    // Assert: the claim held by the old session names the new session with no --force-ownership
+    let rebound_claim_raw = std::fs::read_to_string(&claim_path).expect("read rebound claim");
+    let rebound_claim: Value = serde_json::from_str(&rebound_claim_raw).expect("parse rebound claim");
+    assert_eq!(
+        rebound_claim["session"].as_str(),
+        Some(NEW_SESSION),
+        "claim session must be rebound to new session id, got: {rebound_claim_raw}"
+    );
+    assert_eq!(
+        rebound_claim["fence_epoch"].as_u64(),
+        Some(2),
+        "rebound claim fence_epoch must be bumped to 2, got: {rebound_claim_raw}"
+    );
+
+    // Assert: relocation notice named counts when non-zero
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Relocated session to worktree")
+                && msg.contains("rebound")
+                && msg.contains("carried")
+        }),
+        "relocation notice must name rebound claims and carried jobs when non-zero, got notifications: {:?}",
+        run.notifications
+    );
 }
 
 #[cfg(not(unix))]
