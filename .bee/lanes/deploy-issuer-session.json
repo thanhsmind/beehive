@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "deploy-issuer-session",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"deploy-issuer-session\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature deploy-issuer-session",
+  "next_action": "bee close finished \"deploy-issuer-session\" — feature is closed.",
   "created_at": "2026-09-15T02:35:36.073Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
