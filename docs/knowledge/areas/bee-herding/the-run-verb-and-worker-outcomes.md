@@ -587,13 +587,13 @@ verb's own default ceiling of 21600 s is far too loose to serve as one.
   spinner advances the log. Picking a real discriminator needs calibration traces
   from healthy-but-blocked workers against genuinely hung ones, and the question
   is parked against a registered trigger until those exist.
+<!-- bee:not-a-deferral: a past incident ("later finished" is narrative) and an open gap naming an untested case, not a promise to act later -->
 - **A caller that waits in the foreground and times out loses the worker's
   cleanup.** Seen live 2026-09-06: the caller's own tool timeout (120 s) ended
   the wait first, the worker later finished with a valid result, and the pane
   sat idle with nothing to retire it — closed by hand. The correction on record
   is orchestration, not code: the foreground wait now runs without a premature
   caller timeout, and a rerun returned a done outcome with the pane closed.
-<!-- bee:not-a-deferral: an open gap naming an untested case, not a promise to act later -->
   A run with an inbox session no longer depends on its caller: its runner lives
   in its own process group and closes the pane after a valid result even when
   the launcher's group is killed (pi-stage-dispatch b2f1afca, live Pi run
