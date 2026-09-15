@@ -511,6 +511,7 @@
     "deployment",
     "deploy-stage-execution",
     "lane",
-    "deploy-issuer-session"
+    "deploy-issuer-session",
+    "deploy-pane-authorization"
   ]
 }
