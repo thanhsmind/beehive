@@ -73,6 +73,13 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     // `git status`. Joined at the tail for the same reason as the two lines
     // above: the block's order is hashed into the managed ledger.
     ".bee/result-inbox/",
+    // release-red-fixes: the one-use deploy permit markers
+    // `bee dispatch authorize` writes (`.bee/authorizations/<dispatch-id>.json`)
+    // — runtime data, never committed; without this line the marker the
+    // release script's own authorize step writes would dirty `git status`.
+    // Joined at the tail for the same reason as the lines above: the block's
+    // order is hashed into the managed ledger.
+    ".bee/authorizations/",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the

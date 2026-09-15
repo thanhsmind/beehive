@@ -11,7 +11,6 @@
 .bee/manifest-hash.json
 .bee/sessions/
 .bee/claims/
-.bee/authorizations/
 .bee/runtime/
 .bee/cache/
 .bee/intent/
@@ -35,6 +34,7 @@
 .bee/mailbox/
 .bee/human-mailbox/
 .bee/result-inbox/
+.bee/authorizations/
 # BEE:END
 
 # rust-port (crates/): compiled artifacts only — Rust source is never
