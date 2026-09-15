@@ -162,7 +162,20 @@ row right after `job_id`, for done and non-done results alike, so a hat
 wave matches each result to its seat (pi-stage-dispatch D3). The injected
 summary is one line; on every Pi dispatch kind the leader reads the worker's
 full answer from the file at `report_path`, and the stage skills tell it to
-(pi-stage-dispatch D4).
+(pi-stage-dispatch D4). A session that MOVES — into a feature worktree, or back
+to the main checkout before a merge — is replaced by a new session with a new
+token, so the drain now carries the old token instead of losing what was
+addressed to it: the moving session records the pair, and the arriving session
+drains its own inbox folder plus every carried one (pi-relocation-delivery D1).
+Three limits keep that carry honest. Every folder resolves under the MAIN
+checkout's `.bee`, the one root the dispatch side always writes to, so a job
+dispatched after the move is still found and worktree cleanup cannot delete a
+pending marker. A carried folder is read for unclaimed markers only — orphan
+reclaim runs on the arriving session's own folder alone, so a result already
+injected before the move is not injected a second time into the transcript that
+already carries it. And the carry outlives the session-shutdown that fires
+mid-move, because it is exempt from the clears that retire the other relocation
+state and is mirrored in one small pointer file for a host restart.
 
 **B10 — A belt reaches parity per checkpoint AND per lifecycle moment, not per
 checkpoint alone.** Pi's belt shipped firing four checkpoints while the catalog

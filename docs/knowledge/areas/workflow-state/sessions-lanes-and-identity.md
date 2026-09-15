@@ -158,6 +158,21 @@ session by default rather than only when a caller opted in, so cross-session
 holds and claims become visible without any special handling (D3;
 durable-fallback tier: hardening-1-7-10).
 
+**A claim follows its conversation when the session identity changes under it.**
+Trigger: a runtime replaces the acting session — the Pi worktree move is the
+first one — so the work continues in a session whose identity differs from the
+one that claimed the cell. What happens: the moving runtime asks for the claims
+of the old identity to be reassigned to the new one, scoped to ACTIVE claims
+whose owner is exactly the named session; claims of any other session, and
+expired claims, are untouched, and no match is a clean, silent no-op. Each
+reassignment goes through the same in-place rewriter adoption already uses, so
+the fence epoch advances by one and any other holder still presenting the older
+epoch is refused afterwards rather than racing. What each actor observes: the
+capping step after the move succeeds as ordinary ownership — the audited
+override that a stale owner used to require is no longer part of the normal
+path — and a reassignment that fails leaves the move intact and says so, naming
+the one command that repairs it (pi-relocation-delivery D2).
+
 **A session's own record now carries its workspace, stamped once and reused
 by its claims (multisession-native D2/D3, msn-19).** Trigger: session
 creation, or claiming a cell file. What happens: `packages/bee/hooks/bee-session-init.mjs`
