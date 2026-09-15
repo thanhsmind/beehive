@@ -514,6 +514,7 @@
     "deploy-issuer-session",
     "deploy-pane-authorization",
     "release-clean-tree",
-    "release-red-fixes"
+    "release-red-fixes",
+    "touches-sweep"
   ]
 }
