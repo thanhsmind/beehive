@@ -1243,5 +1243,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-15T06:58:24.683Z"
+  },
+  "pi-stage-dispatch": {
+    "capped": 14,
+    "dropped": 0,
+    "archived_at": "2026-09-15T12:50:47.815Z"
   }
 }
