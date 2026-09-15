@@ -590,3 +590,21 @@
 {"ts":"2026-09-15T14:35:00.559Z","event":"add","id":"ad94f65e-bb1f-4f2a-98f3-6cbb11025a43","kind":"worktree-cleanup","feature":"pi-stage-dispatch","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--pi-stage-dispatch"],"reason":"Worktree beehive--wt--pi-stage-dispatch (branch wt/pi-stage-dispatch) merged into main at 4fe3e8e4b62ec784346592e694c9bab78e17fb30 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-09-15T14:56:01.916Z","event":"add","id":"7fdb8a26-96ff-48d9-9dce-6573c08a1739","kind":"promote","feature":"pi-stage-dispatch","cells":[],"areas":[],"files":["docs/history/pi-stage-dispatch/promote-proposals.md"],"reason":"Promote proposal for \"pi-stage-dispatch\" awaiting apply — docs/history/pi-stage-dispatch/promote-proposals.md."}
 {"ts":"2026-09-15T14:56:03.199Z","event":"add","id":"e22218f1-3031-489d-ba5e-9d8d7d38c703","kind":"promote","feature":"deploy-role-agy-flash","cells":[],"areas":[],"files":["docs/history/deploy-role-agy-flash/promote-proposals.md"],"reason":"Promote proposal for \"deploy-role-agy-flash\" awaiting apply — docs/history/deploy-role-agy-flash/promote-proposals.md."}
+{"ts":"2026-09-15T15:39:35.815Z","event":"complete","id":"7bce9583-4113-4117-9d29-45f660058cad"}
+{"ts":"2026-09-15T15:39:36.209Z","event":"complete","id":"f7ee4777-dd81-45f1-a57b-c7375fa0db28"}
+{"ts":"2026-09-15T15:39:36.476Z","event":"complete","id":"c51daf9e-154b-43fb-ac19-4878bd519ec1"}
+{"ts":"2026-09-15T15:39:36.736Z","event":"complete","id":"7be1be58-4c8c-40f1-90c0-889b12f2ff81"}
+{"ts":"2026-09-15T15:39:36.997Z","event":"complete","id":"fc779ee7-85ac-4937-981d-a099e9c2e1ce"}
+{"ts":"2026-09-15T15:39:37.294Z","event":"complete","id":"4f7231cc-078b-4232-8dc7-757c609f3d24"}
+{"ts":"2026-09-15T15:39:37.590Z","event":"complete","id":"2eaeb199-e8c2-44cc-9066-cc03dbaa172f"}
+{"ts":"2026-09-15T15:39:37.858Z","event":"complete","id":"647cc8de-d3d3-403f-887a-49c79ac7dc62"}
+{"ts":"2026-09-15T15:39:38.237Z","event":"complete","id":"c62e752e-6676-4d7e-b480-d1538966ecb7"}
+{"ts":"2026-09-15T15:39:38.475Z","event":"complete","id":"edc62f79-8cf9-493a-af33-ab96cd827df3"}
+{"ts":"2026-09-15T15:39:38.717Z","event":"complete","id":"b7655649-859b-4357-bc1d-1df5351b9534"}
+{"ts":"2026-09-15T15:39:38.957Z","event":"complete","id":"e7c3cc39-42b8-436b-a61f-dc80b06c2c44"}
+{"ts":"2026-09-15T15:39:38.958Z","event":"complete","id":"61cb2acc-c8a5-43bd-bb83-23540057e6ae"}
+{"ts":"2026-09-15T15:39:39.232Z","event":"complete","id":"a7024299-cc05-4067-8923-499db011423e"}
+{"ts":"2026-09-15T15:39:39.232Z","event":"complete","id":"a1c62a39-e489-4e2a-bc51-a8bc63e93cdf"}
+{"ts":"2026-09-15T15:39:39.232Z","event":"complete","id":"af5724e1-6a43-4e09-9f24-b5fee91b0b16"}
+{"ts":"2026-09-15T15:39:39.694Z","event":"complete","id":"0977da90-2f7d-4d8f-aa92-ca0e5b6a1b4c"}
+{"ts":"2026-09-15T15:39:39.946Z","event":"complete","id":"3197bb99-aeba-4993-915d-0921ea65a27c"}
