@@ -136,7 +136,7 @@ psd-5 and psd-6.
 {
   "schema_version": "1.0",
   "runtime": "claude",
-  "roster_sha256": "00c73e8ff91b0ac1e8d67be4c51374e021fa3a10b4387ecc9d1fbbb0440fbd9d",
+  "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
     {"stage":"planning","classification":"required","role":"plan","reason":"The leader drafts cells and the synthesis."},
     {"stage":"fact-extraction","classification":"conditional","role":"extraction","condition":"A narrow implementation fact is needed.","reason":"This role owns known-location extraction."},
