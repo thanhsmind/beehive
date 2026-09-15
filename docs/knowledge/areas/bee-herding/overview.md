@@ -58,6 +58,9 @@ The machinery it starts is documented beside it:
   still-open pane (D3, D4), and stops cold on a blocked reviewer with a durable marker and a
   `waiting-on` mark. It never merges, never picks a PBI, never starts a coder, never creates a
   pane, never touches main. Its whole contract is `skills/bee-herding/references/route-prompt.md`.
+  The reviewer runs in a pane labelled `<slug>-review`; when the merge role lands that worktree
+  it closes this pane too, and a pane that is already gone is not an error (herding-route-role
+  hrr-7).
   It is an OBSERVER: it reads, asks open questions, and reports, and it may never dispatch, merge,
   approve, or write product code — see
   [the supervisor observer and its interventions](the-supervisor-observer-and-its-interventions.md).

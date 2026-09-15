@@ -10,7 +10,7 @@ bee:
   areas: [verify-pipeline]
   required_context: []
   decisions: []
-  sources: ["rust-port (cell rust-port-15 rework, harness-determinism deviation)", docs/history/rust-port/reports/rust-port-15.md]
+  sources: ["rust-port (cell rust-port-15 rework, harness-determinism deviation)", docs/history/rust-port/reports/rust-port-15.md, "windows-test-portability cell wtp-1 — without a pinned POSIX fixture, 8 tests asserted the host's PowerShell skip branch instead of the display on Windows (commit ef02a2d9)"]
 ---
 
 ## The pattern

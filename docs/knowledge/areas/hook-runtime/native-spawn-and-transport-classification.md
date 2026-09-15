@@ -55,6 +55,15 @@ cell dispatch, directing callers to configured herding/CLI routes.
   are denied by `model-guard` as `codex-spawn-unmarked` (exit 2); read-only jobs
   require an enforceable execution boundary; full-history forks and escalated roles
   cannot carry model overrides (B19; codex-parity D1).
+- R18a — The Codex onboarding note, written on fresh and refreshed onboarding,
+  tells the user the current truth about Codex dispatch: a role that nothing
+  configures resolves to no model and is held to budget in the prompt; roles
+  and transports are configured in the team block for the Codex runtime;
+  non-cell dispatches fall back to a read-only Codex command-line run; and
+  native dispatch depends on runtime capability, with no proof of the model it
+  really used. The old claim that Codex has no per-agent model selection by
+  design is gone, and a regression test refuses its return
+  (codex-reliability-closeout crc-3).
 
 ## Edge Cases Settled
 
