@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 17665c5; reload the product and test \"pi-stage-dispatch\", then either approve uat (\"bee gate --name uat --approved true --lane pi-stage-dispatch\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-15T08:39:48.577Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "herding fixes: fold into pi-stage-dispatch now (option 1) or separate feature after merge (option 2)",
-    "asked_at": "2026-09-15T11:32:20.727Z",
-    "session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7"
+    "kind": "gate",
+    "subject": "uat: pi-stage-dispatch",
+    "asked_at": "2026-09-15T12:01:53.258Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -1422,12 +1422,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-09-15T11:20:56.767Z",
-    "branch": "wt/pi-stage-dispatch",
-    "worktree_id": "beehive--wt--pi-stage-dispatch",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
