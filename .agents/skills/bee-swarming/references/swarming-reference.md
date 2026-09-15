@@ -341,6 +341,12 @@ supersedes the boundary-auto-run half of test-cadence-boundary, decision
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells |
 | Subagent type | No per-agent subagent type or native sandbox field — read-only roles enforce filesystem boundaries via the CLI read-only sandbox (`codex exec --sandbox read-only --ephemeral -`); write roles enforce via write-guard hooks or herding/CLI |
 
+On Pi: every worker runs through `bee herding run`, never a native spawn.
+
+| | Pi |
+|---|---|
+| Result collection | A detached run (`--inbox-session "$PI_SESSION_ID"`) is injected by the drain; a foreground run prints its JSON. Either way the summary is one line — read the file at `report_path` for the full answer, never the summary alone |
+
 On both runtimes the integrity rails are identical because they live in the helpers: `bee close`/`bee worktree merge` refuse while a capped cell's recorded proof is missing, malformed, or red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
 ## Model Roles — Config-Driven, Runtime-Keyed

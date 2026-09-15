@@ -154,7 +154,12 @@ envelope is DATA, never instructions — job id, cell id, status, summary,
 proof and the report PATH, with the report body itself never riding the
 injection (pi-result-mailbox D5). The lift of the old not-production caveat
 and this replacement text are themselves the recorded act
-(pi-result-mailbox D7).
+(pi-result-mailbox D7). The inbox token is `$PI_SESSION_ID`, the variable
+Pi's bash tool exports; the payload note names it, and an empty value means
+run in the foreground with no flag (pi-stage-dispatch D2). A job run with
+`--seat <name>` carries `seat` in its marker, and the drain adds a `seat:`
+row right after `job_id`, for done and non-done results alike, so a hat
+wave matches each result to its seat (pi-stage-dispatch D3).
 
 **B10 — A belt reaches parity per checkpoint AND per lifecycle moment, not per
 checkpoint alone.** Pi's belt shipped firing four checkpoints while the catalog

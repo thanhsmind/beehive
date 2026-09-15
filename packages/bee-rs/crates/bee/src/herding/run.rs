@@ -178,6 +178,10 @@ struct Options {
     /// caller has one — carried into the ack schema the brief shows, never
     /// invented when absent.
     cell_id: Option<String>,
+    /// `--seat <name>` (pi-stage-dispatch D3): seat name of the detached run
+    /// (e.g. `hat-facts-gaps`), written into the result-inbox marker and the
+    /// JSON result envelope.
+    seat: Option<String>,
     /// `--inbox-session <token>` (pi-result-mailbox D6): the orchestrator
     /// session this job's result should be delivered INTO, asynchronously,
     /// because nothing is synchronously waiting on it. Bee has no other way
@@ -190,6 +194,12 @@ struct Options {
     /// Environment variables forwarded into the worker pane (e.g. deploy
     /// authorization tokens).
     pane_env_passthrough: BTreeMap<String, String>,
+    /// psd-12: the caller's own env carries `BEE_HERDING_WORKER=1` (the
+    /// marker `pane_env` puts into every worker pane), so new workers stack
+    /// under the caller inside the worker column (`resolve_split_parent`).
+    /// Read once at parse, so tests build it explicitly and never inherit
+    /// the harness pane's env.
+    caller_is_worker: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -287,6 +297,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut expertise_raw: Option<&str> = None;
     let mut nickname: Option<&str> = None;
     let mut cell_id: Option<&str> = None;
+    let mut seat: Option<&str> = None;
     let mut inbox_session: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
@@ -355,6 +366,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 cell_id = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--seat" => {
+                seat = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--inbox-session" => {
                 inbox_session = flags.get(i + 1).copied();
                 i += 2;
@@ -403,8 +418,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         agent: agent.map(str::to_string),
         expertise,
         has_explicit_expertise,
+        caller_is_worker: std::env::var("BEE_HERDING_WORKER").as_deref() == Ok("1"),
         nickname,
         cell_id: cell_id.map(str::to_string),
+        seat: seat.map(str::to_string),
         inbox_session: inbox_session.map(str::to_string),
         pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
     })
@@ -978,7 +995,23 @@ struct SplitParent {
 /// entry (`Iterator::max_by_key`'s own rule) — an arbitrary but
 /// deterministic choice, since herdr's own list order carries no other
 /// meaning here.
-fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitParent {
+///
+/// psd-12: a `caller_is_worker` caller (a herding worker spawning its own
+/// workers) is already IN the worker column, so the roomiest-other-pane rule
+/// would pick the human's main pane. Its parent is its own pane, split
+/// `down`: the new worker stacks under its caller, and the same width guard
+/// (and so the fresh-tab fallback) applies. An unreadable layout or one that
+/// does not name the caller fails open to that same own-pane `down` split.
+fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str, caller_is_worker: bool) -> SplitParent {
+    if caller_is_worker {
+        let width = panes.and_then(|list| list.iter().find(|p| p.pane_id == own_pane)).map(|p| p.width);
+        return SplitParent {
+            pane_id: own_pane.to_string(),
+            direction: "down",
+            ratio: DOWN_SPLIT_RATIO,
+            refusal: width.and_then(|w| narrow_pane_refusal(own_pane, w)),
+        };
+    }
     let chosen = panes.and_then(|list| {
         // D2: the caller's own pane is a candidate ONLY while it is alone
         // in the tab — that is the one split it ever takes.
@@ -1058,6 +1091,7 @@ fn split_worker_pane(
     job_id: &str,
     main_root: &Path,
     lock_wait: Duration,
+    caller_is_worker: bool,
 ) -> Result<String, String> {
     // Held for the whole body: the guard releases in `Drop`, at the return
     // below, by which point the new pane already exists.
@@ -1078,7 +1112,7 @@ fn split_worker_pane(
     };
 
     let layout = herdr.pane_layout(own_pane);
-    let parent = resolve_split_parent(layout.as_deref(), own_pane);
+    let parent = resolve_split_parent(layout.as_deref(), own_pane, caller_is_worker);
     match parent.refusal {
         None => herdr.pane_split(&parent.pane_id, parent.direction, parent.ratio, cwd),
         // hps-13: no pane in the caller's tab clears the child-width guard
@@ -2182,6 +2216,9 @@ fn write_inbox_marker(bee_dir: &Path, opts: &Options) {
     };
     let mut m = Map::new();
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    if let Some(seat) = &opts.seat {
+        m.insert("seat".into(), Value::String(seat.clone()));
+    }
     m.insert(
         "mailbox".into(),
         Value::String(mailbox::mailbox_dir(bee_dir, &opts.job_id).display().to_string()),
@@ -2433,6 +2470,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         &opts.job_id,
         &opts.main_root,
         SPLIT_LOCK_WAIT,
+        opts.caller_is_worker,
     ) {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
@@ -3095,6 +3133,7 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
 ///
 /// Envelope keys:
 /// - `job_id`: the job id string
+/// - `seat`: string (D3: present only when --seat was passed)
 /// - `outcome`: outcome label string (e.g. `done`, `blocked`, `spawn_failed`, `interrupted`, `cancelled`, ...)
 /// - `pane_id`: string or null
 /// - `closed_pane`: boolean
@@ -3218,6 +3257,9 @@ fn result_envelope(
 ) -> Value {
     let mut m = Map::new();
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    if let Some(seat) = &opts.seat {
+        m.insert("seat".into(), Value::String(seat.clone()));
+    }
     m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));
     m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
     m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
@@ -3347,6 +3389,69 @@ fn emit_result(opts: &Options, result: &ExecResult, transport: &str, dissent: Op
     }
 }
 
+/// Env marker a detached runner carries, so it runs the job instead of
+/// detaching again (decision b2f1afca part a).
+const DETACHED_RUNNER_ENV: &str = "BEE_HERDING_DETACHED_RUNNER";
+
+/// A run with an inbox session detaches its runner into its own process
+/// group: Pi SIGKILLs a bash command's whole group on timeout, which killed
+/// the run before it could close the worker pane. Dry runs and the runner
+/// itself never detach; non-unix targets keep the foreground run.
+fn should_detach(has_inbox_session: bool, dry_run: bool, runner_marker: Option<&str>) -> bool {
+    cfg!(unix) && has_inbox_session && !dry_run && runner_marker != Some("1")
+}
+
+/// The runner's `herding run` arguments: every original flag, then the
+/// launcher's job id. When the task did not come inline through `--task`,
+/// the runner reads the launcher's task text from its stdin pipe. The second
+/// value says whether that pipe carries the task.
+fn runner_args(flags: &[&str], job_id: &str) -> (Vec<String>, bool) {
+    let inline_task = flags
+        .iter()
+        .position(|f| *f == "--task")
+        .and_then(|i| flags.get(i + 1))
+        .is_some_and(|t| !t.is_empty());
+    let mut args: Vec<String> = ["herding", "run"].iter().chain(flags).map(|s| s.to_string()).collect();
+    args.extend(["--job-id".to_string(), job_id.to_string()]);
+    if !inline_task {
+        args.extend(["--task-file".to_string(), "-".to_string()]);
+    }
+    (args, !inline_task)
+}
+
+fn detached_envelope(job_id: &str, inbox_session: &str) -> Value {
+    serde_json::json!({ "job_id": job_id, "outcome": "detached", "inbox_session": inbox_session })
+}
+
+#[cfg(unix)]
+fn spawn_detached_runner(flags: &[&str], opts: &Options) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let exe = std::env::current_exe().map_err(|e| format!("could not resolve the bee executable: {e}"))?;
+    let (args, pipe_task) = runner_args(flags, &opts.job_id);
+    let mut child = Command::new(exe)
+        .args(&args)
+        .env(DETACHED_RUNNER_ENV, "1")
+        .stdin(if pipe_task { Stdio::piped() } else { Stdio::null() })
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("could not start the detached runner: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(opts.task.as_bytes())
+            .map_err(|e| format!("could not hand the task to the detached runner: {e}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn spawn_detached_runner(_flags: &[&str], _opts: &Options) -> Result<(), String> {
+    Err("detached runs need a unix target".to_string())
+}
+
 pub(super) fn run(flags: &[&str]) -> ExitCode {
     let opts = match parse_options(flags) {
         Ok(o) => o,
@@ -3365,6 +3470,21 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let marker = std::env::var(DETACHED_RUNNER_ENV).ok();
+    if let (Some(session), true) =
+        (opts.inbox_session.as_deref(), should_detach(opts.inbox_session.is_some(), opts.dry_run, marker.as_deref()))
+    {
+        return match spawn_detached_runner(flags, &opts) {
+            Ok(()) => {
+                println!("{}", detached_envelope(&opts.job_id, session));
+                ExitCode::SUCCESS
+            }
+            Err(msg) => {
+                eprintln!("bee herding run: {msg}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let result = execute(&opts, transport.as_ref());
     // slp-followup-gaps D4: a dissent the worker handed back as DATA is
     // transcribed here, through the one writer `bee cells dissent` calls, so
@@ -3390,6 +3510,38 @@ mod tests {
     use std::cell::RefCell;
 
     // ─── pure decisions ─────────────────────────────────────────────────
+
+    #[cfg(unix)]
+    #[test]
+    fn detaches_only_with_an_inbox_session_outside_dry_run_and_the_runner() {
+        assert!(should_detach(true, false, None));
+        assert!(!should_detach(false, false, None));
+        assert!(!should_detach(true, true, None));
+        assert!(!should_detach(true, false, Some("1")));
+    }
+
+    #[test]
+    fn runner_args_keep_every_flag_add_the_job_id_and_pipe_a_file_task() {
+        let flags = ["--agent", "pi", "--task-file", "/tmp/t.md", "--inbox-session", "s1", "--json"];
+        let (args, pipe) = runner_args(&flags, "job-9");
+        let mut want: Vec<&str> = vec!["herding", "run"];
+        want.extend(flags);
+        want.extend(["--job-id", "job-9", "--task-file", "-"]);
+        assert_eq!(args, want);
+        assert!(pipe);
+        // An inline --task already rides argv, so no pipe and no stdin read.
+        let (args, pipe) = runner_args(&["--task", "do it", "--inbox-session", "s1"], "job-9");
+        assert_eq!(args, ["herding", "run", "--task", "do it", "--inbox-session", "s1", "--job-id", "job-9"]);
+        assert!(!pipe);
+    }
+
+    #[test]
+    fn detached_envelope_carries_job_id_outcome_and_inbox_session() {
+        let v = detached_envelope("job-9", "s1");
+        assert_eq!(v["job_id"], "job-9");
+        assert_eq!(v["outcome"], "detached");
+        assert_eq!(v["inbox_session"], "s1");
+    }
 
     #[test]
     fn split_direction_is_right_only_when_the_parent_is_the_callers_own_pane() {
@@ -3459,7 +3611,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
             PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 12 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2", "the main pane is never split twice");
         assert_eq!(parent.direction, "down");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "a down split stays even: {}", parent.ratio);
@@ -3476,7 +3628,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 43 },
             PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps the parent's 60 columns: {:?}", parent.refusal);
@@ -3488,7 +3640,7 @@ mod tests {
         // only pane. This is the one split it ever takes — "right", and its
         // child lands at exactly the 60-column minimum, workable.
         let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 120, height: 43 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "{}", parent.ratio);
@@ -3500,7 +3652,7 @@ mod tests {
         // The uat tab: 173x50, one pane. The worker column is 60 wide and
         // the human keeps 113 — the whole point of D2.
         let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 173, height: 50 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - (113.0 / 173.0)).abs() < 1e-12, "the main pane keeps 113: {}", parent.ratio);
@@ -3518,7 +3670,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 60, height: 90 },
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 40 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps width unchanged: {:?}", parent.refusal);
@@ -3526,7 +3678,7 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_is_unreadable() {
-        let parent = resolve_split_parent(None, "w1:p1");
+        let parent = resolve_split_parent(None, "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "a widthless fallback keeps the old even split");
@@ -3535,7 +3687,7 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_names_no_candidate() {
-        let parent = resolve_split_parent(Some(&[]), "w1:p1");
+        let parent = resolve_split_parent(Some(&[]), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!(parent.refusal.is_none());
@@ -3546,12 +3698,56 @@ mod tests {
         // The caller's own pane, alone: a "right" split, and 15 columns cap
         // at a 7-column child — the width the refusal must name.
         let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p3");
+        let parent = resolve_split_parent(Some(&panes), "w1:p3", false);
         assert_eq!(parent.pane_id, "w1:p3");
         let msg = parent.refusal.expect("a 7-column child is below the minimum and must refuse");
         assert!(msg.contains("w1:p3"), "{msg}");
         assert!(msg.contains("7"), "{msg}");
         assert!(msg.contains("60"), "{msg}");
+    }
+
+    // ─── psd-12: a worker caller stacks inside the worker column ─────────
+
+    #[test]
+    fn resolve_split_parent_a_worker_caller_splits_its_own_pane_down_never_the_main_pane() {
+        // The live nested hat wave: the caller w1:p2 is a worker pane; the
+        // human's main pane w1:p1 is the largest, and today's rule split it.
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 25 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p2", true);
+        assert_eq!(parent.pane_id, "w1:p2", "a worker caller stacks under itself");
+        assert_eq!(parent.direction, "down");
+        assert!((parent.ratio - DOWN_SPLIT_RATIO).abs() < 1e-12, "{}", parent.ratio);
+        assert!(parent.refusal.is_none(), "{:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_a_non_worker_caller_keeps_the_roomiest_other_pane() {
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 12 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p3", false);
+        assert_eq!(parent.pane_id, "w1:p1", "a top-level choice is unchanged: roomiest other pane");
+        assert_eq!(parent.direction, "down");
+        assert!(parent.refusal.is_none());
+    }
+
+    #[test]
+    fn resolve_split_parent_a_worker_caller_too_narrow_still_refuses_into_the_fresh_tab_path() {
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 150, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 40, height: 50 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p2", true);
+        assert_eq!(parent.pane_id, "w1:p2");
+        assert_eq!(parent.direction, "down");
+        let msg = parent.refusal.expect("a 40-column down child is below the minimum and must refuse");
+        assert!(msg.contains("w1:p2") && msg.contains("40"), "{msg}");
     }
 
     #[test]
@@ -4464,8 +4660,8 @@ mod tests {
         let herdr = SharedLayoutHerdr::new(240, 40);
         let budget = Duration::from_secs(20);
         std::thread::scope(|s| {
-            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget));
-            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget));
+            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget, false));
+            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget, false));
             a.join().expect("thread a").expect("first split must succeed");
             b.join().expect("thread b").expect("second split must succeed");
         });
@@ -4502,7 +4698,7 @@ mod tests {
         let herdr = SharedLayoutHerdr::new(173, 50);
         let budget = Duration::from_secs(20);
         for n in 1..=5 {
-            split_worker_pane(&herdr, "w1:p1", &root, &format!("job-{n}"), &root, budget)
+            split_worker_pane(&herdr, "w1:p1", &root, &format!("job-{n}"), &root, budget, false)
                 .unwrap_or_else(|e| panic!("spawn {n} must succeed: {e}"));
         }
 
@@ -4551,6 +4747,7 @@ mod tests {
             "job-queued",
             &root,
             Duration::from_millis(150),
+            false,
         )
         .expect("a busy lock must never fail the spawn");
         assert_eq!(pane, "w1:p2");
@@ -4574,6 +4771,7 @@ mod tests {
             "job-broken",
             &root,
             Duration::from_millis(150),
+            false,
         )
         .expect("a broken lock must never fail the spawn");
         assert_eq!(pane, "w1:p2");
@@ -4653,8 +4851,10 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
+            caller_is_worker: false,
         }
     }
 
@@ -4730,8 +4930,10 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
+            caller_is_worker: false,
         }
     }
 
@@ -5888,6 +6090,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn seat_flag_writes_seat_into_the_result_envelope_and_absent_leaves_keys_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.seat = Some("hat-risks".to_string());
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(envelope.get("seat").and_then(Value::as_str), Some("hat-risks"), "{envelope}");
+
+        let mut keys: Vec<&str> = envelope.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "seat", "summary"],
+            "envelope keys drifted for a result with seat: {envelope}"
+        );
+
+        // Without seat, identical to before:
+        opts.seat = None;
+        let envelope_no_seat = result_envelope(&opts, &result, "herdr", None);
+        assert!(envelope_no_seat.get("seat").is_none());
+        let mut keys_no_seat: Vec<&str> = envelope_no_seat.as_object().unwrap().keys().map(String::as_str).collect();
+        keys_no_seat.sort_unstable();
+        assert_eq!(
+            keys_no_seat,
+            vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "summary"]
+        );
+    }
+
     // ─── the report rides the mailbox (pi-result-mailbox D1, D2) ────────
     //
     // The row above is this family's LEGACY row, unchanged and still exact:
@@ -6267,6 +6508,51 @@ mod tests {
         assert_eq!(with.inbox_session.as_deref(), Some("sess-7"));
         let without = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
         assert_eq!(without.inbox_session, None);
+    }
+
+    #[test]
+    fn parse_options_reads_the_seat_flag_and_defaults_to_none() {
+        let with = parse_options(&["--task", "t", "--main-root", ".", "--seat", "hat-risks"]).unwrap();
+        assert_eq!(with.seat.as_deref(), Some("hat-risks"));
+        let without = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+        assert_eq!(without.seat, None);
+    }
+
+    #[test]
+    fn seat_flag_writes_seat_into_the_inbox_marker_and_absent_leaves_it_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.inbox_session = Some("sess-7".to_string());
+        opts.seat = Some("hat-risks".to_string());
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        let marker = tmp.path().join(".bee/result-inbox/sess-7/job-1.json");
+        execute(&opts, &FakeHerdr::new());
+
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
+        assert_eq!(m.get("job_id").and_then(Value::as_str), Some("job-1"), "{m}");
+        assert_eq!(m.get("seat").and_then(Value::as_str), Some("hat-risks"), "{m}");
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let mut opts2 = test_options(tmp2.path(), false);
+        opts2.inbox_session = Some("sess-7".to_string());
+        opts2.seat = None;
+        seed_result(
+            tmp2.path(),
+            &opts2.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        let marker2 = tmp2.path().join(".bee/result-inbox/sess-7/job-1.json");
+        execute(&opts2, &FakeHerdr::new());
+
+        let m2: Value = serde_json::from_str(&std::fs::read_to_string(&marker2).unwrap()).unwrap();
+        assert_eq!(m2.get("job_id").and_then(Value::as_str), Some("job-1"), "{m2}");
+        assert!(m2.get("seat").is_none(), "absent seat must not appear in marker: {m2}");
     }
 
     #[test]

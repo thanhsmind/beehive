@@ -40,7 +40,12 @@ main pane always keeps the larger share and its full height. Every spawn after
 that splits DOWN inside that worker column, stacking under the previous worker.
 The parent is therefore the roomiest pane in the tab EXCLUDING the caller's
 own, and the direction follows from which pane that picked, not from any
-measurement of the rectangle.
+measurement of the rectangle. A caller that is itself a herding worker (its env
+carries `BEE_HERDING_WORKER=1`) is the exception: it splits its OWN pane
+downward, so the workers it spawns stack under it and stay
+in the worker column. Excluding only the caller's pane had made the human's main pane — the
+largest — the parent of every nested worker. The width guard and the fresh-tab
+fallback apply to that choice unchanged (pi-stage-dispatch b2f1afca).
 
 Two earlier rules were tried and retired against live evidence. Reading the
 aspect ratio answered `right` again and again on a wide tab: a 120-column tab
@@ -310,6 +315,18 @@ it open as forensics (herding-executor D6, herding-cockpit-completeness c943feb9
 `--close-always` overrides them. Cancel closes the pane and confirms process exit
 (7172010b). The other carve-out is `paused_limit`, which keeps its pane under
 every setting.
+
+**A run with an inbox session detaches its runner, so the close survives the
+launcher.** Pi runs each bash command in its own process group and, on a bash
+timeout, sends SIGKILL to that whole group — a detached run started there died
+with its launcher before it reached the pane close, and left the pane open.
+Now `--inbox-session` (not a dry run) makes the launcher read the task, allocate
+the job id, and re-launch bee as a runner in its own process group, with the
+task on a stdin pipe and the job id as a flag. The launcher prints one JSON line
+with `job_id`, outcome `detached`, and the inbox session, and returns at once;
+the runner runs the full flow — marker, wait, pane close. Killing the
+launcher's process group no longer stops it. A run without an inbox session,
+and any non-unix target, is unchanged (pi-stage-dispatch b2f1afca).
 
 The verb appends its own dispatch row and a wave-ledger worker row for every run
 it starts, so occupancy counts these workers too (herding-executor D9).

@@ -26,6 +26,67 @@ use std::time::Instant;
 
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
+/// pi-stage-dispatch D6: `dispatch prepare` and `state advisor-ref
+/// record|show` are served inside a GRANTED feature worktree against main's
+/// store, where their records live. Every other door keeps the narrow
+/// refusal. The second value is that worktree's root, when the command runs
+/// in one.
+pub(crate) fn resolve_root_serving_granted(cwd: &Path) -> (Roots, Option<PathBuf>) {
+    match resolve_store_root(cwd) {
+        Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { main_root }) => {
+            let here = match crate::roots::resolve_store_root_worktree(cwd) {
+                crate::roots::RootsWt::Go(r) => r.linked.map(|l| l.worktree_root),
+                _ => None,
+            };
+            (Roots::Ordinary(main_root), here)
+        }
+        other => (other, None),
+    }
+}
+
+/// `prelude` over `resolve_root_serving_granted` — the Ctx for the doors D6
+/// serves from a granted worktree.
+pub(crate) fn ctx_serving_granted(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+) -> Option<Result<crate::verbs::reservations::Ctx, ExitCode>> {
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_root_serving_granted(&cwd).0 {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => return Some(Err(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))),
+        Roots::None => return Some(Err(emit_no_root_error(&cwd, cmd, use_json, t0))),
+    };
+    let drift = crate::registry::check_manifest_drift(&root);
+    Some(Ok(crate::verbs::reservations::Ctx {
+        root,
+        cmd,
+        use_json,
+        t0,
+        drift_changed: drift.manifest_changed,
+        drift_hint: drift.hint,
+    }))
+}
+
+/// pi-stage-dispatch D7: a non-cell dispatch with no `--feature` and no bound
+/// lane takes the feature of the granted worktree it runs in, so it runs
+/// there. Main's `state.json` feature stays the last fallback, in the wire.
+pub(crate) fn granted_worktree_feature(
+    root: &Path,
+    kind: &str,
+    session_id: Option<&str>,
+    worktree_root: Option<&Path>,
+) -> Option<String> {
+    let worktree_root = worktree_root.filter(|_| kind != "cell")?;
+    let bound = crate::verbs::state_group::session_binding(session_id, root)
+        .ok()
+        .and_then(|(_sid, bound)| bound);
+    if bound.is_some() {
+        return None;
+    }
+    crate::verbs::status_full::read_worktree_feature(&worktree_root.to_string_lossy())
+}
+
 /// pi-support D5 (store: the pi belt's dispatch door): `pi` joins codex and
 /// claude as a legal `--runtime`, resolving `team.pi` in the ONE config home
 /// every other runtime reads. It is a HERDING-ONLY door — see
@@ -95,7 +156,11 @@ pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
 /// payload carries. It names the flag, the token to pass, and the one case
 /// that must NOT carry it, because a detached pane's result reaches the
 /// session through the drain or not at all.
-pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "DETACHED runs only (this command backgrounded, nothing waiting on its output): append --inbox-session \"<orchestrator-session-id>\" — the session id the pi preamble shows you — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. Run it SYNCHRONOUSLY (in the foreground, result read from this command's own JSON) and pass NO flag: one delivery path per job, never both.";
+/// pi-stage-dispatch D3: the hat wave's wall-clock budget, in seconds
+/// (`bee-hive/references/gates-and-delegation.md` "Hat wave").
+const HAT_WAVE_CEILING_SECONDS: u64 = 600;
+
+pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "One delivery path per job, never both. DETACHED (this command backgrounded, nothing waiting on its output): append --inbox-session \"$PI_SESSION_ID\" — the variable Pi's bash tool exports — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. When $PI_SESSION_ID is empty, do not detach: run the command in the foreground and pass NO flag. On both paths the JSON summary is one line; the worker's full answer is the file at report_path — read that file.";
 
 /// What a slot resolved to, in the words the refusal reports it under.
 /// `Herding` never reaches here (it is the one resolution the pi door
@@ -970,6 +1035,9 @@ pub(crate) fn prompt_body_for(
     advisor: Option<&str>,
     purpose: Option<&str>,
     lane_feature: Option<&str>,
+    // pi-stage-dispatch D5: the `hat-*` seat this non-cell dispatch runs
+    // as, `None` for every other role. Only the advisor template reads it.
+    seat: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -997,6 +1065,7 @@ pub(crate) fn prompt_body_for(
                 ("expertise", expertise.unwrap_or("")),
                 ("purpose", purpose.unwrap_or("")),
                 ("original_request", &original_request),
+                ("seat", seat.unwrap_or("")),
             ],
         ));
     }
@@ -2162,6 +2231,14 @@ pub(crate) fn prepare_dispatch_wire(
     } else {
         None
     };
+    // pi-stage-dispatch D3/D5: the seat a non-cell dispatch names. A seat that
+    // fell through to the advisor slot keeps its own name here — only its
+    // model resolution rides the advisor.
+    let seat_name: &str = fallen_through_seat.unwrap_or(marker_role);
+    let hat_seat = (kind != "cell" && role.is_some())
+        .then(|| seat_role_named(seat_name))
+        .flatten()
+        .filter(|seat| seat.starts_with("hat-"));
 
     let prompt_body = match prompt_body_for(
         root,
@@ -2174,6 +2251,7 @@ pub(crate) fn prepare_dispatch_wire(
         advisor.as_deref(),
         purpose,
         lane_feature.as_deref(),
+        hat_seat,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -2354,6 +2432,14 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(agent);
                     command.push('"');
                 }
+                // pi-stage-dispatch D3, pi only: a non-cell dispatch that
+                // names a role carries it as `--seat`, so a detached result
+                // comes back named by its seat.
+                if runtime == "pi" && kind != "cell" && role.is_some() {
+                    command.push_str(" --seat \"");
+                    command.push_str(seat_name);
+                    command.push('"');
+                }
                 // herding-stall-ceiling D1: `herding.ceiling_seconds` in the
                 // MAIN checkout's config becomes `--ceiling <n>` on the
                 // command. `herding run` already caps a DEAD pane through
@@ -2361,7 +2447,16 @@ pub(crate) fn prepare_dispatch_wire(
                 // the worker that reads without ever editing and so keeps its
                 // own heartbeat alive past the idle door. Absent or
                 // out-of-range key leaves the command byte-identical.
-                if let Some(seconds) = ceiling_seconds_at(root) {
+                //
+                // pi-stage-dispatch D3, pi only: a hat seat keeps the 10-minute
+                // wave budget — 600 seconds, or a lower configured value.
+                let ceiling = match ceiling_seconds_at(root) {
+                    configured if runtime == "pi" && hat_seat.is_some() => {
+                        Some(configured.map_or(HAT_WAVE_CEILING_SECONDS, |s| s.min(HAT_WAVE_CEILING_SECONDS)))
+                    }
+                    configured => configured,
+                };
+                if let Some(seconds) = ceiling {
                     command.push_str(" --ceiling ");
                     command.push_str(&seconds.to_string());
                 }
@@ -3343,7 +3438,14 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     //    drift-cache write would otherwise swallow the Node re-run's
     //    manifest_changed line. ─────────────────────────────────────────────
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let (roots, here) = resolve_root_serving_granted(&cwd);
+    let root = match roots {
+        // --claim is a cell-execution move on the shared control plane; it
+        // keeps the granted-worktree refusal.
+        Roots::Ordinary(r) if claim && here.is_some() => {
+            let why = crate::roots::Unsupported::GrantedWorktree { main_root: r };
+            return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
+        }
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
@@ -3352,6 +3454,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             return Some(emit_no_root_error(&cwd, "dispatch prepare", use_json, t0));
         }
     };
+    let feature_flag = feature_flag.or_else(|| {
+        granted_worktree_feature(&root, &kind, session_flag.as_deref(), here.as_deref())
+    });
     let prompt_name = if kind == "cell" { "worker-cell" } else { kind.as_str() };
     // Skew used to `return None` — delegate to the Node renderer (C4). That
     // runtime was deleted at R6, so `None` reaches the dispatcher's generic
@@ -3430,9 +3535,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         },
     };
 
-    let ctx = match prelude("dispatch prepare", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let ctx = match ctx_serving_granted("dispatch prepare", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
     };
     if let Some(message) = arg_error {
         return finish(&ctx, Ok(Out::Thrown(message)));
@@ -5368,9 +5473,11 @@ mod detached_delivery_tests {
         assert!(note.contains("--inbox-session"), "the flag must be named: {note}");
         assert!(note.contains(".bee/result-inbox/"), "the marker path must be named: {note}");
         assert!(
-            note.contains("session id") && note.contains("preamble"),
-            "the token's source must be named: {note}"
+            note.contains("--inbox-session \"$PI_SESSION_ID\""),
+            "the token must be a variable Pi really exports: {note}"
         );
+        assert!(note.contains("foreground"), "the empty-token case must be named: {note}");
+        assert!(note.contains("report_path"), "the full-answer file must be named: {note}");
         // The command itself is untouched: bee never guesses the token.
         let command = payload.get("command").and_then(Value::as_str).unwrap_or_default();
         assert!(!command.contains("--inbox-session"), "{command}");

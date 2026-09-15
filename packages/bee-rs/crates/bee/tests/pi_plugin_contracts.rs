@@ -1716,7 +1716,7 @@ fn the_belt_wires_every_advisory_surface_the_event_map_promises() {
 #[test]
 fn the_injected_header_carries_exactly_the_one_line_rows_the_contract_names() {
     let derived = injection_row_keys();
-    let expected = ["job_id", "cell_id", "status", "summary", "proof", "report_path"];
+    let expected = ["job_id", "seat", "cell_id", "status", "summary", "proof", "report_path"];
     assert_eq!(
         derived, expected,
         "the injected fence's row set (or its order) changed. Every row here is a ONE-LINE field \
@@ -2178,6 +2178,29 @@ fn the_session_preamble_is_injected_once_and_a_reload_never_re_runs_session_init
     );
 }
 
+/// The dispatch command the injected preamble publishes, filled in with a
+/// kind and role text and split into argv (the leading `.bee/bin/bee` dropped).
+fn injected_dispatch_args(label: &str, text: &str, expected_runtime: &str, kind: &str, role: &str) -> Vec<String> {
+    let line = text
+        .lines()
+        .find(|l| l.contains("Every subagent/worker dispatch starts with `"))
+        .unwrap_or_else(|| panic!("{label}: dispatch guidance line not found in injected text:\n{text}"));
+    let cmd = line
+        .split('`')
+        .nth(1)
+        .unwrap_or_else(|| panic!("{label}: no command found in backticks on line: {line}"));
+    assert!(
+        cmd.contains(&format!("--runtime {expected_runtime}")),
+        "{label}: extracted command must contain '--runtime {expected_runtime}', got: {cmd}"
+    );
+    cmd.replace("cell|gather|reviewer|advisor", kind)
+        .replace("[--role <name>]", role)
+        .split_whitespace()
+        .skip(1)
+        .map(String::from)
+        .collect()
+}
+
 #[cfg(unix)]
 #[test]
 fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
@@ -2277,26 +2300,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
     }));
 
     let extract_args = |label: &str, text: &str, expected_runtime: &str| -> Vec<String> {
-        let line = text
-            .lines()
-            .find(|l| l.contains("Every subagent/worker dispatch starts with `"))
-            .unwrap_or_else(|| panic!("{label}: dispatch guidance line not found in injected text:\n{text}"));
-        let cmd = line
-            .split('`')
-            .nth(1)
-            .unwrap_or_else(|| panic!("{label}: no command found in backticks on line: {line}"));
-        assert!(
-            cmd.contains(&format!("--runtime {expected_runtime}")),
-            "{label}: extracted command must contain '--runtime {expected_runtime}', got: {cmd}"
-        );
-        let runnable = cmd
-            .replace("cell|gather|reviewer|advisor", "gather")
-            .replace("[--role <name>]", "--role extraction");
-        runnable
-            .split_whitespace()
-            .skip(1)
-            .map(String::from)
-            .collect()
+        injected_dispatch_args(label, text, expected_runtime, "gather", "--role extraction")
     };
 
     // Verify both normal and compact Pi injection publish --runtime pi and execute team.pi herding
@@ -2397,6 +2401,174 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
         let val_malformed: Value = serde_json::from_slice(&out_malformed.stdout).expect("parse JSON");
         assert_eq!(val_malformed["tool"], "Agent", "malformed fallback must select Claude Agent tool");
         assert_eq!(val_malformed["payload"]["model"], "haiku", "malformed fallback must resolve team.claude model");
+    }
+}
+
+/// pi-stage-dispatch D8 + D2: advisor, hat, reviewer, and cell dispatch each
+/// run from the command the injected Pi preamble publishes and return a
+/// herding payload; the detached flag text is READ from the payload note,
+/// expands to the harness session token, and a result written under that
+/// token drains back named by its seat with its report_path.
+#[cfg(unix)]
+#[test]
+fn injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip() {
+    node_or_skip!("injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for harness");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir for test repo");
+    write_real_bee(dir.path());
+    let bee = dir.path().join(".bee").join("bin").join("bee");
+    // `herding run` resolves the main checkout through git, as a real leader's repo does.
+    let Some(git) = git_or_skip("injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip") else {
+        return;
+    };
+    let init = Command::new(&git).args(["init", "-q"]).current_dir(dir.path()).output().expect("git init");
+    assert!(init.status.success(), "git init failed: {}", String::from_utf8_lossy(&init.stderr));
+
+    let herd = json!({"kind": "herding", "agent": "pi-worker-1"});
+    // The hat seat is configured: an unconfigured seat falls through to `advisor` and loses its name.
+    let config = json!({
+        "team": {"pi": {"generation": herd, "read": herd, "code": herd, "review": herd, "advisor": herd, "hat-facts-gaps": herd}},
+        "herding": {"agents": {"pi-worker-1": ["pi", "--model", "dummy"]}}
+    });
+    std::fs::write(dir.path().join(".bee").join("config.json"), config.to_string()).expect("write config.json");
+
+    // A claimed cell for the cell dispatch, claimed through the CLI.
+    let cells_dir = dir.path().join(".bee").join("cells");
+    std::fs::create_dir_all(&cells_dir).expect("create .bee/cells");
+    let cell = json!({
+        "id": "demo-1", "feature": "demo", "title": "Demo cell", "lane": "tiny", "status": "open",
+        "deps": [], "action": "demo action", "verify": "true", "trace": {}
+    });
+    std::fs::write(cells_dir.join("demo-1.json"), cell.to_string()).expect("write cell");
+    let claim = Command::new(&bee)
+        .args(["cells", "claim", "--id", "demo-1", "--worker", "w-demo", "--session-id", "sess-claim", "--json"])
+        .current_dir(dir.path())
+        .output()
+        .expect("cells claim");
+    assert!(claim.status.success(), "cells claim failed: {}", String::from_utf8_lossy(&claim.stderr));
+
+    // The harness session: its token is what `getSessionId` returns to the belt.
+    const TOKEN: &str = "sess-pi-stage-dispatch";
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            advisory_call("before_agent_start", dir.path(), TOKEN, json!({"prompt": "first turn", "systemPrompt": "BASE"})),
+        ],
+    );
+    assert!(!run.results[1].threw, "before_agent_start threw: {:?}", run.results[1]);
+    let preamble = run.results[1]
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .expect("injected systemPrompt must be present");
+
+    let prepare = |label: &str, kind: &str, role: &str, extra: &[&str]| -> Value {
+        let mut args = injected_dispatch_args(label, preamble, "pi", kind, role);
+        args.extend(extra.iter().map(|s| s.to_string()));
+        let out = Command::new(&bee).args(&args).current_dir(dir.path()).output().expect("dispatch prepare");
+        assert!(
+            out.status.success(),
+            "{label}: dispatch prepare {args:?} failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let val: Value = serde_json::from_slice(&out.stdout)
+            .unwrap_or_else(|e| panic!("{label}: unparseable JSON ({e}): {}", String::from_utf8_lossy(&out.stdout)));
+        assert_eq!(val["tool"], "Bash", "{label}: Pi dispatch is herding only: {val}");
+        assert_eq!(val["economics"]["channel"], "herding-exec", "{label}: {val}");
+        let cmd = val["payload"]["command"].as_str().unwrap_or_else(|| panic!("{label}: no payload.command: {val}"));
+        assert!(cmd.contains("herding run") && cmd.contains("pi-worker-1"), "{label}: {cmd}");
+        val
+    };
+
+    prepare("advisor", "advisor", "", &[]);
+    prepare("reviewer", "reviewer", "", &[]);
+    prepare("cell", "cell", "", &["--cell", "demo-1", "--worker", "w-demo"]);
+    let hat = prepare("hat", "advisor", "--role hat-facts-gaps", &[]);
+
+    let hat_cmd = hat["payload"]["command"].as_str().unwrap();
+    assert!(hat_cmd.contains("--seat \"hat-facts-gaps\""), "hat payload must carry its seat: {hat_cmd}");
+    let ceiling: u64 = hat_cmd
+        .split("--ceiling ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("hat payload must carry a numeric --ceiling: {hat_cmd}"));
+    assert!(ceiling <= 600, "hat ceiling must keep the 10-minute wave budget, got {ceiling}: {hat_cmd}");
+    let hat_stdin = hat["payload"]["stdin"].as_str().expect("hat payload.stdin");
+    assert!(hat_stdin.contains("Seat: hat-facts-gaps"), "hat stdin must name its seat:\n{hat_stdin}");
+
+    // Round trip, step 1: the flag text comes from the note, never from this test.
+    let note = hat["payload"]["detached_delivery"].as_str().expect("Pi payload carries detached_delivery");
+    let flag = note
+        .split("append ")
+        .nth(1)
+        .and_then(|rest| rest.split(" — ").next())
+        .unwrap_or_else(|| panic!("the note names no flag text to append: {note}"));
+    assert!(flag.starts_with("--inbox-session"), "the note's flag text: {flag}");
+
+    // The shell the Pi bash tool runs expands that text to the session token.
+    let expanded = Command::new("sh")
+        .args(["-c", &format!("set -- {flag}; printf '%s\\n' \"$@\"")])
+        .env("PI_SESSION_ID", TOKEN)
+        .output()
+        .expect("expand the flag text");
+    assert_eq!(String::from_utf8_lossy(&expanded.stdout), format!("--inbox-session\n{TOKEN}\n"));
+
+    // The composed detached command parses: a dry run accepts it and spawns nothing.
+    let mut child = Command::new("sh")
+        .args(["-c", &format!("{hat_cmd} {flag} --dry-run")])
+        .env("PI_SESSION_ID", TOKEN)
+        .current_dir(dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn the detached dry run");
+    child.stdin.take().expect("stdin").write_all(hat_stdin.as_bytes()).expect("write stdin");
+    let dry = child.wait_with_output().expect("dry run output");
+    assert!(dry.status.success(), "detached dry run failed: {}", String::from_utf8_lossy(&dry.stderr));
+    let dry_val: Value = serde_json::from_slice(&dry.stdout).expect("dry run JSON");
+    assert_eq!(dry_val["dry_run"], true, "{dry_val}");
+    assert_eq!(dry_val["seat"], "hat-facts-gaps", "{dry_val}");
+    assert!(!inbox_dir(dir.path(), TOKEN).exists(), "a dry run writes no marker");
+
+    // Round trip, step 2: the markers a real detached run leaves, one done and one not.
+    for (job_id, seat, status) in [("job-200", "hat-facts-gaps", "done"), ("job-201", "hat-risks", "blocked")] {
+        let mailbox = job_mailbox(dir.path(), job_id);
+        let report = mailbox.join("report-1.md");
+        std::fs::write(&report, "# Round 1\n").expect("write report");
+        let mut result = result_envelope(status, &format!("{seat} answered"), "read plan.md");
+        result["report_path"] = json!(report.to_string_lossy());
+        write_result(&mailbox, 1, &result);
+        let marker_path = write_marker(dir.path(), TOKEN, job_id, &mailbox, None);
+        let mut marker: Value = serde_json::from_str(&std::fs::read_to_string(&marker_path).unwrap()).unwrap();
+        marker["seat"] = json!(seat);
+        std::fs::write(&marker_path, marker.to_string()).expect("rewrite marker with seat");
+    }
+
+    let drained = run_harness(
+        &harness,
+        vec![session_start(dir.path(), TOKEN, "resume"), turn_starts(dir.path(), TOKEN), await_injections(2)],
+    );
+    assert_eq!(drained.messages.len(), 2, "one injection per job, got {:?} (stderr={})", drained.messages, drained.stderr.trim());
+    for (job_id, seat, status) in [("job-200", "hat-facts-gaps", "done"), ("job-201", "hat-risks", "blocked")] {
+        let hits: Vec<Vec<String>> = drained
+            .messages
+            .iter()
+            .map(|m| fenced_rows(&m.text))
+            .filter(|rows| rows.contains(&format!("job_id: {job_id}")))
+            .collect();
+        assert_eq!(hits.len(), 1, "{job_id}: exactly one injection, got {hits:?}");
+        let rows = &hits[0];
+        assert!(rows.contains(&format!("seat: {seat}")), "{job_id}: seat row missing: {rows:?}");
+        assert!(rows.contains(&format!("status: {status}")), "{job_id}: status row missing: {rows:?}");
+        let report = dir.path().join(".bee").join("mailbox").join(job_id).join("report-1.md");
+        assert!(rows.contains(&format!("report_path: {}", report.display())), "{job_id}: report_path row missing: {rows:?}");
     }
 }
 

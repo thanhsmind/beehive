@@ -223,6 +223,15 @@ cold-pickup cell review stays with the leader, and the `review` role keeps its
 other consumers (bee-reviewing's specialists, exploring's fresh-eyes) plus its
 `null` fallback to generation. No constant changed — `SEAT_ROLES` and the
 resolution path are untouched; what moved is which skill asks for which kind.
+A `hat-*` advisor prompt carries a seat block on every runtime: the seat name
+and a pointer to its row in `gates-and-delegation.md` "Hat wave", never a
+copy of the instrument or the configured description; a non-hat advisor
+prompt is byte-identical (pi-stage-dispatch D5). `bee dispatch prepare` and
+`bee state advisor-ref record|show` serve from main's store when run inside a
+granted feature worktree, where every other verb still refuses; a non-cell
+dispatch with no `--feature` resolves its feature from the bound lane, then
+the granted worktree it runs in, then main's default `state.json` feature
+(pi-stage-dispatch D6/D7).
 
 **B16 — `team.pi` is a herding-only role table with a settled value set**
 (pi-support D5/D6). The pi runtime resolves roles from the same one config

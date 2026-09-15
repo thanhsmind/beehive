@@ -70,7 +70,7 @@
 //   2. PreToolUse          -> tool_execution_start (session_id, tool_name, tool_use_id, cwd)
 //   3. PostToolUse         -> tool_result when !isError (session_id, tool_name, tool_use_id, cwd)
 //   4. PostToolUseFailure  -> tool_result when isError (session_id, tool_name, tool_use_id, cwd)
-//   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84.x has no interactive permission prompt event
+//   5. PermissionRequest   -> NAMED EXCLUSION: Pi 0.84–0.85 has no interactive permission prompt event
 //   6. Notification        -> ui_prompt_start (session_id, cwd; notification_type: agent_needs_input)
 //   7. Stop                -> agent_settled (session_id, cwd)
 //   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
@@ -744,6 +744,7 @@ function renderResultInjection(
     if (rendered.length > 0) rows.push(`${key}: ${rendered}`)
   }
   push("job_id", marker.job_id)
+  push("seat", marker.seat)
   push("cell_id", marker.cell_id)
   push("status", result.status)
   push("summary", result.summary)

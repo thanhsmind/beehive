@@ -1724,3 +1724,83 @@ fn a_malformed_settings_file_blocks_the_hooks_merge_without_vendoring_anything()
     // slipped a file in before the refusal.
     assert!(!vendored(&fx).exists());
 }
+
+/// D1 (pi-stage-dispatch psd-4):
+/// A source with claude, codex, and pi blocks renders codex and pi text into the
+/// agents root, only claude text into the claude root, and no pi text into the
+/// opencode root. Marker-free files stay byte-identical everywhere.
+#[test]
+fn skills_with_claude_codex_and_pi_blocks_render_per_d1_into_managed_roots() {
+    let fx = fixture();
+    let src = fx.root.join("skills").join("bee-test");
+    write(
+        &src.join("SKILL.md"),
+        "preamble\n<!-- bee:only claude -->\nclaude block text\n<!-- bee:end -->\n<!-- bee:only codex -->\ncodex block text\n<!-- bee:end -->\n<!-- bee:only pi -->\npi block text\n<!-- bee:end -->\npostscript\n",
+    );
+    write(
+        &src.join("references").join("plain.md"),
+        "marker-free plain text across all targets\n",
+    );
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+
+    // 1. .agents/skills (repo-agents): keeps codex and pi blocks, strips claude
+    let agents_body = std::fs::read_to_string(
+        fx.repo.join(".agents").join("skills").join("bee-test").join("SKILL.md"),
+    )
+    .unwrap();
+    assert!(agents_body.contains("codex block text"), "agents root must keep codex block");
+    assert!(agents_body.contains("pi block text"), "agents root must keep pi block");
+    assert!(!agents_body.contains("claude block text"), "agents root must strip claude block");
+    assert!(!agents_body.contains("bee:only"), "markers must be stripped");
+
+    // 2. .claude/skills (repo-claude): keeps claude, strips codex and pi
+    let claude_body = std::fs::read_to_string(
+        fx.repo.join(".claude").join("skills").join("bee-test").join("SKILL.md"),
+    )
+    .unwrap();
+    assert!(claude_body.contains("claude block text"), "claude root must keep claude block");
+    assert!(!claude_body.contains("codex block text"), "claude root must strip codex block");
+    assert!(!claude_body.contains("pi block text"), "claude root must strip pi block");
+    assert!(!claude_body.contains("bee:only"), "markers must be stripped");
+
+    // 3. .opencode/skills (repo-opencode): strips claude, codex, and pi
+    let opencode_body = std::fs::read_to_string(
+        fx.repo.join(".opencode").join("skills").join("bee-test").join("SKILL.md"),
+    )
+    .unwrap();
+    assert!(!opencode_body.contains("claude block text"), "opencode root must strip claude block");
+    assert!(!opencode_body.contains("codex block text"), "opencode root must strip codex block");
+    assert!(!opencode_body.contains("pi block text"), "opencode root must strip pi block");
+    assert!(!opencode_body.contains("bee:only"), "markers must be stripped");
+
+    // 4. Marker-free file is byte-identical in all three managed roots
+    let src_plain = std::fs::read(src.join("references").join("plain.md")).unwrap();
+    let agents_plain = std::fs::read(
+        fx.repo.join(".agents").join("skills").join("bee-test").join("references").join("plain.md"),
+    )
+    .unwrap();
+    let claude_plain = std::fs::read(
+        fx.repo.join(".claude").join("skills").join("bee-test").join("references").join("plain.md"),
+    )
+    .unwrap();
+    let opencode_plain = std::fs::read(
+        fx.repo.join(".opencode").join("skills").join("bee-test").join("references").join("plain.md"),
+    )
+    .unwrap();
+    assert_eq!(agents_plain, src_plain, "marker-free file must be byte-identical in agents root");
+    assert_eq!(claude_plain, src_plain, "marker-free file must be byte-identical in claude root");
+    assert_eq!(opencode_plain, src_plain, "marker-free file must be byte-identical in opencode root");
+
+    // 5. Sidecar schema and target_runtime
+    let agents_sidecar: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            fx.repo.join(".agents").join("skills").join(super::templates::RENDER_SIDECAR),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(agents_sidecar["schema"], "bee-render/2");
+    assert_eq!(agents_sidecar["target_runtime"], "codex");
+}

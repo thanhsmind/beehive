@@ -61,6 +61,10 @@ what the locked decisions promised). Synthesize only after every
 reviewer returns. A return that breaks the finding schema or cites a
 path that does not resolve gets ONE re-dispatch with the failure named;
 a second failure is listed as an uncovered lens.
+<!-- bee:only pi -->
+On Pi: a reviewer's herding result is a one-line summary. Read each
+reviewer's file at `report_path` before synthesis — the findings are there.
+<!-- bee:end -->
 
 Before severity, the lead filter: check each finding against the
 context the reviewers were denied — locked decisions, earlier rejects,

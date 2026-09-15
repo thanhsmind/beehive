@@ -1051,6 +1051,110 @@ use std::time::Instant;
         );
     }
 
+    /// pi-stage-dispatch D5: a `hat-*` advisor prompt names its seat and the
+    /// Hat wave home on every runtime; the configured description is never
+    /// copied; a non-hat advisor prompt carries no seat block at all.
+    #[test]
+    fn a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","hat-risks":{"model":"opus","description":"UNIQUE-DESCRIPTION-TEXT"}}}}"#,
+        );
+        let body = |role: Option<&str>| -> String {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "advisor", role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            let prompt = v["payload"]["prompt"].as_str().unwrap_or_default().to_string();
+            // Drop the `[bee-tier: …]` marker line: it names the slot, not the body.
+            prompt.split_once('\n').map(|(_, rest)| rest.to_string()).unwrap_or_default()
+        };
+        let plain = body(None);
+        let hat = body(Some("hat-risks"));
+        assert!(!plain.contains("Seat:"), "{plain}");
+        let block = "\n\nSeat: hat-risks. Your perspective and instrument are the row for this role in the bee-hive skill, references/gates-and-delegation.md, section \"Hat wave\". Read that row first, and answer from that seat only.";
+        assert_eq!(hat.replacen(block, "", 1), plain, "the seat block is the only difference: {hat}");
+        assert!(!hat.contains("UNIQUE-DESCRIPTION-TEXT"), "{hat}");
+    }
+
+    /// pi-stage-dispatch D3: on pi a named role rides the herding command as
+    /// `--seat`, and a hat seat caps the ceiling at the 600-second wave
+    /// budget (a lower configured value wins). Claude herding gains neither.
+    #[test]
+    fn a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling() {
+        let command = |runtime: &str, ceiling: &str, kind: &str, role: Option<&str>| -> String {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(
+                &tmp,
+                &format!(
+                    r#"{{{ceiling}"models":{{"{runtime}":{{"generation":{{"kind":"herding","agent":"g"}},"extraction":{{"kind":"herding","agent":"x"}},"advisor":{{"kind":"herding","agent":"a"}},"hat-risks":{{"kind":"herding","agent":"h"}}}}}}}}"#
+                ),
+            );
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, kind, role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {v}")).to_string()
+        };
+        let long = r#""herding":{"ceiling_seconds":1800},"#;
+        let short = r#""herding":{"ceiling_seconds":300},"#;
+
+        let c = command("pi", long, "advisor", Some("hat-risks"));
+        assert!(c.contains(" --seat \"hat-risks\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(command("pi", short, "advisor", Some("hat-risks")).contains("--ceiling 300"));
+        assert!(command("pi", "", "advisor", Some("hat-risks")).contains("--ceiling 600"));
+
+        // A non-hat role on pi names its seat but keeps the configured ceiling.
+        let c = command("pi", long, "gather", Some("extraction"));
+        assert!(c.contains(" --seat \"extraction\"") && c.contains("--ceiling 1800"), "{c}");
+        // No role named: no seat.
+        assert!(!command("pi", long, "advisor", None).contains("--seat"));
+
+        // Claude herding: neither the seat nor the cap.
+        let c = command("claude", long, "advisor", Some("hat-risks"));
+        assert!(!c.contains("--seat") && c.contains("--ceiling 1800"), "{c}");
+        assert!(!command("claude", "", "advisor", Some("hat-risks")).contains("--ceiling"));
+    }
+
+    /// pi-stage-dispatch D3/D5 (psd-9): a hat seat with no team entry falls
+    /// through to the advisor slot for its model, yet keeps its own seat name
+    /// on `--seat`, the wave ceiling, and the prompt seat block.
+    #[test]
+    fn an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through() {
+        let envelope = |config: &str, runtime: &str| -> Value {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, "advisor", Some("hat-risks"), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v
+        };
+        let seat_block = "Seat: hat-risks.";
+
+        let pi = envelope(
+            r#"{"herding":{"ceiling_seconds":1800},"models":{"pi":{"generation":{"kind":"herding","agent":"g"},"advisor":{"kind":"herding","agent":"a"}}}}"#,
+            "pi",
+        );
+        let c = pi["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {pi}"));
+        assert!(c.contains(" --seat \"hat-risks\"") && !c.contains("--seat \"advisor\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(c.contains("--agent \"a\""), "model stays on the advisor slot: {c}");
+        assert!(pi["payload"]["stdin"].as_str().unwrap_or_default().contains(seat_block), "{pi}");
+
+        let claude = envelope(r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#, "claude");
+        assert!(claude["payload"]["prompt"].as_str().unwrap_or_default().contains(seat_block), "{claude}");
+        assert!(!claude["payload"].to_string().contains("--seat"), "{claude}");
+    }
+
     /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
     /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
     /// — `--purpose` is that way. Given, it renders; omitted, today's exact
@@ -2538,6 +2642,89 @@ use std::time::Instant;
         )
         .unwrap();
         (main, granted)
+    }
+
+    // ── psd-1 (D6/D7): the dispatch door and advisor-ref served from a
+    //    granted worktree against main's store ─────────────────────────────
+
+    fn psd1_store_root(cwd: &Path) -> PathBuf {
+        match resolve_root_serving_granted(cwd).0 {
+            Roots::Ordinary(r) => dunce::canonicalize(&r).unwrap(),
+            _ => panic!("expected a served root for {}", cwd.display()),
+        }
+    }
+
+    #[test]
+    fn dispatch_prepare_from_a_granted_worktree_serves_mains_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        let root = psd1_store_root(&granted);
+        assert_eq!(root, psd1_store_root(&main));
+        let build = |r: &Path| match prepare_dispatch_wire(
+            r, "claude", "gather", None, None, None, false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap()
+        {
+            // dispatch_id is a fresh uuid per call; everything else must match.
+            Prepared::Value(Value::Object(mut v)) => {
+                v.remove("dispatch_id");
+                v
+            }
+            Prepared::Value(other) => panic!("expected an envelope: {other}"),
+            Prepared::Thrown(m) => panic!("{m}"),
+        };
+        assert_eq!(build(&root), build(&dunce::canonicalize(&main).unwrap()));
+    }
+
+    #[test]
+    fn non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"advisor":{"kind":"herding"}}}}"#,
+        )
+        .unwrap();
+        w(&main, ".bee/state.json", r#"{"feature":"other-feat"}"#);
+        let (roots, here) = resolve_root_serving_granted(&granted);
+        let Roots::Ordinary(root) = roots else { panic!("expected a served root") };
+        let feature = granted_worktree_feature(&root, "advisor", None, here.as_deref());
+        assert_eq!(feature.as_deref(), Some("demo"));
+        // Cell dispatch resolution is unchanged: no worktree default.
+        assert_eq!(granted_worktree_feature(&root, "cell", None, here.as_deref()), None);
+        // From main the old fallback (state.json's feature) still applies.
+        assert_eq!(granted_worktree_feature(&root, "advisor", None, None), None);
+
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "advisor", None, None, None, false, None, None, false, None, None,
+            feature.as_deref(), None, None, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let command = v["payload"]["command"].as_str().unwrap().to_string();
+        let norm = |p: &str| dunce::canonicalize(p).unwrap().to_string_lossy().into_owned();
+        let cwd = command.split("--cwd \"").nth(1).and_then(|s| s.split('"').next()).expect(&command);
+        assert_eq!(norm(cwd), norm(granted.to_str().unwrap()), "{command}");
+    }
+
+    #[test]
+    fn advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"swarming","feature":"demo"}"#);
+        let show = |r: &Path| match crate::verbs::state_group::show_body(r, &Flags(Vec::new())) {
+            Ok(Out::Emit(_, text, _)) => text,
+            Ok(Out::Thrown(m)) => format!("thrown: {m}"),
+            Err(_) => panic!("unexpected Exotic result"),
+        };
+        assert_eq!(show(&psd1_store_root(&granted)), show(&psd1_store_root(&main)));
+        // Every other verb keeps the narrow door, which still refuses here.
+        assert!(matches!(
+            resolve_store_root(&granted),
+            Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { .. })
+        ));
     }
 
     /// must-have 1 + 2: when `find_granted_worktree_for_feature` resolves a
