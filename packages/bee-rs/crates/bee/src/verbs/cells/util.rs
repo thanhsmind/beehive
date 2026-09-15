@@ -101,6 +101,10 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "archive" => run_archive(flags, use_json, t0),
         "unarchive" => run_unarchive(flags, use_json, t0),
         "claim-next" => run_claim_next(flags, use_json, t0),
+        // pi-relocation-delivery prd-1 (decision 52d1e3aa) — rebind active claims
+        // across session relocation. Served here and DECLARED in
+        // generated/registry_payload.json in the same change.
+        "rebind-session" => run_rebind_session(flags, use_json, t0),
         // D9 (store `4eaf1b71`) — the one-time role backfill. Served here
         // and DECLARED in generated/registry_payload.json in the same
         // change: mrs-12 proved that a verb the dispatcher serves and the
