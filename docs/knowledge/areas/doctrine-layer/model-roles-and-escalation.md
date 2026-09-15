@@ -249,6 +249,9 @@ worker wrote a report. The Pi-only async half is opt-in per dispatch
 (`--inbox-session <token>`) and carries named limits: at-least-once
 delivery with `job_id` as the dedupe key, a drain that needs a live Pi
 session, and header-only injection (the report body is never injected).
+pi-stage-dispatch kept this rule (D9): its seat name, hat ceiling, detached
+runner, and worktree dispatch door all ride herding, and the supported host is
+`@earendil-works/pi-coding-agent` 0.84–0.85.
 See `docs/config-reference.md`, "Pi — team.pi is herding-only".
 
 **B17 — A gather asks for the read job** (gather-reads-the-read-slot D1/D3,
