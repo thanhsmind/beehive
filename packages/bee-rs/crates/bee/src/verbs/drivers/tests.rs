@@ -2540,6 +2540,89 @@ use std::time::Instant;
         (main, granted)
     }
 
+    // ── psd-1 (D6/D7): the dispatch door and advisor-ref served from a
+    //    granted worktree against main's store ─────────────────────────────
+
+    fn psd1_store_root(cwd: &Path) -> PathBuf {
+        match resolve_root_serving_granted(cwd).0 {
+            Roots::Ordinary(r) => dunce::canonicalize(&r).unwrap(),
+            _ => panic!("expected a served root for {}", cwd.display()),
+        }
+    }
+
+    #[test]
+    fn dispatch_prepare_from_a_granted_worktree_serves_mains_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        let root = psd1_store_root(&granted);
+        assert_eq!(root, psd1_store_root(&main));
+        let build = |r: &Path| match prepare_dispatch_wire(
+            r, "claude", "gather", None, None, None, false, None, None, false, None, None, None, None, None, None,
+        )
+        .unwrap()
+        {
+            // dispatch_id is a fresh uuid per call; everything else must match.
+            Prepared::Value(Value::Object(mut v)) => {
+                v.remove("dispatch_id");
+                v
+            }
+            Prepared::Value(other) => panic!("expected an envelope: {other}"),
+            Prepared::Thrown(m) => panic!("{m}"),
+        };
+        assert_eq!(build(&root), build(&dunce::canonicalize(&main).unwrap()));
+    }
+
+    #[test]
+    fn non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"advisor":{"kind":"herding"}}}}"#,
+        )
+        .unwrap();
+        w(&main, ".bee/state.json", r#"{"feature":"other-feat"}"#);
+        let (roots, here) = resolve_root_serving_granted(&granted);
+        let Roots::Ordinary(root) = roots else { panic!("expected a served root") };
+        let feature = granted_worktree_feature(&root, "advisor", None, here.as_deref());
+        assert_eq!(feature.as_deref(), Some("demo"));
+        // Cell dispatch resolution is unchanged: no worktree default.
+        assert_eq!(granted_worktree_feature(&root, "cell", None, here.as_deref()), None);
+        // From main the old fallback (state.json's feature) still applies.
+        assert_eq!(granted_worktree_feature(&root, "advisor", None, None), None);
+
+        let Prepared::Value(v) = prepare_dispatch_wire(
+            &root, "claude", "advisor", None, None, None, false, None, None, false, None, None,
+            feature.as_deref(), None, None, None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let command = v["payload"]["command"].as_str().unwrap().to_string();
+        let norm = |p: &str| dunce::canonicalize(p).unwrap().to_string_lossy().into_owned();
+        let cwd = command.split("--cwd \"").nth(1).and_then(|s| s.split('"').next()).expect(&command);
+        assert_eq!(norm(cwd), norm(granted.to_str().unwrap()), "{command}");
+    }
+
+    #[test]
+    fn advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"swarming","feature":"demo"}"#);
+        let show = |r: &Path| match crate::verbs::state_group::show_body(r, &Flags(Vec::new())) {
+            Ok(Out::Emit(_, text, _)) => text,
+            Ok(Out::Thrown(m)) => format!("thrown: {m}"),
+            Err(_) => panic!("unexpected Exotic result"),
+        };
+        assert_eq!(show(&psd1_store_root(&granted)), show(&psd1_store_root(&main)));
+        // Every other verb keeps the narrow door, which still refuses here.
+        assert!(matches!(
+            resolve_store_root(&granted),
+            Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { .. })
+        ));
+    }
+
     /// must-have 1 + 2: when `find_granted_worktree_for_feature` resolves a
     /// granted worktree for the cell's feature, the envelope names both
     /// roots and the rendered prompt tells the worker where to work and

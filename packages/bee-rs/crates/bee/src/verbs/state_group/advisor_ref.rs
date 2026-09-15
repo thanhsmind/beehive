@@ -232,7 +232,8 @@ pub(crate) fn run_advisor_ref_record(flags: Flags, use_json: bool, t0: Instant) 
     if !bool_flag_ok(&flags, "no-lane") {
         return None;
     }
-    let ctx = match go("state advisor-ref record", use_json, t0)? {
+    // pi-stage-dispatch D6: served from a granted worktree against main's store.
+    let ctx = match crate::verbs::drivers::ctx_serving_granted("state advisor-ref record", use_json, t0)? {
         Ok(c) => c,
         Err(code) => return Some(code),
     };
@@ -341,7 +342,7 @@ pub(crate) fn run_advisor_ref_show(flags: Flags, use_json: bool, t0: Instant) ->
     if !bool_flag_ok(&flags, "no-lane") {
         return None;
     }
-    let ctx = match go("state advisor-ref show", use_json, t0)? {
+    let ctx = match crate::verbs::drivers::ctx_serving_granted("state advisor-ref show", use_json, t0)? {
         Ok(c) => c,
         Err(code) => return Some(code),
     };
@@ -351,7 +352,7 @@ pub(crate) fn run_advisor_ref_show(flags: Flags, use_json: bool, t0: Instant) ->
 
 /// The root-explicit body of `run_advisor_ref_show` — see `record_body`'s doc
 /// for why this is split out from the `go()`-wrapped entry point.
-fn show_body(root: &Path, flags: &Flags) -> R2<Out> {
+pub(crate) fn show_body(root: &Path, flags: &Flags) -> R2<Out> {
     let (lane_feature, no_lane) = match mutation_lane_selector(flags, "advisor-ref show") {
         Ok(v) => v,
         Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),

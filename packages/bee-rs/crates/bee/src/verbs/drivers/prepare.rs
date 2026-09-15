@@ -26,6 +26,67 @@ use std::time::Instant;
 
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
+/// pi-stage-dispatch D6: `dispatch prepare` and `state advisor-ref
+/// record|show` are served inside a GRANTED feature worktree against main's
+/// store, where their records live. Every other door keeps the narrow
+/// refusal. The second value is that worktree's root, when the command runs
+/// in one.
+pub(crate) fn resolve_root_serving_granted(cwd: &Path) -> (Roots, Option<PathBuf>) {
+    match resolve_store_root(cwd) {
+        Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { main_root }) => {
+            let here = match crate::roots::resolve_store_root_worktree(cwd) {
+                crate::roots::RootsWt::Go(r) => r.linked.map(|l| l.worktree_root),
+                _ => None,
+            };
+            (Roots::Ordinary(main_root), here)
+        }
+        other => (other, None),
+    }
+}
+
+/// `prelude` over `resolve_root_serving_granted` — the Ctx for the doors D6
+/// serves from a granted worktree.
+pub(crate) fn ctx_serving_granted(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+) -> Option<Result<crate::verbs::reservations::Ctx, ExitCode>> {
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_root_serving_granted(&cwd).0 {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => return Some(Err(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))),
+        Roots::None => return Some(Err(emit_no_root_error(&cwd, cmd, use_json, t0))),
+    };
+    let drift = crate::registry::check_manifest_drift(&root);
+    Some(Ok(crate::verbs::reservations::Ctx {
+        root,
+        cmd,
+        use_json,
+        t0,
+        drift_changed: drift.manifest_changed,
+        drift_hint: drift.hint,
+    }))
+}
+
+/// pi-stage-dispatch D7: a non-cell dispatch with no `--feature` and no bound
+/// lane takes the feature of the granted worktree it runs in, so it runs
+/// there. Main's `state.json` feature stays the last fallback, in the wire.
+pub(crate) fn granted_worktree_feature(
+    root: &Path,
+    kind: &str,
+    session_id: Option<&str>,
+    worktree_root: Option<&Path>,
+) -> Option<String> {
+    let worktree_root = worktree_root.filter(|_| kind != "cell")?;
+    let bound = crate::verbs::state_group::session_binding(session_id, root)
+        .ok()
+        .and_then(|(_sid, bound)| bound);
+    if bound.is_some() {
+        return None;
+    }
+    crate::verbs::status_full::read_worktree_feature(&worktree_root.to_string_lossy())
+}
+
 /// pi-support D5 (store: the pi belt's dispatch door): `pi` joins codex and
 /// claude as a legal `--runtime`, resolving `team.pi` in the ONE config home
 /// every other runtime reads. It is a HERDING-ONLY door — see
@@ -3343,7 +3404,14 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     //    drift-cache write would otherwise swallow the Node re-run's
     //    manifest_changed line. ─────────────────────────────────────────────
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let (roots, here) = resolve_root_serving_granted(&cwd);
+    let root = match roots {
+        // --claim is a cell-execution move on the shared control plane; it
+        // keeps the granted-worktree refusal.
+        Roots::Ordinary(r) if claim && here.is_some() => {
+            let why = crate::roots::Unsupported::GrantedWorktree { main_root: r };
+            return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
+        }
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
@@ -3352,6 +3420,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             return Some(emit_no_root_error(&cwd, "dispatch prepare", use_json, t0));
         }
     };
+    let feature_flag = feature_flag.or_else(|| {
+        granted_worktree_feature(&root, &kind, session_flag.as_deref(), here.as_deref())
+    });
     let prompt_name = if kind == "cell" { "worker-cell" } else { kind.as_str() };
     // Skew used to `return None` — delegate to the Node renderer (C4). That
     // runtime was deleted at R6, so `None` reaches the dispatcher's generic
@@ -3430,9 +3501,9 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         },
     };
 
-    let ctx = match prelude("dispatch prepare", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let ctx = match ctx_serving_granted("dispatch prepare", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
     };
     if let Some(message) = arg_error {
         return finish(&ctx, Ok(Out::Thrown(message)));
