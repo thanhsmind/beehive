@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"deploy-pane-authorization\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at fbb1395; capture what settled, then bee close --feature deploy-pane-authorization.",
   "created_at": "2026-09-15T02:50:30.537Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -167,12 +167,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-15T05:35:30.148Z",
-    "branch": "wt/deploy-pane-authorization",
-    "worktree_id": "beehive--wt--deploy-pane-authorization",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
