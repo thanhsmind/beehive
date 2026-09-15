@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-red-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 455e169; capture what settled, then bee close --feature release-red-fixes.",
   "created_at": "2026-09-15T06:45:56.633Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -187,12 +187,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-15T06:57:40.005Z",
-    "branch": "wt/release-red-fixes",
-    "worktree_id": "beehive--wt--release-red-fixes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
