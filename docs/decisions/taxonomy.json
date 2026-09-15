@@ -512,6 +512,7 @@
     "deploy-stage-execution",
     "lane",
     "deploy-issuer-session",
-    "deploy-pane-authorization"
+    "deploy-pane-authorization",
+    "release-clean-tree"
   ]
 }

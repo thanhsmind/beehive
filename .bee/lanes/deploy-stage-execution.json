@@ -13,8 +13,13 @@
   "summary": "Feature \"deploy-stage-execution\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"deploy-stage-execution\" — feature is closed.",
   "created_at": "2026-09-14T11:17:09.746Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "I check the tag on GitHub, the GitHub release, and main's version and commits. The checks do not depend on each other.",
+    "asked_at": "2026-09-15T06:16:33.548Z",
+    "session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
