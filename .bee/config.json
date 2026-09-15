@@ -137,6 +137,11 @@
         "agent": "agy-flash",
         "description": "doc edits and parity sweeps"
       },
+      "deploy": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "description": "publish an approved release from main, wait for CI, and verify release assets"
+      },
       "plan": {
         "model": "opus",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
