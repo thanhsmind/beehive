@@ -15,9 +15,9 @@
   "created_at": "2026-09-14T04:08:45.760Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-09-15T02:32:08.200Z",
-    "session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f"
+    "kind": "question",
+    "subject": "release 2.38.0: add a deploy stage to a Claude plan, or run the release from Pi",
+    "asked_at": "2026-09-15T14:30:40.952Z",
+    "session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7"
   }
 }

@@ -515,6 +515,8 @@
     "deploy-pane-authorization",
     "release-clean-tree",
     "release-red-fixes",
-    "touches-sweep"
+    "touches-sweep",
+    "deploy",
+    "plan"
   ]
 }
