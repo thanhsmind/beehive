@@ -152,9 +152,12 @@ elif [ -n "$ARG_VERSION" ]; then
 
   # The commit this script makes must carry the bump and the regen output and
   # NOTHING else, so any dirt at all refuses — named path by path.
-  DIRT="$(git status --porcelain)"
-  if [ -n "$DIRT" ]; then
-    printf '%s\n' "$DIRT" >&2
+  DIRT=()
+  while IFS= read -r -d '' entry || [ -n "$entry" ]; do
+    DIRT+=("$entry")
+  done < <("$ROOT/scripts/release-dirt.sh")
+  if [ ${#DIRT[@]} -gt 0 ]; then
+    printf '%s\n' "${DIRT[@]}" >&2
     fail "working tree is not clean (paths above) — the release commit must carry only the bump and the regen output; commit or stash first. Nothing was changed"
   fi
 
@@ -171,7 +174,22 @@ elif [ -n "$ARG_VERSION" ]; then
     cp "$BACKUP_DIR/codex-plugin.json" "$CODEX_JSON" 2>/dev/null || true
     # The tree was verified clean above, so every tracked change since then is
     # this script's own — undoing them restores exactly what we found.
-    git checkout -- . 2>/dev/null || true
+    local -a to_restore=()
+    while IFS= read -r -d '' entry; do
+      case "${entry:0:2}" in
+        R*|C*)
+          local src
+          IFS= read -r -d '' src
+          to_restore+=("$src")
+          ;;
+      esac
+      if [ "${entry:0:2}" != "??" ]; then
+        to_restore+=("${entry:3}")
+      fi
+    done < <("$ROOT/scripts/release-dirt.sh")
+    if [ ${#to_restore[@]} -gt 0 ]; then
+      git checkout -- "${to_restore[@]}" 2>/dev/null || true
+    fi
     rm -rf "$BACKUP_DIR"
     # Untracked leftovers (a brand-new file the regen chain rendered) are
     # NAMED, never deleted: a sibling worker's untracked file can appear in
@@ -227,7 +245,7 @@ elif [ -n "$ARG_VERSION" ]; then
       R*|C*) IFS= read -r -d '' src && CHANGED+=("$src") ;;
     esac
     CHANGED+=("${entry:3}")
-  done < <(git status --porcelain -z)
+  done < <("$ROOT/scripts/release-dirt.sh")
   [ ${#CHANGED[@]} -gt 0 ] \
     || fail "the bump and the regen chain changed no files — nothing to release"
 

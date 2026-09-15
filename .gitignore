@@ -11,6 +11,7 @@
 .bee/manifest-hash.json
 .bee/sessions/
 .bee/claims/
+.bee/authorizations/
 .bee/runtime/
 .bee/cache/
 .bee/intent/
