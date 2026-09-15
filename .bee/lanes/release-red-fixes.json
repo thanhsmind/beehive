@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-red-fixes",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-red-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 455e169; capture what settled, then bee close --feature release-red-fixes.",
+  "next_action": "bee close --feature release-red-fixes",
   "created_at": "2026-09-15T06:45:56.633Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -187,5 +187,14 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "release-red-fixes",
+    "date": "2026-09-15",
+    "at": "2026-09-15T06:58:23.997Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "bee close --feature release-red-fixes"
   }
 }
