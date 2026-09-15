@@ -86,6 +86,7 @@ must not change except where D5 applies to every runtime.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: This historical section records questions the live Pi runs answered (psd-8 evidence: advisor-ref record succeeded from the bound worktree leader; every leader bash call passed its own timeout) and ideas already filed in the backlog. -->
 ### Deferred To Planning
 
 - [ ] `advisor-ref record` refused in two Pi sessions ("no active feature to anchor the consult to", phase `idle` and `compounding-complete`). Reproduce from a Pi leader bound to a live lane first; fix only if it reproduces — otherwise record the failed reproduction.
@@ -100,3 +101,4 @@ must not change except where D5 applies to every runtime.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->
