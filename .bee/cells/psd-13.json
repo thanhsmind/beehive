@@ -1,0 +1,86 @@
+{
+  "id": "psd-13",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Document the detached runner and the nested worker column rule",
+  "action": "Per decision b2f1afca and the feature playbook's knowledge sync. In docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md, extend the paragraph that states the caller's pane is the main pane and is split exactly once: a caller that is itself a herding worker splits its own pane downward and stays in the worker column. Extend the section Pane lifecycle follows the result, not the clock: a run with an inbox session detaches a runner into its own process group and returns at once with outcome detached, so killing the launcher's process group (as Pi does on a bash timeout) no longer leaves the pane open. In docs/config-reference.md, update the Pi async-delivery note: the detached command returns at once, so a wait on it no longer blocks the leader. Extend existing text; add no new document.",
+  "verify": "rg -n 'process group' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'worker column' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'returns at once' docs/config-reference.md",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/plan.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/config-reference.md"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/config-reference.md"
+  ],
+  "deps": [
+    "psd-12"
+  ],
+  "decisions": [
+    "b2f1afca"
+  ],
+  "must_haves": {
+    "truths": [
+      "The knowledge doc states the nested worker column rule and the detached runner",
+      "The config reference says the Pi detached command returns at once"
+    ],
+    "prohibitions": [
+      "No new document"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-13",
+    "outcome": "Knowledge doc states nested worker column rule and detached runner; config-reference Pi note says the detached command returns at once",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/config-reference.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T11:51:08.965Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell, cell verify pointer check",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "rg -n 'process group' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'worker column' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'returns at once' docs/config-reference.md",
+    "claimed_at": "2026-09-15T11:49:16.472Z",
+    "mistakes": [
+      {
+        "wrong": "first commit wrapped worker column across two lines so the cell verify matched only old lines",
+        "better": "check the verify hits a new line number before commit"
+      },
+      {
+        "wrong": "first finish call gave a paraphrased proof command and was refused",
+        "better": "pass the approved verify command verbatim"
+      }
+    ],
+    "report": {
+      "outcome": "docs synced for psd-11 and psd-12",
+      "commit": "7f39b340",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/config-reference.md"
+      ],
+      "tests": "rg -n 'process group' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'worker column' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'returns at once' docs/config-reference.md — green:static — docs-only cell, cell verify pointer check",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "first commit wrapped worker column across two lines so the cell verify matched only old lines — check the verify hits a new line number before commit",
+        "first finish call gave a paraphrased proof command and was refused — pass the approved verify command verbatim"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

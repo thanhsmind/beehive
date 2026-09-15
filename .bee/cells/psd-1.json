@@ -1,0 +1,150 @@
+{
+  "id": "psd-1",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Serve dispatch prepare and the advisor record from inside a granted feature worktree",
+  "action": "Per D6 and D7. In run_dispatch_prepare, when resolve_store_root returns Unsupported::GrantedWorktree { main_root }, continue with main_root as the store root instead of emitting the refusal; keep the LinkInvalid and no-root arms unchanged. Do the same for bee state advisor-ref record and show: find where they reach emit_unsupported_root (rg -n emit_unsupported_root packages/bee-rs/crates/bee/src/verbs/state_group) and serve those two from main_root only. Every other verb keeps its refusal. For a non-cell dispatch with no --feature, resolve the feature in this order: the session's bound lane (today, prepare.rs session_binding), then the granted worktree the command runs in (new), then main's default .bee/state.json feature (today, unchanged). Write the tests first: prepare run from a granted worktree returns the same payload as the same call from main; a non-cell dispatch from that worktree with no --feature and no bound lane carries --cwd of that worktree even when main's state.json names another feature; advisor-ref show from the worktree returns the same result as from main; another state verb still refuses there.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: advisor_ref",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/roots.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/*"
+  ],
+  "deps": [],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "dispatch prepare run inside a granted worktree returns a payload instead of the granted-worktree refusal",
+      "state advisor-ref record and show work inside a granted worktree against main's store",
+      "A non-cell dispatch from a granted worktree with no --feature and no bound lane carries --cwd of that worktree"
+    ],
+    "prohibitions": [
+      "No other verb stops refusing inside a granted worktree",
+      "The fallback to main's default state.json feature stays for every runtime",
+      "Cell dispatch feature resolution is unchanged"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-1c",
+    "outcome": "dispatch prepare and advisor-ref record/show serve main's store from a granted worktree; non-cell dispatch there defaults to the worktree feature",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs"
+    ],
+    "deviations": [
+      "dispatch prepare --claim still refuses inside a granted worktree — claim writes holds and reservations on the shared control plane, which this cell did not audit — found a better route",
+      "the worktree feature is passed as the --feature default in run_dispatch_prepare, not threaded as a new prepare_dispatch_wire parameter — avoids editing 28 test call sites; order stays flag, bound lane, worktree, state.json — found a better route",
+      "show_body in advisor_ref.rs became pub(crate) so the drivers test can reuse the git worktree fixture — the fixture is private to drivers tests — hit an unforeseen obstacle",
+      "sync-ack: skill text for the pi-stage-dispatch slice lands in its planned docs cells (psd-5, psd-7); psd-1 files list no skills"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T09:33:39.211Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify over touched prepare.rs, advisor_ref.rs and their tests (422 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: advisor_ref",
+    "claimed_at": "2026-09-15T09:20:06.920Z",
+    "verified_at": null,
+    "escalation_reason": "agy-flash worker searched prepare.rs, roots.rs and state_group for 17 minutes with zero edits; the cell spans the widest code surface in the slice",
+    "sync_ack": "skill text for the pi-stage-dispatch slice lands in its planned docs cells (psd-5, psd-7); psd-1 files list no skills",
+    "mistakes": [
+      {
+        "wrong": "tests.rs dispatch_prepare_from_a_granted_worktree_serves_mains_payload compared whole payloads, but dispatch_id is a fresh uuid per prepare call",
+        "better": "strip per-call fields before comparing two prepare envelopes"
+      }
+    ],
+    "report": {
+      "outcome": "prepare.rs resolve_root_serving_granted + ctx_serving_granted serve run_dispatch_prepare and advisor_ref record/show from main_root; granted_worktree_feature adds the worktree feature after bound lane and before state.json for non-cell kinds; tests in drivers/tests.rs (dispatch_prepare_from_a_granted_worktree_serves_mains_payload, non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree, advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse)",
+      "commit": "48498f1f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: advisor_ref — green:unit — cell verify over touched prepare.rs, advisor_ref.rs and their tests (422 passed)",
+      "deviations": [
+        "dispatch prepare --claim still refuses inside a granted worktree — claim writes holds and reservations on the shared control plane, which this cell did not audit — found a better route",
+        "the worktree feature is passed as the --feature default in run_dispatch_prepare, not threaded as a new prepare_dispatch_wire parameter — avoids editing 28 test call sites; order stays flag, bound lane, worktree, state.json — found a better route",
+        "show_body in advisor_ref.rs became pub(crate) so the drivers test can reuse the git worktree fixture — the fixture is private to drivers tests — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "tests.rs dispatch_prepare_from_a_granted_worktree_serves_mains_payload compared whole payloads, but dispatch_id is a fresh uuid per prepare call — strip per-call fields before comparing two prepare envelopes"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "psd-1-truth-worktree-prepare",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- dispatch_prepare_from_a_granted_worktree: passed verbs::drivers::tests::dispatch_prepare_from_a_granted_worktree_serves_mains_payload; prepare.rs:3407-3420"
+          },
+          {
+            "id": "psd-1-truth-worktree-advisor-ref",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- advisor_ref_show_from_a_granted_worktree: passed verbs::drivers::tests::advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse; advisor_ref.rs:236,345"
+          },
+          {
+            "id": "psd-1-truth-worktree-non-cell-cwd",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- non_cell_dispatch_from_a_granted_worktree: passed verbs::drivers::tests::non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree; prepare.rs:72-87"
+          },
+          {
+            "id": "psd-1-prohibition-other-verbs-refuse",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:2620-2623 asserts resolve_store_root(&granted) matches Roots::Unsupported(GrantedWorktree); passed advisor_ref_show_from_a_granted_worktree_matches_main_and_other_verbs_still_refuse"
+          },
+          {
+            "id": "psd-1-prohibition-fallback-state-json",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:2591 asserts granted_worktree_feature(&root, \"advisor\", None, None) == None; passed non_cell_dispatch_from_a_granted_worktree_runs_in_that_worktree"
+          },
+          {
+            "id": "psd-1-prohibition-cell-resolution-unchanged",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:79 filters out cell kind; tests.rs:2589 asserts granted_worktree_feature(&root, \"cell\", None, here.as_deref()) == None"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T11:20:59.979Z"
+      }
+    ]
+  },
+  "escalate": true,
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "plan",
+      "decision": "8131e9cf-94d9-4d66-a41e-69fd0e1c6029",
+      "at": "2026-09-15T09:20:06.840Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}

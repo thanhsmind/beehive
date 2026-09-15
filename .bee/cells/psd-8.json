@@ -1,0 +1,99 @@
+{
+  "id": "psd-8",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Drive a real Pi hat wave end to end in a sandbox",
+  "action": "Per D2, D3, D4, D6, D7. Build and install the candidate binary into a fresh onboarded sandbox repo with a granted feature worktree and a plan.md. Open a real Pi 0.85.1 session in that worktree through a herdr pane. Have it run the three default hat dispatches exactly as the Pi skill text says, detached with $PI_SESSION_ID. Observe and write into .bee/verify/verify-app/features/pi-hat-wave.md (create it, and add its row to the features README): each dispatch prepare succeeded from the worktree; each hat ran in the worktree; each result was injected with its seat row, which proves the bash PI_SESSION_ID equals the drain token; the leader read each report_path; the wave finished inside 10 minutes; bee state advisor-ref record from that bound Pi leader succeeded or refused, with the exact output; and whether the Pi bash tool applied a default timeout. Include the Pi session log path so the evidence can be re-read.",
+  "verify": "rg -n 'seat: hat-facts-gaps' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'advisor-ref record' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'pi-hat-wave' .bee/verify/verify-app/features/README.md",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    ".bee/verify/verify-app/features/README.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md",
+    ".bee/verify/verify-app/features/README.md"
+  ],
+  "deps": [
+    "psd-5",
+    "psd-6"
+  ],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "A real Pi session completes a three-seat hat wave inside 10 minutes with seat-named results",
+      "Every dispatch prepare and the advisor record in that run succeed from the feature worktree",
+      "The feature file records how to drive the wave and the session log path"
+    ],
+    "prohibitions": [
+      "No hand-edited payload in the live run"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-8",
+    "outcome": "Live Pi hat wave mapped in pi-hat-wave.md with its README row",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md",
+      ".bee/verify/verify-app/features/README.md"
+    ],
+    "deviations": [
+      "the orchestrator started the live Pi leader through the herding transport in the sandbox worktree instead of this worker typing into a pane — the isolation guard refused pane prompts from this subagent, decision 74593eae — hit an unforeseen obstacle",
+      "the Pi shell tool default timeout is recorded as not observed — all 14 shell calls in the Pi log passed an explicit timeout — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T11:20:56.743Z",
+    "behavior_change": false,
+    "verification_evidence": "a real Pi 0.85.1 leader ran the wave; evidence re-read from /tmp/bee-verify/run/20260915-180023-56873/evidence/wave-log.md and the Pi session log 01a0a4be-5ed3-77fc-9a7f-928b7df1850a.jsonl with three seat-named bee-result blocks, plus mailbox job.json cwd and report-1.md for jobs 91086, 91088, 91089",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "rg -n 'seat: hat-facts-gaps' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'advisor-ref record' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'pi-hat-wave' .bee/verify/verify-app/features/README.md",
+    "claimed_at": "2026-09-15T10:58:29.569Z",
+    "mistakes": [
+      {
+        "wrong": "this cell ran as a native Claude subagent locked to the pi-stage-dispatch worktree, where herdr agent prompt into the tmp sandbox is refused",
+        "better": "dispatch a live Pi wave from a session or herding pane rooted in the sandbox"
+      },
+      {
+        "wrong": "the first pi-hat-wave.md draft said to vendor the binary before worktree new",
+        "better": "check that the worktree bin is a symlink before writing a precondition"
+      }
+    ],
+    "report": {
+      "outcome": "Live Pi hat wave mapped in pi-hat-wave.md with its README row",
+      "commit": "d571016786165438d867f2e49bdfca19ec529479",
+      "files": [
+        ".bee/verify/verify-app/features/pi-hat-wave.md",
+        ".bee/verify/verify-app/features/README.md"
+      ],
+      "tests": "rg -n 'seat: hat-facts-gaps' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'advisor-ref record' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'pi-hat-wave' .bee/verify/verify-app/features/README.md — green:live — a real Pi 0.85.1 leader ran the wave; evidence re-read from /tmp/bee-verify/run/20260915-180023-56873/evidence/wave-log.md and the Pi session log 01a0a4be-5ed3-77fc-9a7f-928b7df1850a.jsonl with three seat-named bee-result blocks, plus mailbox job.json cwd and report-1.md for jobs 91086, 91088, 91089",
+      "deviations": [
+        "the orchestrator started the live Pi leader through the herding transport in the sandbox worktree instead of this worker typing into a pane — the isolation guard refused pane prompts from this subagent, decision 74593eae — hit an unforeseen obstacle",
+        "the Pi shell tool default timeout is recorded as not observed — all 14 shell calls in the Pi log passed an explicit timeout — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "this cell ran as a native Claude subagent locked to the pi-stage-dispatch worktree, where herdr agent prompt into the tmp sandbox is refused — dispatch a live Pi wave from a session or herding pane rooted in the sandbox",
+        "the first pi-hat-wave.md draft said to vendor the binary before worktree new — check that the worktree bin is a symlink before writing a precondition"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role_reroutes": [
+    {
+      "from": "test",
+      "to": "plan",
+      "decision": "8636f888-56ab-400d-8dc1-fe65ee31bda9",
+      "at": "2026-09-15T10:58:29.487Z",
+      "plan_sha256": "5bdd627ded707cf9021a08c95cd0d4c999eae5fee7e13c75184a2f84db212e44"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "id": "psd-14",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Re-run the live Pi hat wave and prove the panes close inside the worker column",
+  "action": "Per decisions b2f1afca and 74593eae. The orchestrator builds the candidate binary with psd-11 and psd-12, installs it into the existing sandbox at /tmp/bee-verify/run/20260915-180023-56873, and starts a real Pi leader in the sandbox worktree through the herding transport, as in the first live run. The leader runs the three default hat seats exactly as the skill text says. Read the new evidence the orchestrator hands over (the leader's wave log, the herding run envelopes, the job records, and a pane layout capture taken while the hats ran and after they finished), and update .bee/verify/verify-app/features/pi-hat-wave.md: each hat job reports closed_pane true; no hat pane is left open after the wave; each hat pane was split from a worker pane in the worker column, never from the human's main pane; a detached launcher returned outcome detached at once. Replace the first run's two open-pane gotchas with the observed result, and keep the evidence paths.",
+  "verify": "rg -n 'closed_pane' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'worker column' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'outcome detached' .bee/verify/verify-app/features/pi-hat-wave.md",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/plan.md",
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-hat-wave.md"
+  ],
+  "deps": [
+    "psd-12"
+  ],
+  "decisions": [
+    "b2f1afca",
+    "74593eae"
+  ],
+  "must_haves": {
+    "truths": [
+      "A real Pi hat wave leaves no hat pane open",
+      "Every hat pane sits in the worker column, not beside the main pane",
+      "The feature file records the evidence paths"
+    ],
+    "prohibitions": [
+      "No hand-edited payload in the live run"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-14",
+    "outcome": "Recorded the second live Pi hat wave in .bee/verify/verify-app/features/pi-hat-wave.md: detached launches, hat panes in the worker column, all panes closed, evidence paths kept",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "deviations": [
+      "Proved hat pane close from the layout captures and result-1.json mtimes, not from a hat envelope closed_pane field; closed_pane true is shown only for the leader envelope — a detached runner sends its stdout to null, so no hat envelope exists — the plan was wrong about a fact",
+      "Replaced one gotcha (the & wait launcher timeout), not two — the feature file held only one gotcha tied to open panes — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T12:01:08.545Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only feature file; cell verify pointer check, facts cross-checked against evidence2 layout captures (cmp 00-before/99-after identical), job.json, result-1.json and dispatch.jsonl",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "rg -n 'closed_pane' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'worker column' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'outcome detached' .bee/verify/verify-app/features/pi-hat-wave.md",
+    "claimed_at": "2026-09-15T11:58:12.830Z",
+    "mistakes": [
+      {
+        "wrong": "First commit put the cell: psd-14 trailer above the Co-Authored-By lines, not on the last line",
+        "better": "write the trailer last on the first try; I amended my own unpushed commit"
+      },
+      {
+        "wrong": "First cells finish proof line abbreviated the verify command with ... and was refused",
+        "better": "hand the cell verify command verbatim"
+      }
+    ],
+    "report": {
+      "outcome": "Recorded the second live Pi hat wave in .bee/verify/verify-app/features/pi-hat-wave.md: new driving steps (detached launch, worker-column pane check), a second-run Evidence section (leader envelope closed_pane true, three outcome detached lines, hat pane ids, layout captures proving each hat pane split under leader w1:p9Z and closed, 99-after identical to 00-before), the launcher-timeout gotcha replaced by the observed result, and a new pane-height gotcha",
+      "commit": "5b03ec210b5d55cd551ef36e4edda6e19e58abd5",
+      "files": [
+        ".bee/verify/verify-app/features/pi-hat-wave.md"
+      ],
+      "tests": "rg -n 'closed_pane' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'worker column' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'outcome detached' .bee/verify/verify-app/features/pi-hat-wave.md — green:static — docs-only feature file; cell verify pointer check, facts cross-checked against evidence2 layout captures (cmp 00-before/99-after identical), job.json, result-1.json and dispatch.jsonl",
+      "deviations": [
+        "Proved hat pane close from the layout captures and result-1.json mtimes, not from a hat envelope closed_pane field; closed_pane true is shown only for the leader envelope — a detached runner sends its stdout to null, so no hat envelope exists — the plan was wrong about a fact",
+        "Replaced one gotcha (the & wait launcher timeout), not two — the feature file held only one gotcha tied to open panes — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "First commit put the cell: psd-14 trailer above the Co-Authored-By lines, not on the last line — write the trailer last on the first try; I amended my own unpushed commit",
+        "First cells finish proof line abbreviated the verify command with ... and was refused — hand the cell verify command verbatim"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

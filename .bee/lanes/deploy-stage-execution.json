@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-09-15T08:08:12.922Z",
+    "subject": "4. Main's commit and status.",
+    "asked_at": "2026-09-15T08:14:04.220Z",
     "session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f"
   },
   "route": {

@@ -1,0 +1,123 @@
+{
+  "id": "psd-12",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "change_class": "behavior",
+  "title": "Keep workers spawned by a herding worker inside the worker column",
+  "action": "Per decision b2f1afca part (b). resolve_split_parent in herding/run.rs excludes only the caller's own pane and picks the roomiest remaining pane, so a caller that is itself a herding worker (its process env carries BEE_HERDING_WORKER=1, which run.rs puts into every worker pane through pane_env) splits the human's main pane, because the main pane is the largest. Give resolve_split_parent a caller_is_worker input, read once from the process env at its call site: when true, the parent is the caller's own pane and the direction is down, so each new worker stacks inside the worker column under its caller; the width guard (narrow_pane_refusal) and the fresh-tab fallback keep working on that choice. When false, the choice stays exactly as today. Write the tests first on the pure function: a worker caller in a tab whose largest pane is another pane picks its own pane with direction down; a non-worker caller keeps today's roomiest-other-pane choice and direction; a worker caller whose down child would be too narrow still returns the refusal that leads to the fresh-tab fallback.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "deps": [
+    "psd-11"
+  ],
+  "decisions": [
+    "a20cf301",
+    "b2f1afca"
+  ],
+  "must_haves": {
+    "truths": [
+      "A herding run whose caller is a herding worker splits the caller's own pane downward",
+      "A top-level caller keeps today's split parent, direction and ratio"
+    ],
+    "prohibitions": [
+      "The human's main pane is never the split parent for a worker caller",
+      "The width guard and the fresh-tab fallback are unchanged"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-12",
+    "outcome": "resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "read the BEE_HERDING_WORKER marker once at option parse into Options.caller_is_worker and pass it through split_worker_pane, not at the resolve_split_parent call site — reading it inside split_worker_pane/execute made 2 execute tests fail when cargo test runs inside a worker pane (BEE_HERDING_WORKER=1) — hit an unforeseen obstacle",
+      "sync-ack: cell files are run.rs only; the planned knowledge sync for this split rule is psd-13 (the-run-verb-and-worker-outcomes.md); skills/bee-herding carries no split-parent rule text to change"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T11:48:43.718Z",
+    "behavior_change": true,
+    "verification_evidence": "223 passed incl. 3 new resolve_split_parent worker-caller tests; also green with BEE_HERDING_WORKER=1 set in the test env",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run",
+    "claimed_at": "2026-09-15T11:43:30.307Z",
+    "sync_ack": "cell files are run.rs only; the planned knowledge sync for this split rule is psd-13 (the-run-verb-and-worker-outcomes.md); skills/bee-herding carries no split-parent rule text to change",
+    "mistakes": [
+      {
+        "wrong": "first wired std::env::var at the split_worker_pane call site in execute, and BEE_HERDING_WORKER=1 cargo test then failed a_fresh_spawn_splits_the_roomiest_sibling_pane_not_the_callers_own",
+        "better": "read harness-shaped env at option parse from the start so tests build the value explicitly"
+      },
+      {
+        "wrong": "first cells finish wrote the proof command as PATH=$HOME/.cargo/bin:$PATH and the cap refused it",
+        "better": "copy the cell verify string byte for byte"
+      }
+    ],
+    "report": {
+      "outcome": "worker caller stacks under its own pane; top-level split choice unchanged",
+      "commit": "b1afba17",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run — green:unit — 223 passed incl. 3 new resolve_split_parent worker-caller tests; also green with BEE_HERDING_WORKER=1 set in the test env",
+      "deviations": [
+        "read the BEE_HERDING_WORKER marker once at option parse into Options.caller_is_worker and pass it through split_worker_pane, not at the resolve_split_parent call site — reading it inside split_worker_pane/execute made 2 execute tests fail when cargo test runs inside a worker pane (BEE_HERDING_WORKER=1) — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "first wired std::env::var at the split_worker_pane call site in execute, and BEE_HERDING_WORKER=1 cargo test then failed a_fresh_spawn_splits_the_roomiest_sibling_pane_not_the_callers_own — read harness-shaped env at option parse from the start so tests build the value explicitly",
+        "first cells finish wrote the proof command as PATH=$HOME/.cargo/bin:$PATH and the cap refused it — copy the cell verify string byte for byte"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "worker-caller-splits-own-pane-down",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:1005-1013; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run::tests::resolve_split_parent_a_worker_caller_splits_its_own_pane_down_never_the_main_pane passed (1 passed; 0 failed)"
+          },
+          {
+            "id": "top-level-caller-preserves-parent-direction-ratio",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:1015-1065; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run::tests::resolve_split_parent_a_non_worker_caller_keeps_the_roomiest_other_pane passed (1 passed; 0 failed)"
+          },
+          {
+            "id": "width-refusal-and-fresh-tab-fallback",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:1011,1116-1129; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run::tests::resolve_split_parent_a_worker_caller_too_narrow_still_refuses_into_the_fresh_tab_path passed (1 passed; 0 failed)"
+          },
+          {
+            "id": "human-main-pane-never-parent-for-worker",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:1005-1013; resolve_split_parent directly assigns own_pane as parent when caller_is_worker is true; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run::tests::resolve_split_parent_a_worker_caller_splits_its_own_pane_down_never_the_main_pane passed (1 passed; 0 failed)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T12:00:24.979Z"
+      }
+    ]
+  }
+}

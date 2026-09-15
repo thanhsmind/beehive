@@ -1,0 +1,162 @@
+{
+  "id": "psd-3",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Carry seat, budget, session token, and full-answer pointer on dispatch payloads",
+  "action": "Per D2, D3, D4, D5. (a) Rewrite HERDING_DETACHED_DELIVERY_PI: the detached run appends --inbox-session \"$PI_SESSION_ID\" (the variable Pi's bash tool exports); when that variable is empty, run in the foreground; on both paths the JSON summary is one line and the full answer is the file at report_path. Update the_pi_herding_payload_names_the_inbox_session_flag to assert PI_SESSION_ID, foreground, and report_path in the note. (b) On runtime pi only, every non-cell herding command that resolved a role appends --seat \"<role>\". (c) On runtime pi only, a hat-* herding command uses a ceiling of min(configured ceiling, 600). (d) Add a seat block to packages/bee/prompts/advisor.md, rendered on every runtime only for hat-* roles, holding the role name and the pointer: bee-hive skill, references/gates-and-delegation.md, section Hat wave, the row for this role. Pass it from the non-cell render arm. Do not copy the configured description. Tests: a non-hat advisor prompt is byte-identical to before; a Claude hat payload differs only by the seat block; a Pi hat payload carries --seat and the capped ceiling; a Claude herding hat payload carries neither. Refresh the release manifest (prompts are shipped).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: prompts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/advisor.md",
+    "packages/bee-rs/crates/bee/src/devtools/prompts.rs",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee/prompts/advisor.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "psd-1",
+    "psd-2"
+  ],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "The Pi detached note names --inbox-session \"$PI_SESSION_ID\", the foreground case, and report_path",
+      "A Pi hat-* herding command carries --seat and a ceiling no higher than 600",
+      "A hat-* advisor prompt on every runtime names its seat and the Hat wave home",
+      "A non-hat advisor prompt is byte-identical to before"
+    ],
+    "prohibitions": [
+      "No hat instrument text or configured description is copied into the prompt",
+      "Claude and Codex herding commands do not gain --seat or the ceiling cap",
+      "Pi dispatch stays herding-only"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-3",
+    "outcome": "Pi note names PI_SESSION_ID, foreground, report_path (prepare.rs HERDING_DETACHED_DELIVERY_PI); pi non-cell role adds --seat and hat-* caps --ceiling at 600 (prepare.rs herding arm, HAT_WAVE_CEILING_SECONDS); advisor.md seat block via prompt_body_for seat arg; tests in drivers/tests.rs",
+    "files_changed": [
+      ".bee/bin/prompts/advisor.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/advisor.md"
+    ],
+    "deviations": [
+      "Also synced the vendored copy .bee/bin/prompts/advisor.md (reserved first) — three drivers tests assert the vendored prompt matches the source, and the cell file list missed it — the plan was wrong about a fact",
+      "A Pi hat seat with no configured ceiling gets --ceiling 600 — the plan text min(configured, 600) did not name the absent case, and the wave budget needs a cap — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T09:43:16.200Z",
+    "behavior_change": false,
+    "verification_evidence": "touched prepare.rs, advisor.md, and drivers tests; 410 passed, manifest 376 files match",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: prompts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-15T09:37:36.314Z",
+    "mistakes": [
+      {
+        "wrong": "The first cargo test call put the CARGO_HOME and PATH variables inside the command, and the worktree guard refused it",
+        "better": "call /home/thanhsmind/.cargo/bin/cargo by its absolute path from the start"
+      },
+      {
+        "wrong": "The first cells finish --report used a shortened proof command, and the cap refused it",
+        "better": "copy the cell verify string exactly into the tests field"
+      }
+    ],
+    "report": {
+      "outcome": "Pi note, --seat, hat ceiling cap, and hat seat block landed",
+      "commit": "7ec3ff3c",
+      "files": [
+        ".bee/bin/prompts/advisor.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee/prompts/advisor.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers:: prompts && .bee/bin/bee dev release-manifest --write && .bee/bin/bee dev release-manifest --check — green:unit — touched prepare.rs, advisor.md, and drivers tests; 410 passed, manifest 376 files match",
+      "deviations": [
+        "Also synced the vendored copy .bee/bin/prompts/advisor.md (reserved first) — three drivers tests assert the vendored prompt matches the source, and the cell file list missed it — the plan was wrong about a fact",
+        "A Pi hat seat with no configured ceiling gets --ceiling 600 — the plan text min(configured, 600) did not name the absent case, and the wave budget needs a cap — found a better route"
+      ],
+      "mistakes": [
+        "The first cargo test call put the CARGO_HOME and PATH variables inside the command, and the worktree guard refused it — call /home/thanhsmind/.cargo/bin/cargo by its absolute path from the start",
+        "The first cells finish --report used a shortened proof command, and the cap refused it — copy the cell verify string exactly into the tests field"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "psd-3-truth-pi-detached-note",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- the_pi_herding_payload_names_the_inbox_session_flag: passed verbs::drivers::prepare::detached_delivery_tests::the_pi_herding_payload_names_the_inbox_session_flag; prepare.rs:160-163"
+          },
+          {
+            "id": "psd-3-truth-pi-hat-seat-and-ceiling",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling: passed verbs::drivers::tests::a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling; prepare.rs:2435-2439,2450-2457"
+          },
+          {
+            "id": "psd-3-truth-hat-prompt-seat-block",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block: passed verbs::drivers::tests::a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block; packages/bee/prompts/advisor.md:2-5"
+          },
+          {
+            "id": "psd-3-truth-non-hat-prompt-byte-identical",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:1075 asserts non-hat prompt omits Seat block; passed a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block"
+          },
+          {
+            "id": "psd-3-prohibition-no-copied-instrument-text",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:1080 asserts !hat.contains(\"UNIQUE-DESCRIPTION-TEXT\"); prompt references bee-hive documentation row instead"
+          },
+          {
+            "id": "psd-3-prohibition-claude-codex-unmodified",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:1118-1121 asserts claude herding payload gains no --seat and keeps 1800s ceiling; prepare.rs:2435,2451"
+          },
+          {
+            "id": "psd-3-prohibition-pi-herding-only",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:2481 asserts val[\"tool\"] == \"Bash\" and val[\"economics\"][\"channel\"] == \"herding-exec\"; passed injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_round_trip"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-15T11:20:59.996Z"
+      }
+    ]
+  },
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "plan",
+      "decision": "99e52fac-82f0-45e9-8461-aa9e3de8e67c",
+      "at": "2026-09-15T09:37:36.160Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}

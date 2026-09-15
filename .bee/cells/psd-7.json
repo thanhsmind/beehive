@@ -1,0 +1,105 @@
+{
+  "id": "psd-7",
+  "feature": "pi-stage-dispatch",
+  "role": "plan",
+  "lane": "standard",
+  "title": "Sync Pi dispatch facts into the config reference and knowledge",
+  "action": "Per D9 and the feature playbook's knowledge sync. In docs/config-reference.md, change the Pi 0.84.x label to 0.84–0.85 and document herding run --seat and the Pi hat ceiling cap. In docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md, add the drain seat row and the $PI_SESSION_ID token source. In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md, record that a hat prompt carries its seat block on every runtime and that dispatch prepare and advisor-ref serve from a granted worktree. Extend existing entries; add no new document.",
+  "verify": "rg -n 'seat' docs/config-reference.md docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md && ! rg -n 'Pi 0\\.84\\.x' docs/config-reference.md",
+  "read_first": [
+    "docs/history/pi-stage-dispatch/CONTEXT.md",
+    "docs/history/pi-stage-dispatch/plan.md",
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "files": [
+    "docs/config-reference.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "deps": [
+    "psd-3"
+  ],
+  "decisions": [
+    "a20cf301",
+    "15109d96"
+  ],
+  "must_haves": {
+    "truths": [
+      "The config reference documents --seat and the Pi hat ceiling cap",
+      "The knowledge areas state the token source, the seat row, and the worktree door"
+    ],
+    "prohibitions": [
+      "No second parity document or event catalog"
+    ]
+  },
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-psd-7b",
+    "outcome": "Pi dispatch facts synced: config-reference (0.84–0.85 label, --seat and hat ceiling cap paragraph, PI_SESSION_ID token, drain seat field); hook-runtime B9 (token source, seat row); model-roles B15a (hat seat block, prepare and advisor-ref from granted worktree)",
+    "files_changed": [
+      "docs/config-reference.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: the four skills/** paths are a sibling worker's uncommitted edits in the shared worktree (psd-5 skill blocks); commit 1ad9f2cd for psd-7 touches only the three docs files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T10:50:09.483Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify pointer check for a docs-only change",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7",
+    "verify_command": "rg -n 'seat' docs/config-reference.md docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md && ! rg -n 'Pi 0\\.84\\.x' docs/config-reference.md",
+    "claimed_at": "2026-09-15T10:47:23.711Z",
+    "verified_at": null,
+    "sync_ack": "the four skills/** paths are a sibling worker's uncommitted edits in the shared worktree (psd-5 skill blocks); commit 1ad9f2cd for psd-7 touches only the three docs files",
+    "mistakes": [
+      {
+        "wrong": "staging into the shared index was refused by the concurrent-worker guard",
+        "better": "a path-scoped commit from the start would have skipped the retry"
+      },
+      {
+        "wrong": "first finish passed a paraphrased proof command and was refused",
+        "better": "pass the cell verify command verbatim"
+      }
+    ],
+    "report": {
+      "outcome": "Pi dispatch facts synced into config reference and two knowledge areas",
+      "commit": "1ad9f2cd",
+      "files": [
+        "docs/config-reference.md",
+        "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "rg -n 'seat' docs/config-reference.md docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md && ! rg -n 'Pi 0\\.84\\.x' docs/config-reference.md — green:static — cell verify pointer check for a docs-only change",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "staging into the shared index was refused by the concurrent-worker guard — a path-scoped commit from the start would have skipped the retry",
+        "first finish passed a paraphrased proof command and was refused — pass the cell verify command verbatim"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "role_reroutes": [
+    {
+      "from": "docs",
+      "to": "plan",
+      "decision": "54dc9dd4-a585-4006-9d86-caa69689d61c",
+      "at": "2026-09-15T10:47:23.572Z",
+      "plan_sha256": "295bd671b0b999e57f1f3cd5cd58927c5aa9c2f58682205c68407c735bc9104c"
+    }
+  ]
+}
