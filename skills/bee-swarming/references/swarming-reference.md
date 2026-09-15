@@ -400,7 +400,13 @@ On Pi: every worker runs through `bee herding run`, never a native spawn.
 
 | | Pi |
 |---|---|
+| Spawn | n/a (native spawn) — every worker runs through `bee herding run` in a dedicated terminal pane |
+| Model | Resolved from `config.team.pi[<role>]` in `.bee/config.json`; `bee dispatch prepare` passes the configured model or agent to `bee herding run` |
 | Result collection | A detached run (`--inbox-session "$PI_SESSION_ID"`) is injected by the drain; a foreground run prints its JSON. Either way the summary is one line — read the file at `report_path` for the full answer, never the summary alone |
+| Follow-up / rescue | The herding pane verbs (`bee herding pane …`) send input and commands to the worker's open pane; no native session resume |
+| Harness assist | The `bee-guard` extension's result drain monitors `.bee/result-inbox/` and injects completed worker results into the Pi leader session |
+| Isolation guarantee | n/a (native session isolation) — isolation is at process level: each worker runs in an independent terminal pane with its own context and environment |
+| Subagent type | n/a — every Pi worker runs through `bee herding run`, never a native spawn |
 <!-- bee:end -->
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee close`/`bee worktree merge` refuse while a capped cell's recorded proof is missing, malformed, or red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.

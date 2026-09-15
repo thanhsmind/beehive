@@ -2391,14 +2391,14 @@
     },
     {
       "path": "skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "b2947a403ef186cf864bff00be7e4cb03765c950590ecc4171a9496eb23b9d6c",
+      "sha256": "91bb16ae4338c38625e83d378c4b33122384622439f5f589b6cd4f2efa447764",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/swarming-reference.md"
     },
     {
       "path": "skills/bee-swarming/references/worker-details.md",
-      "sha256": "861f606a52c5229673fca0078fe26fa769f34293b78f3cef49b4afc8c198d449",
+      "sha256": "ed9852ca8657dc2ccc5a852e73a346dcae3ed728eb48156c2c1c191919e98020",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/worker-details.md"

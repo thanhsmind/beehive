@@ -276,6 +276,9 @@ next: <one line>
 <!-- bee:only codex -->
 - **Model-shaped advisor:** consult via Codex-native subagent dispatch at the named advisor model, recording the same `advisor-consult <cell-id>: <advisor-model>` attribution that bee-swarming's goal-check reads from `.bee/logs/dispatch.jsonl`. The transport stays runtime-native: a model-shaped transport that is unavailable or rejected surfaces in the Consults section (spending at most one budget slot, per the transport-error rule below) — never a silent fallback to a cross-vendor CLI, unless the advisor slot itself is configured as that CLI (a cli-shaped advisor, next).
 <!-- bee:end -->
+<!-- bee:only pi -->
+- On Pi: **Herding-shaped advisor:** run the prepared `bee herding run` command with the evidence bundle on stdin. Record the same `advisor-consult <cell-id>: <advisor-model>` attribution that bee-swarming's goal-check reads from `.bee/logs/dispatch.jsonl`. Keep the existing one-slot transport-error rule: a transport error burns at most one budget slot for the whole claim.
+<!-- bee:end -->
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
 - **Transport is config:** the shape you were handed (native, pane, cli) is config, not a signal about the work (`packages/bee/prompts/worker-cell.md`).
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
