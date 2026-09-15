@@ -1122,6 +1122,39 @@ use std::time::Instant;
         assert!(!command("claude", "", "advisor", Some("hat-risks")).contains("--ceiling"));
     }
 
+    /// pi-stage-dispatch D3/D5 (psd-9): a hat seat with no team entry falls
+    /// through to the advisor slot for its model, yet keeps its own seat name
+    /// on `--seat`, the wave ceiling, and the prompt seat block.
+    #[test]
+    fn an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through() {
+        let envelope = |config: &str, runtime: &str| -> Value {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(&tmp, config);
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, "advisor", Some("hat-risks"), None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v
+        };
+        let seat_block = "Seat: hat-risks.";
+
+        let pi = envelope(
+            r#"{"herding":{"ceiling_seconds":1800},"models":{"pi":{"generation":{"kind":"herding","agent":"g"},"advisor":{"kind":"herding","agent":"a"}}}}"#,
+            "pi",
+        );
+        let c = pi["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {pi}"));
+        assert!(c.contains(" --seat \"hat-risks\"") && !c.contains("--seat \"advisor\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(c.contains("--agent \"a\""), "model stays on the advisor slot: {c}");
+        assert!(pi["payload"]["stdin"].as_str().unwrap_or_default().contains(seat_block), "{pi}");
+
+        let claude = envelope(r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus"}}}"#, "claude");
+        assert!(claude["payload"]["prompt"].as_str().unwrap_or_default().contains(seat_block), "{claude}");
+        assert!(!claude["payload"].to_string().contains("--seat"), "{claude}");
+    }
+
     /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
     /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
     /// — `--purpose` is that way. Given, it renders; omitted, today's exact

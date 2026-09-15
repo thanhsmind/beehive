@@ -2231,9 +2231,12 @@ pub(crate) fn prepare_dispatch_wire(
     } else {
         None
     };
-    // pi-stage-dispatch D3/D5: a non-cell dispatch that names a `hat-*` seat.
+    // pi-stage-dispatch D3/D5: the seat a non-cell dispatch names. A seat that
+    // fell through to the advisor slot keeps its own name here — only its
+    // model resolution rides the advisor.
+    let seat_name: &str = fallen_through_seat.unwrap_or(marker_role);
     let hat_seat = (kind != "cell" && role.is_some())
-        .then(|| seat_role_named(marker_role))
+        .then(|| seat_role_named(seat_name))
         .flatten()
         .filter(|seat| seat.starts_with("hat-"));
 
@@ -2434,7 +2437,7 @@ pub(crate) fn prepare_dispatch_wire(
                 // comes back named by its seat.
                 if runtime == "pi" && kind != "cell" && role.is_some() {
                     command.push_str(" --seat \"");
-                    command.push_str(marker_role);
+                    command.push_str(seat_name);
                     command.push('"');
                 }
                 // herding-stall-ceiling D1: `herding.ceiling_seconds` in the
