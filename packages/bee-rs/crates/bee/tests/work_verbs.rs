@@ -188,6 +188,8 @@ fn the_session_env_var_resolves_the_record_when_no_flag_names_one() {
     let out = Command::cargo_bin("bee")
         .unwrap()
         .args(["work", "show", "--json"])
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("PI_SESSION_ID")
         .env_remove("BEE_HERDING_WORKER")
         .env_remove("BEE_HERDING_JOB_ID")
         .env("CLAUDE_CODE_SESSION_ID", "s-env")

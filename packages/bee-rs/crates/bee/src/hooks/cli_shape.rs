@@ -1149,7 +1149,14 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 2] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 3] = [
+        // dis-1 (deploy-issuer-session): the fenced cells JSON of that closed
+        // plan quotes this span inside a cell ACTION to name the bug under
+        // repair ("`bee dispatch prepare --stage deployment` writes
+        // issuer_session only from the flag") — a prose mention of a verb
+        // shape, not a transcript anyone ran or should copy; the plan is
+        // immutable history, so the line is pinned here instead of rewritten.
+        r#"bee dispatch prepare --stage deployment"#,
         // kdt-3 (knowledge-distill-trigger): `decisions log` gained a
         // required `--relation` after this codex-native-runtime-v2 advisor
         // session ran; the report is a raw shell-transcript line, not a
@@ -1176,7 +1183,11 @@ mod documented_invocations {
         }
         let mut checked = 0usize;
         let mut denied: Vec<String> = Vec::new();
-        let mut known_hits = 0usize;
+        // The DISTINCT exceptions still refused, not a count of matching lines:
+        // a later plan quoting a pinned span again (release-red-fixes quotes
+        // the dis-1 span) must not read as a dead exception, while an entry
+        // that no line refuses any more still fails the equality below.
+        let mut known_hits: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
         for f in &files {
             let Ok(text) = std::fs::read_to_string(f) else { continue };
             let mut fenced = false;
@@ -1191,8 +1202,10 @@ mod documented_invocations {
                 for command in invocations(line) {
                     checked += 1;
                     if let Some(reason) = check_cli_shape(&command) {
-                        if KNOWN_HISTORICAL_EXCEPTIONS.contains(&command.as_str()) {
-                            known_hits += 1;
+                        if let Some(pinned) =
+                            KNOWN_HISTORICAL_EXCEPTIONS.iter().find(|e| **e == command.as_str())
+                        {
+                            known_hits.insert(pinned);
                             continue;
                         }
                         denied.push(format!("{}\n    {command}\n    {reason}", f.display()));
@@ -1201,7 +1214,7 @@ mod documented_invocations {
             }
         }
         assert_eq!(
-            known_hits,
+            known_hits.len(),
             KNOWN_HISTORICAL_EXCEPTIONS.len(),
             "a pinned historical-transcript exception stopped being refused — delete it from \
 KNOWN_HISTORICAL_EXCEPTIONS instead of leaving a dead exception"
