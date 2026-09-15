@@ -50,7 +50,7 @@ state it describes is not.
 | item 10 — recorded commands | The project's setup/start/test/verify commands. |
 | item 11 — compaction survival count | How many times the claimed unit has now been compacted, and, once that count is two or more, an advisory that the unit may be oversized. |
 | item 12 — critical-patterns pointer | One line naming where the durable patterns live, not their content. |
-| item 13 — the dispatch door | The one preparation verb every helper dispatch starts from, plus one line naming the four work tiers and what each resolves to, rendered through the same resolver the verb reads (dispatch-door-upfront D2; the full rule lives in the dispatch-guard concept). |
+| item 13 — the dispatch door | The one preparation verb every helper dispatch starts from, plus one line naming the four work tiers and what each resolves to, rendered through the same resolver the verb reads (dispatch-door-upfront D2; the full rule lives in the dispatch-guard concept). The door line names the runtime the session really runs on — claude, codex, or pi — in both the full preamble and this capsule; an unknown runtime falls back to claude (pi-parity-review-fixes D1, cell pprf-1). |
 
 ## Behaviors & Operations
 

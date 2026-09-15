@@ -8,7 +8,7 @@ bee:
   id: pattern-20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step
   lifecycle: active
   areas: [hook-runtime, rust-runtime]
-  sources: ["slp-supervisor-heartbeat cell sup-11 — dispatched worker died on an API rate limit with implementation and tests on disk, uncommitted, 2026-08-27"]
+  sources: ["slp-supervisor-heartbeat cell sup-11 — dispatched worker died on an API rate limit with implementation and tests on disk, uncommitted, 2026-08-27", "deploy-pane-authorization cell dpa-1 — herding worker wrote the red tests, its pane died with the leader session restart, the leader finished the two fix edits (commit 7707daf5, 2026-09-15)"]
   polarity: pitfall
   critical: true
   evidence: wired

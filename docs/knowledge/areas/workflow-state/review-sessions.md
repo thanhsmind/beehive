@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [565e68d0-327f-404e-b49e-d1c61ba81bfd (independent review is user-invoked; a feature closes truthfully as unreviewed), a83a3613 (a conclusive repository answer outranks an auxiliary launch warning when review coverage is derived), c18ac30a (an approved review decision is refused while any P1 finding stands unresolved)]
+  decisions: [565e68d0-327f-404e-b49e-d1c61ba81bfd (independent review is user-invoked; a feature closes truthfully as unreviewed), a83a3613 (a conclusive repository answer outranks an auxiliary launch warning when review coverage is derived), c18ac30a (an approved review decision is refused while any P1 finding stands unresolved), 8388df3e (herding-route-role D2 — the cockpit-only, owner-armed review carve-out)]
   sources: ["review-on-demand cells review-od-1..3 (traces in .bee/cells/, reports docs/history/review-on-demand/reports/, 2026-07-12)", "codex-sandbox-baseline cell codex-sandbox-baseline-6 (status-first review history derivation, 2026-07-16)", "review-p1-teeth cell rp1-1 (approval refuses on an unresolved P1; trace .bee/cells/archive/review-p1-teeth/rp1-1.json, decision c18ac30a, 2026-08-04)", "docs/specs/workflow-state.md#B3", "docs/specs/workflow-state.md#B4", "docs/specs/workflow-state.md#B5", "docs/specs/workflow-state.md#B6", "docs/specs/workflow-state.md#R4", "docs/specs/workflow-state.md#R5", "docs/specs/workflow-state.md#R6", "docs/specs/workflow-state.md#R9", "docs/specs/workflow-state.md#R10", "docs/specs/workflow-state.md#R11", "docs/specs/workflow-state.md#R28", "docs/specs/workflow-state.md#E7", "docs/specs/workflow-state.md#E8", "docs/specs/workflow-state.md#E9", "docs/specs/workflow-state.md#P17"]
   authoritative_for: "workflow-state: review sessions, review candidates, and derived review status"
 ---
@@ -87,7 +87,12 @@ this door (see the bypass ladder in `gates.md`, R25).
   completing a cell, slice, or feature never spends reviewer tokens by itself,
   and a merge/ship/release request is answered with the review status plus one
   explicit question, never a silent review dispatch (decision
-  565e68d0-327f-404e-b49e-d1c61ba81bfd).
+  565e68d0-327f-404e-b49e-d1c61ba81bfd). One named, scoped exception exists:
+  inside the unattended herding cockpit only, while the owner's enable marker
+  is present and gate bypass is at its full or total level, the cockpit's
+  route role may start a reviewer over a finished worktree, on a different
+  agent than the one that produced the work (herding-route-role D2, decision
+  8388df3e). Everywhere else this rule stands unchanged.
 - R5 — Verification and review are separate: verification evidence remains
   mandatory for completion, while a completed feature closes truthfully as
   unreviewed and joins a later user-selected review batch (decision
@@ -105,8 +110,12 @@ this door (see the bypass ladder in `gates.md`, R25).
   `unreviewed` — no session records are ever fabricated for history (decision
   565e68d0-327f-404e-b49e-d1c61ba81bfd; SPEC §11.3).
 - R11 — The final human approval of a review (its Gate 3) exists only inside a
-  review session; gate bypass never creates or approves one (decision
-  565e68d0-327f-404e-b49e-d1c61ba81bfd; SPEC R8).
+  review session; gate bypass never creates or approves one outside the
+  herding cockpit (decision 565e68d0-327f-404e-b49e-d1c61ba81bfd; SPEC R8).
+  The one owner-armed exception is R4's cockpit route role: under the owner's
+  enable marker plus full or total gate bypass, it opens the review and maps
+  the reviewer's verdict onto `approved` or `blocked` with no human approval
+  (herding-route-role D2, decision 8388df3e).
 - R28 — When review status is derived from change history, a conclusive
   repository answer remains authoritative even if the execution environment
   also attaches an auxiliary launch warning. Only an inconclusive answer
