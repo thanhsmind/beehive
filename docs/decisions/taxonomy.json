@@ -513,6 +513,7 @@
     "lane",
     "deploy-issuer-session",
     "deploy-pane-authorization",
-    "release-clean-tree"
+    "release-clean-tree",
+    "release-red-fixes"
   ]
 }
