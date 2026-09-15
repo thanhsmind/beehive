@@ -5,16 +5,21 @@
   "phase": "idle",
   "approved_gates": {
     "context": true,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": true
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 4fe3e8e; capture what settled, then bee close --feature pi-stage-dispatch.",
   "created_at": "2026-09-15T08:39:48.577Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-stage-dispatch (Pi advisor, hat wave, and stage dispatch on main)",
+    "asked_at": "2026-09-15T12:02:38.876Z",
+    "session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -30,8 +35,8 @@
   },
   "gate_preview": {
     "feature": "pi-stage-dispatch",
-    "plan_sha256": "6e90b3fb59cab520f40bed8eebc08eecddb2bbfd8b31fbb1a86edcfaae3ccf1e",
-    "previewed_at": "2026-09-15T11:38:42.275Z",
+    "plan_sha256": "9b15b3a711e1d6528d3a0882f9a82c4db36c2f56f30086cd10bfe2d82aa1e988",
+    "previewed_at": "2026-09-15T14:35:00.571Z",
     "cells": [
       {
         "id": "psd-1",
@@ -603,7 +608,7 @@
     "role_plan": {
       "schema_version": "1.0",
       "runtime": "claude",
-      "roster_sha256": "00c73e8ff91b0ac1e8d67be4c51374e021fa3a10b4387ecc9d1fbbb0440fbd9d",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
       "stages": [
         {
           "stage": "planning",
@@ -679,6 +684,13 @@
           "role": "review",
           "condition": "The user explicitly requests independent review.",
           "reason": "Review remains a separate user-invoked pass."
+        },
+        {
+          "stage": "deployment",
+          "classification": "conditional",
+          "role": "deploy",
+          "condition": "The user asks for a release after the feature closes.",
+          "reason": "The configured deploy role publishes from main, waits for CI, and verifies assets."
         },
         {
           "stage": "generic-advisor",
@@ -729,8 +741,8 @@
   },
   "approved_cell_packet": {
     "feature": "pi-stage-dispatch",
-    "plan_sha256": "6e90b3fb59cab520f40bed8eebc08eecddb2bbfd8b31fbb1a86edcfaae3ccf1e",
-    "previewed_at": "2026-09-15T11:38:42.275Z",
+    "plan_sha256": "9b15b3a711e1d6528d3a0882f9a82c4db36c2f56f30086cd10bfe2d82aa1e988",
+    "previewed_at": "2026-09-15T14:35:00.571Z",
     "cells": [
       {
         "id": "psd-1",
@@ -1302,7 +1314,7 @@
     "role_plan": {
       "schema_version": "1.0",
       "runtime": "claude",
-      "roster_sha256": "00c73e8ff91b0ac1e8d67be4c51374e021fa3a10b4387ecc9d1fbbb0440fbd9d",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
       "stages": [
         {
           "stage": "planning",
@@ -1378,6 +1390,13 @@
           "role": "review",
           "condition": "The user explicitly requests independent review.",
           "reason": "Review remains a separate user-invoked pass."
+        },
+        {
+          "stage": "deployment",
+          "classification": "conditional",
+          "role": "deploy",
+          "condition": "The user asks for a release after the feature closes.",
+          "reason": "The configured deploy role publishes from main, waits for CI, and verifies assets."
         },
         {
           "stage": "generic-advisor",
