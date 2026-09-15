@@ -47,6 +47,8 @@ Preconditions:
 - **The leader reads each full answer.** The leader's next tool calls read each `report_path`. The injection header says the report body is not in the block.
 - **The wave keeps its budget.** Compare the launch time with the newest `report-1.md` mtime. Budget: 10 minutes.
 - **The advisor record succeeds from the bound leader.** `.bee/bin/bee state advisor-ref record --advisor "hat-wave:live-check" --digest-file <synthesis>` prints `Recorded advisor_ref (advisor "hat-wave:live-check", feature "hat-demo").`
+- **Each detached launch returns at once.** Each backgrounded `herding run ... --inbox-session "$PI_SESSION_ID"` prints one JSON line with `outcome detached` (`"outcome":"detached"`) and the job id. The launch shell exits with no timeout.
+- **Hat panes stay in the worker column and close.** Capture the herdr pane layout (a `cli:pane:layout` result) every 15 s from before the leader starts until after it ends. While the hats run, each hat pane has the leader's `x` and sits below the leader pane, and the main pane keeps its `x`, width, and height. A hat pane is gone from the first capture after its `result-1.json` mtime. The last capture equals the first one.
 
 ### Evidence (run 20260915-180023-56873, 2026-09-15, bee 2.37.3 candidate, Pi 0.85.1)
 
@@ -66,9 +68,24 @@ Preconditions:
   ```
 - Bash default timeout: not observed. All 14 bash tool calls in the session log passed an explicit `timeout` (8 at 10 s, 6 at 30 s), so this run cannot show whether Pi applies a default.
 
+### Evidence, second run (same sandbox, 2026-09-15, candidate with the detached runner and the worker-column split)
+
+- Leader step log: `/tmp/bee-verify/run/20260915-180023-56873/evidence2/wave-log.md`. Run window: `evidence2/started-at.txt` 11:49:31Z to `evidence2/ended-at.txt` 11:56:55Z.
+- Leader herding envelope: `/tmp/bee-verify/run/20260915-180023-56873/evidence2/leader-envelope.json`. After two `stalled` / `recovered` text lines, its JSON line has `"outcome":"done"`, `"pane_id":"w1:p9Z"`, and `"closed_pane":true`.
+- Detached launches: the wave log shows three lines at 11:50:35Z, one per seat, each with `"outcome":"detached"`: `job-1789473035217-265277-1` (`hat-facts-gaps`), `job-1789473035218-265281-1` (`hat-alternatives`), `job-1789473035219-265285-1` (`hat-user-impact`). The launch shell exited with no error, and no shell command timed out.
+- Hat job records: `/tmp/bee-verify/run/20260915-180023-56873/repo/.bee/mailbox/job-1789473035217-265277-1/`, `…-265281-1/`, and `…-265285-1/`. `job.json` gives `pane_id` `w1:p90`, `w1:pA1`, and `w1:pA2`, and `cwd` the worktree. Each `result-1.json` has `status` `done`. Dispatch log rows 11 to 13 of `<run>/repo/.bee/logs/dispatch.jsonl` carry the same pane ids; row 7 carries the leader pane `w1:p9Z`.
+- Hat panes closed. No hat envelope carries `closed_pane`, because a detached runner sends its stdout to null. The proof is the layout captures in `/tmp/bee-verify/run/20260915-180023-56873/evidence2/layout/`, one every 15 s:
+  - `06-115046.txt` to `12-115216.txt`: all three hat panes are open.
+  - `w1:pA2` (`result-1.json` 11:52:21Z) is gone from `13-115231.txt`. `w1:pA1` (11:52:44Z) is gone from `15-115301.txt`. `w1:p90` (11:53:38Z) is gone from `18-115346.txt`.
+  - The leader `w1:p9Z` is gone from `31-115701.txt`. `99-after.txt` is byte-identical to `00-before.txt` (`cmp`): only `w1:p3A` and `w1:p9Y` are open.
+  - `herding-status-after.txt` lists the three hat jobs and the leader with `status=done`.
+- Worker column: in `07-115101.txt` the main pane `w1:p3A` stays at `x=0`, width 95, height 45, as in `00-before.txt`. The leader `w1:p9Z` sits at `x=95, y=23` under `w1:p9Y`. The hats `w1:pA2` (`y=26`), `w1:pA1` (`y=29`), and `w1:p90` (`y=34`) are all at `x=95`. Every `down` split after `split_1_1` starts at the leader's rect (`x=95, y=23`), so each hat pane was split from the leader worker pane, never from the main pane.
+- Budget: launch 11:50:35Z, `result-1.json` at 11:52:21Z, 11:52:44Z, and 11:53:38Z. That is 3 min 3 s.
+
 ## Gotchas
 
-- **Never `wait` on the detached jobs.** The leader put `& wait` after the three backgrounded `herding run` commands. So the launcher shell waited on them, and the leader's own 30-second bash timeout ended it (`Command timed out after 30 seconds`). The hats still finished and were injected. The skill `On Pi:` block says "keep working — never wait in the foreground". It does not yet say "never `wait` on the detached jobs", and a leader can read `& wait` as allowed.
+- **A launcher timeout no longer leaves a hat pane open (second run).** In the first run the leader put `& wait` after the backgrounded launches, and its 30-second bash timeout ended the launcher. Pi kills the whole process group on a timeout, so the runner died before its pane close. Now an `--inbox-session` run detaches into its own process group and prints `outcome detached` at once. In the second run no shell timed out, and every hat pane closed after its result (see the second-run evidence). A leader must still not `wait` on the detached jobs.
+- **Stacked worker panes can get too small.** Each hat splits the caller's pane downward, and nothing sets a minimum pane height. In `evidence2/layout/07-115101.txt` the leader `w1:p9Z` and the hat `w1:pA2` have a height of 3 rows. Tracked in the backlog.
 - **A native Claude subagent cannot drive this.** Under worktree isolation, a Claude subagent cannot type into a Pi pane in a `/tmp` sandbox. The isolation guard refuses `herdr agent prompt` with task text and `control-bee sh` scripts that aim outside the worktree. Start the leader with `bee herding run --cwd <sandbox worktree>`, or drive from a session rooted in the sandbox.
 - The result-inbox folder is empty after the drain. Read the seat rows from the Pi session log, not from the marker folder.
 - `result-1.json` in the mailbox carries no `seat` field. The seat rides the inbox marker, the `herding run --json` envelope, and the injected block.
