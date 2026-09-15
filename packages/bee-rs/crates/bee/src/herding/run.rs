@@ -3364,6 +3364,69 @@ fn emit_result(opts: &Options, result: &ExecResult, transport: &str, dissent: Op
     }
 }
 
+/// Env marker a detached runner carries, so it runs the job instead of
+/// detaching again (decision b2f1afca part a).
+const DETACHED_RUNNER_ENV: &str = "BEE_HERDING_DETACHED_RUNNER";
+
+/// A run with an inbox session detaches its runner into its own process
+/// group: Pi SIGKILLs a bash command's whole group on timeout, which killed
+/// the run before it could close the worker pane. Dry runs and the runner
+/// itself never detach; non-unix targets keep the foreground run.
+fn should_detach(has_inbox_session: bool, dry_run: bool, runner_marker: Option<&str>) -> bool {
+    cfg!(unix) && has_inbox_session && !dry_run && runner_marker != Some("1")
+}
+
+/// The runner's `herding run` arguments: every original flag, then the
+/// launcher's job id. When the task did not come inline through `--task`,
+/// the runner reads the launcher's task text from its stdin pipe. The second
+/// value says whether that pipe carries the task.
+fn runner_args(flags: &[&str], job_id: &str) -> (Vec<String>, bool) {
+    let inline_task = flags
+        .iter()
+        .position(|f| *f == "--task")
+        .and_then(|i| flags.get(i + 1))
+        .is_some_and(|t| !t.is_empty());
+    let mut args: Vec<String> = ["herding", "run"].iter().chain(flags).map(|s| s.to_string()).collect();
+    args.extend(["--job-id".to_string(), job_id.to_string()]);
+    if !inline_task {
+        args.extend(["--task-file".to_string(), "-".to_string()]);
+    }
+    (args, !inline_task)
+}
+
+fn detached_envelope(job_id: &str, inbox_session: &str) -> Value {
+    serde_json::json!({ "job_id": job_id, "outcome": "detached", "inbox_session": inbox_session })
+}
+
+#[cfg(unix)]
+fn spawn_detached_runner(flags: &[&str], opts: &Options) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let exe = std::env::current_exe().map_err(|e| format!("could not resolve the bee executable: {e}"))?;
+    let (args, pipe_task) = runner_args(flags, &opts.job_id);
+    let mut child = Command::new(exe)
+        .args(&args)
+        .env(DETACHED_RUNNER_ENV, "1")
+        .stdin(if pipe_task { Stdio::piped() } else { Stdio::null() })
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("could not start the detached runner: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(opts.task.as_bytes())
+            .map_err(|e| format!("could not hand the task to the detached runner: {e}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn spawn_detached_runner(_flags: &[&str], _opts: &Options) -> Result<(), String> {
+    Err("detached runs need a unix target".to_string())
+}
+
 pub(super) fn run(flags: &[&str]) -> ExitCode {
     let opts = match parse_options(flags) {
         Ok(o) => o,
@@ -3382,6 +3445,21 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let marker = std::env::var(DETACHED_RUNNER_ENV).ok();
+    if let (Some(session), true) =
+        (opts.inbox_session.as_deref(), should_detach(opts.inbox_session.is_some(), opts.dry_run, marker.as_deref()))
+    {
+        return match spawn_detached_runner(flags, &opts) {
+            Ok(()) => {
+                println!("{}", detached_envelope(&opts.job_id, session));
+                ExitCode::SUCCESS
+            }
+            Err(msg) => {
+                eprintln!("bee herding run: {msg}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let result = execute(&opts, transport.as_ref());
     // slp-followup-gaps D4: a dissent the worker handed back as DATA is
     // transcribed here, through the one writer `bee cells dissent` calls, so
@@ -3407,6 +3485,38 @@ mod tests {
     use std::cell::RefCell;
 
     // ─── pure decisions ─────────────────────────────────────────────────
+
+    #[cfg(unix)]
+    #[test]
+    fn detaches_only_with_an_inbox_session_outside_dry_run_and_the_runner() {
+        assert!(should_detach(true, false, None));
+        assert!(!should_detach(false, false, None));
+        assert!(!should_detach(true, true, None));
+        assert!(!should_detach(true, false, Some("1")));
+    }
+
+    #[test]
+    fn runner_args_keep_every_flag_add_the_job_id_and_pipe_a_file_task() {
+        let flags = ["--agent", "pi", "--task-file", "/tmp/t.md", "--inbox-session", "s1", "--json"];
+        let (args, pipe) = runner_args(&flags, "job-9");
+        let mut want: Vec<&str> = vec!["herding", "run"];
+        want.extend(flags);
+        want.extend(["--job-id", "job-9", "--task-file", "-"]);
+        assert_eq!(args, want);
+        assert!(pipe);
+        // An inline --task already rides argv, so no pipe and no stdin read.
+        let (args, pipe) = runner_args(&["--task", "do it", "--inbox-session", "s1"], "job-9");
+        assert_eq!(args, ["herding", "run", "--task", "do it", "--inbox-session", "s1", "--job-id", "job-9"]);
+        assert!(!pipe);
+    }
+
+    #[test]
+    fn detached_envelope_carries_job_id_outcome_and_inbox_session() {
+        let v = detached_envelope("job-9", "s1");
+        assert_eq!(v["job_id"], "job-9");
+        assert_eq!(v["outcome"], "detached");
+        assert_eq!(v["inbox_session"], "s1");
+    }
 
     #[test]
     fn split_direction_is_right_only_when_the_parent_is_the_callers_own_pane() {
