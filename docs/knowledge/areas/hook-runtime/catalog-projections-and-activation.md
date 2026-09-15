@@ -159,7 +159,10 @@ Pi's bash tool exports; the payload note names it, and an empty value means
 run in the foreground with no flag (pi-stage-dispatch D2). A job run with
 `--seat <name>` carries `seat` in its marker, and the drain adds a `seat:`
 row right after `job_id`, for done and non-done results alike, so a hat
-wave matches each result to its seat (pi-stage-dispatch D3).
+wave matches each result to its seat (pi-stage-dispatch D3). The injected
+summary is one line; on every Pi dispatch kind the leader reads the worker's
+full answer from the file at `report_path`, and the stage skills tell it to
+(pi-stage-dispatch D4).
 
 **B10 — A belt reaches parity per checkpoint AND per lifecycle moment, not per
 checkpoint alone.** Pi's belt shipped firing four checkpoints while the catalog
@@ -328,7 +331,12 @@ recovery.
   deviation, B9, R1): no `Runtime::Pi`, no fourth projection — the belt file
   `.pi/extensions/bee-guard.ts` IS the projection, and
   `devtools/mod.rs`'s `render_projection_text_for` carries `"pi" => None` as
-  a RECOGNIZED runtime with no rendered file, never an unmatched name. Belt
+  a RECOGNIZED runtime with no rendered file, never an unmatched name.
+  Pi has no skill root of its own either: it reads the shared `.agents/skills`
+  root that onboarding renders for Codex, and that one root keeps
+  `bee:only pi` blocks beside the Codex blocks, while the Claude, OpenCode and
+  plugin skill roots strip them. Every dispatch and result-collection step a
+  Pi leader reads is therefore one Pi can run (pi-stage-dispatch D1). Belt
   internals mirror the OpenCode belt's shape (tool→hook routing map with
   fail-safe unknown-tool routing, throw-on-deny blocking runner, never-throw
   advisory wrappers) plus per-call passivity: each handler re-checks for the
