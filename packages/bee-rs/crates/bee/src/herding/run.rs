@@ -178,6 +178,10 @@ struct Options {
     /// caller has one — carried into the ack schema the brief shows, never
     /// invented when absent.
     cell_id: Option<String>,
+    /// `--seat <name>` (pi-stage-dispatch D3): seat name of the detached run
+    /// (e.g. `hat-facts-gaps`), written into the result-inbox marker and the
+    /// JSON result envelope.
+    seat: Option<String>,
     /// `--inbox-session <token>` (pi-result-mailbox D6): the orchestrator
     /// session this job's result should be delivered INTO, asynchronously,
     /// because nothing is synchronously waiting on it. Bee has no other way
@@ -287,6 +291,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut expertise_raw: Option<&str> = None;
     let mut nickname: Option<&str> = None;
     let mut cell_id: Option<&str> = None;
+    let mut seat: Option<&str> = None;
     let mut inbox_session: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
@@ -355,6 +360,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 cell_id = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--seat" => {
+                seat = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--inbox-session" => {
                 inbox_session = flags.get(i + 1).copied();
                 i += 2;
@@ -405,6 +414,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         has_explicit_expertise,
         nickname,
         cell_id: cell_id.map(str::to_string),
+        seat: seat.map(str::to_string),
         inbox_session: inbox_session.map(str::to_string),
         pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
     })
@@ -2182,6 +2192,9 @@ fn write_inbox_marker(bee_dir: &Path, opts: &Options) {
     };
     let mut m = Map::new();
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    if let Some(seat) = &opts.seat {
+        m.insert("seat".into(), Value::String(seat.clone()));
+    }
     m.insert(
         "mailbox".into(),
         Value::String(mailbox::mailbox_dir(bee_dir, &opts.job_id).display().to_string()),
@@ -3095,6 +3108,7 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
 ///
 /// Envelope keys:
 /// - `job_id`: the job id string
+/// - `seat`: string (D3: present only when --seat was passed)
 /// - `outcome`: outcome label string (e.g. `done`, `blocked`, `spawn_failed`, `interrupted`, `cancelled`, ...)
 /// - `pane_id`: string or null
 /// - `closed_pane`: boolean
@@ -3218,6 +3232,9 @@ fn result_envelope(
 ) -> Value {
     let mut m = Map::new();
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
+    if let Some(seat) = &opts.seat {
+        m.insert("seat".into(), Value::String(seat.clone()));
+    }
     m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));
     m.insert("pane_id".into(), result.pane_id.clone().map(Value::String).unwrap_or(Value::Null));
     m.insert("closed_pane".into(), Value::Bool(result.closed_pane));
@@ -4653,6 +4670,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
         }
@@ -4730,6 +4748,7 @@ mod tests {
             has_explicit_expertise: false,
             nickname: "job-1".to_string(),
             cell_id: None,
+            seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
         }
@@ -5888,6 +5907,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn seat_flag_writes_seat_into_the_result_envelope_and_absent_leaves_keys_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.seat = Some("hat-risks".to_string());
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"fixed it","files_changed":["a.rs"],"proof":"cargo test — green"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(envelope.get("seat").and_then(Value::as_str), Some("hat-risks"), "{envelope}");
+
+        let mut keys: Vec<&str> = envelope.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "seat", "summary"],
+            "envelope keys drifted for a result with seat: {envelope}"
+        );
+
+        // Without seat, identical to before:
+        opts.seat = None;
+        let envelope_no_seat = result_envelope(&opts, &result, "herdr", None);
+        assert!(envelope_no_seat.get("seat").is_none());
+        let mut keys_no_seat: Vec<&str> = envelope_no_seat.as_object().unwrap().keys().map(String::as_str).collect();
+        keys_no_seat.sort_unstable();
+        assert_eq!(
+            keys_no_seat,
+            vec!["closed_pane", "dry_run", "files_changed", "job_id", "outcome", "pane_id", "proof", "summary"]
+        );
+    }
+
     // ─── the report rides the mailbox (pi-result-mailbox D1, D2) ────────
     //
     // The row above is this family's LEGACY row, unchanged and still exact:
@@ -6267,6 +6325,51 @@ mod tests {
         assert_eq!(with.inbox_session.as_deref(), Some("sess-7"));
         let without = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
         assert_eq!(without.inbox_session, None);
+    }
+
+    #[test]
+    fn parse_options_reads_the_seat_flag_and_defaults_to_none() {
+        let with = parse_options(&["--task", "t", "--main-root", ".", "--seat", "hat-risks"]).unwrap();
+        assert_eq!(with.seat.as_deref(), Some("hat-risks"));
+        let without = parse_options(&["--task", "t", "--main-root", "."]).unwrap();
+        assert_eq!(without.seat, None);
+    }
+
+    #[test]
+    fn seat_flag_writes_seat_into_the_inbox_marker_and_absent_leaves_it_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.inbox_session = Some("sess-7".to_string());
+        opts.seat = Some("hat-risks".to_string());
+        seed_result(
+            tmp.path(),
+            &opts.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        let marker = tmp.path().join(".bee/result-inbox/sess-7/job-1.json");
+        execute(&opts, &FakeHerdr::new());
+
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
+        assert_eq!(m.get("job_id").and_then(Value::as_str), Some("job-1"), "{m}");
+        assert_eq!(m.get("seat").and_then(Value::as_str), Some("hat-risks"), "{m}");
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let mut opts2 = test_options(tmp2.path(), false);
+        opts2.inbox_session = Some("sess-7".to_string());
+        opts2.seat = None;
+        seed_result(
+            tmp2.path(),
+            &opts2.job_id,
+            1,
+            r#"{"status":"done","summary":"s","files_changed":[],"proof":"p"}"#,
+        );
+        let marker2 = tmp2.path().join(".bee/result-inbox/sess-7/job-1.json");
+        execute(&opts2, &FakeHerdr::new());
+
+        let m2: Value = serde_json::from_str(&std::fs::read_to_string(&marker2).unwrap()).unwrap();
+        assert_eq!(m2.get("job_id").and_then(Value::as_str), Some("job-1"), "{m2}");
+        assert!(m2.get("seat").is_none(), "absent seat must not appear in marker: {m2}");
     }
 
     #[test]
