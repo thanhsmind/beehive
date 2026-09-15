@@ -333,6 +333,14 @@ permit.
   is in `hooks/mod.rs`); reader is `activity_path` / `parse_activity_text` /
   `ACTIVITY_FRESHNESS_SECS` in `herding/mailbox.rs`, wired through
   `status_with_activity` in `herding/run.rs`.
+- A fresh spawn whose caller has `BEE_DISPATCH_ID` set also exports
+  `BEE_DISPATCH_ID`, `BEE_RELEASE_VERSION` and `BEE_SESSION_ID` (each only when
+  non-empty) into the pane, before the two markers, which still win. This is how a
+  deploy dispatch's worker runs `scripts/release.sh`: `dispatch authorize` inside the
+  pane sees the permit id and resolves the issuer session first in the env chain.
+  Without `BEE_DISPATCH_ID` none of the three passes, so an ordinary worker keeps its
+  own identity. Home: `resolve_pane_env_passthrough_from` and `Options.pane_env_passthrough`
+  in `herding/run.rs` (deploy-pane-authorization, cell `dpa-1`).
 - The worker marker is the environment variable `BEE_HERDING_WORKER=1`, exported
   into the pane before `agent start`; the mailbox directory is
   `.bee/mailbox/<job-id>/`. The repo instructions the contract tells the worker to
