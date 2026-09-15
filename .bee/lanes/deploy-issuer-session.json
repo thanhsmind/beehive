@@ -1,0 +1,153 @@
+{
+  "schema_version": "1.0",
+  "feature": "deploy-issuer-session",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"deploy-issuer-session\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-15T02:35:36.073Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "authorization"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-09-15T02:35:36.097Z",
+    "feature": "deploy-issuer-session"
+  },
+  "gate_preview": {
+    "feature": "deploy-issuer-session",
+    "plan_sha256": "7a86f9e3cabcd2f85ad4a2b4e70b98e8a1aebd64059faa9e62450310146dea2e",
+    "previewed_at": "2026-09-15T02:37:11.083Z",
+    "cells": [
+      {
+        "id": "dis-1",
+        "feature": "deploy-issuer-session",
+        "title": "Bind deployment dispatches to the resolved issuer session",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+          "docs/history/deploy-stage-execution/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "BUG: `bee dispatch prepare --stage deployment` writes `issuer_session` into the dispatch record ONLY when the raw `--session-id` flag is passed, while `bee dispatch authorize` resolves the acting session through `crate::verbs::state_group::resolve_session_id(flag, root)` (flag, then env chain BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID / PI_SESSION_ID, then single-live-session adoption). A pi session that runs prepare without the flag gets a record with no issuer_session, authorize refuses with deploy_authorization_wrong_session ('dispatch record is missing issuer_session'), the fix text says re-dispatch, and the leader loops. Anchors (rg -n in prepare.rs): `1340:    session_id: Option<&str>,` (param of fn prepare_dispatch_wire); `1462:                crate::verbs::state_group::session_binding(session_id, root)`; `2658:        if v2.stage.as_deref() == Some(\"deployment\") {`; `2662:            if let Some(sid) = session_id {`; `2663:                economics.insert(\"issuer_session\".into(), Value::String(sid.to_string()));`; authorize side `4416:    let session_id = crate::verbs::state_group::resolve_session_id(requested_session_id, &root)`. STEP 1 (red first): in tests.rs, next to `fn test_deploy_authorization_authorize_success_and_reuse_refusal` (it builds the pi team config, lane feat-auth with approved_cell_packet, and .bee/sessions/sess-auth.json, then calls `prepare_dispatch_wire(... Some(\"feat-auth\"), Some(\"deployment\"), Some(\"sess-auth\"), Some(\"2.39.0\"))`), add a test that builds the same fixture but calls prepare_dispatch_wire with session flag `None` while `BEE_SESSION_ID` is set to the session id (use BEE_SESSION_ID, not PI_SESSION_ID: the chain checks BEE first and a developer shell may carry CLAUDE_CODE_SESSION_ID; follow the set_var/remove_var pattern at `9252:        unsafe { std::env::set_var(\"BEE_SESSION_ID\", sid); }`, and remove the var before any assert can panic, or use a guard). Assert observable behavior: the prepared dispatch's record in .bee/logs/dispatch.jsonl carries issuer_session equal to that id, AND `authorize_dispatch_permit(&root, dispatch_id, \"2.39.0\", Some(<id>))` returns ok. Run it and watch it FAIL for the reported reason (missing issuer_session) before you fix. STEP 2 (fix): in prepare_dispatch_wire, stamp issuer_session from the SAME resolution authorize uses — `resolve_session_id(session_id, root)` — so prepare and authorize cannot disagree; keep the stamp limited to the deployment stage and keep writing nothing when no session resolves (authorize still refuses that record). Do not change authorize_dispatch_permit or its refusal matrix. STEP 3: run the new test plus the existing deploy_authorization tests.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_authorization",
+        "must_haves": {
+          "truths": [
+            "prepare --stage deployment without --session-id, with a session id in the env chain, writes issuer_session equal to that id",
+            "authorize with the same acting session then succeeds instead of refusing deploy_authorization_wrong_session"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "issuer_session stamped from resolve_session_id, the same resolver authorize uses"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "new red-first test for the flagless prepare then authorize path"
+            }
+          ],
+          "key_links": [
+            "prepare.rs deployment branch calls crate::verbs::state_group::resolve_session_id"
+          ],
+          "prohibitions": [
+            "No change to authorize_dispatch_permit refusal checks",
+            "Existing test_deploy_authorization_* tests stay unchanged and green"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "deploy-issuer-session",
+    "plan_sha256": "7a86f9e3cabcd2f85ad4a2b4e70b98e8a1aebd64059faa9e62450310146dea2e",
+    "previewed_at": "2026-09-15T02:37:11.083Z",
+    "cells": [
+      {
+        "id": "dis-1",
+        "feature": "deploy-issuer-session",
+        "title": "Bind deployment dispatches to the resolved issuer session",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+          "docs/history/deploy-stage-execution/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "BUG: `bee dispatch prepare --stage deployment` writes `issuer_session` into the dispatch record ONLY when the raw `--session-id` flag is passed, while `bee dispatch authorize` resolves the acting session through `crate::verbs::state_group::resolve_session_id(flag, root)` (flag, then env chain BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID / PI_SESSION_ID, then single-live-session adoption). A pi session that runs prepare without the flag gets a record with no issuer_session, authorize refuses with deploy_authorization_wrong_session ('dispatch record is missing issuer_session'), the fix text says re-dispatch, and the leader loops. Anchors (rg -n in prepare.rs): `1340:    session_id: Option<&str>,` (param of fn prepare_dispatch_wire); `1462:                crate::verbs::state_group::session_binding(session_id, root)`; `2658:        if v2.stage.as_deref() == Some(\"deployment\") {`; `2662:            if let Some(sid) = session_id {`; `2663:                economics.insert(\"issuer_session\".into(), Value::String(sid.to_string()));`; authorize side `4416:    let session_id = crate::verbs::state_group::resolve_session_id(requested_session_id, &root)`. STEP 1 (red first): in tests.rs, next to `fn test_deploy_authorization_authorize_success_and_reuse_refusal` (it builds the pi team config, lane feat-auth with approved_cell_packet, and .bee/sessions/sess-auth.json, then calls `prepare_dispatch_wire(... Some(\"feat-auth\"), Some(\"deployment\"), Some(\"sess-auth\"), Some(\"2.39.0\"))`), add a test that builds the same fixture but calls prepare_dispatch_wire with session flag `None` while `BEE_SESSION_ID` is set to the session id (use BEE_SESSION_ID, not PI_SESSION_ID: the chain checks BEE first and a developer shell may carry CLAUDE_CODE_SESSION_ID; follow the set_var/remove_var pattern at `9252:        unsafe { std::env::set_var(\"BEE_SESSION_ID\", sid); }`, and remove the var before any assert can panic, or use a guard). Assert observable behavior: the prepared dispatch's record in .bee/logs/dispatch.jsonl carries issuer_session equal to that id, AND `authorize_dispatch_permit(&root, dispatch_id, \"2.39.0\", Some(<id>))` returns ok. Run it and watch it FAIL for the reported reason (missing issuer_session) before you fix. STEP 2 (fix): in prepare_dispatch_wire, stamp issuer_session from the SAME resolution authorize uses — `resolve_session_id(session_id, root)` — so prepare and authorize cannot disagree; keep the stamp limited to the deployment stage and keep writing nothing when no session resolves (authorize still refuses that record). Do not change authorize_dispatch_permit or its refusal matrix. STEP 3: run the new test plus the existing deploy_authorization tests.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_authorization",
+        "must_haves": {
+          "truths": [
+            "prepare --stage deployment without --session-id, with a session id in the env chain, writes issuer_session equal to that id",
+            "authorize with the same acting session then succeeds instead of refusing deploy_authorization_wrong_session"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "issuer_session stamped from resolve_session_id, the same resolver authorize uses"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "new red-first test for the flagless prepare then authorize path"
+            }
+          ],
+          "key_links": [
+            "prepare.rs deployment branch calls crate::verbs::state_group::resolve_session_id"
+          ],
+          "prohibitions": [
+            "No change to authorize_dispatch_permit refusal checks",
+            "Existing test_deploy_authorization_* tests stay unchanged and green"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  }
+}

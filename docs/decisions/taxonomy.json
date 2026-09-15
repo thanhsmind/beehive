@@ -509,6 +509,8 @@
     "role-reroute",
     "scope-correction",
     "deployment",
-    "deploy-stage-execution"
+    "deploy-stage-execution",
+    "lane",
+    "deploy-issuer-session"
   ]
 }
