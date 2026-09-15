@@ -344,12 +344,10 @@ pub const HEADER_POINTER_CANDIDATES: &[&str] =
 
 /// onboard_bee.mjs RENDER_RUNTIMES / RENDER_SCHEMA / RENDER_SIDECAR /
 /// SKILLS_VERSION_STAMP (l. 685–719). `opencode` joined this list under D1
-/// (opencode-support oc-4): the marker grammar (`render.rs::classify_marker_line`)
-/// accepts it as a valid `<!-- bee:only opencode -->` label because the
-/// ONBOARDING SYNC PATH now renders a real opencode target
-/// (`.opencode/skills/`, via the already-runtime-agnostic
-/// `apply_sync_skill`/`render_skill_bytes`).
-pub const RENDER_RUNTIMES: &[&str] = &["claude", "codex", "opencode"];
+/// (opencode-support oc-4) and `pi` joined under D1 (pi-stage-dispatch psd-4):
+/// the marker grammar (`render.rs::classify_marker_line`) accepts both as valid
+/// marker labels (`<!-- bee:only opencode -->` and `<!-- bee:only pi -->`).
+pub const RENDER_RUNTIMES: &[&str] = &["claude", "codex", "opencode", "pi"];
 pub const RENDER_SCHEMA: &str = "bee-render/2";
 pub const RENDER_SIDECAR: &str = ".bee-render.json";
 pub const SKILLS_VERSION_STAMP: &str = ".bee-skills-version.json";
