@@ -324,9 +324,34 @@ no cells): the remaining control-plane verbs a relocated Pi leader runs.
     "must_haves":{"truths":["An unconfigured hat seat on Pi carries --seat with its own hat name and a ceiling no higher than 600","An unconfigured hat seat prompt names its own seat on every runtime"],"prohibitions":["The unconfigured hat still resolves its model through the advisor slot","Configured hat seats and non-hat roles are unchanged"]},
     "affects_skills":[],
     "affects_specs":[]
+  },
+  {
+    "id":"psd-10",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "title":"Pin the psd-1 plan action span as a known historical CLI-shape exception",
+    "action":"Per decision 687adf88, fix-first after the full suite went red. The test hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard fails because the fenced cells JSON in docs/history/pi-stage-dispatch/plan.md quotes the state advisor-ref verb span inside the psd-1 action, and the widened guard refuses that span. Run that one test first and copy the refused span exactly as its failure message prints it. Add that exact span as a new entry in KNOWN_HISTORICAL_EXCEPTIONS in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs, with a comment in the same style as the dis-1 entry that names psd-1 (pi-stage-dispatch) as the plan cell action quoting a verb shape, not a transcript anyone ran; raise the array length to match. Do not change invocations(), the walk scope, or any assertion, and do not edit plan.md.",
+    "verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- hooks::cli_shape::documented_invocations",
+    "read_first":["docs/history/pi-stage-dispatch/CONTEXT.md","docs/history/pi-stage-dispatch/plan.md","packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"],
+    "files":["packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"],
+    "deps":["psd-9"],
+    "decisions":["a20cf301","687adf88"],
+    "must_haves":{"truths":["The documented-invocations test passes with the psd-1 plan action span pinned as a known historical exception","Every pinned exception is still refused by the guard, so no entry is dead"],"prohibitions":["The scanner scope, the invocation extractor, and every assertion are unchanged","plan.md is not reworded"]},
+    "affects_skills":[],
+    "affects_specs":[]
   }
 ]
 ```
+
+### Plan revision 2 (2026-09-15)
+
+The full declared suite went red on one test: the documented-invocations scanner
+reads the fenced cells JSON above, and the psd-1 action quotes a state
+advisor-ref verb span that the widened CLI-shape guard refuses. The scanner's
+own documented remedy for a history plan that quotes a verb shape inside a cell
+action is a pinned entry in `KNOWN_HISTORICAL_EXCEPTIONS` (precedent: dis-1),
+not a rewrite of the plan. psd-10 is that fix-first cell (decision `687adf88`).
 
 ### Plan revision 1 (2026-09-15)
 
