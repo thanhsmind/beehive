@@ -10557,6 +10557,7 @@ advance_on — falling to another model there hides the defect (D11)"
         let cmd = payload.get("command").and_then(Value::as_str).unwrap();
         assert!(cmd.contains("export BEE_DISPATCH_ID="), "command must export BEE_DISPATCH_ID: {cmd}");
         assert!(cmd.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "command must export BEE_RELEASE_VERSION: {cmd}");
+        assert!(cmd.contains("BEE_SESSION_ID=\"sess-1\""), "command must export BEE_SESSION_ID: {cmd}");
         assert_eq!(payload.get("release_version"), Some(&json!("2.38.0")));
 
         // Verify dispatch.jsonl was written with audit fields
