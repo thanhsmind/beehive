@@ -308,9 +308,34 @@ no cells): the remaining control-plane verbs a relocated Pi leader runs.
     "must_haves":{"truths":["A real Pi session completes a three-seat hat wave inside 10 minutes with seat-named results","Every dispatch prepare and the advisor record in that run succeed from the feature worktree","The feature file records how to drive the wave and the session log path"],"prohibitions":["No hand-edited payload in the live run"]},
     "affects_skills":[],
     "affects_specs":[]
+  },
+  {
+    "id":"psd-9",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "title":"Keep the declared hat seat when an unconfigured hat falls through to advisor",
+    "action":"Per D3 and D5, fix-first after psd-6 found the gap. In prepare.rs an undeclared hat seat (no team.<runtime> entry for it) sets fallen_through_seat and rebinds canonical_role to advisor; hat_seat is then derived from marker_role, which carries the rebound role, so a Pi hat that falls through gets --seat advisor, no 600-second ceiling cap, and no seat block. Derive hat_seat (and so the --seat value, the Pi ceiling cap, and the prompt seat block) from the caller's declared hat name, using fallen_through_seat when it is set, while model resolution stays on the advisor slot. Write the test first: with team.pi carrying no hat-* entries, --kind advisor --role hat-risks on runtime pi returns --seat \"hat-risks\", a ceiling no higher than 600, and a prompt naming seat hat-risks; with team.claude carrying no hat-* entries, the claude prompt names seat hat-risks and the command gains no --seat.",
+    "verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- drivers::",
+    "read_first":["docs/history/pi-stage-dispatch/CONTEXT.md","docs/history/pi-stage-dispatch/plan.md","packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"],
+    "files":["packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs","packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"],
+    "deps":["psd-3"],
+    "decisions":["a20cf301","15109d96","c5aff99f"],
+    "must_haves":{"truths":["An unconfigured hat seat on Pi carries --seat with its own hat name and a ceiling no higher than 600","An unconfigured hat seat prompt names its own seat on every runtime"],"prohibitions":["The unconfigured hat still resolves its model through the advisor slot","Configured hat seats and non-hat roles are unchanged"]},
+    "affects_skills":[],
+    "affects_specs":[]
   }
 ]
 ```
+
+### Plan revision 1 (2026-09-15)
+
+psd-6 found that an unconfigured hat seat falls through to `advisor` in
+`prepare.rs` (`fallen_through_seat`, then `hat_seat` reads the rebound
+`marker_role`), so a host with no `team.pi` hat entries loses the seat name,
+the Pi ceiling cap, and the seat block (D3, D5). psd-9 is the fix-first cell
+(decision `c5aff99f`). psd-8 was already persisted with deps psd-5 and psd-6;
+it runs after psd-9 by orchestration, a named serial edge, not by a changed dep.
 
 ## Test matrix
 
