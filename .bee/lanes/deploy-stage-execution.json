@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"deploy-stage-execution\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"deploy-stage-execution\" (lane).",
+  "next_action": "Merged into main at e3cb3ea; reload the product and test \"deploy-stage-execution\", then either approve uat (\"bee gate --name uat --approved true --lane deploy-stage-execution\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-14T11:17:09.746Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: deploy-stage-execution",
+    "asked_at": "2026-09-15T01:49:11.964Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
@@ -536,12 +541,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-09-14T15:20:51.730Z"
-  },
-  "merge_ready": {
-    "since": "2026-09-14T15:54:17.178Z",
-    "branch": "wt/deploy-stage-execution",
-    "worktree_id": "beehive--wt--deploy-stage-execution",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
