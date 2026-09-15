@@ -12,9 +12,9 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-delivery
   lifecycle: active
-  areas: [bee-herding, hook-runtime, doctrine-layer]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
   required_context: [docs/history/pi-stage-dispatch/CONTEXT.md, docs/history/pi-stage-dispatch/plan.md]
-  sources: [docs/history/pi-stage-dispatch/CONTEXT.md, docs/history/pi-stage-dispatch/plan.md, .bee/cells/psd-1.json, .bee/cells/psd-2.json, .bee/cells/psd-3.json, .bee/cells/psd-4.json, .bee/cells/psd-5.json, .bee/cells/psd-6.json, .bee/cells/psd-7.json, .bee/cells/psd-8.json, .bee/cells/psd-9.json, .bee/cells/psd-10.json, .bee/cells/psd-11.json, .bee/cells/psd-12.json, .bee/cells/psd-13.json, .bee/cells/psd-14.json]
+  sources: [docs/history/pi-stage-dispatch/CONTEXT.md, docs/history/pi-stage-dispatch/plan.md, .bee/cells/archive/pi-stage-dispatch/psd-1.json, .bee/cells/archive/pi-stage-dispatch/psd-2.json, .bee/cells/archive/pi-stage-dispatch/psd-3.json, .bee/cells/archive/pi-stage-dispatch/psd-4.json, .bee/cells/archive/pi-stage-dispatch/psd-5.json, .bee/cells/archive/pi-stage-dispatch/psd-6.json, .bee/cells/archive/pi-stage-dispatch/psd-7.json, .bee/cells/archive/pi-stage-dispatch/psd-8.json, .bee/cells/archive/pi-stage-dispatch/psd-9.json, .bee/cells/archive/pi-stage-dispatch/psd-10.json, .bee/cells/archive/pi-stage-dispatch/psd-11.json, .bee/cells/archive/pi-stage-dispatch/psd-12.json, .bee/cells/archive/pi-stage-dispatch/psd-13.json, .bee/cells/archive/pi-stage-dispatch/psd-14.json]
 ---
 
 # pi-stage-dispatch — Delivery
@@ -97,19 +97,31 @@ Proposed by `bee knowledge promote --work pi-stage-dispatch` from 14 capped cell
 
 (b) AREA UPDATES — candidate spec-sync bullets, each citing its cell
 
-areas: from the scribing stamp for "pi-stage-dispatch" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-09-15T12:44:57.206Z), the work item declares no bee.areas.
+areas: from the scribing stamp for "pi-stage-dispatch" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-09-15T12:58:17.366Z), the work item declares no bee.areas.
 
 area bee-herding:
-  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-11.json)
-  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-12.json)
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
 
 area hook-runtime:
-  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-11.json)
-  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-12.json)
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
 
 area doctrine-layer:
-  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-11.json)
-  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/psd-12.json)
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
+
+area okf-profile:
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
+
+area advisor-protocol:
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
+
+area worktree-parallelism:
+  - [psd-11] run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0 — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-11.json)
+  - [psd-12] resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged — feature-wide sync per the scribing stamp, 1 file(s) changed (trace .bee/cells/archive/pi-stage-dispatch/psd-12.json)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 
@@ -123,8 +135,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-1-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-1.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-1.json]
   polarity: pitfall
 ---
 
@@ -134,7 +146,7 @@ bee:
 
 dispatch prepare and advisor-ref record/show serve main's store from a granted worktree; non-cell dispatch there defaults to the worktree feature
 
-## Recorded evidence (verbatim from .bee/cells/psd-1.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-1.json)
 
 - **deviation** — dispatch prepare --claim still refuses inside a granted worktree — claim writes holds and reservations on the shared control plane, which this cell did not audit — found a better route
 - **deviation** — the worktree feature is passed as the --feature default in run_dispatch_prepare, not threaded as a new prepare_dispatch_wire parameter — avoids editing 28 test call sites; order stays flag, bound lane, worktree, state.json — found a better route
@@ -155,8 +167,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-2-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-2.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-2.json]
   polarity: pitfall
 ---
 
@@ -166,7 +178,7 @@ bee:
 
 herding run --seat writes seat into inbox marker (write_inbox_marker) and JSON envelope (result_envelope); Pi drain renderResultInjection pushes seat row after job_id; PermissionRequest comment says Pi 0.84–0.85; release manifest refreshed
 
-## Recorded evidence (verbatim from .bee/cells/psd-2.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-2.json)
 
 - **deviation** — kept the run.rs seat flag, marker, envelope, and tests that an earlier worker on this cell left uncommitted in the worktree, after review against the cell action — found a better route
 - **deviation** — sync-ack: --seat is an additive herding flag; the dispatch payload that passes it is cell psd-3, and no plan cell names a skills/bee-herding file (affects_skills is empty)
@@ -185,8 +197,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-3-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-3.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-3.json]
   polarity: pitfall
 ---
 
@@ -196,7 +208,7 @@ bee:
 
 Pi note names PI_SESSION_ID, foreground, report_path (prepare.rs HERDING_DETACHED_DELIVERY_PI); pi non-cell role adds --seat and hat-* caps --ceiling at 600 (prepare.rs herding arm, HAT_WAVE_CEILING_SECONDS); advisor.md seat block via prompt_body_for seat arg; tests in drivers/tests.rs
 
-## Recorded evidence (verbatim from .bee/cells/psd-3.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-3.json)
 
 - **deviation** — Also synced the vendored copy .bee/bin/prompts/advisor.md (reserved first) — three drivers tests assert the vendored prompt matches the source, and the cell file list missed it — the plan was wrong about a fact
 - **deviation** — A Pi hat seat with no configured ceiling gets --ceiling 600 — the plan text min(configured, 600) did not name the absent case, and the wave budget needs a cap — found a better route
@@ -215,8 +227,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-4-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-4.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-4.json]
   polarity: pitfall
 ---
 
@@ -226,7 +238,7 @@ bee:
 
 pi joins both marker label lists (templates.rs RENDER_RUNTIMES, skill_trees.rs MARKER_RUNTIMES); onboard render.rs render_skill_bytes keeps pi blocks for the codex agents-root render only; claude/opencode roots and devtools plugin trees strip pi; sidecar schema unchanged
 
-## Recorded evidence (verbatim from .bee/cells/psd-4.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-4.json)
 
 - **deviation** — followed the plan
 - **deviation** — sync-ack: approved plan sets affects_skills empty for psd-4: this cell only adds the pi marker label and agents-root render rule; skill text that uses bee:only pi blocks lands in other pi-stage-dispatch cells
@@ -245,8 +257,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-5-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-5.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-5.json]
   polarity: pitfall
 ---
 
@@ -256,7 +268,7 @@ bee:
 
 Pi dispatch and collection blocks added to four stage skills, rendered into the agents tree only
 
-## Recorded evidence (verbatim from .bee/cells/psd-5.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-5.json)
 
 - **deviation** — ran the verify chain as separate commands instead of one compound line — the worktree command guard refused the compound form — hit an unforeseen obstacle
 - **deviation** — capped through a scratchpad script file instead of an inline finish command — the command guard refused the verify text inside the report — hit an unforeseen obstacle
@@ -277,8 +289,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-6-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-6.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-6.json]
   polarity: pitfall
 ---
 
@@ -288,7 +300,7 @@ bee:
 
 Pi advisor, hat, reviewer, and cell dispatch plus a detached drain round trip proven in pi_plugin_contracts.rs
 
-## Recorded evidence (verbatim from .bee/cells/psd-6.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-6.json)
 
 - **deviation** — Token proof is a shell expansion of the note flag text plus a successful --dry-run, not a read of parsed options — the dry-run JSON and job.json carry no inbox_session field — the plan was wrong about a fact
 - **deviation** — The test config sets team.pi hat-facts-gaps — an unconfigured hat seat falls through to advisor (prepare.rs:1964-1965), so Pi emits --seat advisor, no 600 cap, and no seat block; the product fix is in prepare.rs, outside this cell — hit an unforeseen obstacle
@@ -309,8 +321,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-7-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-7.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-7.json]
   polarity: pitfall
 ---
 
@@ -320,7 +332,7 @@ bee:
 
 Pi dispatch facts synced: config-reference (0.84–0.85 label, --seat and hat ceiling cap paragraph, PI_SESSION_ID token, drain seat field); hook-runtime B9 (token source, seat row); model-roles B15a (hat seat block, prepare and advisor-ref from granted worktree)
 
-## Recorded evidence (verbatim from .bee/cells/psd-7.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-7.json)
 
 - **deviation** — followed the plan
 - **deviation** — sync-ack: the four skills/** paths are a sibling worker's uncommitted edits in the shared worktree (psd-5 skill blocks); commit 1ad9f2cd for psd-7 touches only the three docs files
@@ -339,8 +351,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-8-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-8.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-8.json]
   polarity: pitfall
 ---
 
@@ -350,7 +362,7 @@ bee:
 
 Live Pi hat wave mapped in pi-hat-wave.md with its README row
 
-## Recorded evidence (verbatim from .bee/cells/psd-8.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-8.json)
 
 - **deviation** — the orchestrator started the live Pi leader through the herding transport in the sandbox worktree instead of this worker typing into a pane — the isolation guard refused pane prompts from this subagent, decision 74593eae — hit an unforeseen obstacle
 - **deviation** — the Pi shell tool default timeout is recorded as not observed — all 14 shell calls in the Pi log passed an explicit timeout — the plan was wrong about a fact
@@ -369,8 +381,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-9-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-9.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-9.json]
   polarity: pitfall
 ---
 
@@ -380,7 +392,7 @@ bee:
 
 Unconfigured hat seat keeps its own name on --seat, Pi 600s ceiling, and prompt seat block while its model resolves through the advisor slot (prepare.rs seat_name; test an_unconfigured_hat_seat_keeps_its_own_seat_when_it_falls_through)
 
-## Recorded evidence (verbatim from .bee/cells/psd-9.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-9.json)
 
 - **deviation** — followed the plan
 
@@ -398,8 +410,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-10-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-10.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-10.json]
   polarity: pitfall
 ---
 
@@ -409,7 +421,7 @@ bee:
 
 Pinned the psd-1 plan action span in KNOWN_HISTORICAL_EXCEPTIONS (cli_shape.rs, array length 3->4); documented_invocations test green
 
-## Recorded evidence (verbatim from .bee/cells/psd-10.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-10.json)
 
 - **deviation** — ran the verify with PATH=$HOME/.cargo/bin prefix instead of the CARGO_HOME-default form — the worktree shell guard refused the runtime-computed variable; CARGO_HOME is unset so the same cargo ran — hit an unforeseen obstacle
 
@@ -427,8 +439,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-11-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-11.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-11.json]
   polarity: pitfall
 ---
 
@@ -438,7 +450,7 @@ bee:
 
 run() in herding/run.rs detaches an inbox-session run: should_detach gates it, spawn_detached_runner re-launches bee in process_group(0) with the task on a stdin pipe and --job-id, the launcher prints detached_envelope and exits 0
 
-## Recorded evidence (verbatim from .bee/cells/psd-11.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-11.json)
 
 - **deviation** — The runner gets --task-file - appended only when the task did not come inline through --task; an inline task already rides argv and its stdin is null, because a non-empty --task wins in parse_options and an unread pipe could block the launcher on a large task — found a better route
 - **deviation** — The detach check runs after the transport config check, so a bad herding.transport still refuses in the foreground where the caller sees it — found a better route
@@ -459,8 +471,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-12-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-12.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-12.json]
   polarity: pitfall
 ---
 
@@ -470,7 +482,7 @@ bee:
 
 resolve_split_parent takes caller_is_worker (Options.caller_is_worker, read from BEE_HERDING_WORKER at parse): a worker caller splits its own pane down under the same width guard and fresh-tab fallback; top-level choice unchanged
 
-## Recorded evidence (verbatim from .bee/cells/psd-12.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-12.json)
 
 - **deviation** — read the BEE_HERDING_WORKER marker once at option parse into Options.caller_is_worker and pass it through split_worker_pane, not at the resolve_split_parent call site — reading it inside split_worker_pane/execute made 2 execute tests fail when cargo test runs inside a worker pane (BEE_HERDING_WORKER=1) — hit an unforeseen obstacle
 - **deviation** — sync-ack: cell files are run.rs only; the planned knowledge sync for this split rule is psd-13 (the-run-verb-and-worker-outcomes.md); skills/bee-herding carries no split-parent rule text to change
@@ -489,8 +501,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-13-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-13.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-13.json]
   polarity: pitfall
 ---
 
@@ -500,7 +512,7 @@ bee:
 
 Knowledge doc states nested worker column rule and detached runner; config-reference Pi note says the detached command returns at once
 
-## Recorded evidence (verbatim from .bee/cells/psd-13.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-13.json)
 
 - **deviation** — followed the plan
 
@@ -518,8 +530,8 @@ timestamp: 2026-09-15
 bee:
   id: pi-stage-dispatch-psd-14-pitfall
   lifecycle: draft
-  areas: [bee-herding, hook-runtime, doctrine-layer]
-  sources: [.bee/cells/psd-14.json]
+  areas: [bee-herding, hook-runtime, doctrine-layer, okf-profile, advisor-protocol, worktree-parallelism]
+  sources: [.bee/cells/archive/pi-stage-dispatch/psd-14.json]
   polarity: pitfall
 ---
 
@@ -529,7 +541,7 @@ bee:
 
 Recorded the second live Pi hat wave in .bee/verify/verify-app/features/pi-hat-wave.md: detached launches, hat panes in the worker column, all panes closed, evidence paths kept
 
-## Recorded evidence (verbatim from .bee/cells/psd-14.json)
+## Recorded evidence (verbatim from .bee/cells/archive/pi-stage-dispatch/psd-14.json)
 
 - **deviation** — Proved hat pane close from the layout captures and result-1.json mtimes, not from a hat envelope closed_pane field; closed_pane true is shown only for the leader envelope — a detached runner sends its stdout to null, so no hat envelope exists — the plan was wrong about a fact
 - **deviation** — Replaced one gotcha (the & wait launcher timeout), not two — the feature file held only one gotcha tied to open panes — the plan was wrong about a fact
@@ -538,4 +550,4 @@ Recorded the second live Pi hat wave in .bee/verify/verify-app/features/pi-hat-w
 
 Candidate only. `bee knowledge promote` proposes; naming the pattern, generalizing it beyond this cell, and moving `bee.lifecycle` to `active` are a human or agent decision.
 
-knowledge promote: 14 capped cell(s) mined, 1 delivery draft, 6 area bullet(s), 14 pattern candidate(s), 0 file(s) written.
+knowledge promote: 14 capped cell(s) mined, 1 delivery draft, 12 area bullet(s), 14 pattern candidate(s), 0 file(s) written.
