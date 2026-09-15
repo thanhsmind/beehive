@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at ade418c; capture what settled, then bee close --feature pi-stage-dispatch.",
+  "next_action": "Merged into main at 1915432; capture what settled, then bee close --feature pi-stage-dispatch.",
   "created_at": "2026-09-15T08:39:48.577Z",
   "run_state": null,
   "waiting_on": null,
