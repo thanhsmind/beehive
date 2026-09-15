@@ -194,6 +194,12 @@ struct Options {
     /// Environment variables forwarded into the worker pane (e.g. deploy
     /// authorization tokens).
     pane_env_passthrough: BTreeMap<String, String>,
+    /// psd-12: the caller's own env carries `BEE_HERDING_WORKER=1` (the
+    /// marker `pane_env` puts into every worker pane), so new workers stack
+    /// under the caller inside the worker column (`resolve_split_parent`).
+    /// Read once at parse, so tests build it explicitly and never inherit
+    /// the harness pane's env.
+    caller_is_worker: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -412,6 +418,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         agent: agent.map(str::to_string),
         expertise,
         has_explicit_expertise,
+        caller_is_worker: std::env::var("BEE_HERDING_WORKER").as_deref() == Ok("1"),
         nickname,
         cell_id: cell_id.map(str::to_string),
         seat: seat.map(str::to_string),
@@ -988,7 +995,23 @@ struct SplitParent {
 /// entry (`Iterator::max_by_key`'s own rule) — an arbitrary but
 /// deterministic choice, since herdr's own list order carries no other
 /// meaning here.
-fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitParent {
+///
+/// psd-12: a `caller_is_worker` caller (a herding worker spawning its own
+/// workers) is already IN the worker column, so the roomiest-other-pane rule
+/// would pick the human's main pane. Its parent is its own pane, split
+/// `down`: the new worker stacks under its caller, and the same width guard
+/// (and so the fresh-tab fallback) applies. An unreadable layout or one that
+/// does not name the caller fails open to that same own-pane `down` split.
+fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str, caller_is_worker: bool) -> SplitParent {
+    if caller_is_worker {
+        let width = panes.and_then(|list| list.iter().find(|p| p.pane_id == own_pane)).map(|p| p.width);
+        return SplitParent {
+            pane_id: own_pane.to_string(),
+            direction: "down",
+            ratio: DOWN_SPLIT_RATIO,
+            refusal: width.and_then(|w| narrow_pane_refusal(own_pane, w)),
+        };
+    }
     let chosen = panes.and_then(|list| {
         // D2: the caller's own pane is a candidate ONLY while it is alone
         // in the tab — that is the one split it ever takes.
@@ -1068,6 +1091,7 @@ fn split_worker_pane(
     job_id: &str,
     main_root: &Path,
     lock_wait: Duration,
+    caller_is_worker: bool,
 ) -> Result<String, String> {
     // Held for the whole body: the guard releases in `Drop`, at the return
     // below, by which point the new pane already exists.
@@ -1088,7 +1112,7 @@ fn split_worker_pane(
     };
 
     let layout = herdr.pane_layout(own_pane);
-    let parent = resolve_split_parent(layout.as_deref(), own_pane);
+    let parent = resolve_split_parent(layout.as_deref(), own_pane, caller_is_worker);
     match parent.refusal {
         None => herdr.pane_split(&parent.pane_id, parent.direction, parent.ratio, cwd),
         // hps-13: no pane in the caller's tab clears the child-width guard
@@ -2446,6 +2470,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         &opts.job_id,
         &opts.main_root,
         SPLIT_LOCK_WAIT,
+        opts.caller_is_worker,
     ) {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
@@ -3586,7 +3611,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
             PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 12 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2", "the main pane is never split twice");
         assert_eq!(parent.direction, "down");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "a down split stays even: {}", parent.ratio);
@@ -3603,7 +3628,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 43 },
             PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps the parent's 60 columns: {:?}", parent.refusal);
@@ -3615,7 +3640,7 @@ mod tests {
         // only pane. This is the one split it ever takes — "right", and its
         // child lands at exactly the 60-column minimum, workable.
         let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 120, height: 43 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "{}", parent.ratio);
@@ -3627,7 +3652,7 @@ mod tests {
         // The uat tab: 173x50, one pane. The worker column is 60 wide and
         // the human keeps 113 — the whole point of D2.
         let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 173, height: 50 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - (113.0 / 173.0)).abs() < 1e-12, "the main pane keeps 113: {}", parent.ratio);
@@ -3645,7 +3670,7 @@ mod tests {
             PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 60, height: 90 },
             PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 40 },
         ];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p2");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps width unchanged: {:?}", parent.refusal);
@@ -3653,7 +3678,7 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_is_unreadable() {
-        let parent = resolve_split_parent(None, "w1:p1");
+        let parent = resolve_split_parent(None, "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!((parent.ratio - 0.5).abs() < 1e-12, "a widthless fallback keeps the old even split");
@@ -3662,7 +3687,7 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_names_no_candidate() {
-        let parent = resolve_split_parent(Some(&[]), "w1:p1");
+        let parent = resolve_split_parent(Some(&[]), "w1:p1", false);
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
         assert!(parent.refusal.is_none());
@@ -3673,12 +3698,56 @@ mod tests {
         // The caller's own pane, alone: a "right" split, and 15 columns cap
         // at a 7-column child — the width the refusal must name.
         let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 15, height: 43 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p3");
+        let parent = resolve_split_parent(Some(&panes), "w1:p3", false);
         assert_eq!(parent.pane_id, "w1:p3");
         let msg = parent.refusal.expect("a 7-column child is below the minimum and must refuse");
         assert!(msg.contains("w1:p3"), "{msg}");
         assert!(msg.contains("7"), "{msg}");
         assert!(msg.contains("60"), "{msg}");
+    }
+
+    // ─── psd-12: a worker caller stacks inside the worker column ─────────
+
+    #[test]
+    fn resolve_split_parent_a_worker_caller_splits_its_own_pane_down_never_the_main_pane() {
+        // The live nested hat wave: the caller w1:p2 is a worker pane; the
+        // human's main pane w1:p1 is the largest, and today's rule split it.
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 25 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p2", true);
+        assert_eq!(parent.pane_id, "w1:p2", "a worker caller stacks under itself");
+        assert_eq!(parent.direction, "down");
+        assert!((parent.ratio - DOWN_SPLIT_RATIO).abs() < 1e-12, "{}", parent.ratio);
+        assert!(parent.refusal.is_none(), "{:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_a_non_worker_caller_keeps_the_roomiest_other_pane() {
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), x: 0, y: 0, width: 60, height: 12 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p3", false);
+        assert_eq!(parent.pane_id, "w1:p1", "a top-level choice is unchanged: roomiest other pane");
+        assert_eq!(parent.direction, "down");
+        assert!(parent.refusal.is_none());
+    }
+
+    #[test]
+    fn resolve_split_parent_a_worker_caller_too_narrow_still_refuses_into_the_fresh_tab_path() {
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), x: 0, y: 0, width: 150, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), x: 0, y: 0, width: 40, height: 50 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p2", true);
+        assert_eq!(parent.pane_id, "w1:p2");
+        assert_eq!(parent.direction, "down");
+        let msg = parent.refusal.expect("a 40-column down child is below the minimum and must refuse");
+        assert!(msg.contains("w1:p2") && msg.contains("40"), "{msg}");
     }
 
     #[test]
@@ -4591,8 +4660,8 @@ mod tests {
         let herdr = SharedLayoutHerdr::new(240, 40);
         let budget = Duration::from_secs(20);
         std::thread::scope(|s| {
-            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget));
-            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget));
+            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget, false));
+            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget, false));
             a.join().expect("thread a").expect("first split must succeed");
             b.join().expect("thread b").expect("second split must succeed");
         });
@@ -4629,7 +4698,7 @@ mod tests {
         let herdr = SharedLayoutHerdr::new(173, 50);
         let budget = Duration::from_secs(20);
         for n in 1..=5 {
-            split_worker_pane(&herdr, "w1:p1", &root, &format!("job-{n}"), &root, budget)
+            split_worker_pane(&herdr, "w1:p1", &root, &format!("job-{n}"), &root, budget, false)
                 .unwrap_or_else(|e| panic!("spawn {n} must succeed: {e}"));
         }
 
@@ -4678,6 +4747,7 @@ mod tests {
             "job-queued",
             &root,
             Duration::from_millis(150),
+            false,
         )
         .expect("a busy lock must never fail the spawn");
         assert_eq!(pane, "w1:p2");
@@ -4701,6 +4771,7 @@ mod tests {
             "job-broken",
             &root,
             Duration::from_millis(150),
+            false,
         )
         .expect("a broken lock must never fail the spawn");
         assert_eq!(pane, "w1:p2");
@@ -4783,6 +4854,7 @@ mod tests {
             seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
+            caller_is_worker: false,
         }
     }
 
@@ -4861,6 +4933,7 @@ mod tests {
             seat: None,
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
+            caller_is_worker: false,
         }
     }
 
