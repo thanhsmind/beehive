@@ -1223,5 +1223,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-15T01:54:25.055Z"
+  },
+  "deploy-issuer-session": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T02:45:48.333Z"
   }
 }

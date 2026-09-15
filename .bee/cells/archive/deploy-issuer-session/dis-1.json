@@ -4,7 +4,7 @@
   "title": "Bind deployment dispatches to the resolved issuer session",
   "lane": "small",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "files": [
@@ -45,17 +45,54 @@
   },
   "trace": {
     "worker": "dis-worker-1",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "prepare stamps issuer_session from the resolved session id",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-15T02:44:47.453Z",
     "behavior_change": true,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "touched the deployment issuer_session stamp in prepare_dispatch_wire; 5 passed incl. new flagless-prepare test, red before fix per worker report",
+    "verify_output": "green:unit",
+    "verify_passed": true,
     "claim_session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
-    "verify_command": null,
-    "claimed_at": "2026-09-15T02:37:44.987Z"
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_authorization",
+    "claimed_at": "2026-09-15T02:37:44.987Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f",
+        "owner_bypassed": null,
+        "at": "2026-09-15T02:44:47.452Z"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "saved dispatch prepare --json with 2>&1 so WARNING lines broke jq and the first herding run never started",
+        "better": "redirect only stdout to the payload file"
+      },
+      {
+        "wrong": "ctl9.sh ran bee worktree merge after bee cells finish refused, so main took the branch with verify unchecked",
+        "better": "stop the script on a refused cap before merging"
+      }
+    ],
+    "report": {
+      "outcome": "prepare stamps issuer_session through resolve_session_id, the resolver authorize uses",
+      "commit": "c34ea8bb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee deploy_authorization — green:unit — touched the deployment issuer_session stamp in prepare_dispatch_wire; 5 passed incl. new flagless-prepare test, red before fix per worker report",
+      "deviations": [],
+      "mistakes": [
+        "saved dispatch prepare --json with 2>&1 so WARNING lines broke jq and the first herding run never started — redirect only stdout to the payload file",
+        "ctl9.sh ran bee worktree merge after bee cells finish refused, so main took the branch with verify unchecked — stop the script on a refused cap before merging"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
