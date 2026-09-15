@@ -50,7 +50,11 @@ Nothing new is stored anywhere else. The document holds every lane's proposal
 verbatim, the cross-critiques, the chosen answer, the rejected set with its
 reasons, and the citations. The decision entry carries a registered revisit
 condition, so a reversal has a named trigger rather than a memory
-(slp-blind-lanes D2, f0f21142).
+(slp-blind-lanes D2, f0f21142). A convergence frames its rubric before any
+lane runs and converges by base plus grafts — one proposal taken whole, the
+best of the rest folded in — never by averaging the proposals. The rubric and
+the grafts ride as bold blocks inside the dossier's Question and Chosen
+sections, because the checking verb accepts exactly seven sections (af985dc0).
 
 **B5 — One verb checks that document.** Its sections are fixed and ordered,
 and every refusal names the offending section, so a reader always learns which

@@ -92,7 +92,19 @@ govern the working residue of a cell rather than its content.
   named as UNSWEPT. Seven rows go in, seven come out — an omitted row is the
   defect the procedure exists to stop, the same honesty rule R19's dismissed
   bucket applies to review. The playbook and the skill CITE this home; neither
-  transcribes it.
+  transcribes it. The user shortcut skills `/bee-how` and `/bee-why` are doors
+  into these two procedures, never copies: each scopes the question, runs Trace
+  or the Provenance sweep from that one home, and answers in the reply with no
+  brief file. The procedure owns every step, the vague-target reading line
+  included, so a door restates none of them.
+- **R22** — A saved document with no bee template (a README, a guide, a
+  handbook page) is written through `bee-technical-writing`: the document type
+  comes first, one type per file, split and linked where types meet. Two places
+  say so and no more: the docs-only route in the bee-hive router names it, and
+  one always-loaded AGENTS sentence names it for plain turns, where no skill is
+  running. A templated document (a plan, a cell action, an area spec, a
+  CONTEXT.md, a research brief) already keeps one type through its own template
+  rules and gets no extra line (f951a31f).
 
 - **R13** — Small work starts from an executable work packet, never a shrunken
   feature plan (lane-ceremony-v3 D3/D4/D5). The tiny lane's complete work shape
