@@ -1,0 +1,101 @@
+{
+  "id": "prd-2",
+  "feature": "pi-relocation-delivery",
+  "title": "Carry the inbox token and the claims across a Pi relocation",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "prd-1"
+  ],
+  "decisions": [
+    "0833887d-9005-46de-84f4-df265da53cbb",
+    "52d1e3aa-97d3-4a0d-a89a-67f0822ec695",
+    "b527603f-226d-4a19-96e1-7feaecf090d4",
+    "a73c592a-d6c5-4e15-abe6-5ffab20e37c8"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-relocation-delivery/CONTEXT.md",
+    "docs/history/pi-relocation-delivery/plan.md",
+    "docs/history/pi-relocation-delivery/reports/hat-wave-synthesis.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST, in this order. (1) Make the contract harness able to tell the two session ids apart: the replaced context currently reports the OLD id (pi_plugin_contracts.rs:701 `createCommandContext(newCwd, ctxSessionId, {`), so have it report the forked session file's own id. (2) Add ONE contract case that dispatches a detached job with --inbox-session <old id>, relocates the session, and asserts: the new session drains that carried marker; a job dispatched AFTER the relocation is also delivered; an already-injected marker (`<job>.json.processing`) is NOT injected a second time; and the claim held by the old session names the new session with no --force-ownership. Run it and watch it FAIL for those reasons. (3) Then change the belt: the new session CARRIES the old token instead of moving files — the drain reads its own result-inbox folder plus the carried one(s), resolved under the MAIN checkout's .bee (the root `herding/run.rs:2243` always writes to), never the worktree's; the carry survives the mid-switch session_shutdown (bee-guard.ts:1961-1962, :1990-1991 clears the other relocation maps — the carry slot is exempt and is mirrored in one small pointer file under the main root); a carried folder is read for unclaimed `<job-id>.json` markers only, and orphan reclaim never runs over it. In performSessionTransition's withSession closure, record the carry and call `bee cells rebind-session --from <old> --to <new>` through execBeeCli FIRST, before handlePostExitMerge; if the switch afterwards reports cancelled or failed, rebind back to the old id. A failed rebind never aborts the transition — it warns in the UI naming the manual verb. When non-zero, the relocation notice names how many claims were rebound and how many jobs were carried. (4) Run the full regen inside this cell — `bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — so the embedded belt bytes and the release manifest match the edit.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+  "must_haves": {
+    "truths": [
+      "a job dispatched before a relocation is delivered to the relocated session",
+      "a job dispatched after the relocation is delivered too",
+      "an already-injected marker is not injected a second time",
+      "the claim survives the move: a cap after relocation needs no --force-ownership",
+      "the carry and rebind run before handlePostExitMerge, and a cancelled switch undoes the rebind",
+      "doctor --runtime pi reports wiring_matches_binary ok"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "carried-token drain, exempt carry slot, pointer file, ordered and compensating rebind, notice counts"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "harness reports the forked id, plus the new relocation-with-a-job-in-flight case"
+      }
+    ],
+    "key_links": [
+      "the drain resolves carried folders under the main checkout root, not the worktree",
+      "the rebind call goes through the verb prd-1 added"
+    ],
+    "prohibitions": [
+      "Do not move or delete marker files as the delivery mechanism",
+      "Do not change how relocation itself works (session replacement stays)",
+      "Do not touch Claude, Codex or OpenCode paths"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prd-2",
+    "outcome": "Carry the inbox token and rebind the claims across a Pi relocation, proven by a red-first contract case",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Rebuilt the release binary and refreshed the vendored .bee/bin/bee beyond the cell's file list — something else had to be fixed first: doctor's wiring_matches_binary compares the installed belt against the bytes the binary embeds, so the proof the cell owes cannot be produced without it"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T23:29:37.206Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the approved chain: 68 contract tests passed including the new relocation-with-a-job-in-flight case, manifest 376 files match, and doctor --runtime pi reported overall ready with wiring_matches_binary ok",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "6f3236e7-8071-46e7-aa47-bd47394b0ba6",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+    "claimed_at": "2026-09-15T23:08:50.296Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A relocated Pi session now carries the old inbox token under the main checkout root and rebinds its claims through bee cells rebind-session before handlePostExitMerge, with a compensating rebind when the switch fails (bee-guard.ts:90 mainCheckoutRoot, :769 carriedInboxTokens, :803 recordCarry, :915-918 own-folder-only orphan reclaim, :1623-1675 ordered carry+rebind, :1685-1697 rollback)",
+      "commit": "67ebe19bb57797a8a418f94d7fe15f6c9253d9c8",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json — green:live — leader re-ran the approved chain: 68 contract tests passed including the new relocation-with-a-job-in-flight case, manifest 376 files match, and doctor --runtime pi reported overall ready with wiring_matches_binary ok",
+      "deviations": [
+        "Rebuilt the release binary and refreshed the vendored .bee/bin/bee beyond the cell's file list — something else had to be fixed first: doctor's wiring_matches_binary compares the installed belt against the bytes the binary embeds, so the proof the cell owes cannot be produced without it"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -608,3 +608,4 @@
 {"ts":"2026-09-15T15:39:39.232Z","event":"complete","id":"af5724e1-6a43-4e09-9f24-b5fee91b0b16"}
 {"ts":"2026-09-15T15:39:39.694Z","event":"complete","id":"0977da90-2f7d-4d8f-aa92-ca0e5b6a1b4c"}
 {"ts":"2026-09-15T15:39:39.946Z","event":"complete","id":"3197bb99-aeba-4993-915d-0921ea65a27c"}
+{"ts":"2026-09-15T23:29:22.529Z","event":"add","id":"aba19a90-f322-47a4-8027-eae9b762eee2","kind":"scribe","feature":"pi-relocation-delivery","cells":["prd-1"],"areas":[],"files":["packages/bee-rs/crates/bee/src/generated/registry_payload.json","packages/bee-rs/crates/bee/src/verbs/cells/claims.rs","packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs","packages/bee-rs/crates/bee/src/verbs/cells/util.rs"],"reason":"Scribing debt: 1 capped behavior_change cell(s) for \"pi-relocation-delivery\" with no scribing/compounding record since capping."}
