@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "3. The other commands logged at 06:33:56, to see if it came in a burst from the test suite.",
-    "asked_at": "2026-09-15T06:34:52.322Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-15T08:08:12.922Z",
     "session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f"
   },
   "route": {

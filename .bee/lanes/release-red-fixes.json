@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"release-red-fixes\" — feature is closed.",
   "created_at": "2026-09-15T06:45:56.633Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "question",
+    "subject": "Release 2.37.3 ready but blocked: this machine has no DNS (github.com, crates.io, google.com fail) — restore network, then say go",
+    "asked_at": "2026-09-15T06:58:44.047Z",
+    "session": "d75e9d1f-bb71-42f9-ab40-f1dc725c918f"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",
