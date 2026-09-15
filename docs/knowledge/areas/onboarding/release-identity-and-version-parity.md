@@ -44,7 +44,7 @@ never tagged, leaving installers serving an older version indefinitely.
 | Skipping the gate | Possible, explicit, and loud. Never the default, never silent. |
 | No version given | The old tail-only behaviour: take the committed version and resume from tagging. |
 | Version already committed | Idempotent. It says so and resumes, so a run that died waiting on the pipeline is re-run, not repaired. |
-| Refusals | Wrong branch, malformed version, a version not strictly newer, a tag that already exists anywhere, or any dirty file — each refuses by name **before** a byte is written. |
+| Refusals | Wrong branch, malformed version, a version not strictly newer, a tag that already exists anywhere, or any dirty file — each refuses by name **before** a byte is written. The one exemption from "any dirty file" is exactly `.bee/wave-ledger.jsonl` and `.bee/lanes/*.json`: bee itself writes them on main while a deploy dispatch runs (the herding wave row, the session wait mark), so `scripts/release-dirt.sh` leaves them out of the dirt check, out of the release commit, and out of the abort-time reset. The permit marker under `.bee/authorizations/` is git-ignored runtime state (release-clean-tree, cell `rct-1`). |
 | Abort part-way | Anything that fails between the version write and the commit restores the manifests, so a failed release leaves nothing half-bumped. |
 | Done | Only when the final success line prints. A release commit without it is **not** a release. |
 
