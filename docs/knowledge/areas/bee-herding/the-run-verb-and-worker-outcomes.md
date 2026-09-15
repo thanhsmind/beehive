@@ -593,8 +593,13 @@ verb's own default ceiling of 21600 s is far too loose to serve as one.
   sat idle with nothing to retire it — closed by hand. The correction on record
   is orchestration, not code: the foreground wait now runs without a premature
   caller timeout, and a rerun returned a done outcome with the pane closed.
-  Whether the verb should refuse a foreground wait it cannot outlast, and
-  recovery from abrupt process death, are both untested and open.
+<!-- bee:not-a-deferral: an open gap naming an untested case, not a promise to act later -->
+  A run with an inbox session no longer depends on its caller: its runner lives
+  in its own process group and closes the pane after a valid result even when
+  the launcher's group is killed (pi-stage-dispatch b2f1afca, live Pi run
+  2026-09-15). A FOREGROUND wait still shares its caller's fate, and whether the
+  verb should refuse a foreground wait it cannot outlast is untested and open.
+<!-- /bee:not-a-deferral -->
 - **A valid result closes the pane before a promised report is checked.**
   Completion is read from the result file, never console text; a declared
   report that is missing, empty, unreadable, a directory, or stale becomes a
