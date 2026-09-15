@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-clean-tree\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 8966766; capture what settled, then bee close --feature release-clean-tree.",
   "created_at": "2026-09-15T06:18:27.993Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -190,12 +190,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-15T06:29:57.931Z",
-    "branch": "wt/release-clean-tree",
-    "worktree_id": "beehive--wt--release-clean-tree",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
