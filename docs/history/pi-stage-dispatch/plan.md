@@ -150,6 +150,7 @@ psd-5 and psd-6.
     {"stage":"test-and-live-proof","classification":"required","role":"test","reason":"Pi contract tests and one live Pi wave prove the path."},
     {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"Skills, rendered trees, config reference, and knowledge must agree."},
     {"stage":"independent-review","classification":"conditional","role":"review","condition":"The user explicitly requests independent review.","reason":"Review remains a separate user-invoked pass."},
+    {"stage":"deployment","classification":"conditional","role":"deploy","condition":"The user asks for a release after the feature closes.","reason":"The configured deploy role publishes from main, waits for CI, and verifies assets."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"The three hats supply the plan consult."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended supervisor loop is needed."},
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"Causes are verified; no competing whole designs."},
@@ -409,6 +410,14 @@ no cells): the remaining control-plane verbs a relocated Pi leader runs.
   }
 ]
 ```
+
+### Plan revision 4 (2026-09-15)
+
+The user asked for release 2.38.0 from this Claude session and chose to add a
+conditional `deployment` stage on role `deploy` to this role plan (decision
+`ae151969`). The only approved plans with a deployment stage are Pi plans, so
+the Claude dispatch door refused them. No cell is added; the stage only lets the
+deploy role run `scripts/release.sh` from main.
 
 ### Plan revision 3 (2026-09-15)
 
