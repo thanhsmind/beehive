@@ -11039,6 +11039,101 @@ advance_on — falling to another model there hides the defect (D11)"
     }
 
     #[test]
+    fn test_release_dirt_script_filters_only_bee_paths() {
+        let repo_root_3 = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let repo_root = if repo_root_3.join("scripts").join("release-dirt.sh").exists() {
+            repo_root_3
+        } else {
+            repo_root_3.join("..")
+        };
+        let script = repo_root.join("scripts").join("release-dirt.sh");
+
+        let tmp = tempfile::tempdir().unwrap();
+        let td = tmp.path();
+
+        let run_git = |args: &[&str]| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(td)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&out.stderr));
+        };
+
+        run_git(&["init", "-q"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+        run_git(&["config", "user.name", "test"]);
+
+        std::fs::create_dir_all(td.join(".bee").join("lanes")).unwrap();
+        std::fs::write(td.join("a.txt"), "a\n").unwrap();
+        std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave\n").unwrap();
+        std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{}\n").unwrap();
+
+        run_git(&["add", "."]);
+        run_git(&["commit", "-m", "init", "-q"]);
+
+        std::fs::write(td.join("a.txt"), "a dirty\n").unwrap();
+        std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave dirty\n").unwrap();
+        std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{\"dirty\":true}\n").unwrap();
+        std::fs::write(td.join("b.txt"), "b untracked\n").unwrap();
+
+        let out = Command::new("bash")
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out.stderr));
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(stdout.contains("a.txt"), "output should contain a.txt: {stdout:?}");
+        assert!(stdout.contains("b.txt"), "output should contain b.txt: {stdout:?}");
+        assert!(!stdout.contains(".bee/wave-ledger.jsonl"), "output should not contain wave-ledger: {stdout:?}");
+        assert!(!stdout.contains(".bee/lanes/x.json"), "output should not contain lanes/x.json: {stdout:?}");
+
+        run_git(&["checkout", "--", "a.txt"]);
+        std::fs::remove_file(td.join("b.txt")).unwrap();
+
+        let out_clean = Command::new("bash")
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        assert!(out_clean.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out_clean.stderr));
+        let stdout_clean = String::from_utf8_lossy(&out_clean.stdout);
+        assert!(stdout_clean.is_empty(), "expected empty output when only bee paths dirty, got: {stdout_clean:?}");
+    }
+
+    #[test]
+    fn test_release_authorizations_git_ignored() {
+        let repo_root_3 = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..");
+        let repo_root = if repo_root_3.join(".gitignore").exists() {
+            repo_root_3
+        } else {
+            repo_root_3.join("..")
+        };
+        if !repo_root.join(".gitignore").exists() {
+            return;
+        }
+        let out = Command::new("git")
+            .args(&["check-ignore", "-q", ".bee/authorizations/x.json"])
+            .current_dir(&repo_root)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "expected .bee/authorizations/x.json to be ignored by git at repo_root: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
     fn test_deploy_authorization_cli_routing() {
         let t0 = Instant::now();
         let os = |v: &[&str]| -> Vec<OsString> { v.iter().map(OsString::from).collect() };
@@ -11128,6 +11223,7 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(stdin_deploy_wt.contains("authorized to perform release mutations"), "deployment stdin must permit mutation: {stdin_deploy_wt}");
         assert!(stdin_deploy_wt.contains("CI"), "deployment stdin must mention CI verification: {stdin_deploy_wt}");
         assert!(stdin_deploy_wt.contains("asset"), "deployment stdin must mention asset verification: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("never run `bee dispatch authorize` yourself"), "deployment stdin must forbid calling dispatch authorize: {stdin_deploy_wt}");
         assert!(!stdin_deploy_wt.contains("Read-only"), "deployment stdin must not contain Read-only: {stdin_deploy_wt}");
         assert!(!stdin_deploy_wt.contains("never write"), "deployment stdin must not forbid writes: {stdin_deploy_wt}");
         assert!(!stdin_deploy_wt.contains("never edit"), "deployment stdin must not forbid edits: {stdin_deploy_wt}");

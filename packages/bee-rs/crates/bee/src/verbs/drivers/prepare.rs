@@ -1314,6 +1314,7 @@ pub(crate) fn deployment_prompt(release_version: &str) -> String {
         You are the deployment worker. This dispatch is authorized to perform release mutations on the main branch.\n\n\
         Execute the authorized release command:\n\
         scripts/release.sh {release_version}\n\n\
+        Run only that command; never run `bee dispatch authorize` yourself, because release.sh runs it and the permit works one time.\n\n\
         Wait for release CI to pass and verify the published release assets.\n"
     )
 }
