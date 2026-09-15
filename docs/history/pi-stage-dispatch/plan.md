@@ -340,9 +340,87 @@ no cells): the remaining control-plane verbs a relocated Pi leader runs.
     "must_haves":{"truths":["The documented-invocations test passes with the psd-1 plan action span pinned as a known historical exception","Every pinned exception is still refused by the guard, so no entry is dead"],"prohibitions":["The scanner scope, the invocation extractor, and every assertion are unchanged","plan.md is not reworded"]},
     "affects_skills":[],
     "affects_specs":[]
+  },
+  {
+    "id":"psd-11",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "change_class":"behavior",
+    "title":"Detach an inbox-session herding run from its launcher so the runner survives and closes its pane",
+    "action":"Per decision b2f1afca part (a). Pi runs each bash command in its own process group and on a timeout sends SIGKILL to that whole group, so a detached herding run started from Pi dies with its launcher and never reaches the pane close after wait_for_round (should_close_pane in execute). In run() in herding/run.rs, when the options carry an inbox session, the run is not a dry run, and the process env does not carry the runner marker BEE_HERDING_DETACHED_RUNNER=1: read the task text fully in the launcher (the task file, or stdin when the task file is the dash sentinel), allocate the job id in the launcher, and re-launch the current executable with the same arguments plus the job-id flag, the runner marker in its env, and the task handed over through a stdin pipe that the launcher writes fully and then closes. On unix put the runner in a new process group (std::os::unix::process::CommandExt::process_group(0)) with stdout and stderr detached from the launcher. The launcher prints one JSON line carrying job_id, outcome detached and the inbox session, and exits 0 at once; the runner runs today's full flow unchanged, including the inbox marker, the wait and the pane close. On non-unix targets and for every run without an inbox session, behavior and bytes stay as today. Write the tests first: a pure decision function detaches only when the inbox session is set, the run is not a dry run and the runner marker is absent; the runner argument list keeps every original flag and adds the job id; the launcher envelope carries job_id, outcome detached and the inbox session.",
+    "verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run",
+    "read_first":["docs/history/pi-stage-dispatch/CONTEXT.md","docs/history/pi-stage-dispatch/plan.md","packages/bee-rs/crates/bee/src/herding/run.rs","docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"],
+    "files":["packages/bee-rs/crates/bee/src/herding/run.rs"],
+    "deps":["psd-10"],
+    "decisions":["a20cf301","b2f1afca"],
+    "must_haves":{"truths":["A herding run with an inbox session returns at once with job_id and outcome detached while a separate runner process in its own process group finishes the job","The detached runner closes the worker pane when the result is valid, exactly as a foreground run does","Killing the launcher's process group does not stop the runner"],"prohibitions":["A run without an inbox session is byte-identical to today","The inbox marker is still written before the pane is split","No new crate dependency"]},
+    "affects_skills":[],
+    "affects_specs":["docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"]
+  },
+  {
+    "id":"psd-12",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "change_class":"behavior",
+    "title":"Keep workers spawned by a herding worker inside the worker column",
+    "action":"Per decision b2f1afca part (b). resolve_split_parent in herding/run.rs excludes only the caller's own pane and picks the roomiest remaining pane, so a caller that is itself a herding worker (its process env carries BEE_HERDING_WORKER=1, which run.rs puts into every worker pane through pane_env) splits the human's main pane, because the main pane is the largest. Give resolve_split_parent a caller_is_worker input, read once from the process env at its call site: when true, the parent is the caller's own pane and the direction is down, so each new worker stacks inside the worker column under its caller; the width guard (narrow_pane_refusal) and the fresh-tab fallback keep working on that choice. When false, the choice stays exactly as today. Write the tests first on the pure function: a worker caller in a tab whose largest pane is another pane picks its own pane with direction down; a non-worker caller keeps today's roomiest-other-pane choice and direction; a worker caller whose down child would be too narrow still returns the refusal that leads to the fresh-tab fallback.",
+    "verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding::run",
+    "read_first":["docs/history/pi-stage-dispatch/CONTEXT.md","docs/history/pi-stage-dispatch/plan.md","packages/bee-rs/crates/bee/src/herding/run.rs"],
+    "files":["packages/bee-rs/crates/bee/src/herding/run.rs"],
+    "deps":["psd-11"],
+    "decisions":["a20cf301","b2f1afca"],
+    "must_haves":{"truths":["A herding run whose caller is a herding worker splits the caller's own pane downward","A top-level caller keeps today's split parent, direction and ratio"],"prohibitions":["The human's main pane is never the split parent for a worker caller","The width guard and the fresh-tab fallback are unchanged"]},
+    "affects_skills":[],
+    "affects_specs":["docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"]
+  },
+  {
+    "id":"psd-13",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "title":"Document the detached runner and the nested worker column rule",
+    "action":"Per decision b2f1afca and the feature playbook's knowledge sync. In docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md, extend the paragraph that states the caller's pane is the main pane and is split exactly once: a caller that is itself a herding worker splits its own pane downward and stays in the worker column. Extend the section Pane lifecycle follows the result, not the clock: a run with an inbox session detaches a runner into its own process group and returns at once with outcome detached, so killing the launcher's process group (as Pi does on a bash timeout) no longer leaves the pane open. In docs/config-reference.md, update the Pi async-delivery note: the detached command returns at once, so a wait on it no longer blocks the leader. Extend existing text; add no new document.",
+    "verify":"rg -n 'process group' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'worker column' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n 'returns at once' docs/config-reference.md",
+    "read_first":["docs/history/pi-stage-dispatch/plan.md","docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md","docs/config-reference.md"],
+    "files":["docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md","docs/config-reference.md"],
+    "deps":["psd-12"],
+    "decisions":["b2f1afca"],
+    "must_haves":{"truths":["The knowledge doc states the nested worker column rule and the detached runner","The config reference says the Pi detached command returns at once"],"prohibitions":["No new document"]},
+    "affects_skills":[],
+    "affects_specs":["docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"]
+  },
+  {
+    "id":"psd-14",
+    "feature":"pi-stage-dispatch",
+    "role":"plan",
+    "lane":"standard",
+    "title":"Re-run the live Pi hat wave and prove the panes close inside the worker column",
+    "action":"Per decisions b2f1afca and 74593eae. The orchestrator builds the candidate binary with psd-11 and psd-12, installs it into the existing sandbox at /tmp/bee-verify/run/20260915-180023-56873, and starts a real Pi leader in the sandbox worktree through the herding transport, as in the first live run. The leader runs the three default hat seats exactly as the skill text says. Read the new evidence the orchestrator hands over (the leader's wave log, the herding run envelopes, the job records, and a pane layout capture taken while the hats ran and after they finished), and update .bee/verify/verify-app/features/pi-hat-wave.md: each hat job reports closed_pane true; no hat pane is left open after the wave; each hat pane was split from a worker pane in the worker column, never from the human's main pane; a detached launcher returned outcome detached at once. Replace the first run's two open-pane gotchas with the observed result, and keep the evidence paths.",
+    "verify":"rg -n 'closed_pane' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'worker column' .bee/verify/verify-app/features/pi-hat-wave.md && rg -n 'outcome detached' .bee/verify/verify-app/features/pi-hat-wave.md",
+    "read_first":["docs/history/pi-stage-dispatch/plan.md",".bee/verify/verify-app/features/pi-hat-wave.md"],
+    "files":[".bee/verify/verify-app/features/pi-hat-wave.md"],
+    "deps":["psd-12"],
+    "decisions":["b2f1afca","74593eae"],
+    "must_haves":{"truths":["A real Pi hat wave leaves no hat pane open","Every hat pane sits in the worker column, not beside the main pane","The feature file records the evidence paths"],"prohibitions":["No hand-edited payload in the live run"]},
+    "affects_skills":[],
+    "affects_specs":[]
   }
 ]
 ```
+
+### Plan revision 3 (2026-09-15)
+
+The user chose to fix two herding defects found by the live Pi run before merge
+(decision `b2f1afca`). Pi runs each bash command in its own process group and on
+a timeout sends SIGKILL to that whole group, so a detached run died with its
+launcher and never closed its pane; psd-11 detaches the runner into its own
+process group. The split-parent rule excludes only the caller's own pane, so a
+worker that spawns workers split the human's main pane; psd-12 keeps a worker
+caller inside the worker column. psd-13 syncs the knowledge doc and config
+reference; psd-14 re-runs the live Pi wave. The plan-step hat wave is not re-run:
+the lane is standard and the change is a bounded repair of two verified causes.
 
 ### Plan revision 2 (2026-09-15)
 
