@@ -1233,5 +1233,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-15T05:36:06.668Z"
+  },
+  "release-clean-tree": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T06:31:11.466Z"
   }
 }
