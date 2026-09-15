@@ -508,6 +508,7 @@
     "gate-1",
     "role-reroute",
     "scope-correction",
-    "deployment"
+    "deployment",
+    "deploy-stage-execution"
   ]
 }

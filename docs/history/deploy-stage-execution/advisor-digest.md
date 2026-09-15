@@ -32,4 +32,6 @@ The plan now includes the required safeguards:
 
 ## Gate judgment
 
+<!-- bee:not-a-deferral: This paragraph explains the completed cell order; it promises no future work. -->
 The three-cell sequence is the smallest honest high-risk shape. Code, shared instructions, and harmless installed proof have separate owners. Dependencies are serial because each later cell verifies output from the prior cell.
+<!-- /bee:not-a-deferral -->
