@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "pi-stage-dispatch",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 17665c5; reload the product and test \"pi-stage-dispatch\", then either approve uat (\"bee gate --name uat --approved true --lane pi-stage-dispatch\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature pi-stage-dispatch",
   "created_at": "2026-09-15T08:39:48.577Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: pi-stage-dispatch",
-    "asked_at": "2026-09-15T12:01:53.258Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: pi-stage-dispatch (Pi advisor, hat wave, and stage dispatch on main)",
+    "asked_at": "2026-09-15T12:02:38.876Z",
+    "session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7"
   },
   "route": {
     "class": "feature",
@@ -1422,5 +1422,16 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "pi-stage-dispatch",
+    "date": "2026-09-15",
+    "at": "2026-09-15T12:44:57.206Z",
+    "areas_synced": [
+      "bee-herding",
+      "hook-runtime",
+      "doctrine-layer"
+    ],
+    "next_action": "bee close --feature pi-stage-dispatch"
   }
 }
