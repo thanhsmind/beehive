@@ -1051,6 +1051,77 @@ use std::time::Instant;
         );
     }
 
+    /// pi-stage-dispatch D5: a `hat-*` advisor prompt names its seat and the
+    /// Hat wave home on every runtime; the configured description is never
+    /// copied; a non-hat advisor prompt carries no seat block at all.
+    #[test]
+    fn a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":"sonnet","advisor":"opus","hat-risks":{"model":"opus","description":"UNIQUE-DESCRIPTION-TEXT"}}}}"#,
+        );
+        let body = |role: Option<&str>| -> String {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "advisor", role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            let prompt = v["payload"]["prompt"].as_str().unwrap_or_default().to_string();
+            // Drop the `[bee-tier: …]` marker line: it names the slot, not the body.
+            prompt.split_once('\n').map(|(_, rest)| rest.to_string()).unwrap_or_default()
+        };
+        let plain = body(None);
+        let hat = body(Some("hat-risks"));
+        assert!(!plain.contains("Seat:"), "{plain}");
+        let block = "\n\nSeat: hat-risks. Your perspective and instrument are the row for this role in the bee-hive skill, references/gates-and-delegation.md, section \"Hat wave\". Read that row first, and answer from that seat only.";
+        assert_eq!(hat.replacen(block, "", 1), plain, "the seat block is the only difference: {hat}");
+        assert!(!hat.contains("UNIQUE-DESCRIPTION-TEXT"), "{hat}");
+    }
+
+    /// pi-stage-dispatch D3: on pi a named role rides the herding command as
+    /// `--seat`, and a hat seat caps the ceiling at the 600-second wave
+    /// budget (a lower configured value wins). Claude herding gains neither.
+    #[test]
+    fn a_pi_hat_herding_command_carries_its_seat_and_the_wave_ceiling() {
+        let command = |runtime: &str, ceiling: &str, kind: &str, role: Option<&str>| -> String {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(
+                &tmp,
+                &format!(
+                    r#"{{{ceiling}"models":{{"{runtime}":{{"generation":{{"kind":"herding","agent":"g"}},"extraction":{{"kind":"herding","agent":"x"}},"advisor":{{"kind":"herding","agent":"a"}},"hat-risks":{{"kind":"herding","agent":"h"}}}}}}}}"#
+                ),
+            );
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, runtime, kind, role, None, None, false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            v["payload"]["command"].as_str().unwrap_or_else(|| panic!("no command: {v}")).to_string()
+        };
+        let long = r#""herding":{"ceiling_seconds":1800},"#;
+        let short = r#""herding":{"ceiling_seconds":300},"#;
+
+        let c = command("pi", long, "advisor", Some("hat-risks"));
+        assert!(c.contains(" --seat \"hat-risks\""), "{c}");
+        assert!(c.contains("--ceiling 600") && !c.contains("1800"), "{c}");
+        assert!(command("pi", short, "advisor", Some("hat-risks")).contains("--ceiling 300"));
+        assert!(command("pi", "", "advisor", Some("hat-risks")).contains("--ceiling 600"));
+
+        // A non-hat role on pi names its seat but keeps the configured ceiling.
+        let c = command("pi", long, "gather", Some("extraction"));
+        assert!(c.contains(" --seat \"extraction\"") && c.contains("--ceiling 1800"), "{c}");
+        // No role named: no seat.
+        assert!(!command("pi", long, "advisor", None).contains("--seat"));
+
+        // Claude herding: neither the seat nor the cap.
+        let c = command("claude", long, "advisor", Some("hat-risks"));
+        assert!(!c.contains("--seat") && c.contains("--ceiling 1800"), "{c}");
+        assert!(!command("claude", "", "advisor", Some("hat-risks")).contains("--ceiling"));
+    }
+
     /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
     /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
     /// — `--purpose` is that way. Given, it renders; omitted, today's exact

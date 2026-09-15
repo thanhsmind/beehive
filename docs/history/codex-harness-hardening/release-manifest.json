@@ -1819,7 +1819,7 @@
     },
     {
       "path": "packages/bee/prompts/advisor.md",
-      "sha256": "77ca1659b33dc4879ea708202582985d0b95bc9ef7556c37dd7f0c09def825a9",
+      "sha256": "608dab75e064bc4affd30db5e548acdbc3d42b80e091329f03ede9ef9bdd6cf8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/advisor.md"

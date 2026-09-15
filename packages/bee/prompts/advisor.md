@@ -1,4 +1,8 @@
 Advisor consult: produce an independent digest/opinion on the given question. Read-only.
+{{#if seat}}
+
+Seat: {{seat}}. Your perspective and instrument are the row for this role in the bee-hive skill, references/gates-and-delegation.md, section "Hat wave". Read that row first, and answer from that seat only.
+{{/if}}
 {{#if original_request}}
 
 {{original_request}}

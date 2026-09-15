@@ -156,7 +156,11 @@ pub(crate) const PI_HERDING_ONLY_REASON: &str = "pi_requires_herding";
 /// payload carries. It names the flag, the token to pass, and the one case
 /// that must NOT carry it, because a detached pane's result reaches the
 /// session through the drain or not at all.
-pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "DETACHED runs only (this command backgrounded, nothing waiting on its output): append --inbox-session \"<orchestrator-session-id>\" — the session id the pi preamble shows you — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. Run it SYNCHRONOUSLY (in the foreground, result read from this command's own JSON) and pass NO flag: one delivery path per job, never both.";
+/// pi-stage-dispatch D3: the hat wave's wall-clock budget, in seconds
+/// (`bee-hive/references/gates-and-delegation.md` "Hat wave").
+const HAT_WAVE_CEILING_SECONDS: u64 = 600;
+
+pub(crate) const HERDING_DETACHED_DELIVERY_PI: &str = "One delivery path per job, never both. DETACHED (this command backgrounded, nothing waiting on its output): append --inbox-session \"$PI_SESSION_ID\" — the variable Pi's bash tool exports — before you run it. The flag writes a .bee/result-inbox/<session>/<job-id>.json marker before the pane splits, and the bee Pi drain injects the worker's result into this session once the pane closes. When $PI_SESSION_ID is empty, do not detach: run the command in the foreground and pass NO flag. On both paths the JSON summary is one line; the worker's full answer is the file at report_path — read that file.";
 
 /// What a slot resolved to, in the words the refusal reports it under.
 /// `Herding` never reaches here (it is the one resolution the pi door
@@ -1031,6 +1035,9 @@ pub(crate) fn prompt_body_for(
     advisor: Option<&str>,
     purpose: Option<&str>,
     lane_feature: Option<&str>,
+    // pi-stage-dispatch D5: the `hat-*` seat this non-cell dispatch runs
+    // as, `None` for every other role. Only the advisor template reads it.
+    seat: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -1058,6 +1065,7 @@ pub(crate) fn prompt_body_for(
                 ("expertise", expertise.unwrap_or("")),
                 ("purpose", purpose.unwrap_or("")),
                 ("original_request", &original_request),
+                ("seat", seat.unwrap_or("")),
             ],
         ));
     }
@@ -2223,6 +2231,11 @@ pub(crate) fn prepare_dispatch_wire(
     } else {
         None
     };
+    // pi-stage-dispatch D3/D5: a non-cell dispatch that names a `hat-*` seat.
+    let hat_seat = (kind != "cell" && role.is_some())
+        .then(|| seat_role_named(marker_role))
+        .flatten()
+        .filter(|seat| seat.starts_with("hat-"));
 
     let prompt_body = match prompt_body_for(
         root,
@@ -2235,6 +2248,7 @@ pub(crate) fn prepare_dispatch_wire(
         advisor.as_deref(),
         purpose,
         lane_feature.as_deref(),
+        hat_seat,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -2415,6 +2429,14 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(agent);
                     command.push('"');
                 }
+                // pi-stage-dispatch D3, pi only: a non-cell dispatch that
+                // names a role carries it as `--seat`, so a detached result
+                // comes back named by its seat.
+                if runtime == "pi" && kind != "cell" && role.is_some() {
+                    command.push_str(" --seat \"");
+                    command.push_str(marker_role);
+                    command.push('"');
+                }
                 // herding-stall-ceiling D1: `herding.ceiling_seconds` in the
                 // MAIN checkout's config becomes `--ceiling <n>` on the
                 // command. `herding run` already caps a DEAD pane through
@@ -2422,7 +2444,16 @@ pub(crate) fn prepare_dispatch_wire(
                 // the worker that reads without ever editing and so keeps its
                 // own heartbeat alive past the idle door. Absent or
                 // out-of-range key leaves the command byte-identical.
-                if let Some(seconds) = ceiling_seconds_at(root) {
+                //
+                // pi-stage-dispatch D3, pi only: a hat seat keeps the 10-minute
+                // wave budget — 600 seconds, or a lower configured value.
+                let ceiling = match ceiling_seconds_at(root) {
+                    configured if runtime == "pi" && hat_seat.is_some() => {
+                        Some(configured.map_or(HAT_WAVE_CEILING_SECONDS, |s| s.min(HAT_WAVE_CEILING_SECONDS)))
+                    }
+                    configured => configured,
+                };
+                if let Some(seconds) = ceiling {
                     command.push_str(" --ceiling ");
                     command.push_str(&seconds.to_string());
                 }
@@ -5439,9 +5470,11 @@ mod detached_delivery_tests {
         assert!(note.contains("--inbox-session"), "the flag must be named: {note}");
         assert!(note.contains(".bee/result-inbox/"), "the marker path must be named: {note}");
         assert!(
-            note.contains("session id") && note.contains("preamble"),
-            "the token's source must be named: {note}"
+            note.contains("--inbox-session \"$PI_SESSION_ID\""),
+            "the token must be a variable Pi really exports: {note}"
         );
+        assert!(note.contains("foreground"), "the empty-token case must be named: {note}");
+        assert!(note.contains("report_path"), "the full-answer file must be named: {note}");
         // The command itself is untouched: bee never guesses the token.
         let command = payload.get("command").and_then(Value::as_str).unwrap_or_default();
         assert!(!command.contains("--inbox-session"), "{command}");
