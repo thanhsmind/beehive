@@ -317,6 +317,17 @@ a brief whose leaning IS its job. Hats never see each other. The
 orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
 never delegates.
 
+<!-- bee:only pi -->
+On Pi: each hat payload is a `bee herding run` command. Launch every seat's
+command in the background in ONE shell call, each with
+`--inbox-session "$PI_SESSION_ID"` appended, then keep working — never wait
+in the foreground. The drain injects each result into the session; match it
+to its hat by its `seat:` row. The injected summary is one line: read the
+file at `report_path` for the hat's full answer before synthesis. A seat still
+missing at 10 minutes is dropped and named (Budget, above). A result whose
+`job_id` you already handled is a replay — ignore it. When `$PI_SESSION_ID`
+is empty, run the commands in the foreground instead, without the flag.
+<!-- bee:end -->
 **Prompt framing — open questions, not validation.** A hat prompt presents
 the PROBLEM and CONSTRAINTS, never the leader's draft solution. Frame each
 dispatch as an open question that invites the hat's own exploration:
