@@ -10951,4 +10951,234 @@ advance_on — falling to another model there hides the defect (D11)"
         ).is_some());
     }
 
+    #[test]
+    fn test_deploy_payload_stdin_and_cwd_with_and_without_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
 
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"read-only-gather","classification":"conditional","role":"read","condition":"cond","reason":"r"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" },
+                    "read": { "kind": "herding", "agent": "gather-agent" }
+                }
+            }
+        });
+        w(&main, ".bee/config.json", &config.to_string());
+
+        let table_val = crate::verbs::models_group::team_table(&main, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "demo",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(main.join(".bee").join("lanes")).unwrap();
+        w(&main, ".bee/lanes/demo.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "demo",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        let norm_main = dunce::canonicalize(&main).unwrap().to_string_lossy().into_owned();
+        let norm_granted = dunce::canonicalize(&granted).unwrap().to_string_lossy().into_owned();
+
+        // 1. Stage deployment WITH granted feature worktree:
+        // Cwd MUST be main root, NOT the worktree; stdin MUST permit mutation and name scripts/release.sh.
+        let Prepared::Value(v_deploy_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for deployment with worktree");
+        };
+        let payload_deploy_wt = v_deploy_wt.get("payload").unwrap();
+        let stdin_deploy_wt = payload_deploy_wt.get("stdin").and_then(Value::as_str).unwrap();
+        assert!(stdin_deploy_wt.contains("scripts/release.sh 2.38.0"), "deployment stdin must name authorized positional release: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("authorized to perform release mutations"), "deployment stdin must permit mutation: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("CI"), "deployment stdin must mention CI verification: {stdin_deploy_wt}");
+        assert!(stdin_deploy_wt.contains("asset"), "deployment stdin must mention asset verification: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("Read-only"), "deployment stdin must not contain Read-only: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never write"), "deployment stdin must not forbid writes: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never edit"), "deployment stdin must not forbid edits: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("never run a mutating command"), "deployment stdin must not forbid mutation: {stdin_deploy_wt}");
+        assert!(!stdin_deploy_wt.contains("bee-gather"), "deployment stdin must not contain bee-gather embedded body: {stdin_deploy_wt}");
+
+        let cmd_deploy_wt = payload_deploy_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_deploy_wt.contains(&format!("--cwd \"{}\"", main.to_string_lossy())) || cmd_deploy_wt.contains(&format!("--cwd \"{}\"", norm_main)),
+            "deployment command cwd must be main root: {cmd_deploy_wt}"
+        );
+        assert!(!cmd_deploy_wt.contains(&granted.to_string_lossy().into_owned()) && !cmd_deploy_wt.contains(&norm_granted), "deployment command cwd must not be worktree: {cmd_deploy_wt}");
+        assert!(cmd_deploy_wt.contains("export BEE_DISPATCH_ID="), "deployment command must export BEE_DISPATCH_ID: {cmd_deploy_wt}");
+        assert!(cmd_deploy_wt.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "deployment command must export BEE_RELEASE_VERSION: {cmd_deploy_wt}");
+
+        // 2. Ordinary gather WITH granted feature worktree:
+        // Cwd MUST be the granted worktree; stdin MUST be read-only gather template.
+        let Prepared::Value(v_gather_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("read-only-gather"), Some("sess-1"), None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for ordinary gather with worktree");
+        };
+        let payload_gather_wt = v_gather_wt.get("payload").unwrap();
+        let stdin_gather_wt = payload_gather_wt.get("stdin").and_then(Value::as_str).unwrap();
+        assert!(stdin_gather_wt.contains("Read-only"), "gather stdin must be read-only: {stdin_gather_wt}");
+        assert!(stdin_gather_wt.contains("Gather: locate and digest"), "gather stdin must be gather prompt: {stdin_gather_wt}");
+
+        let cmd_gather_wt = payload_gather_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_gather_wt.contains(&format!("--cwd \"{}\"", granted.to_string_lossy())) || cmd_gather_wt.contains(&format!("--cwd \"{}\"", norm_granted)),
+            "ordinary gather command cwd must be worktree: {cmd_gather_wt}"
+        );
+
+        // Revoke the worktree grant to test without worktree
+        w(&main, ".bee/runtime/worktree-grants.json", "{}\n");
+
+        // 3. Stage deployment WITHOUT granted feature worktree:
+        // Cwd MUST STILL be main root.
+        let Prepared::Value(v_deploy_no_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for deployment without worktree");
+        };
+        let payload_deploy_no_wt = v_deploy_no_wt.get("payload").unwrap();
+        let cmd_deploy_no_wt = payload_deploy_no_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(
+            cmd_deploy_no_wt.contains(&format!("--cwd \"{}\"", main.to_string_lossy())) || cmd_deploy_no_wt.contains(&format!("--cwd \"{}\"", norm_main)),
+            "deployment command cwd without worktree must still be main root: {cmd_deploy_no_wt}"
+        );
+
+        // 4. Ordinary gather WITHOUT granted feature worktree:
+        // Command MUST NOT contain --cwd.
+        let Prepared::Value(v_gather_no_wt) = prepare_dispatch_wire(
+            &main, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("demo"), Some("read-only-gather"), Some("sess-1"), None,
+        ).unwrap() else {
+            panic!("expected prepared dispatch value for ordinary gather without worktree");
+        };
+        let payload_gather_no_wt = v_gather_no_wt.get("payload").unwrap();
+        let cmd_gather_no_wt = payload_gather_no_wt.get("command").and_then(Value::as_str).unwrap();
+        assert!(!cmd_gather_no_wt.contains("--cwd"), "ordinary gather without worktree must not specify --cwd: {cmd_gather_no_wt}");
+    }
+
+    #[test]
+    fn test_deploy_non_main_root_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        // Switch to a non-main branch
+        dp1_git_ok(&root, &["checkout", "-q", "-b", "feature-non-main"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-branch",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-branch.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-branch",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        let Prepared::Value(ref_branch) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-branch"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for non-main branch");
+        };
+        assert_eq!(ref_branch.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_branch.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_branch.get("reason"), Some(&json!("main_branch_required")));
+    }
+
+    #[test]
+    fn test_deploy_without_approved_v2_role_plan_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        // 1. Feature with no lane record / no approved role plan
+        let Prepared::Value(ref_no_plan) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, Some("feat-no-plan"), Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for missing plan");
+        };
+        assert_eq!(ref_no_plan.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_no_plan.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_no_plan.get("reason"), Some(&json!("role_plan_required")));
+
+        // 2. Deployment request without feature
+        let Prepared::Value(ref_no_feat) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, false, None, None, None, Some("deployment"), Some("sess-1"), Some("2.38.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch refusal for deployment without feature");
+        };
+        assert_eq!(ref_no_feat.get("ok"), Some(&json!(false)));
+        assert_eq!(ref_no_feat.get("type"), Some(&json!("refused")));
+        assert_eq!(ref_no_feat.get("reason"), Some(&json!("role_plan_required")));
+    }

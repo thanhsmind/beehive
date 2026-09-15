@@ -1291,6 +1291,33 @@ pub(crate) fn resolve_main_commit(root: &Path) -> Option<String> {
     try_ref("refs/heads/main").or_else(|| try_ref("HEAD"))
 }
 
+pub(crate) fn resolve_current_branch(root: &Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if out.status.success() {
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !s.is_empty() {
+            return Some(s);
+        }
+    }
+    None
+}
+
+pub(crate) fn deployment_prompt(release_version: &str) -> String {
+    format!(
+        "Deploy-stage execution brief\n\n\
+        Authorized release version: {release_version}\n\n\
+        You are the deployment worker. This dispatch is authorized to perform release mutations on the main branch.\n\n\
+        Execute the authorized release command:\n\
+        scripts/release.sh {release_version}\n\n\
+        Wait for release CI to pass and verify the published release assets.\n"
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_dispatch_wire(
     root: &Path,
@@ -1451,6 +1478,25 @@ pub(crate) fn prepare_dispatch_wire(
 
     let mut v2_info: Option<V2DispatchInfo> = None;
     let mut v2_effective_role: Option<String> = None;
+
+    if stage == Some("deployment") || release_version.is_some() {
+        let has_approved_role_plan = resolved_feature
+            .as_deref()
+            .and_then(|feat| crate::verbs::state_group::get_approved_role_plan(root, feat))
+            .is_some();
+        if !has_approved_role_plan {
+            let mut r = Map::new();
+            r.insert("ok".into(), Value::Bool(false));
+            r.insert("type".into(), Value::String("refused".into()));
+            r.insert("reason".into(), Value::String("role_plan_required".into()));
+            if let Some(feat) = resolved_feature.as_deref() {
+                r.insert("feature".into(), Value::String(feat.to_string()));
+            }
+            r.insert("stage".into(), Value::String("deployment".into()));
+            r.insert("fix".into(), Value::String("stage deployment requires an approved v2 plan with a role plan.".into()));
+            return Ok(Prepared::Value(Value::Object(r)));
+        }
+    }
 
     if let Some(feat) = resolved_feature.as_deref() {
         if let Some(role_plan) = crate::verbs::state_group::get_approved_role_plan(root, feat) {
@@ -1707,6 +1753,20 @@ pub(crate) fn prepare_dispatch_wire(
                         r.insert("stage".into(), Value::String("deployment".into()));
                         r.insert("release_version".into(), Value::String(ver.to_string()));
                         r.insert("fix".into(), Value::String(format!("\"{ver}\" is not valid semver (MAJOR.MINOR.PATCH with no leading zeros).")));
+                        return Ok(Prepared::Value(Value::Object(r)));
+                    }
+                    let branch = resolve_current_branch(root);
+                    if branch.as_deref() != Some("main") {
+                        let mut r = Map::new();
+                        r.insert("ok".into(), Value::Bool(false));
+                        r.insert("type".into(), Value::String("refused".into()));
+                        r.insert("reason".into(), Value::String("main_branch_required".into()));
+                        r.insert("feature".into(), Value::String(feat.to_string()));
+                        r.insert("stage".into(), Value::String("deployment".into()));
+                        if let Some(b) = branch {
+                            r.insert("branch".into(), Value::String(b));
+                        }
+                        r.insert("fix".into(), Value::String("stage deployment requires control root to be on branch \"main\".".into()));
                         return Ok(Prepared::Value(Value::Object(r)));
                     }
                 }
@@ -2142,9 +2202,22 @@ pub(crate) fn prepare_dispatch_wire(
     } else {
         pinned_agent_type(marker_role)
     };
-    let pane_prompt = match embedded_agent_body(pinned_type) {
-        Some(body) => format!("{body}\n\n{prompt_body}"),
-        None => prompt_body.clone(),
+    let is_deployment = v2_info
+        .as_ref()
+        .map(|v| v.stage.as_deref() == Some("deployment"))
+        .unwrap_or(false);
+
+    let pane_prompt = if is_deployment {
+        let ver = v2_info
+            .as_ref()
+            .and_then(|v| v.release_version.as_deref())
+            .unwrap_or_default();
+        deployment_prompt(ver)
+    } else {
+        match embedded_agent_body(pinned_type) {
+            Some(body) => format!("{body}\n\n{prompt_body}"),
+            None => prompt_body.clone(),
+        }
     };
 
     // The dispatch SUBJECT — computed ONCE, here, before the transport match,
@@ -2264,7 +2337,11 @@ pub(crate) fn prepare_dispatch_wire(
                 // without an agent leaves the command byte-identical to before.
                 tool = "Bash".into();
                 let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
-                if let Some((worktree_root, _control_root)) = &worktree_location {
+                if is_deployment {
+                    command.push_str(" --cwd \"");
+                    command.push_str(&root.to_string_lossy());
+                    command.push('"');
+                } else if let Some((worktree_root, _control_root)) = &worktree_location {
                     if !worktree_root.is_empty() {
                         command.push_str(" --cwd \"");
                         command.push_str(worktree_root);

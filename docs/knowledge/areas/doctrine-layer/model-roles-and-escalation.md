@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1]
   sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
@@ -305,6 +305,8 @@ can ever travel under — is warned by name instead of dying silently.
 **B20 — Structured cell rerouting requires a tagged decision and claim lock** (semantic-role-routing D4, decision `68bc3484`). `bee cells reroute --id <id> --role <role> --decision <id>` acquires the cell claim lock, validates that the cited decision belongs to the feature and carries tag `role-reroute`, ensures the target role is configured for the plan's runtime, and records an audited entry in `role_reroutes[]`. This provides the verified revision door for cell role changes while leaving the approved plan packet immutable.
 
 **B21 — Release execution requires deploy authorization** (semantic-role-routing D6, decision `c0a4d406`). Publishing a release version through `scripts/release.sh` requires an authorized dispatch permit (`bee dispatch authorize`) issued for stage `deployment` and role `deploy`. The permit binds version, plan hash, main commit, and issuer session with a two-hour lifetime; direct script calls and replayed permits are refused.
+
+**B22 — Deployment-stage dispatch permits authorized release mutation rooted at main** (deploy-stage-execution D1, decision `38edea83`). The shared delegation contract permits mutation only for an authorized deployment stage; ordinary gather remains explicitly read-only. Preparing a deployment-stage dispatch (`--stage deployment` with role `deploy`) produces an explicit mutating execution brief naming the authorized version and the positional `scripts/release.sh <version>` command. The herding command sets `--cwd` to the main control root unconditionally, even when the feature has a granted worktree. Deployment requests require an approved v2 role plan and refuse on non-main branches before payload creation; authorization checks and one-use permit consumption (B21) remain unchanged.
 
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 

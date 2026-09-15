@@ -148,6 +148,7 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
   is done by the orchestrator after it reads the result back, exactly the D4 split gather workers
   never needed in the first place (`bee-herding/references/operational-invariants.md`, "`bee
   herding run` — one foreign agent as a cell-execution worker"). prepare's transport_ready is the reachability fact; the fallback model applies only when it is false — never guess from channel.
+- **deployment mutation exception** — the shared contract permits mutation only for an authorized deployment stage (decision `38edea83`). Ordinary gather remains explicitly read-only. For an approved deployment dispatch (`--stage deployment` with role `deploy`), `bee dispatch prepare` issues an executable release brief on `stdin` that names the authorized version and the positional `scripts/release.sh <version>` command. The dispatch herding command sets `--cwd` to the main control root unconditionally, even when the feature has a granted worktree. A deployment request on a non-main branch or lacking an approved v2 role plan is refused before payload creation.
 
 ### Blind lanes and convergence
 
