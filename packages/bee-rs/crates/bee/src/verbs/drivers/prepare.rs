@@ -2659,8 +2659,11 @@ pub(crate) fn prepare_dispatch_wire(
             let expires = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
             economics.insert("expires_at".into(), Value::String(expires.clone()));
             payload.insert("expires_at".into(), Value::String(expires));
-            if let Some(sid) = session_id {
-                economics.insert("issuer_session".into(), Value::String(sid.to_string()));
+            if let Some(sid) = crate::verbs::state_group::resolve_session_id(session_id, root)
+                .ok()
+                .flatten()
+            {
+                economics.insert("issuer_session".into(), Value::String(sid));
             }
         }
 

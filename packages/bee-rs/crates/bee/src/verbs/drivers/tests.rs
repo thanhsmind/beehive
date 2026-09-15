@@ -10665,6 +10665,110 @@ advance_on — falling to another model there hides the defect (D11)"
     }
 
     #[test]
+    fn test_deploy_authorization_flagless_prepare_with_env_session_success() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"deployment","classification":"conditional","role":"deploy","condition":"cond","reason":"d"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let cells = vec![serde_json::json!({ "id": "c-1", "role": "code" })];
+
+        let config = serde_json::json!({
+            "team": {
+                "pi": {
+                    "plan": { "kind": "herding", "agent": "plan-agent" },
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": { "kind": "herding", "agent": "test-agent" },
+                    "review": { "kind": "herding", "agent": "review-agent" },
+                    "supervisor": { "kind": "herding", "agent": "sup-agent" },
+                    "deploy": { "kind": "herding", "agent": "deploy-agent" }
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        dp1_git_ok(&root, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&root, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&root, &["config", "user.name", "t"]);
+        dp1_git_ok(&root, &["add", "-A"]);
+        dp1_git_ok(&root, &["commit", "-qm", "init"]);
+
+        let table_val = crate::verbs::models_group::team_table(&root, Some("pi")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "pi").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "pi",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let packet = serde_json::json!({
+            "feature": "feat-auth",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        w(&root, ".bee/lanes/feat-auth.json", &serde_json::to_string_pretty(&serde_json::json!({
+            "feature": "feat-auth",
+            "approved_cell_packet": packet,
+        })).unwrap());
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        w(&root, ".bee/sessions/sess-auth.json", &serde_json::json!({
+            "id": "sess-auth",
+            "lane": "feat-auth",
+        }).to_string());
+
+        struct EnvGuard(&'static str);
+        impl Drop for EnvGuard {
+            fn drop(&mut self) {
+                unsafe { std::env::remove_var(self.0); }
+            }
+        }
+
+        unsafe { std::env::set_var("BEE_SESSION_ID", "sess-auth"); }
+        let _guard = EnvGuard("BEE_SESSION_ID");
+
+        // Prepare dispatch with session flag `None`
+        let Prepared::Value(v_deploy) = prepare_dispatch_wire(
+            &root, "pi", "gather", None, None, None, false, None, None, true, None, None, Some("feat-auth"), Some("deployment"), None, Some("2.39.0"),
+        ).unwrap() else {
+            panic!("expected prepared dispatch value");
+        };
+        let dispatch_id = v_deploy.get("dispatch_id").and_then(Value::as_str).unwrap();
+
+        // 1. Authorize succeeds
+        let res = authorize_dispatch_permit(&root, dispatch_id, "2.39.0", Some("sess-auth"));
+        assert!(res.is_ok(), "expected authorize to succeed, got {res:?}");
+        let auth_val = res.unwrap();
+        assert_eq!(auth_val.get("ok"), Some(&json!(true)));
+        assert_eq!(auth_val.get("authorized"), Some(&json!(true)));
+
+        // 2. Dispatch record in .bee/logs/dispatch.jsonl carries issuer_session equal to that id
+        let log_path = root.join(".bee").join("logs").join("dispatch.jsonl");
+        let log_content = std::fs::read_to_string(&log_path).unwrap();
+        let mut found_issuer_session = None;
+        for line in log_content.lines().rev() {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if entry.get("dispatch_id").and_then(Value::as_str) == Some(dispatch_id) {
+                    found_issuer_session = entry.get("issuer_session").and_then(Value::as_str).map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+        assert_eq!(found_issuer_session.as_deref(), Some("sess-auth"), "dispatch log record must carry issuer_session");
+    }
+
+    #[test]
     fn test_deploy_authorization_refusals_matrix() {
         let tmp = tempfile::tempdir().unwrap();
         let stages = vec![
