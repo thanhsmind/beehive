@@ -84,5 +84,8 @@ accepted — the seats' reports are navigation aids, not evidence.
 
 ## Open questions
 
+<!-- bee:not-a-deferral: this section records that the wave deferred nothing — it promises no later work -->
+
 None. The mechanism questions the wave raised are answered in the plan; nothing
 was deferred to the user.
+<!-- /bee:not-a-deferral -->

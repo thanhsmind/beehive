@@ -96,6 +96,51 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "carry-resolves-under-main-root",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:90 mainCheckoutRoot resolves the main worktree via git rev-parse --git-common-dir, and resultInboxDir now resolves under it, matching the writer at herding/run.rs:2243 which always writes to opts.main_root/.bee — so a post-relocation dispatch is still found."
+          },
+          {
+            "id": "carry-survives-mid-switch-shutdown",
+            "status": "PASS",
+            "evidence": "carriedInboxTokens is declared at bee-guard.ts:769 and mirrored to .bee/relocation-carry.json at :794; the only .clear() calls in the file are inFlightClaims (:903, :2009), pendingTransitions (:2159) and pendingRelocationTokens (:2160) — the carry map is never cleared by the reason \"resume\" shutdown that fires mid-switch."
+          },
+          {
+            "id": "no-duplicate-injection",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:915-918 runs reclaimOrphanClaims on the session's own inbox folder only, so an already-injected marker left as <job>.json.processing in a carried folder is not requeued; the contract case asserts exactly two injections."
+          },
+          {
+            "id": "order-and-compensating-rollback",
+            "status": "PASS",
+            "evidence": "In the withSession closure the carry is recorded (:1623) and bee cells rebind-session runs (:1637) BEFORE handlePostExitMerge (:1675); a failed or cancelled switch rebinds back and deletes the carry (:1685-1697, :1732-1738), and a failed rebind only warns, naming the manual verb (:1654)."
+          },
+          {
+            "id": "red-first-contract-case",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts.rs:7383 relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims, with the harness reading the forked session id at :699 (it previously handed back the old id); the worker reported watching it fail before the belt edit."
+          },
+          {
+            "id": "installed-runtime-proof",
+            "status": "PASS",
+            "evidence": "Leader re-ran the approved chain: 68 contract tests passed, 0 failed; bee dev release-manifest --check reported 376 files match; bee doctor --runtime pi returned overall ready with wiring_matches_binary ok."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-15T23:32:32.290Z"
+      }
+    ]
   }
 }

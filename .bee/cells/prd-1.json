@@ -94,6 +94,46 @@
     "warnings": [
       "advisory: this cap's commit changes 244 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verb-served-and-declared",
+            "status": "PASS",
+            "evidence": "util.rs:107 routes \"rebind-session\" to run_rebind_session, and generated/registry_payload.json declares cells.rebind-session (invoke \"bee cells rebind-session\"); flags null matches cells.claim, cells.unclaim and cells.judge-record, so the house style is unchanged."
+          },
+          {
+            "id": "single-writer-reuse",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:2823 calls adopt_claim from the cells module rather than duplicating the claim rewrite; claims.rs:334-339 is the rewriter the plan named."
+          },
+          {
+            "id": "scoped-rewrite-and-epoch",
+            "status": "PASS",
+            "evidence": "handlers_write.rs tests rebind_rewrites_only_active_claims_for_matching_session, rebind_increments_fence_epoch_by_exactly_one, rebind_no_matching_claims_is_clean_noop and rebind_flag_validation_and_keys_known; the leader re-ran the approved verify and saw 4 passed, 0 failed."
+          },
+          {
+            "id": "fence-epoch-consequence-stated",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:2781 and :2857 state that a bumped fence_epoch refuses any other holder presenting a stale epoch with CLAIM_FENCE_STALE on a later renew or release."
+          },
+          {
+            "id": "scope-and-prohibitions",
+            "status": "PASS",
+            "evidence": "git show a193d8da --stat lists only the four declared files; .pi/extensions/bee-guard.ts and packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, both forbidden to this cell, are untouched."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-15T23:32:32.288Z"
+      }
+    ]
   }
 }
