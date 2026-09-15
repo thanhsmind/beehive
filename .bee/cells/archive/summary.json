@@ -1228,5 +1228,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-15T02:45:48.333Z"
+  },
+  "deploy-pane-authorization": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-15T05:36:06.668Z"
   }
 }
