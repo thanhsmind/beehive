@@ -67,7 +67,13 @@ and returns exactly three sections:
 | **(c) Pattern candidates** | Every capped cell whose trace carries a **deviation** or a **failure signature**, shaped as a candidate `bee.pattern` concept with `bee.polarity: pitfall` and `bee.lifecycle: draft`, quoting the trace verbatim. A clean cell yields nothing. | `trace.deviations`, `trace.attempts[].failure_signature`, `trace.semantic_judge[].failure_signature`. |
 
 The `--json` payload is `{work, work_item, cells, delivery, area_updates, pattern_candidates,
-writes}`, and **`writes` is always `[]`** — the machine-readable form of the contract. There is no
+writes}`, and **`writes` is always `[]`** — the machine-readable form of the contract.
+A proposal review is finished only when `bee state scribing-run --feature <f>`
+stamps the feature: the unapplied-proposal counter reads that stamp, never a
+delivery record on disk — the 2026-09-08 batch wrote 27 delivery records and the
+counter still read 57. For a feature the default record does not track,
+`--no-lane` writes the durable ledger only and leaves phase alone; it refuses
+from phase idle for the feature the default record does track (0e35c469). There is no
 `--apply` flag and no write path of any kind: `promote` never touches `docs/knowledge/`, never
 touches `.bee/*.json(l)`, and never touches anything else. Deciding to save a proposal — and
 editing it into curated prose first — is a human or agent decision.
