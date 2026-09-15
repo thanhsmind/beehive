@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 55d6d9d; capture what settled, then bee close --feature pi-stage-dispatch.",
+  "next_action": "bee close finished \"pi-stage-dispatch\" — feature is closed.",
   "created_at": "2026-09-15T08:39:48.577Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-stage-dispatch (Pi advisor, hat wave, and stage dispatch on main)",
+    "asked_at": "2026-09-15T12:02:38.876Z",
+    "session": "a04bfa6d-c0ed-4dfc-a322-219a18f2bee7"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
