@@ -1312,7 +1312,10 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
 
     let bin_dir = root.join(".bee").join("bin");
     std::fs::create_dir_all(&bin_dir).expect("failed to create .bee/bin");
-    let prelude = "#!/bin/sh\nd=\"$(dirname \"$0\")\"\ncat > \"$d/last_stdin.json\"\nif [ -n \"$BEE_EXEC_TIMEOUT_MS\" ]; then\n  printf '%s [timeout=%s]\\n' \"$*\" \"$BEE_EXEC_TIMEOUT_MS\" >> \"$d/calls.log\"\nelse\n  printf '%s\\n' \"$*\" >> \"$d/calls.log\"\nfi\n";
+    // `calls_cwd.log` is a SEPARATE log on purpose: `count_invocations` compares
+    // whole `calls.log` lines, so appending the directory there would turn every
+    // existing equality assertion red for a reason that is not the code's fault.
+    let prelude = "#!/bin/sh\nd=\"$(dirname \"$0\")\"\ncat > \"$d/last_stdin.json\"\nprintf '%s\\t%s\\n' \"$PWD\" \"$*\" >> \"$d/calls_cwd.log\"\nif [ -n \"$BEE_EXEC_TIMEOUT_MS\" ]; then\n  printf '%s [timeout=%s]\\n' \"$*\" \"$BEE_EXEC_TIMEOUT_MS\" >> \"$d/calls.log\"\nelse\n  printf '%s\\n' \"$*\" >> \"$d/calls.log\"\nfi\n";
     let body = match behavior {
         StubBehavior::Deny(reason) => format!("echo \"{reason}\" >&2\nexit 2\n"),
         StubBehavior::Allow => "exit 0\n".to_string(),
@@ -1361,7 +1364,43 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
                 .unwrap_or_else(|| "WORKTREE_MERGE_PROOF_DEBT: missing proof".to_string());
             format!(
                 r#"CURRENT_CWD="$(pwd -P 2>/dev/null || pwd)"
-if [ "$1" = "worktree" ] && [ "$2" = "new" ]; then
+if [ "$1" = "cells" ] && [ "$2" = "rebind-session" ]; then
+  # Models the real verb, including its refusal: `cells rebind-session` reads
+  # the shared control plane and is REFUSED inside a granted feature worktree.
+  # Without this branch the stub accepted the call, rewrote nothing, and exited
+  # 0 — so the case passed while the belt's rebind did nothing at all.
+  if [ "$CURRENT_CWD" = "{wt_s}" ] || [ "$CURRENT_CWD" = "$(cd "{wt_s}" 2>/dev/null && pwd -P)" ]; then
+    echo "bee cells rebind-session: refused inside a granted feature worktree — this command reads the shared control plane (sessions, claims, workers, workflows, handoff), which lives in the main checkout. FIX: run it from {main_s}." >&2
+    exit 1
+  fi
+  FROM=""
+  TO=""
+  prev=""
+  for arg in "$@"; do
+    if [ "$prev" = "--from" ]; then
+      FROM="$arg"
+    elif [ "$prev" = "--to" ]; then
+      TO="$arg"
+    fi
+    prev="$arg"
+  done
+  REBOUND=""
+  for claim in "{main_s}/.bee/claims/"*.json; do
+    [ -f "$claim" ] || continue
+    grep -q "\"session\": \"$FROM\"" "$claim" || continue
+    CELL="$(sed -n 's/.*"cell": "\([^"]*\)".*/\1/p' "$claim" | head -1)"
+    EPOCH="$(sed -n 's/.*"fence_epoch": \([0-9][0-9]*\).*/\1/p' "$claim" | head -1)"
+    [ -n "$EPOCH" ] || EPOCH=1
+    NEXT=$((EPOCH + 1))
+    sed -e "s/\"session\": \"$FROM\"/\"session\": \"$TO\"/" \
+        -e "s/\"fence_epoch\": $EPOCH/\"fence_epoch\": $NEXT/" "$claim" > "$claim.tmp"
+    mv "$claim.tmp" "$claim"
+    if [ -n "$REBOUND" ]; then REBOUND="$REBOUND,"; fi
+    REBOUND="$REBOUND{{\"cell\":\"$CELL\",\"from\":\"$FROM\",\"to\":\"$TO\",\"fence_epoch\":$NEXT}}"
+  done
+  printf '{{"rebound":[%s]}}\n' "$REBOUND"
+  exit 0
+elif [ "$1" = "worktree" ] && [ "$2" = "new" ]; then
   TRANS='{{"schemaVersion":1,"operation":"enter-worktree","sourceCwd":"{main_s}","targetCwd":"{wt_s}","worktreeId":"{worktree_id}","feature":"{feature}","piSessionId":"'"$PI_SESSION_ID"'","continuation":null}}'
   if [ -n "$PI_SESSION_ID" ]; then
     echo "@@BEE_SESSION_TRANSITION@@ $TRANS" >&2
@@ -1485,6 +1524,27 @@ fn stub_invocations(root: &Path) -> Vec<String> {
 
 fn count_invocations(root: &Path, hook: &str) -> usize {
     stub_invocations(root).iter().filter(|line| line.as_str() == format!("hook {hook}")).count()
+}
+
+/// Every `<cwd>\t<argv>` pair the stub bee logged, in order. It rides its OWN
+/// file rather than `calls.log` because `count_invocations` compares whole
+/// lines there — putting the directory in that log would turn every existing
+/// equality assertion red for a reason that is not the code's fault.
+///
+/// What it makes visible: a control-plane verb the belt runs from the wrong
+/// root. `cells rebind-session` refuses inside a granted worktree, so a
+/// worktree cwd turns every rebind into a warning and a no-op, and argv alone
+/// cannot tell that apart from a rebind that worked.
+fn stub_cwd_invocations(root: &Path) -> Vec<(String, String)> {
+    let path = root.join(".bee").join("bin").join("calls_cwd.log");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => text
+            .lines()
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(cwd, argv)| (cwd.trim().to_string(), argv.trim().to_string()))
+            .collect(),
+        Err(_) => Vec::new(),
+    }
 }
 
 // ─── the independent field-shape table ─────────────────────────────────────
@@ -7587,6 +7647,30 @@ fn relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims() {
         Some(2),
         "rebound claim fence_epoch must be bumped to 2, got: {rebound_claim_raw}"
     );
+
+    // Assert: every rebind ran from the MAIN checkout, never a worktree.
+    // `cells rebind-session` reads the shared control plane and refuses inside a
+    // granted feature worktree, so a worktree cwd makes the rebind a no-op that
+    // only warns — and argv alone cannot tell that apart from one that worked.
+    let logged = stub_cwd_invocations(&main_path);
+    let rebind_cwds: Vec<String> = logged
+        .iter()
+        .filter(|(_, argv)| argv.contains("cells rebind-session"))
+        .map(|(cwd, _)| cwd.clone())
+        .collect();
+    assert!(
+        !rebind_cwds.is_empty(),
+        "expected at least one `cells rebind-session` invocation, got none: {logged:?}"
+    );
+    let main_canon = dunce::canonicalize(&main_path).unwrap_or_else(|_| main_path.clone());
+    for cwd in &rebind_cwds {
+        let cwd_canon =
+            dunce::canonicalize(PathBuf::from(cwd)).unwrap_or_else(|_| PathBuf::from(cwd));
+        assert_eq!(
+            cwd_canon, main_canon,
+            "`cells rebind-session` must run from the main checkout root, not a worktree; got {cwd}"
+        );
+    }
 
     // Assert: relocation notice named counts when non-zero
     assert!(

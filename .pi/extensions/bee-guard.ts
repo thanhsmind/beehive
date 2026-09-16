@@ -1632,8 +1632,12 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
               }
             }
 
+            // The main checkout, never `intent.targetCwd`: `cells rebind-session`
+            // reads the shared control plane and REFUSES inside a granted feature
+            // worktree, so a worktree cwd turns every rebind into a warning and a
+            // no-op (reproduced live, 2026-09-16).
             const rebindResult = await execBeeCli(
-              intent.targetCwd,
+              mainRoot,
               ["cells", "rebind-session", "--from", currentSessionId, "--to", newSessionId, "--json"],
               newSessionId,
             )
@@ -1686,7 +1690,7 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
       if (reboundSessionFrom && reboundSessionTo) {
         try {
           await execBeeCli(
-            intent.sourceCwd,
+            mainRoot,
             ["cells", "rebind-session", "--from", reboundSessionTo, "--to", reboundSessionFrom, "--json"],
             currentSessionId,
           )
@@ -1728,7 +1732,7 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
       if (reboundSessionFrom && reboundSessionTo) {
         try {
           await execBeeCli(
-            intent.sourceCwd,
+            mainRoot,
             ["cells", "rebind-session", "--from", reboundSessionTo, "--to", reboundSessionFrom, "--json"],
             currentSessionId,
           )
