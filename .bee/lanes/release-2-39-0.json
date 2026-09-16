@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-39-0",
   "mode": "tiny",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"release-2-39-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"release-2-39-0\" (lane).",
+  "next_action": "bee close finished \"release-2-39-0\" — feature is closed.",
   "created_at": "2026-09-16T02:42:56.762Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
