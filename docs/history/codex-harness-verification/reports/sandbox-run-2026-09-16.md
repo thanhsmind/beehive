@@ -80,14 +80,58 @@ repository." The canary script already passes `--repo-hooks`; the map does not.
 The correction is to add `--repo-hooks` to that line, then re-render the copies
 with `bee onboard --apply`.
 
-## Not covered by this run
+## Second run (same day): the two gaps, now closed
 
-- **Codex cell dispatch.** `dispatch prepare --runtime codex --kind cell` was
-  refused earlier in the chain, at `claim_ownership`, because the sandbox's
-  `execution` gate is not approved. Approving a gate belongs to the user, so
-  this run did not self-approve one. The documented
-  `native_hook_input_opaque` refusal for native cell dispatch stays unverified
-  here.
-- **Backend model identity.** `dispatch prepare` reports
-  `effective_model_status: "unverified"` on Codex. Nothing in this run proves
-  which backend model a dispatched role actually gets.
+Both items the first run left open were driven in a second sandbox, on bee
+2.40.0. Sandbox `/var/tmp/bee-verify/run/20260916-130522-3521384/repo`,
+evidence `/var/tmp/bee-verify/evidence/20260916-130522-3521384`.
+
+### Codex cell dispatch is refused as documented
+
+The first run never reached this door: it stopped at `claim_ownership` because
+the sandbox's execution gate was unapproved. This run drove the whole user
+chain in a throwaway sandbox — `state start-feature`, `route --set`, a
+`plan.md` carrying a load-bearing claims table, `gate --preview`,
+`gate --merge --approved true`, `cells add`, `cells claim` — and then asked for
+the cell dispatch. Evidence `018` through `022`.
+
+`dispatch prepare --runtime codex --kind cell --cell ccd-1 --worker w1` answers:
+
+```json
+{"ok": false, "type": "refused", "reason": "native_hook_input_opaque",
+ "slot": "extraction", "worker_registered": true}
+```
+
+with the fix line "Codex 0.154.0 hides the native role message from installed
+hooks. Configure an explicit herding executor for this cell role and prepare
+again." The refusal the feature map documents is real, and it refuses *after*
+registering the worker rather than before.
+
+One gate note: `gate --merge` first refused because the plan had no
+`## Load-bearing claims` table, naming the exact required columns and stating
+"There is no waiver flag." The approval only went through once the table held
+rows whose evidence this run actually holds.
+
+### The requested model does reach Codex
+
+With `team.codex.extraction` unset (`null`), `dispatch prepare` returns
+`codex exec --sandbox read-only --ephemeral -` with `requested_model: null` and
+`effective_model_status: "unverified"` (evidence `009`).
+
+Pinning `team.codex.extraction = {"model": "gpt-5.6-sol"}` changes all three
+observable things (evidence `011`, `012`, `013`):
+
+| | Before the pin | After the pin |
+|---|---|---|
+| Roster transport | (empty), model `null` | `native`, model `gpt-5.6-sol` |
+| Prepared command | `codex exec --sandbox read-only --ephemeral -` | `… --ephemeral --model 'gpt-5.6-sol' -` |
+| `effective_model_status` | `unverified` | `declared` |
+| Codex `exec` banner | `model: gpt-6-astra` (Codex's own default) | `model: gpt-5.6-sol` |
+
+The worker returned `PROBE_OK`, so the pinned model ran the work.
+
+Read the status vocabulary precisely: it moves `unverified` → `declared`, never
+to "verified". `effective_model` stays `null` throughout. bee records the model
+it asked for and never claims to have read back what the provider served — the
+Codex banner is the external evidence that the request took effect, and bee
+does not pretend to own that proof.
