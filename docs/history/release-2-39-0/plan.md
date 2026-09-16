@@ -1,7 +1,6 @@
 ---
 artifact_contract: bee-plan/v2
 mode: tiny
-# approved_gate2: <unset until approval>
 ---
 
 # Plan: Release 2.39.0
