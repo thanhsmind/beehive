@@ -1,0 +1,127 @@
+{
+  "id": "hwr-1",
+  "feature": "harness-worktree-relocation",
+  "title": "Locate the caller session and print a per-harness move instruction",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c6023a6e-b1f2-4eb7-bf31-ea542d0cb975",
+    "6c860e87-9aff-42f4-8fed-8e628a217e21"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/harness-worktree-relocation/CONTEXT.md",
+    "docs/history/harness-worktree-relocation/plan.md",
+    "packages/bee-rs/crates/bee/src/session_identity.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "(1) In session_identity.rs, add (do NOT change `SESSION_ENV_VARS` or `resolve_env_session_id_from`) a caller locator over an injected lookup `F: Fn(&str) -> Option<String>`: return the FIRST present non-blank candidate as {id, runtime} in this order — `PI_SESSION_ID` → \"pi\"; `CODEX_THREAD_ID` → \"codex\"; `BEE_SESSION_ID` only when `BEE_RUNTIME` is also non-blank → runtime = BEE_RUNTIME's value; `CLAUDE_CODE_SESSION_ID` → \"claude\"; else none. Add a second function that, given the main checkout root and a located id, reads that session's record with `read_session` from verbs/state_group/store.rs (`pub(crate) fn read_session(root: &Path, session_id: &str) -> Ex<Option<Map<String, Value>>> {`) and returns `activity.cwd` when present. No liveness window. (2) In verbs/worktree/handlers.rs, leave `sessionTransition` and `build_session_transition_with_session_id` byte-identical in keys and schemaVersion, and leave `format_pi_transition_marker` Pi-only. On every path that returns a sessionTransition (worktree new, worktree enter, merge from inside a linked worktree — find them by `\"enter-worktree\",` and `\"exit-worktree-before-merge\",`), add top-level result fields `sessionRuntime` (runtime string or null) and `instruction` (string), and print the instruction as one text line. Build the instruction in one function keyed by runtime and operation: pi → `Pi moves this session to <target> when this turn settles.`; claude → `Call EnterWorktree with path=<target>.` for enter-worktree, `Call ExitWorktree with action=keep.` for exit-worktree, and `Call ExitWorktree with action=keep, then run bee worktree merge --id <id> from <target>.` for exit-worktree-before-merge; codex → `Ask the user to type /cd <target>, then send any message to continue.`; opencode → `Ask the user to type /move <target>, then send any message to continue.`; none/other → `Open a session at <target>.` Handlers read the real env through the locator; the builder functions take the located caller as a parameter so tests inject it. (3) Tests: locator — Codex id with a Claude id also present returns codex; bare BEE_SESSION_ID without BEE_RUNTIME is skipped; BEE_SESSION_ID + BEE_RUNTIME=opencode returns opencode; empty env returns none; record cwd read from a fixture record. Instruction — one case per runtime and operation. Existing tests in verbs/worktree/tests.rs that assert schemaVersion 1 or the no-marker case (search `schemaVersion` and `no marker formatted`) must stay green with CLAUDE_CODE_SESSION_ID or CODEX_THREAD_ID set in the process env — run the module inside this environment to prove it.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity",
+  "must_haves": {
+    "truths": [
+      "the locator returns the innermost harness: Codex wins over an inherited Claude id",
+      "a bare BEE_SESSION_ID without BEE_RUNTIME is not treated as the caller",
+      "worktree new, enter and linked merge results carry sessionRuntime and a per-harness instruction in JSON and text",
+      "sessionTransition keys, schemaVersion and the Pi-only marker are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "substantive": "caller locator and record-cwd reader with unit tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "instruction builder and the two new result fields on every transition path"
+      }
+    ],
+    "key_links": [
+      "handlers.rs gets runtime from the new locator, not from PI_SESSION_ID directly",
+      "the record-cwd reader goes through state_group read_session, not a new file reader"
+    ],
+    "prohibitions": [
+      "Do not change SESSION_ENV_VARS or resolve_env_session_id_from",
+      "Do not change sessionTransition keys, schemaVersion, or marker emission",
+      "Do not change merge, queue, cleanup, or grant behavior",
+      "Do not touch .pi or .opencode plugin files"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-hwr-1",
+    "outcome": "caller locator plus per-harness instruction on every transition path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/session_identity.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-16T11:19:39.246Z",
+    "behavior_change": true,
+    "verification_evidence": "worktree module (270 passed) and caller locator (11 passed), run inside a Claude Code session with CLAUDE_CODE_SESSION_ID set",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity",
+    "claimed_at": "2026-09-16T11:09:22.514Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee locates the calling harness session (innermost env var first) and worktree new/enter/linked merge print sessionRuntime plus a per-harness move instruction; sessionTransition unchanged",
+      "commit": "9b5ea59d5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/session_identity.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_identity — green:unit — worktree module (270 passed) and caller locator (11 passed), run inside a Claude Code session with CLAUDE_CODE_SESSION_ID set",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "locator-order",
+            "status": "PASS",
+            "evidence": "session_identity.rs:92 locate_caller_from order PI->CODEX->BEE(+BEE_RUNTIME)->CLAUDE; test locator_prefers_innermost_codex_over_inherited_claude"
+          },
+          {
+            "id": "record-cwd-no-liveness",
+            "status": "PASS",
+            "evidence": "session_identity.rs:155-156 read_caller_session_cwd uses state_group store read_session; no time check"
+          },
+          {
+            "id": "instruction-fields",
+            "status": "PASS",
+            "evidence": "handlers.rs:128 build_instruction_for_runtime; enter, linked merge and new results carry sessionRuntime and instruction"
+          },
+          {
+            "id": "transition-unchanged",
+            "status": "PASS",
+            "evidence": "build_session_transition_with_session_id schemaVersion 1 and format_pi_transition_marker untouched; test schema_version_and_no_marker_remain_unaffected_under_claude_or_codex_env"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-16T11:47:23.941Z"
+      }
+    ]
+  }
+}

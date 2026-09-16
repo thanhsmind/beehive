@@ -518,6 +518,7 @@
     "touches-sweep",
     "deploy",
     "plan",
-    "verify-app"
+    "verify-app",
+    "session-relocation"
   ]
 }
