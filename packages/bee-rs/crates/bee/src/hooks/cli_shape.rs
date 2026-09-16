@@ -1149,7 +1149,14 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 4] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 5] = [
+        // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
+        // plan carries this span as a cell TITLE naming the verb the cell adds
+        // ("Add bee cells rebind-session --from --to") — a name for the flag
+        // pair, not a transcript anyone ran or should copy. The plan's shape
+        // gate is approved, so the file is frozen; the line is pinned here
+        // instead of rewritten.
+        r#"bee cells rebind-session --from --to""#,
         // dis-1 (deploy-issuer-session): the fenced cells JSON of that closed
         // plan quotes this span inside a cell ACTION to name the bug under
         // repair ("`bee dispatch prepare --stage deployment` writes
