@@ -9,8 +9,10 @@ which of them still block.
 
 - `worktree-new` creates and registers a sibling worktree on its own branch, emitting enter transition intent.
 - `worktree-enter` enters an existing verified and granted worktree with zero mutation, emitting enter transition intent.
+- `worktree-exit` exits an existing linked worktree back to main with zero mutation and no merge, keeping the worktree and emitting exit transition intent.
 - `worktree-linked-enter` enters an existing granted worktree B directly from linked worktree A, resolving main through git metadata and emitting A as sourceCwd.
 - `worktree-linked-exit` emits zero-mutation exit-before-merge transition intent with typed continuation when merge runs inside a worktree.
+- `worktree-merge-detect-main` intercepts a merge from main when the caller session still sits in that worktree, emitting exit-before-merge intent unless `--detached` is passed.
 - `worktree-relocate-pi` relocates the active Pi session across worktree boundaries without mutating process cwd.
 - `worktree-relocate-recovery` handles post-exit merge refusal in Pi, keeping the worktree and reporting the re-entry command.
 - `worktree-list` reports the grants and which are pending a merge.
@@ -23,11 +25,12 @@ which of them still block.
 
 - Run `bee worktree new --feature <slug> --json` from the main checkout.
 - Run `bee worktree enter --id <id> --json` from the main checkout or another linked worktree.
+- Run `bee worktree exit [--id <id>] --json` inside a linked worktree (or from main with `--id <id>`).
 - Run `bee worktree list --json`.
 - Inside a linked worktree, run `bee worktree merge [--id <id>] --json` to emit exit intent before merge.
-- Run `bee worktree merge --id <id> --json` from the main checkout to execute the merge.
-- In Pi, run `/bee-worktree-new --feature <slug>`, `/bee-worktree-enter --id <id>`, or `/bee-worktree-merge [--id <id>]`.
-- In Pi, run ordinary CLI `bee worktree new` or `bee worktree merge` in shell; the Pi belt intercepts `@@BEE_SESSION_TRANSITION@@` and relocates the session automatically after `agent_settled`.
+- Run `bee worktree merge --id <id> [--detached] --json` from the main checkout to execute the merge (pass `--detached` to bypass session relocation interception).
+- In Pi, run `/bee-worktree-new --feature <slug>`, `/bee-worktree-enter --id <id>`, `/bee-worktree-exit [--id <id>]`, or `/bee-worktree-merge [--id <id>]`.
+- In Pi, run ordinary CLI `bee worktree new`, `bee worktree enter`, `bee worktree exit`, or `bee worktree merge` in shell; the Pi belt intercepts `@@BEE_SESSION_TRANSITION@@` and relocates the session automatically after `agent_settled`.
 - Run `bee close --feature <slug> --dry-run --json`, then without `--dry-run`.
 
 ## Driving it with control-bee
@@ -40,7 +43,8 @@ Preconditions:
 - **Create the worktree.** Run
   `control-bee cli -- worktree new --feature wt-demo --json`. The payload reports
   `id: "repo--wt--wt-demo"`, a `worktreeRoot` that is a **sibling** of the
-  sandbox inside the run dir, `branch: "wt/wt-demo"`, and a `sessionTransition`
+  sandbox inside the run dir, `branch: "wt/wt-demo"`, top-level `sessionRuntime`
+  and `instruction` fields, and a `sessionTransition`
   object with `operation: "enter-worktree"`, canonical `sourceCwd: main_root`,
   `targetCwd: worktreeRoot`, and `continuation: null`. When `PI_SESSION_ID` is set,
   `@@BEE_SESSION_TRANSITION@@` is emitted on stderr. Confirm with
@@ -51,7 +55,8 @@ Preconditions:
   and a `main_root` pointing at the sandbox.
 - **Enter an existing worktree.** Run
   `control-bee cli -- worktree enter --id repo--wt--wt-demo --json`. The payload
-  reports `ok: true`, `id: "repo--wt--wt-demo"`, and identical `sessionTransition`
+  reports `ok: true`, `id: "repo--wt--wt-demo"`, top-level `sessionRuntime` and `instruction`
+  fields, and identical `sessionTransition`
   metadata. Confirm zero mutation: `control-bee sh -- git status --porcelain` and
   `VERIFY_CWD=repo--wt--wt-demo control-bee sh -- git status --porcelain` both
   remain completely clean.
@@ -62,6 +67,12 @@ Preconditions:
   `operation: "enter-worktree"`, `sourceCwd` pointing at `repo--wt--wt-demo`, and `targetCwd`
   pointing at `repo--wt--wt-second`. Same-worktree entry (`--id repo--wt--wt-demo`) is refused
   with `same_worktree` before transition marker emission.
+- **Exit a worktree without merging (`worktree exit`).** Run
+  `VERIFY_CWD=repo--wt--wt-demo control-bee cli -- worktree exit --json`. The payload
+  reports `ok: true`, top-level `sessionRuntime` and `instruction` fields, and `sessionTransition`
+  with `operation: "exit-worktree"`, canonical `sourceCwd: worktreeRoot`, `targetCwd: main_root`,
+  and `continuation: null`. Confirm zero mutation: the worktree is kept intact without merging.
+  In Pi, `/bee-worktree-exit [--id <id>]` relocates the session to main with no merge.
 - **Work inside the worktree.** Aim the harness at it with `VERIFY_CWD`. Run
   `printf 'work\n' | VERIFY_CWD=repo--wt--wt-demo control-bee put WORK.md`, then
   `VERIFY_CWD=repo--wt--wt-demo control-bee sh -- git add -A` and
@@ -69,11 +80,20 @@ Preconditions:
 - **Exit intent from linked worktree merge.** Run
   `VERIFY_CWD=repo--wt--wt-demo control-bee cli -- worktree merge --json`
   inside the worktree (omitted `--id` defaults to current verified id). The payload
-  reports `ok: true`, and `sessionTransition` with `operation: "exit-worktree-before-merge"`,
+  reports `ok: true`, top-level `sessionRuntime` and `instruction` fields, and `sessionTransition` with `operation: "exit-worktree-before-merge"`,
   canonical `sourceCwd: worktreeRoot`, `targetCwd: main_root`, and typed
   `continuation: { operation: "merge-worktree", noCleanup: false, skipUat: false, queueWaitMs: null }`.
   Confirm zero mutation on exit: `control-bee sh -- ls WORK.md` fails (unmerged),
   and `control-bee sh -- ls ../repo--wt--wt-demo` proves the worktree is intact and kept.
+- **Merge-from-main detection intercepts caller session in worktree.** When
+  `control-bee cli -- worktree merge --id repo--wt--wt-demo --json` runs from main while
+  the caller session's record cwd sits inside that worktree, bee emits `exit-worktree-before-merge`
+  transition intent along with `sessionRuntime` and `instruction`, merging nothing so the session
+  moves first (D2). For Codex and OpenCode callers, bee marks a waiting-on question mark (D3).
+- **Direct merge from main with `--detached`.** Run
+  `control-bee cli -- worktree merge --id repo--wt--wt-demo --detached --json`.
+  `--detached` bypasses caller session cwd detection and executes the merge directly on main,
+  allowing sessionless runners such as herding to merge and clean up.
 - **Merge it back from main.** Run
   `control-bee cli -- worktree merge --id repo--wt--wt-demo --json` — from the
   main checkout. The payload reports
@@ -155,6 +175,14 @@ Preconditions:
   emits zero-mutation `exit-worktree-before-merge` transition intent with typed continuation
   parameters (`noCleanup`, `skipUat`, `queueWaitMs`). The merge itself executes
   only from main (or is reconstructed by the Pi belt after replacement on main).
+- `bee worktree merge` from main intercepts when the caller session sits in the target worktree,
+  emitting `exit-worktree-before-merge` instead of merging. Sessionless callers pass `--detached`
+  to merge directly.
+- `bee worktree exit` exits the current worktree back to main with zero mutation and without
+  merging, keeping the worktree. From main, it requires `--id <id>` and verifies the caller
+  session sits in that worktree.
+- `sessionRuntime` and `instruction` top-level fields accompany every worktree transition result
+  (`new`, `enter`, `exit`, linked `merge`, and merge-from-main detection).
 - `bee worktree enter` is main-only. Invoking it inside any linked worktree
   refuses untyped, naming the checkout kind it was run from.
 - Exit before merge never deletes the worktree. Teardown runs only after a

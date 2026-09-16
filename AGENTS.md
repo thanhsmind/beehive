@@ -195,7 +195,9 @@ not: a Task-tool subagent inherits the session's OS cwd, so dispatching an
 execution worker while cwd is main cannot write into the feature's
 worktree and dies on the write guard. Move the session into the worktree
 (EnterWorktree, or a session/pane opened at the worktree path) before
-dispatching execution workers.
+dispatching execution workers. Follow the `instruction` line bee prints
+on `worktree new`, `enter`, `exit` and `merge`; leave with `bee worktree exit`;
+never `cd` to main inside a shell call to merge.
 
 File overlap with an in-flight cell or live worktree is triage data,
 never a user question: take disjoint items first, split scope to the

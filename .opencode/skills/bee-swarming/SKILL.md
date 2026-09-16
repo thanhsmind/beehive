@@ -27,7 +27,8 @@ main is control-plane and fine; execution depends on transport:
 - **Native subagents** (Agent tool, Task tool) inherit the session's OS
   cwd. From main they cannot write into the worktree — the write guard
   refuses. Enter the worktree first (EnterWorktree, or a session/pane
-  opened at the worktree path) and dispatch from there.
+  opened at the worktree path) and dispatch from there; use `bee worktree exit`
+  as the way back.
 - **External herding workers** (bee herding run with --cwd) receive an
   explicit cwd at process start. The leader can stay in main while the
   worker writes in the worktree — no manual entry required. A `tiny` cell may run inline in this

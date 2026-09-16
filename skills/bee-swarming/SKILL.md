@@ -27,7 +27,8 @@ main is control-plane and fine; execution depends on transport:
 - **Native subagents** (Agent tool, Task tool) inherit the session's OS
   cwd. From main they cannot write into the worktree — the write guard
   refuses. Enter the worktree first (EnterWorktree, or a session/pane
-  opened at the worktree path) and dispatch from there.
+  opened at the worktree path) and dispatch from there; use `bee worktree exit`
+  as the way back.
 <!-- bee:only pi -->
 - On Pi: there are no native subagents. Every worker dispatches through
   herding only, and its full answer is the file at `report_path`.
