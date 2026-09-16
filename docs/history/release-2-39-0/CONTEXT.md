@@ -37,10 +37,10 @@ and the claim reassignment), so the minor number moves.
 
 ## Locked Decisions
 
-| ID | Decision | Rationale |
-|----|----------|-----------|
-| D1 | The release runs only through `scripts/release.sh` under an authorized deployment dispatch — never by hand-walking bump, tag or push. | The script exists because a hand-walked checklist skipped tagging and pushing twice before (2.6.6, 2.6.7), and the permit machinery is what makes the deploy role's authority auditable. |
-| D2 | The release is done ONLY when the script prints its final `OK` line — tag pushed, CI green, assets verified. | A release commit without that line is not a release. |
+| ID | Store ID | Decision | Rationale |
+|----|----------|----------|-----------|
+| D1 | `11dcf251-aaf7-41b0-a1d2-5e53f9ca92db` | The release runs only through `scripts/release.sh` under an authorized deployment dispatch — never by hand-walking bump, tag or push. | The script exists because a hand-walked checklist skipped tagging and pushing twice before (2.6.6, 2.6.7), and the permit machinery is what makes the deploy role's authority auditable. |
+| D2 | `5d56be49-2aff-49bb-bf74-eb7857b04798` | The release is done ONLY when the script prints its final `OK` line — tag pushed, CI green, assets verified. | A release commit without that line is not a release. |
 
 ## Out of Scope
 
