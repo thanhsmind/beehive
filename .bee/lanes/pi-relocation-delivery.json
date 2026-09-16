@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-relocation-delivery",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pi-relocation-delivery\" started at phase \"exploring\".",
-  "next_action": "Close pi-relocation-delivery once the user accepts the uat door",
+  "next_action": "bee close finished \"pi-relocation-delivery\" — feature is closed.",
   "created_at": "2026-09-15T22:36:48.349Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "gate_revoked_at": {
     "execution": "2026-09-16T02:04:31.984Z"
