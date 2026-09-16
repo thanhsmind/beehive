@@ -45,19 +45,51 @@
     ]
   },
   "behavior_change": false,
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "released 2.41.0",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "first deploy run stopped at the test gate on the catalog flag pin; fixed by catalog-pin-detached cpd-1 and re-dispatched"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-16T13:28:58.821Z",
     "behavior_change": false,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "the script ran the declared suite before tagging and exited 0 after verifying CI and assets",
+    "verify_output": "green:live",
+    "verify_passed": true,
     "claim_session": null,
-    "verify_command": null
+    "verify_command": "bash scripts/release.sh 2.41.0 && bee dev release-manifest --check",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "7033d8f8-2786-4936-b02c-73b18858ea0e",
+        "owner_bypassed": null,
+        "at": "2026-09-16T13:28:58.821Z"
+      }
+    ],
+    "no_mistakes": true,
+    "commit_pending": "the release commit debff7c64 is authored by scripts/release.sh with subject 'Release 2.41.0' and no cell trailer, the same as release 2.40.0",
+    "report": {
+      "outcome": "released 2.41.0: tag v2.41.0 on origin, release-binaries run 35101655020 success, linux and windows binaries plus SHA256SUMS published",
+      "commit": "debff7c64",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.41.0 && bee dev release-manifest --check — green:live — the script ran the declared suite before tagging and exited 0 after verifying CI and assets",
+      "deviations": [
+        "first deploy run stopped at the test gate on the catalog flag pin; fixed by catalog-pin-detached cpd-1 and re-dispatched"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
