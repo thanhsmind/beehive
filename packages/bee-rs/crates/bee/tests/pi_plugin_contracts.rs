@@ -1469,6 +1469,30 @@ elif [ "$1" = "worktree" ] && [ "$2" = "merge" ]; then
       exit 0
     fi
   fi
+elif [ "$1" = "worktree" ] && [ "$2" = "exit" ]; then
+  EXIT_ID=""
+  prev=""
+  for arg in "$@"; do
+    if [ "$prev" = "--id" ]; then
+      EXIT_ID="$arg"
+    fi
+    prev="$arg"
+  done
+  if [ -n "$EXIT_ID" ] && [ "$EXIT_ID" != "{worktree_id}" ]; then
+    echo "worktree id \"$EXIT_ID\" does not match current worktree \"{worktree_id}\"" >&2
+    exit 1
+  fi
+  if [ -n "$PI_SESSION_ID" ]; then
+    PI_ID_VAL="\"$PI_SESSION_ID\""
+  else
+    PI_ID_VAL="null"
+  fi
+  TRANS='{{"schemaVersion":1,"operation":"exit-worktree","sourceCwd":"{wt_s}","targetCwd":"{main_s}","worktreeId":"{worktree_id}","feature":"{feature}","piSessionId":'"$PI_ID_VAL"',"continuation":null}}'
+  if [ -n "$PI_SESSION_ID" ]; then
+    echo "@@BEE_SESSION_TRANSITION@@ $TRANS" >&2
+  fi
+  printf '{{"ok":true,"id":"{worktree_id}","worktreeRoot":"{wt_s}","mainRoot":"{main_s}","feature":"{feature}","sessionTransition":%s,"sessionRuntime":"pi","instruction":"Pi moves this session to {main_s} when this turn settles."}}\n' "$TRANS"
+  exit 0
 elif [ "$1" = "cells" ]; then
   exec "{bee_bin_s}" "$@"
 else
@@ -4368,7 +4392,7 @@ fn public_and_private_commands_register() {
     node_or_skip!("public_and_private_commands_register");
 
     let registered = pi_registered_commands();
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-merge", "bee-worktree-relocate"] {
+    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate"] {
         assert!(
             registered.contains(cmd),
             "expected .pi/extensions/bee-guard.ts to register command \"{cmd}\", but derived was: {registered:?}"
@@ -4381,7 +4405,7 @@ fn public_and_private_commands_register() {
     write_stub_bee(dir.path(), &StubBehavior::Allow);
 
     let run = run_harness(&harness, vec![]);
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-merge", "bee-worktree-relocate"] {
+    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate"] {
         assert!(
             run.commands.iter().any(|c| c == cmd),
             "expected command \"{cmd}\" to be registered in harness run, found: {:?}",
@@ -6554,6 +6578,204 @@ fn deferred_exit_ordering_settled_fork_switch_replacement_merge() {
     assert!(
         run.notifications.iter().any(|n| n["message"].as_str().unwrap_or("").contains("Merge succeeded")),
         "expected merge succeeded notification: {:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn exit_worktree_marker_relocates_and_no_merge_command_runs() {
+    node_or_skip!("exit_worktree_marker_relocates_and_no_merge_command_runs");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let main_dir = tempfile::tempdir().expect("tempdir");
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+
+    let main_path = dunce::canonicalize(main_dir.path()).unwrap_or_else(|_| main_dir.path().to_path_buf());
+    let wt_path = dunce::canonicalize(wt_dir.path()).unwrap_or_else(|_| wt_dir.path().to_path_buf());
+
+    let lifecycle_stub = StubBehavior::WorktreeLifecycle {
+        worktree_id: "repo--wt--exit-marker".to_string(),
+        main_root: main_path.clone(),
+        worktree_root: wt_path.clone(),
+        feature: "exit-marker".to_string(),
+        merge_fails: false,
+        merge_refusal_reason: None,
+    };
+    write_stub_bee(&main_path, &lifecycle_stub);
+    write_stub_bee(&wt_path, &lifecycle_stub);
+
+    let session_file = wt_path.join("session.jsonl");
+    std::fs::write(
+        &session_file,
+        format!(
+            "{}\n",
+            json!({
+                "type": "session",
+                "id": "sess-exit-marker-1",
+                "cwd": wt_path.to_string_lossy(),
+                "timestamp": "2026-09-07T12:00:00.000Z"
+            })
+        ),
+    )
+    .expect("write session file");
+
+    let exit_intent = json!({
+        "schemaVersion": 1,
+        "operation": "exit-worktree",
+        "sourceCwd": wt_path.to_string_lossy(),
+        "targetCwd": main_path.to_string_lossy(),
+        "worktreeId": "repo--wt--exit-marker",
+        "feature": "exit-marker",
+        "piSessionId": "sess-exit-marker-1",
+        "continuation": null
+    });
+    let raw_marker = format!("@@BEE_SESSION_TRANSITION@@ {}\n", serde_json::to_string(&exit_intent).unwrap());
+
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call(
+                "tool_result",
+                &wt_path,
+                "sess-exit-marker-1",
+                json!({
+                    "toolName": "bash",
+                    "content": [{"type": "text", "text": format!("Shell output before exit\n{raw_marker}Shell output after exit\n")}],
+                    "isError": false,
+                }),
+            ),
+            advisory_call("agent_settled", &wt_path, "sess-exit-marker-1", json!({})),
+            sleep_step(300),
+        ],
+    );
+
+    // 1. Tool result strips marker
+    let tool_res = &run.results[0];
+    let returned = tool_res
+        .result
+        .as_ref()
+        .expect("tool_result must return ToolResultEventResult");
+    let content = &returned["content"];
+    let text = content[0]["text"].as_str().unwrap_or("");
+    assert!(!text.contains("@@BEE_SESSION_TRANSITION@@"), "marker must be stripped: {text}");
+
+    // 2. Private command submitted
+    assert!(
+        run.messages.iter().any(|m| m.text.starts_with("/bee-worktree-relocate ")),
+        "expected relocation command submission: {:?}",
+        run.messages
+    );
+
+    // 3. Switch executed to main
+    assert_eq!(run.switches.len(), 1, "expected exactly 1 switch to main");
+    assert_eq!(run.forks.len(), 1, "expected exactly 1 fork");
+    assert!(run.process_cwd_unchanged, "process.cwd() must remain unchanged");
+
+    // 4. Notification says worktree was kept and names /bee-worktree-enter
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Relocated session to main")
+                && msg.contains("worktree was kept")
+                && msg.contains("/bee-worktree-enter --id repo--wt--exit-marker")
+        }),
+        "expected exit notification with kept worktree: {:?}",
+        run.notifications
+    );
+
+    // 5. Calls log on main must NOT contain worktree merge
+    let calls_log_path = main_path.join(".bee/bin/calls.log");
+    let calls_log = std::fs::read_to_string(&calls_log_path).unwrap_or_default();
+    assert!(
+        !calls_log.contains("worktree merge"),
+        "exit must NOT execute merge on main: {calls_log}"
+    );
+
+    // 6. Notifications must NOT contain merge success or failure
+    assert!(
+        !run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Merge succeeded") || msg.contains("merge failed")
+        }),
+        "exit must not emit merge notifications: {:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn direct_user_command_exit_relocates() {
+    node_or_skip!("direct_user_command_exit_relocates");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let main_dir = tempfile::tempdir().expect("tempdir");
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+
+    let main_path = dunce::canonicalize(main_dir.path()).unwrap_or_else(|_| main_dir.path().to_path_buf());
+    let wt_path = dunce::canonicalize(wt_dir.path()).unwrap_or_else(|_| wt_dir.path().to_path_buf());
+
+    let lifecycle_stub = StubBehavior::WorktreeLifecycle {
+        worktree_id: "repo--wt--exit-cmd".to_string(),
+        main_root: main_path.clone(),
+        worktree_root: wt_path.clone(),
+        feature: "exit-cmd".to_string(),
+        merge_fails: false,
+        merge_refusal_reason: None,
+    };
+    write_stub_bee(&main_path, &lifecycle_stub);
+    write_stub_bee(&wt_path, &lifecycle_stub);
+
+    let session_file = wt_path.join("session.jsonl");
+    std::fs::write(&session_file, "{}\n").expect("write session file");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            command_call_with_options(
+                &wt_path,
+                "sess-exit-cmd",
+                "bee-worktree-exit",
+                "--id repo--wt--exit-cmd",
+                true,
+                Some(&session_file),
+                false,
+            ),
+        ],
+    );
+
+    assert_eq!(run.switches.len(), 1, "exit must switch to main");
+    assert_eq!(run.forks.len(), 1, "exit must create 1 fork");
+
+    // Notification confirms relocation and worktree was kept
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Relocated session to main")
+                && msg.contains("worktree was kept")
+                && msg.contains("/bee-worktree-enter --id repo--wt--exit-cmd")
+        }),
+        "expected exit notification: {:?}",
+        run.notifications
+    );
+
+    // Calls log on main must NOT contain worktree merge
+    let calls_log_path = main_path.join(".bee/bin/calls.log");
+    let calls_log = std::fs::read_to_string(&calls_log_path).unwrap_or_default();
+    assert!(
+        !calls_log.contains("worktree merge"),
+        "exit must not execute worktree merge: {calls_log}"
+    );
+
+    // Notifications must NOT contain merge success or refusal
+    assert!(
+        !run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Merge succeeded") || msg.contains("merge failed")
+        }),
+        "exit must not emit merge notifications: {:?}",
         run.notifications
     );
 }
