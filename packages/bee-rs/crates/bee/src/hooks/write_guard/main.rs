@@ -491,6 +491,196 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
+        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json
+        if denial.is_none() {
+            for rel in &rel_paths {
+                let norm = normalize_rel(rel);
+                if norm == ".bee/config.json" || norm == ".bee/config.local.json" {
+                    if is_apply {
+                        denial = Some(format!(
+                            "bee config guard: \"{}\" cannot be modified via apply_patch — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+                            rel
+                        ));
+                        break;
+                    }
+                    if is_shell {
+                        denial = Some(format!(
+                            "bee config guard: \"{}\" cannot be modified via Bash — this target requires content-level inspection. FIX: use Edit/Write to edit config files.",
+                            rel
+                        ));
+                        break;
+                    }
+                    // The comparison is over the MERGED view, never one file
+                    // alone: .bee/config.local.json deep-merges over
+                    // .bee/config.json on every read (state.rs:176-184), so a
+                    // per-file projection cannot tell a masked change from a
+                    // removal in either direction. Both sides of the diff are
+                    // built the way read_config_raw builds what the dispatcher
+                    // resolves against.
+                    let tracked_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.json")).ok();
+                    let overlay_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.local.json")).ok();
+                    let is_overlay_file = norm == ".bee/config.local.json";
+                    // Two distinct "nothing to compare" cases, both None, both
+                    // allowed: NEITHER config file exists yet (a first write
+                    // has no prior table to change), and the tracked file
+                    // exists but does not parse (config_merged_text returns
+                    // None, which is how a corrupt-config repair stays possible).
+                    let old_merged = if tracked_disk.is_none() && overlay_disk.is_none() {
+                        None
+                    } else {
+                        config_merged_text(tracked_disk.as_deref(), overlay_disk.as_deref())
+                    };
+                    let merged_with = |proposed: &str| -> Option<String> {
+                        if is_overlay_file {
+                            config_merged_text(tracked_disk.as_deref(), Some(proposed))
+                        } else {
+                            config_merged_text(Some(proposed), overlay_disk.as_deref())
+                        }
+                    };
+
+                    if tool_name == "Write" {
+                        let Some(content) = tool_input.get("content").and_then(Value::as_str) else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" Write cannot be reconstructed — missing or invalid content parameter. FIX: use Edit/Write with complete content.",
+                                rel
+                            ));
+                            break;
+                        };
+                        if let Some(new_merged) = merged_with(content) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
+                            }
+                        }
+                    } else if tool_name == "Edit" {
+                        // Reconstruction reads the file actually being edited —
+                        // never a fallback to the other config file, which
+                        // would apply this edit's strings to bytes that are not
+                        // its target.
+                        let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" Edit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
+                                rel
+                            ));
+                            break;
+                        };
+                        let Some(old_s) = tool_input.get("old_string").and_then(Value::as_str) else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" Edit cannot be reconstructed — missing or invalid old_string. FIX: provide old_string and new_string to Edit.",
+                                rel
+                            ));
+                            break;
+                        };
+                        let Some(new_s) = tool_input.get("new_string").and_then(Value::as_str) else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" Edit cannot be reconstructed — missing or invalid new_string. FIX: provide old_string and new_string to Edit.",
+                                rel
+                            ));
+                            break;
+                        };
+                        if !current_text.contains(old_s) {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" Edit cannot be reconstructed — old_string not found in file. FIX: provide exact matching old_string to Edit.",
+                                rel
+                            ));
+                            break;
+                        }
+                        let replace_all = tool_input.get("replace_all").and_then(Value::as_bool).unwrap_or(false);
+                        let proposed = if replace_all {
+                            current_text.replace(old_s, new_s)
+                        } else {
+                            current_text.replacen(old_s, new_s, 1)
+                        };
+                        if let Some(new_merged) = merged_with(&proposed) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
+                            }
+                        }
+                    } else if tool_name == "MultiEdit" {
+                        let Ok(mut current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
+                                rel
+                            ));
+                            break;
+                        };
+                        let Some(Value::Array(edits)) = tool_input.get("edits") else {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — missing edits array. FIX: provide edits array to MultiEdit.",
+                                rel
+                            ));
+                            break;
+                        };
+                        if edits.is_empty() {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — edits array is empty. FIX: provide non-empty edits array to MultiEdit.",
+                                rel
+                            ));
+                            break;
+                        }
+                        let mut reconstruct_ok = true;
+                        let old_text_saved = current_text.clone();
+                        for edit in edits {
+                            let Some(old_s) = edit.get("old_string").and_then(Value::as_str) else {
+                                reconstruct_ok = false;
+                                break;
+                            };
+                            let Some(new_s) = edit.get("new_string").and_then(Value::as_str) else {
+                                reconstruct_ok = false;
+                                break;
+                            };
+                            if !current_text.contains(old_s) {
+                                reconstruct_ok = false;
+                                break;
+                            }
+                            let replace_all = edit.get("replace_all").and_then(Value::as_bool).unwrap_or(false);
+                            if replace_all {
+                                current_text = current_text.replace(old_s, new_s);
+                            } else {
+                                current_text = current_text.replacen(old_s, new_s, 1);
+                            }
+                        }
+                        if !reconstruct_ok {
+                            denial = Some(format!(
+                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — missing parameters or target string not found. FIX: provide valid edits array to MultiEdit.",
+                                rel
+                            ));
+                            break;
+                        }
+                        let _ = &old_text_saved;
+                        if let Some(new_merged) = merged_with(&current_text) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
+                            }
+                        }
+                    } else {
+                        denial = Some(format!(
+                            "bee config guard: \"{}\" cannot be modified via {} — unsupported tool for governed config. FIX: use Edit/Write to edit config files.",
+                            rel, tool_name
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+
+
         if denial.is_none() && !rel_paths.is_empty() {
             // The worktree-first guard must judge the same ACTING record
             // every other write check already resolved (resolve_write_record:

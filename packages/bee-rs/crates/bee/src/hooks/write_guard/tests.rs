@@ -274,6 +274,440 @@ use std::process::ExitCode;
         assert_eq!(e2.code, 0, "{}", e2.stderr);
     }
 
+    // ── config-role-key-guard tests ──────────────────────────────────────────
+
+    fn sample_config_with_pi_review() -> Value {
+        json!({
+            "hooks": {
+                "write-guard": true
+            },
+            "commands": {
+                "test": "cargo test"
+            },
+            "gate_bypass": "off",
+            "uat_stop": "close",
+            "team": {
+                "pi": {
+                    "review": {
+                        "kind": "herding",
+                        "agent": "pi-gpt-5.6-luna",
+                        "description": "independent review"
+                    }
+                }
+            },
+            "herding": {
+                "agent_command": "claude-sonnet",
+                "agents": {
+                    "pi-gpt-5.6-luna": ["pi", "-a", "--model", "openai-codex/gpt-5.6-luna:high"],
+                    "pi-opencode-free": ["pi", "-a", "--model", "opencode/x-preview-f-free:high"]
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_write_edit_multiedit_on_team_pi_review() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        let cfg_str = serde_json::to_string_pretty(&cfg).unwrap();
+        std::fs::write(fx.root.join(".bee/config.json"), &cfg_str).unwrap();
+
+        // 1. Write
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-opencode-free"), "stderr={}", ew.stderr);
+
+        // 2. Edit
+        let edit_payload = json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "old_string": "\"pi-gpt-5.6-luna\"",
+                "new_string": "\"pi-opencode-free\""
+            }
+        });
+        let ee = expect_done(edit_payload, &fx.root);
+        assert_eq!(ee.code, 2, "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("team.pi.review.agent"), "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ee.stderr);
+        assert!(ee.stderr.contains("pi-opencode-free"), "stderr={}", ee.stderr);
+
+        // 3. MultiEdit
+        let multiedit_payload = json!({
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "edits": [
+                    {
+                        "old_string": "\"pi-gpt-5.6-luna\"",
+                        "new_string": "\"pi-opencode-free\""
+                    }
+                ]
+            }
+        });
+        let em = expect_done(multiedit_payload, &fx.root);
+        assert_eq!(em.code, 2, "stderr={}", em.stderr);
+        assert!(em.stderr.contains("team.pi.review.agent"), "stderr={}", em.stderr);
+        assert!(em.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", em.stderr);
+        assert!(em.stderr.contains("pi-opencode-free"), "stderr={}", em.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_config_local_json() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        let cfg_str = serde_json::to_string_pretty(&cfg).unwrap();
+        std::fs::write(fx.root.join(".bee/config.local.json"), &cfg_str).unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("pi-opencode-free"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_legacy_models_key() {
+        let fx = build_fixture("swarming", true);
+        let legacy_cfg = json!({
+            "models": {
+                "pi": {
+                    "review": {
+                        "kind": "herding",
+                        "agent": "pi-gpt-5.6-luna"
+                    }
+                }
+            }
+        });
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&legacy_cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = legacy_cfg.clone();
+        modified_cfg["models"]["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    /// `.bee/config.local.json` deep-merges over `.bee/config.json`
+    /// (state.rs:176-184) — it does not replace it. Creating the overlay with
+    /// only unrelated keys therefore removes nothing, and must pass. Judging
+    /// the overlay file on its own reads the tracked team table as deleted and
+    /// refuses a legitimate first write.
+    #[test]
+    fn config_role_key_guard_allows_creating_a_local_overlay_with_unrelated_keys() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": "{\n  \"doc_viewer\": \"local-only\"\n}\n"
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    /// The overlay's other direction: the same role change written into
+    /// `.bee/config.local.json` still wins at read time, so it must still
+    /// refuse even though `.bee/config.json` is untouched.
+    #[test]
+    fn config_role_key_guard_refuses_a_role_override_added_by_the_local_overlay() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let overlay = json!({
+            "team": { "pi": { "review": { "kind": "herding", "agent": "pi-opencode-free" } } }
+        });
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": serde_json::to_string_pretty(&overlay).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    /// The third config shape: neither `team` nor `models` present, so the
+    /// dispatcher reads the WHOLE config object as the role table
+    /// (hooks/model_guard.rs:532-539, `Some(&cfg_val)`). A view that projected
+    /// an empty table for this shape would leave it entirely unguarded — the
+    /// arm must see what the dispatcher sees.
+    #[test]
+    fn config_role_key_guard_refuses_bare_runtime_table_with_no_team_wrapper() {
+        let fx = build_fixture("swarming", true);
+        let bare_cfg = json!({
+            "pi": {
+                "review": {
+                    "kind": "herding",
+                    "agent": "pi-gpt-5.6-luna"
+                }
+            }
+        });
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&bare_cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = bare_cfg.clone();
+        modified_cfg["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_rewriting_herding_agents_argv() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["herding"]["agents"]["pi-gpt-5.6-luna"] = json!(["pi", "-a", "--model", "different-model"]);
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("herding.agents.pi-gpt-5.6-luna"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_disabling_write_guard_hook() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["hooks"]["write-guard"] = json!(false);
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("hooks.write-guard"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_apply_patch_and_sed_in_place() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        // 1. apply_patch
+        let patch_input = "*** Begin Patch\n*** Update File: .bee/config.json\n@@\n- \"pi-gpt-5.6-luna\"\n+ \"pi-opencode-free\"\n*** End Patch\n";
+        let ep = expect_done(patch(patch_input), &fx.root);
+        assert_eq!(ep.code, 2, "stderr={}", ep.stderr);
+        assert!(ep.stderr.contains("Edit/Write"), "stderr={}", ep.stderr);
+
+        // 2. sed -i
+        let es = expect_done(bash("sed -i 's/pi-gpt-5.6-luna/pi-opencode-free/' .bee/config.json"), &fx.root);
+        assert_eq!(es.code, 2, "stderr={}", es.stderr);
+        assert!(es.stderr.contains("Edit/Write"), "stderr={}", es.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_refuses_removing_existing_role_slot() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().remove("review");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review"), "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_adding_role_slot() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().insert(
+            "deploy".to_string(),
+            json!({
+                "kind": "herding",
+                "agent": "pi-deploy-bot"
+            }),
+        );
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_changing_non_governed_keys() {
+        let fx = build_fixture("swarming", true);
+        let cfg = sample_config_with_pi_review();
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["gate_bypass"] = json!("full");
+        modified_cfg["uat_stop"] = json!("merge");
+        modified_cfg["commands"]["test"] = json!("cargo test --all");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_reindent_description_edit_and_dropped_null_slot() {
+        let fx = build_fixture("swarming", true);
+        let mut cfg = sample_config_with_pi_review();
+        cfg["team"]["pi"].as_object_mut().unwrap().insert("temp_slot".into(), Value::Null);
+        let cfg_str = serde_json::to_string(&cfg).unwrap(); // compact
+        std::fs::write(fx.root.join(".bee/config.json"), &cfg_str).unwrap();
+
+        // 1. Re-indent and 2. change description and 3. drop temp_slot (null slot)
+        let mut modified_cfg = cfg.clone();
+        modified_cfg["team"]["pi"]["review"]["description"] = json!("completely new description");
+        modified_cfg["team"]["pi"].as_object_mut().unwrap().remove("temp_slot");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap() // pretty indent
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    #[test]
+    fn config_role_key_guard_allows_first_write_and_corrupt_repair() {
+        let fx = build_fixture("swarming", true);
+
+        // 1. First write with no config file on disk
+        let cfg = sample_config_with_pi_review();
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+
+        // 2. Corrupt config repair
+        std::fs::write(fx.root.join(".bee/config.json"), "{ corrupt json ...").unwrap();
+        let repair_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&cfg).unwrap()
+            }
+        });
+        let er = expect_done(repair_payload, &fx.root);
+        assert_eq!(er.code, 0, "stderr={}", er.stderr);
+    }
+
+
     // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
     // The pure decision table lives in hooks/cli_shape.rs; these rows prove
     // the wiring — that a denial reaches exit 2 on stderr, that a well-formed
