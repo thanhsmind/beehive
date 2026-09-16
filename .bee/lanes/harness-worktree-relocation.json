@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"harness-worktree-relocation\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 0b59428; reload the product and test \"harness-worktree-relocation\", then either approve uat (\"bee gate --name uat --approved true --lane harness-worktree-relocation\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"harness-worktree-relocation\" (lane).",
   "created_at": "2026-09-16T10:56:30.230Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: harness-worktree-relocation",
-    "asked_at": "2026-09-16T11:47:48.401Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-09-16T11:48:28.452Z",
+    "session": "7033d8f8-2786-4936-b02c-73b18858ea0e"
   },
   "route": {
     "class": "feature",

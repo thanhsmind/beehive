@@ -519,6 +519,7 @@
     "deploy",
     "plan",
     "verify-app",
-    "session-relocation"
+    "session-relocation",
+    "cli-vocabulary"
   ]
 }

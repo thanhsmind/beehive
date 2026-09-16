@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0",
+  "feature": "catalog-pin-detached",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"catalog-pin-detached\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"catalog-pin-detached\" (lane).",
+  "created_at": "2026-09-16T13:17:13.165Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-09-16T13:17:13.188Z",
+    "feature": "catalog-pin-detached"
+  },
+  "gate_preview": {
+    "feature": "catalog-pin-detached",
+    "plan_sha256": "da542ac931c18f6f3cdf3d98b2c93a1d111e595bebdadbd8711af9649f0ad95f",
+    "previewed_at": "2026-09-16T13:17:45.369Z",
+    "cells": [
+      {
+        "id": "cpd-1",
+        "feature": "catalog-pin-detached",
+        "title": "Pin the flag vocabulary at 208 for --detached",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "cf50327a-104e-4e44-97b7-d52fd850494b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In catalog.rs test distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision, bump PINNED_FLAG_COUNT from 207 to 208 and add a comment entry '207 -> 208 (harness-worktree-relocation hwr-2)' saying worktree.merge gained --detached and no existing flag name means skip the caller-session relocation check (per D1).",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary_is_pinned",
+        "must_haves": {
+          "truths": [
+            "the flag vocabulary pin test passes at 208"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not rename or remove any flag"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "catalog-pin-detached",
+    "plan_sha256": "da542ac931c18f6f3cdf3d98b2c93a1d111e595bebdadbd8711af9649f0ad95f",
+    "previewed_at": "2026-09-16T13:17:45.369Z",
+    "cells": [
+      {
+        "id": "cpd-1",
+        "feature": "catalog-pin-detached",
+        "title": "Pin the flag vocabulary at 208 for --detached",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "cf50327a-104e-4e44-97b7-d52fd850494b"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In catalog.rs test distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision, bump PINNED_FLAG_COUNT from 207 to 208 and add a comment entry '207 -> 208 (harness-worktree-relocation hwr-2)' saying worktree.merge gained --detached and no existing flag name means skip the caller-session relocation check (per D1).",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee distinct_flag_vocabulary_is_pinned",
+        "must_haves": {
+          "truths": [
+            "the flag vocabulary pin test passes at 208"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not rename or remove any flag"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-09-16T13:20:04.925Z",
+    "branch": "wt/catalog-pin-detached",
+    "worktree_id": "beehive--wt--catalog-pin-detached",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
