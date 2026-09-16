@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-40-0",
   "mode": null,
-  "phase": "exploring",
+  "phase": "scribing",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,13 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"release-2-40-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"release-2-40-0\" (lane).",
+  "next_action": "Close release-2-40-0.",
   "created_at": "2026-09-16T04:26:23.222Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tree is clean. Re-minting the permit against the new HEAD and running exactly what the door returns.",
-    "asked_at": "2026-09-16T04:29:48.573Z",
+    "subject": "Vendored binary still reports 2.39.0. Rebuilding it from the released source.",
+    "asked_at": "2026-09-16T04:37:55.588Z",
     "session": "394d377c-ef26-4579-8e45-871f6f5d588c"
   },
   "route": {
