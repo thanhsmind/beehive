@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pi-relocation-delivery\" started at phase \"exploring\".",
-  "next_action": "Merged into main at e493f27; reload the product and test \"pi-relocation-delivery\", then either approve uat (\"bee gate --name uat --approved true --lane pi-relocation-delivery\") or fix it in the worktree and merge again.",
+  "next_action": "Close pi-relocation-delivery once the user accepts the uat door",
   "created_at": "2026-09-15T22:36:48.349Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pi-relocation-delivery",
-    "asked_at": "2026-09-16T02:30:53.011Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "gate_revoked_at": {
     "execution": "2026-09-16T02:04:31.984Z"
   },
@@ -487,5 +482,14 @@
     "rationale": "prd-5 repairs the cwd the belt passes to bee cells rebind-session; three files, one public verb already shipped",
     "updated_at": "2026-09-16T02:14:57.310Z",
     "feature": "pi-relocation-delivery"
+  },
+  "last_scribing_run": {
+    "feature": "pi-relocation-delivery",
+    "date": "2026-09-16",
+    "at": "2026-09-16T02:34:10.197Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Close pi-relocation-delivery once the user accepts the uat door"
   }
 }
