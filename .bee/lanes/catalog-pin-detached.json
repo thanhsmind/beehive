@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"catalog-pin-detached\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"catalog-pin-detached\" (lane).",
+  "next_action": "Merged into main at 36b2efd; capture what settled, then bee close --feature catalog-pin-detached.",
   "created_at": "2026-09-16T13:17:13.165Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -101,12 +101,5 @@
         "behavior_change": false
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-16T13:20:04.925Z",
-    "branch": "wt/catalog-pin-detached",
-    "worktree_id": "beehive--wt--catalog-pin-detached",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
