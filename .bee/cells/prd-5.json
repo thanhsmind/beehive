@@ -96,6 +96,51 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "every-rebind-runs-from-main",
+            "status": "PASS",
+            "evidence": "bee-guard.ts:1640 (forward rebind), :1693 and :1735 (compensating rollbacks) all pass `mainRoot`, the value resolved at :1605; a grep for execBeeCli call sites shows no rebind invocation carrying intent.targetCwd or intent.sourceCwd."
+          },
+          {
+            "id": "red-before-green",
+            "status": "PASS",
+            "evidence": "Against the pre-fix belt the case failed on the rebound-claim assertion — left Some(\"sess-old-reloc\"), right Some(\"sess-new-reloc\") — and passed after the three call sites changed: `relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims ... ok`."
+          },
+          {
+            "id": "stub-models-the-verb-it-asserts-on",
+            "status": "PASS",
+            "evidence": "The fixture's stub bee now answers `cells rebind-session` itself, refusing with the real verb's message when its cwd is the worktree and rewriting the claim (session plus fence_epoch) otherwise; before this it delegated cells verbs to the real binary, which refused, so the assertion rested on a call that rewrote nothing."
+          },
+          {
+            "id": "cwd-is-asserted-not-assumed",
+            "status": "PASS",
+            "evidence": "The stub logs `<cwd>\\t<argv>` to its own calls_cwd.log — separate from calls.log, whose whole-line equality other cases depend on — and the case asserts every `cells rebind-session` invocation ran with the main checkout root."
+          },
+          {
+            "id": "installed-runtime-proof",
+            "status": "PASS",
+            "evidence": "Leader re-ran the approved chain in the worktree: 68 contract tests passed 0 failed; `dev release-manifest --check` reported 376 files match; `doctor --runtime pi` returned overall ready with wiring_matches_binary ok after the binary was rebuilt and re-vendored."
+          },
+          {
+            "id": "scope-and-prohibitions",
+            "status": "PASS",
+            "evidence": "Commit c65eaaef13c4496b15b44d99b0ad0b8fe9e29dca touches only the belt and the Pi contract test; the regen commit 18585cf13b498f2f4847611802403171f8fe624d touches the manifest and onboarding record. The carry mechanism itself is unchanged, and no Claude, Codex or OpenCode path was edited."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-16T02:30:13.341Z"
+      }
+    ]
   }
 }
