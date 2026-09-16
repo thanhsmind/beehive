@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 use std::process::ExitCode;
 use std::time::Instant;
+use crate::session_identity::{locate_caller, CallerSession};
 
 // ─── worktree new / merge ─────────────────────────────────────────────────
 
@@ -124,10 +125,43 @@ pub(crate) fn emit_pi_transition_marker_if_present(transition: &Value) {
     }
 }
 
+pub(crate) fn build_instruction_for_runtime(
+    runtime: Option<&str>,
+    operation: &str,
+    target: &str,
+    worktree_id: Option<&str>,
+) -> String {
+    match runtime {
+        Some("pi") => format!("Pi moves this session to {target} when this turn settles."),
+        Some("claude") => match operation {
+            "enter-worktree" => format!("Call EnterWorktree with path={target}."),
+            "exit-worktree" => "Call ExitWorktree with action=keep.".to_string(),
+            "exit-worktree-before-merge" => {
+                let id = worktree_id.unwrap_or_default();
+                format!("Call ExitWorktree with action=keep, then run bee worktree merge --id {id} from {target}.")
+            }
+            _ => format!("Open a session at {target}."),
+        },
+        Some("codex") => format!("Ask the user to type /cd {target}, then send any message to continue."),
+        Some("opencode") => format!("Ask the user to type /move {target}, then send any message to continue."),
+        _ => format!("Open a session at {target}."),
+    }
+}
+
+pub(crate) fn build_instruction(
+    caller: Option<&CallerSession>,
+    operation: &str,
+    target: &str,
+    worktree_id: Option<&str>,
+) -> String {
+    build_instruction_for_runtime(caller.map(|c| c.runtime.as_str()), operation, target, worktree_id)
+}
+
 pub(crate) fn enter_worktree_core(
     control_root: &Path,
     source_root: &Path,
     id: &str,
+    caller: Option<&CallerSession>,
 ) -> Result<(Value, String), String> {
     let control_canon = dunce::canonicalize(control_root)
         .map_err(|e| format!("cannot canonicalize control root {}: {}", control_root.display(), e))?;
@@ -171,6 +205,17 @@ pub(crate) fn enter_worktree_core(
         result.insert("feature".into(), json!(f));
     }
     result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "enter-worktree",
+        &p(&target_root),
+        Some(id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
 
     let stay_desc = if crate::path_identity::canonical_paths_equal(&source_canon, &control_canon) {
         "this session stays on main until relocated."
@@ -178,7 +223,7 @@ pub(crate) fn enter_worktree_core(
         "this session stays in the worktree until relocated."
     };
     let text = format!(
-        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — {stay_desc}",
+        "Session transition intent emitted for worktree \"{id}\" (feature: \"{}\"): target at {}.\nOpen next session with cwd={} — {stay_desc}\n{instruction}",
         feature.as_deref().unwrap_or(id),
         p(&target_root),
         p(&target_root)
@@ -214,7 +259,8 @@ pub(crate) fn run_enter(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             )));
         }
     };
-    match enter_worktree_core(&control_root, &source_root, &id) {
+    let caller = locate_caller();
+    match enter_worktree_core(&control_root, &source_root, &id, caller.as_ref()) {
         Ok((result, text)) => {
             if let Some(transition) = result.get("sessionTransition") {
                 emit_pi_transition_marker_if_present(transition);
@@ -233,6 +279,7 @@ pub(crate) fn linked_worktree_merge_core(
     no_cleanup: bool,
     skip_uat: bool,
     queue_wait_ms: Option<f64>,
+    caller: Option<&CallerSession>,
 ) -> Result<(Value, String), String> {
     if let Some(pid) = passed_id {
         if pid != current_id {
@@ -270,9 +317,20 @@ pub(crate) fn linked_worktree_merge_core(
         result.insert("feature".into(), json!(f));
     }
     result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "exit-worktree-before-merge",
+        &p(main_root),
+        Some(current_id),
+    );
+    result.insert("instruction".into(), json!(&instruction));
 
     let text = format!(
-        "Session transition intent emitted for worktree \"{current_id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} to run merge — this session stays in the worktree until relocated.",
+        "Session transition intent emitted for worktree \"{current_id}\" (feature: \"{}\"): return to main checkout at {}.\nSwitch session to cwd={} to run merge — this session stays in the worktree until relocated.\n{instruction}",
         feature.as_deref().unwrap_or(current_id),
         p(main_root),
         p(main_root)
@@ -407,21 +465,53 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         p(&created.worktree_root),
         created.id
     );
-    let (mut result, text) = new_result_and_text(&feature, &created, &next_step);
-    let transition = match build_session_transition(
-        "enter-worktree",
+    let caller = locate_caller();
+    let (result, text) = match new_worktree_transition_result_and_text(
+        &feature,
+        &created,
+        &next_step,
         &main_root,
-        &created.worktree_root,
-        &created.id,
-        Some(&feature),
-        None,
+        caller.as_ref(),
     ) {
-        Ok(t) => t,
+        Ok(pair) => pair,
         Err(err) => return Some(ctx.fail(&err)),
     };
-    result.insert("sessionTransition".into(), transition.clone());
-    emit_pi_transition_marker_if_present(&transition);
+    if let Some(transition) = result.get("sessionTransition") {
+        emit_pi_transition_marker_if_present(transition);
+    }
     Some(ctx.emit(&Value::Object(result), &text))
+}
+
+pub(crate) fn new_worktree_transition_result_and_text(
+    feature: &str,
+    created: &Created,
+    next_step: &str,
+    main_root: &Path,
+    caller: Option<&CallerSession>,
+) -> Result<(Map<String, Value>, String), String> {
+    let (mut result, text) = new_result_and_text(feature, created, next_step);
+    let transition = build_session_transition(
+        "enter-worktree",
+        main_root,
+        &created.worktree_root,
+        &created.id,
+        Some(feature),
+        None,
+    )?;
+    result.insert("sessionTransition".into(), transition);
+    result.insert(
+        "sessionRuntime".into(),
+        caller.map_or(Value::Null, |c| json!(c.runtime)),
+    );
+    let instruction = build_instruction(
+        caller,
+        "enter-worktree",
+        &p(&created.worktree_root),
+        Some(&created.id),
+    );
+    result.insert("instruction".into(), json!(instruction));
+    let text = format!("{text}\n{instruction}");
+    Ok((result, text))
 }
 
 /// bee.mjs handleWorktreeNew's result/text, split out the same way
@@ -776,6 +866,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         } else {
             None
         };
+        let caller = locate_caller();
         match linked_worktree_merge_core(
             &worktree_root,
             current_id,
@@ -784,6 +875,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             no_cleanup_flag,
             skip_uat_flag,
             queue_wait_opt,
+            caller.as_ref(),
         ) {
             Ok((result, text)) => {
                 if let Some(transition) = result.get("sessionTransition") {
