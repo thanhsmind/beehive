@@ -299,6 +299,50 @@ follows prd-1, because its test asserts the claim rebind end to end.
       ]
     },
     "behavior_change": false
+  },
+  {
+    "id": "prd-5",
+    "feature": "pi-relocation-delivery",
+    "title": "Run the relocation rebind from the main checkout, not the worktree",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": ["52d1e3aa-97d3-4a0d-a89a-67f0822ec695"],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/pi-relocation-delivery/CONTEXT.md",
+      "docs/history/pi-relocation-delivery/reports/uat-correction.md",
+      ".pi/extensions/bee-guard.ts"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "A live acceptance run found the shipped relocation rebind refused every time. The belt calls `bee cells rebind-session` with a worktree cwd, and that verb is refused inside a granted feature worktree (reproduced: from the worktree it exits 1 with 'refused inside a granted feature worktree — ... FIX: run it from <main>'; from the main checkout the same call exits 0). Fix all three call sites in .pi/extensions/bee-guard.ts to pass the already-resolved `mainRoot` (computed at :1605) instead of a worktree path: the forward rebind at :1635 passes `intent.targetCwd`, and the two compensating rollbacks at :1688 and :1730 pass `intent.sourceCwd`, which is the worktree on the exit-before-merge direction. RED FIRST: the existing contract case missed this because the harness fakes the bee CLI and its stub records only argv and stdin, never the working directory — extend the stub prelude to append its own $PWD beside the argv it logs, add an assertion that the rebind invocation ran with the main checkout root, watch it fail against the current belt, then fix. Finally run `bee dev regen` so the embedded belt bytes and the release manifest match.",
+    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+    "must_haves": {
+      "truths": [
+        "every bee cells rebind-session call the belt makes runs with the main checkout root as its cwd",
+        "the stub bee records the working directory of each invocation",
+        "the contract test asserts that cwd and fails against the pre-fix belt",
+        "the compensating rollback on a cancelled or failed switch also runs from the main root",
+        "doctor --runtime pi reports wiring_matches_binary ok after regen"
+      ],
+      "artifacts": [
+        {"path": ".pi/extensions/bee-guard.ts", "substantive": "all three rebind call sites pass mainRoot"},
+        {"path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", "substantive": "the stub logs its cwd and the case asserts the rebind ran from the main root"}
+      ],
+      "key_links": [
+        "mainRoot is already computed at bee-guard.ts:1605 and is in scope for all three sites"
+      ],
+      "prohibitions": [
+        "Do not change the carry mechanism itself",
+        "Do not touch Claude, Codex or OpenCode paths"
+      ]
+    },
+    "behavior_change": true
   }
 ]
 ```
