@@ -160,8 +160,10 @@ For every worktree found finished in §3 with **no** red-stop marker, from the
 MAIN checkout:
 
 ```
-bee worktree merge --id <grant-key> --cleanup
+bee worktree merge --id <grant-key> --cleanup --detached
 ```
+
+Pass `--detached` so sessionless herding merges directly without caller session relocation checks (D2).
 
 This first runs a zero-mutation proof check over the feature's capped cells
 (D7/D8) — every capped cell must already carry a recorded proof line, or the
@@ -258,7 +260,7 @@ integration transaction.
 | Killed-merge wreckage on main | `git -C <main-root> rev-parse -q --verify MERGE_HEAD` → `git -C <main-root> merge --abort` |
 | Red-stop marker, check before merging | `ls .bee/tmp/bee-herding.red.<slug>` — exists → skip this worktree, say nothing (§4) |
 | In-review marker, check before merging | `ls .bee/tmp/bee-herding.review.<slug>` — exists → skip this worktree, say so once via scrollback dedup (§4) |
-| Merge and clean up | `bee worktree merge --id <grant-key> --cleanup` |
+| Merge and clean up | `bee worktree merge --id <grant-key> --cleanup --detached` |
 | Find the worktree's runtime pane | `bee herding pane list --workspace <id>` filtered to the runtime tab, `label == <slug>` |
 | Close it (only after a successful merge) | `bee herding pane close <pane_id>` |
 | On red, write the marker then report, once, no retry | `mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>`, then `bee herding pane send-text <chat_pane_id> "..."` |

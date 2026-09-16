@@ -547,5 +547,24 @@ export default (async ({ directory }) => {
         // named gap, see discovery.md.
       })
     },
+
+    // ── ADVISORY: shell.env — export BEE_SESSION_ID and BEE_RUNTIME for
+    // OpenCode shell children so caller locator can identify the session.
+    // Fail-open: never throws. ───────────────────────────────────────────
+    "shell.env": async (input, output) => {
+      try {
+        const sessionID = input?.sessionID
+        if (sessionID) {
+          if (!output.env) {
+            output.env = {}
+          }
+          output.env.BEE_SESSION_ID = sessionID
+          output.env.BEE_RUNTIME = "opencode"
+        }
+      } catch (err: any) {
+        console.error(`bee shell.env (advisory): ${err?.message ?? err}`)
+      }
+    },
   }
 }) satisfies Plugin
+

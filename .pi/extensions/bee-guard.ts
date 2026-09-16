@@ -951,7 +951,7 @@ interface SessionTransitionContinuation {
 
 interface SessionTransitionIntent {
   schemaVersion: 1
-  operation: "enter-worktree" | "exit-worktree-before-merge"
+  operation: "enter-worktree" | "exit-worktree-before-merge" | "exit-worktree"
   sourceCwd: string
   targetCwd: string
   worktreeId: string
@@ -1155,7 +1155,11 @@ function validateTransitionIntent(
   if (parsed.schemaVersion !== 1) {
     return null
   }
-  if (parsed.operation !== "enter-worktree" && parsed.operation !== "exit-worktree-before-merge") {
+  if (
+    parsed.operation !== "enter-worktree" &&
+    parsed.operation !== "exit-worktree-before-merge" &&
+    parsed.operation !== "exit-worktree"
+  ) {
     return null
   }
   if (typeof parsed.sourceCwd !== "string" || typeof parsed.targetCwd !== "string") {
@@ -1178,7 +1182,7 @@ function validateTransitionIntent(
     return null
   }
 
-  if (parsed.operation === "enter-worktree") {
+  if (parsed.operation === "enter-worktree" || parsed.operation === "exit-worktree") {
     if (parsed.continuation !== null) {
       return null
     }
@@ -1346,6 +1350,9 @@ async function revalidateDeferredIntent(
   if (intent.operation === "enter-worktree") {
     if (!intent.worktreeId) return null
     args = ["worktree", "enter", "--id", intent.worktreeId, "--json"]
+  } else if (intent.operation === "exit-worktree") {
+    if (!intent.worktreeId) return null
+    args = ["worktree", "exit", "--id", intent.worktreeId, "--json"]
   } else if (intent.operation === "exit-worktree-before-merge") {
     args = ["worktree", "merge", "--json"]
     if (intent.worktreeId) {
@@ -1496,7 +1503,11 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
       ctx.ui?.notify?.("Session transition refused: unsupported schemaVersion", "error")
       return false
     }
-    if (intent.operation !== "enter-worktree" && intent.operation !== "exit-worktree-before-merge") {
+    if (
+      intent.operation !== "enter-worktree" &&
+      intent.operation !== "exit-worktree-before-merge" &&
+      intent.operation !== "exit-worktree"
+    ) {
       ctx.ui?.notify?.("Session transition refused: unknown operation", "error")
       return false
     }
@@ -1678,6 +1689,13 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
               )
             }
             await handlePostExitMerge(replacedCtx, intent)
+          } else if (intent.operation === "exit-worktree") {
+            const worktreeId = intent.worktreeId || ""
+            const reentryCmd = `/bee-worktree-enter --id ${worktreeId}`
+            replacedCtx.ui?.notify?.(
+              `Relocated session to main (${intent.targetCwd})${detailSuffix}. The worktree was kept. To return, run: ${reentryCmd}`,
+              "info",
+            )
           } else {
             replacedCtx.ui?.notify?.(
               `Relocated session to worktree ${intent.worktreeId || ""} (${intent.targetCwd})${detailSuffix}`,
@@ -2245,6 +2263,48 @@ export default function (pi: ExtensionAPI) {
       } else {
         ctx.ui?.notify?.(
           "bee version mismatch: worktree enter succeeded but output lacked sessionTransition intent. Upgrade bee to enable session relocation.",
+          "error",
+        )
+      }
+    },
+  })
+
+  pi.registerCommand("bee-worktree-exit", {
+    description: "Exit current bee worktree back to main",
+    handler: async (args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      let tokens: string[]
+      try {
+        tokens = tokenizeArgv(args)
+      } catch (err: any) {
+        ctx.ui?.notify?.(`Command argument error: ${err?.message ?? err}`, "error")
+        return
+      }
+      const beeArgs = ["worktree", "exit", ...tokens]
+      if (!beeArgs.includes("--json")) {
+        beeArgs.push("--json")
+      }
+      const directory = directoryOf(ctx)
+      const result = await execBeeCli(directory, beeArgs, sessionIdOf(ctx))
+      if (result.exitCode !== 0) {
+        ctx.ui?.notify?.(result.stderr.trim() || result.stdout.trim() || "bee worktree exit failed", "error")
+        return
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(result.stdout)
+      } catch {
+        ctx.ui?.notify?.("Failed to parse bee output as JSON", "error")
+        return
+      }
+      if (parsed?.sessionTransition) {
+        await performSessionTransition(ctx, parsed.sessionTransition)
+      } else {
+        ctx.ui?.notify?.(
+          "bee version mismatch: worktree exit succeeded but output lacked sessionTransition intent. Upgrade bee to enable session relocation.",
           "error",
         )
       }

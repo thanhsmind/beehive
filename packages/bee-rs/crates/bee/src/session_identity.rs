@@ -83,6 +83,92 @@ pub(crate) fn env_session_id() -> Option<String> {
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CallerSession {
+    pub(crate) id: String,
+    pub(crate) runtime: String,
+}
+
+pub(crate) fn locate_caller_from<F>(lookup: F) -> Option<CallerSession>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if let Some(val) = lookup("PI_SESSION_ID") {
+        let trimmed = js_trim(&val);
+        if !trimmed.is_empty() {
+            return Some(CallerSession {
+                id: trimmed.to_string(),
+                runtime: "pi".to_string(),
+            });
+        }
+    }
+    if let Some(val) = lookup("CODEX_THREAD_ID") {
+        let trimmed = js_trim(&val);
+        if !trimmed.is_empty() {
+            return Some(CallerSession {
+                id: trimmed.to_string(),
+                runtime: "codex".to_string(),
+            });
+        }
+    }
+    if let Some(val) = lookup("BEE_SESSION_ID") {
+        let trimmed_id = js_trim(&val);
+        if !trimmed_id.is_empty() {
+            if let Some(rt_val) = lookup("BEE_RUNTIME") {
+                let trimmed_rt = js_trim(&rt_val);
+                if !trimmed_rt.is_empty() {
+                    return Some(CallerSession {
+                        id: trimmed_id.to_string(),
+                        runtime: trimmed_rt.to_string(),
+                    });
+                }
+            }
+        }
+    }
+    if let Some(val) = lookup("CLAUDE_CODE_SESSION_ID") {
+        let trimmed = js_trim(&val);
+        if !trimmed.is_empty() {
+            return Some(CallerSession {
+                id: trimmed.to_string(),
+                runtime: "claude".to_string(),
+            });
+        }
+    }
+    None
+}
+
+pub(crate) fn locate_caller() -> Option<CallerSession> {
+    locate_caller_from(|key| {
+        let val = std::env::var(key).ok()?;
+        #[cfg(test)]
+        if key == "PI_SESSION_ID" {
+            if let Some(ambient) = ambient_pi_session_id() {
+                if val == ambient {
+                    return None;
+                }
+            }
+        }
+        Some(val)
+    })
+}
+
+pub(crate) fn read_caller_session_cwd(root: &std::path::Path, session_id: &str) -> Option<String> {
+    let session = crate::verbs::state_group::store::read_session(root, session_id).ok()??;
+    let activity = session.get("activity")?.as_object()?;
+    let cwd = activity.get("cwd")?.as_str()?;
+    let trimmed = js_trim(cwd);
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn caller_session_cwd(root: &std::path::Path, session_id: &str) -> Option<String> {
+    read_caller_session_cwd(root, session_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +223,127 @@ mod tests {
         if let Some(ambient) = initial {
             assert!(!ambient.is_empty());
         }
+    }
+
+    #[test]
+    fn locator_prefers_innermost_codex_over_inherited_claude() {
+        let caller = locate_caller_from(|k| match k {
+            "CODEX_THREAD_ID" => Some("codex-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            _ => None,
+        });
+        assert_eq!(
+            caller,
+            Some(CallerSession {
+                id: "codex-id".into(),
+                runtime: "codex".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn locator_skips_bare_bee_session_id_without_runtime() {
+        // Fall through to Claude
+        let caller = locate_caller_from(|k| match k {
+            "BEE_SESSION_ID" => Some("bare-bee-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            _ => None,
+        });
+        assert_eq!(
+            caller,
+            Some(CallerSession {
+                id: "claude-id".into(),
+                runtime: "claude".into(),
+            })
+        );
+
+        // All alone -> None
+        let caller_alone = locate_caller_from(|k| match k {
+            "BEE_SESSION_ID" => Some("bare-bee-id".into()),
+            _ => None,
+        });
+        assert_eq!(caller_alone, None);
+
+        // Blank runtime -> None / skipped
+        let caller_blank_rt = locate_caller_from(|k| match k {
+            "BEE_SESSION_ID" => Some("bare-bee-id".into()),
+            "BEE_RUNTIME" => Some("   ".into()),
+            _ => None,
+        });
+        assert_eq!(caller_blank_rt, None);
+    }
+
+    #[test]
+    fn locator_resolves_bee_session_id_with_runtime() {
+        let caller = locate_caller_from(|k| match k {
+            "BEE_SESSION_ID" => Some("opencode-session".into()),
+            "BEE_RUNTIME" => Some("opencode".into()),
+            _ => None,
+        });
+        assert_eq!(
+            caller,
+            Some(CallerSession {
+                id: "opencode-session".into(),
+                runtime: "opencode".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn locator_returns_none_for_empty_env() {
+        let caller = locate_caller_from(|_| None);
+        assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn locator_resolves_pi_first() {
+        let caller = locate_caller_from(|k| match k {
+            "PI_SESSION_ID" => Some("pi-id".into()),
+            "CODEX_THREAD_ID" => Some("codex-id".into()),
+            "CLAUDE_CODE_SESSION_ID" => Some("claude-id".into()),
+            _ => None,
+        });
+        assert_eq!(
+            caller,
+            Some(CallerSession {
+                id: "pi-id".into(),
+                runtime: "pi".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn read_caller_session_cwd_from_fixture_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sessions_dir = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        let record_content = serde_json::json!({
+            "id": "sess-test-1",
+            "activity": {
+                "cwd": "/path/to/worktree"
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-test-1.json"),
+            serde_json::to_string(&record_content).unwrap(),
+        ).unwrap();
+
+        let cwd = read_caller_session_cwd(tmp.path(), "sess-test-1");
+        assert_eq!(cwd.as_deref(), Some("/path/to/worktree"));
+
+        // Missing session
+        assert_eq!(read_caller_session_cwd(tmp.path(), "sess-nonexistent"), None);
+
+        // Missing activity or cwd
+        let incomplete_record = serde_json::json!({
+            "id": "sess-test-2",
+            "activity": {}
+        });
+        std::fs::write(
+            sessions_dir.join("sess-test-2.json"),
+            serde_json::to_string(&incomplete_record).unwrap(),
+        ).unwrap();
+        assert_eq!(read_caller_session_cwd(tmp.path(), "sess-test-2"), None);
     }
 }

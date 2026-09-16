@@ -670,6 +670,11 @@ try {
     const input = { event: payload.event };
     await fn(input);
     result = { threw: false, message: null, output: null };
+  } else if (surface === "shell.env") {
+    const input = { cwd: payload.cwd ?? directory, sessionID: payload.sessionID, callID: payload.callID };
+    const output = { env: payload.env ?? {} };
+    await fn(input, output);
+    result = { threw: false, message: null, output };
   } else {
     const input = { tool: payload.tool, sessionID: payload.sessionID ?? "sess1", callID: payload.callID ?? "call1", args: payload.args };
     const output = { args: payload.args ?? {} };
@@ -1132,6 +1137,80 @@ fn advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior() {
             "expected bee-guard.ts to wire \"{expected}\" via runAdvisoryHook, but the derived set was {wired:?}"
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_env_hook_exports_session_id_and_runtime_when_session_id_present() {
+    node_or_skip!("shell_env_hook_exports_session_id_and_runtime_when_session_id_present");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let plugin = repo_root().join(".opencode/plugins/bee-guard.ts");
+    let fx = tempfile::tempdir().expect("tempdir");
+
+    // The plugin source embeds and exposes `shell.env`.
+    assert!(
+        PLUGIN_SOURCE.contains("\"shell.env\":"),
+        "bee-guard.ts must define shell.env hook beside tool.execute.after"
+    );
+
+    // Calling shell.env with a sessionID yields BEE_SESSION_ID and BEE_RUNTIME=opencode,
+    // and keeps existing env entries.
+    let payload_with_session = json!({
+        "sessionID": "opencode-session-123",
+        "env": {
+            "EXISTING_ENV_VAR": "kept_value"
+        }
+    });
+    let r1 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_with_session);
+    assert!(!r1.threw, "shell.env must never throw: {:?}", r1.message);
+    let output1 = r1.output.expect("shell.env must be exposed and return output");
+    let env1 = output1.get("env").and_then(Value::as_object).expect("output must have env object");
+    assert_eq!(
+        env1.get("BEE_SESSION_ID").and_then(Value::as_str),
+        Some("opencode-session-123"),
+        "shell.env must set BEE_SESSION_ID to the hook's sessionID"
+    );
+    assert_eq!(
+        env1.get("BEE_RUNTIME").and_then(Value::as_str),
+        Some("opencode"),
+        "shell.env must set BEE_RUNTIME to \"opencode\""
+    );
+    assert_eq!(
+        env1.get("EXISTING_ENV_VAR").and_then(Value::as_str),
+        Some("kept_value"),
+        "shell.env must keep existing env entries"
+    );
+
+    // Calling shell.env without a sessionID adds neither variable and keeps existing env.
+    let payload_without_session = json!({
+        "env": {
+            "EXISTING_ENV_VAR": "kept_value"
+        }
+    });
+    let r2 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_without_session);
+    assert!(!r2.threw, "shell.env must never throw when sessionID is absent: {:?}", r2.message);
+    let output2 = r2.output.expect("shell.env must return output");
+    let env2 = output2.get("env").and_then(Value::as_object).expect("output must have env object");
+    assert!(
+        !env2.contains_key("BEE_SESSION_ID"),
+        "shell.env must not set BEE_SESSION_ID when sessionID is absent"
+    );
+    assert!(
+        !env2.contains_key("BEE_RUNTIME"),
+        "shell.env must not set BEE_RUNTIME when sessionID is absent"
+    );
+    assert_eq!(
+        env2.get("EXISTING_ENV_VAR").and_then(Value::as_str),
+        Some("kept_value"),
+        "shell.env must keep existing env entries when sessionID is absent"
+    );
+
+    // Calling shell.env with empty payload (no env, no sessionID) never throws.
+    let payload_empty = json!({});
+    let r3 = run_harness(&harness, &plugin, fx.path(), "shell.env", &payload_empty);
+    assert!(!r3.threw, "shell.env must never throw on empty payload: {:?}", r3.message);
 }
 
 #[cfg(not(unix))]

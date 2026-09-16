@@ -16,7 +16,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "9fc73a6d5c765fd5f697dbe363c90e9d20648601c6a2da663a15b81a35ea55ca"
+      "sha256": "b2ab13335d305cc6d59b66f6d87af01ebe1263cfb82e2193bf800149d0a927e9"
     },
     {
       "name": "bee-herdr",
@@ -104,7 +104,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "f8dff27b00636c664aaee0eec5ce4beb2086da8fdbc5d62f09f4ecfc5dc17989"
+      "sha256": "ae9784f4a33e216b2903324723258afbf4b8889050b6ff856a5be936f3edbeeb"
     },
     {
       "name": "bee-teach",

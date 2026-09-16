@@ -5979,7 +5979,7 @@ use std::time::Instant;
         let wt_status_before = git_status_porcelain_str(&created.worktree_root);
         let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
 
-        let (result, text) = enter_worktree_core(&main, &main, &created.id)
+        let (result, text) = enter_worktree_core(&main, &main, &created.id, None)
             .expect("enter_worktree_core must succeed for valid granted worktree");
 
         // Verify result and transition
@@ -6025,7 +6025,7 @@ use std::time::Instant;
         let wt_b_status_before = git_status_porcelain_str(&created_b.worktree_root);
         let grants_before = read_grants_strict(&main.join(".bee")).unwrap();
 
-        let (result, text) = enter_worktree_core(&main, &created_a.worktree_root, &created_b.id)
+        let (result, text) = enter_worktree_core(&main, &created_a.worktree_root, &created_b.id, None)
             .expect("enter_worktree_core must succeed for linked-to-linked enter");
 
         assert_eq!(result["id"], json!(created_b.id));
@@ -6064,7 +6064,7 @@ use std::time::Instant;
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo-same");
 
-        let err = enter_worktree_core(&main, &created.worktree_root, &created.id).unwrap_err();
+        let err = enter_worktree_core(&main, &created.worktree_root, &created.id, None).unwrap_err();
         assert!(
             err.contains("target directory is identical to source directory"),
             "expected same-worktree rejection: {err}"
@@ -6075,7 +6075,7 @@ use std::time::Instant;
     fn enter_worktree_core_refuses_ungranted_id() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
-        let err = enter_worktree_core(&main, &main, "nonexistent-id").unwrap_err();
+        let err = enter_worktree_core(&main, &main, "nonexistent-id", None).unwrap_err();
         assert!(err.contains("no granted worktree found for id \"nonexistent-id\""), "{err}");
     }
 
@@ -6091,7 +6091,7 @@ use std::time::Instant;
         write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
 
         // 1. enter_worktree_core must refuse false-valued grant
-        let enter_err = enter_worktree_core(&main, &main, &created.id).unwrap_err();
+        let enter_err = enter_worktree_core(&main, &main, &created.id, None).unwrap_err();
         assert!(
             enter_err.contains(&format!("no granted worktree found for id \"{}\"", created.id)),
             "enter must refuse false-valued grant: {enter_err}"
@@ -6105,6 +6105,7 @@ use std::time::Instant;
             None,
             false,
             false,
+            None,
             None,
         ).unwrap_err();
         assert!(
@@ -6122,7 +6123,7 @@ use std::time::Instant;
         grants.insert("ghost-id".to_string(), json!(true));
         write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
 
-        let err = enter_worktree_core(&main, &main, "ghost-id").unwrap_err();
+        let err = enter_worktree_core(&main, &main, "ghost-id", None).unwrap_err();
         assert!(err.contains("no matching, bidirectionally-valid git worktree link was found"), "{err}");
     }
 
@@ -6133,7 +6134,7 @@ use std::time::Instant;
         let created_a = worktree_with_a_real_commit(&main, "demo-a");
 
         // Ungranted ID
-        let err1 = enter_worktree_core(&main, &created_a.worktree_root, "nonexistent-id").unwrap_err();
+        let err1 = enter_worktree_core(&main, &created_a.worktree_root, "nonexistent-id", None).unwrap_err();
         assert!(err1.contains("no granted worktree found for id \"nonexistent-id\""), "{err1}");
 
         // Broken git link
@@ -6141,7 +6142,7 @@ use std::time::Instant;
         grants.insert("ghost-id".to_string(), json!(true));
         write_grants_file_atomic(&main.join(".bee"), &grants).unwrap();
 
-        let err2 = enter_worktree_core(&main, &created_a.worktree_root, "ghost-id").unwrap_err();
+        let err2 = enter_worktree_core(&main, &created_a.worktree_root, "ghost-id", None).unwrap_err();
         assert!(err2.contains("no matching, bidirectionally-valid git worktree link was found"), "{err2}");
     }
 
@@ -6163,6 +6164,7 @@ use std::time::Instant;
             None, // omitted id
             false,
             false,
+            None,
             None,
         ).expect("linked_worktree_merge_core must succeed with omitted id");
 
@@ -6215,6 +6217,7 @@ use std::time::Instant;
             true, // noCleanup
             true, // skipUat
             Some(7500.5), // fractional queueWaitMs preserved
+            None,
         ).expect("linked_worktree_merge_core must succeed with matching id");
 
         let cont = &result["sessionTransition"]["continuation"];
@@ -6237,6 +6240,7 @@ use std::time::Instant;
             Some("other-id"),
             false,
             false,
+            None,
             None,
         ).unwrap_err();
 
@@ -6261,6 +6265,7 @@ use std::time::Instant;
             None,
             false,
             false,
+            None,
             None,
         ).unwrap_err();
 
@@ -6398,4 +6403,505 @@ use std::time::Instant;
             enter_desc.contains("transition") && enter_desc.to_ascii_lowercase().contains("enter"),
             "worktree.enter description must describe enter session transition: {enter_desc}"
         );
+    }
+
+    #[test]
+    fn instruction_builder_cases_per_runtime_and_operation() {
+        let target = "/target/path";
+        let wt_id = "wt-123";
+
+        // 1. pi: moves session when turn settles for all operations
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "enter-worktree", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "exit-worktree", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("pi"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Pi moves this session to /target/path when this turn settles."
+        );
+
+        // 2. claude: EnterWorktree for enter-worktree, ExitWorktree keep for exit-worktree, ExitWorktree + merge for exit-worktree-before-merge
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "enter-worktree", target, Some(wt_id)),
+            "Call EnterWorktree with path=/target/path."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "exit-worktree", target, Some(wt_id)),
+            "Call ExitWorktree with action=keep."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("claude"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Call ExitWorktree with action=keep, then run bee worktree merge --id wt-123 from /target/path."
+        );
+
+        // 3. codex: Ask user to type /cd <target>, then send any message to continue
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "enter-worktree", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "exit-worktree", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("codex"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Ask the user to type /cd /target/path, then send any message to continue."
+        );
+
+        // 4. opencode: Ask user to type /move <target>, then send any message to continue
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "enter-worktree", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "exit-worktree", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("opencode"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Ask the user to type /move /target/path, then send any message to continue."
+        );
+
+        // 5. none / other: Open a session at <target>.
+        assert_eq!(
+            build_instruction_for_runtime(None, "enter-worktree", target, Some(wt_id)),
+            "Open a session at /target/path."
+        );
+        assert_eq!(
+            build_instruction_for_runtime(Some("custom-other"), "exit-worktree-before-merge", target, Some(wt_id)),
+            "Open a session at /target/path."
+        );
+    }
+
+    #[test]
+    fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-test-caller");
+
+        // 1. enter_worktree_core with Claude caller
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-sess-1".into(),
+            runtime: "claude".into(),
+        };
+        let (enter_res, enter_text) = enter_worktree_core(&main, &main, &created.id, Some(&claude_caller))
+            .expect("enter_worktree_core succeeds");
+        assert_eq!(enter_res["sessionRuntime"], json!("claude"));
+        let target_str = p(&created.worktree_root);
+        let expected_enter_inst = format!("Call EnterWorktree with path={target_str}.");
+        assert_eq!(enter_res["instruction"], json!(expected_enter_inst));
+        assert!(enter_text.contains(&expected_enter_inst));
+
+        // 2. linked_worktree_merge_core with Codex caller
+        let codex_caller = crate::session_identity::CallerSession {
+            id: "codex-thread-1".into(),
+            runtime: "codex".into(),
+        };
+        let (merge_res, merge_text) = linked_worktree_merge_core(
+            &created.worktree_root,
+            &created.id,
+            &main,
+            None,
+            false,
+            false,
+            None,
+            Some(&codex_caller),
+        ).expect("linked_worktree_merge_core succeeds");
+        assert_eq!(merge_res["sessionRuntime"], json!("codex"));
+        let main_str = p(&main);
+        let expected_merge_inst = format!("Ask the user to type /cd {main_str}, then send any message to continue.");
+        assert_eq!(merge_res["instruction"], json!(expected_merge_inst));
+        assert!(merge_text.contains(&expected_merge_inst));
+
+        // 3. new_worktree_transition_result_and_text with OpenCode caller
+        let opencode_caller = crate::session_identity::CallerSession {
+            id: "opencode-sess-1".into(),
+            runtime: "opencode".into(),
+        };
+        let next_step = "next step text";
+        let (new_res, new_text) = new_worktree_transition_result_and_text(
+            "hwr-test-caller",
+            &created,
+            next_step,
+            &main,
+            Some(&opencode_caller),
+        ).expect("new_worktree_transition_result_and_text succeeds");
+        assert_eq!(new_res["sessionRuntime"], json!("opencode"));
+        let expected_new_inst = format!("Ask the user to type /move {target_str}, then send any message to continue.");
+        assert_eq!(new_res["instruction"], json!(expected_new_inst));
+        assert!(new_text.contains(&expected_new_inst));
+
+        // 4. none caller: sessionRuntime is null, instruction is Open a session at <target>.
+        let (none_res, none_text) = enter_worktree_core(&main, &main, &created.id, None)
+            .expect("enter_worktree_core succeeds with none caller");
+        assert_eq!(none_res["sessionRuntime"], Value::Null);
+        let expected_none_inst = format!("Open a session at {target_str}.");
+        assert_eq!(none_res["instruction"], json!(expected_none_inst));
+        assert!(none_text.contains(&expected_none_inst));
+    }
+
+    #[test]
+    fn schema_version_and_no_marker_remain_unaffected_under_claude_or_codex_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+
+        // Ensure transition built has schemaVersion 1 and no marker even when other env is present
+        let trans = build_session_transition_with_session_id(
+            "enter-worktree",
+            &main,
+            &wt,
+            "wt-hermetic",
+            Some("f-hermetic"),
+            None,
+            None,
+        ).unwrap();
+        assert_eq!(trans["schemaVersion"], json!(1));
+        assert_eq!(trans["piSessionId"], Value::Null);
+        assert_eq!(format_pi_transition_marker(&trans), None);
+    }
+
+    #[test]
+    fn exit_inside_a_worktree_emits_exit_worktree_and_changes_nothing_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-exit-inside");
+        let wt = created.worktree_root.clone();
+
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-sess-exit".into(),
+            runtime: "claude".into(),
+        };
+        let head_before = git_stdout(&wt, &["rev-parse", "HEAD"]);
+        let status_before = git_status_porcelain_str(&wt);
+
+        let (res, text) = linked_worktree_exit_core(
+            &wt,
+            &created.id,
+            &main,
+            None,
+            Some(&claude_caller),
+        )
+        .expect("linked_worktree_exit_core succeeds");
+
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(res["sessionTransition"]["operation"], json!("exit-worktree"));
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&wt_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert_eq!(res["sessionTransition"]["continuation"], Value::Null);
+        assert_eq!(res["sessionRuntime"], json!("claude"));
+        assert!(text.contains("Call ExitWorktree with action=keep."));
+
+        // Passing a different --id refuses
+        let err = linked_worktree_exit_core(
+            &wt,
+            &created.id,
+            &main,
+            Some("other-id"),
+            Some(&claude_caller),
+        )
+        .expect_err("different id must refuse");
+        assert!(err.contains("cannot exit worktree \"other-id\" from inside worktree"));
+
+        // Changes nothing on disk
+        let head_after = git_stdout(&wt, &["rev-parse", "HEAD"]);
+        let status_after = git_status_porcelain_str(&wt);
+        assert_eq!(head_before, head_after);
+        assert_eq!(status_before, status_after);
+    }
+
+    #[test]
+    fn exit_from_main_with_caller_in_worktree_and_with_no_such_caller() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-exit-main");
+        let wt = created.worktree_root.clone();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        // 1. Caller cwd sits inside the worktree -> emits exit-worktree with sourceCwd = that cwd
+        let caller_inside = crate::session_identity::CallerSession {
+            id: "sess-inside".into(),
+            runtime: "claude".into(),
+        };
+        let sub_path = wt.join("some-dir");
+        std::fs::create_dir_all(&sub_path).unwrap();
+        let sub_canon = dunce::canonicalize(&sub_path).unwrap();
+
+        let rec_inside = json!({
+            "id": "sess-inside",
+            "activity": {
+                "cwd": p(&sub_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-inside.json"),
+            jsjson::stringify(&rec_inside),
+        )
+        .unwrap();
+
+        let (res, text) = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            Some(&caller_inside),
+        )
+        .expect("main_checkout_worktree_exit_core succeeds");
+
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(res["sessionTransition"]["operation"], json!("exit-worktree"));
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&sub_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert_eq!(res["sessionTransition"]["continuation"], Value::Null);
+        assert!(text.contains("Call ExitWorktree with action=keep."));
+
+        // 2. Caller cwd sits in main (outside worktree) -> refuses with typed error
+        let caller_outside = crate::session_identity::CallerSession {
+            id: "sess-outside".into(),
+            runtime: "claude".into(),
+        };
+        let rec_outside = json!({
+            "id": "sess-outside",
+            "activity": {
+                "cwd": p(&main_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-outside.json"),
+            jsjson::stringify(&rec_outside),
+        )
+        .unwrap();
+
+        let err_outside = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            Some(&caller_outside),
+        )
+        .expect_err("caller outside worktree must refuse");
+        assert!(err_outside.contains("no calling session sits in worktree"));
+
+        // 3. No caller (None) -> refuses with typed error
+        let err_none = main_checkout_worktree_exit_core(
+            &main,
+            &created.id,
+            None,
+        )
+        .expect_err("none caller must refuse");
+        assert!(err_none.contains("no calling session sits in worktree"));
+    }
+
+    #[test]
+    fn merge_from_main_with_caller_in_worktree_emits_exit_before_merge_and_main_head_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-merge-interception");
+        let wt = created.worktree_root.clone();
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        let caller_in_wt = crate::session_identity::CallerSession {
+            id: "sess-in-wt".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_wt = json!({
+            "id": "sess-in-wt",
+            "activity": {
+                "cwd": p(&wt_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-in-wt.json"),
+            jsjson::stringify(&rec_in_wt),
+        )
+        .unwrap();
+
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+
+        // check_merge_exit_before_merge triggers
+        let check = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_wt),
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+
+        let (res, text) = check.expect("interception should trigger");
+        assert_eq!(res["ok"], json!(true));
+        assert_eq!(
+            res["sessionTransition"]["operation"],
+            json!("exit-worktree-before-merge")
+        );
+        assert_eq!(res["sessionTransition"]["sourceCwd"], json!(p(&wt_canon)));
+        assert_eq!(res["sessionTransition"]["targetCwd"], json!(p(&main_canon)));
+        assert!(res["sessionTransition"]["continuation"].is_object());
+        assert!(text.contains("The merge did NOT run yet."));
+
+        let head_after = git_stdout(&main, &["rev-parse", "HEAD"]);
+        assert_eq!(head_before, head_after);
+    }
+
+    #[test]
+    fn merge_with_detached_or_caller_in_main_or_no_caller_merges_directly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "hwr-merge-direct");
+        let wt = created.worktree_root.clone();
+        let wt_canon = dunce::canonicalize(&wt).unwrap();
+        let main_canon = dunce::canonicalize(&main).unwrap();
+
+        let sessions_dir = main.join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        // 1. Caller in main -> check_merge_exit_before_merge returns Ok(None) -> merges
+        let caller_in_main = crate::session_identity::CallerSession {
+            id: "sess-in-main".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_main = json!({
+            "id": "sess-in-main",
+            "activity": {
+                "cwd": p(&main_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-in-main.json"),
+            jsjson::stringify(&rec_in_main),
+        )
+        .unwrap();
+
+        let check_in_main = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_main),
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+        assert!(check_in_main.is_none(), "caller in main must not intercept merge");
+
+        // 2. No caller env (None) -> check_merge_exit_before_merge returns Ok(None) -> merges
+        let check_none = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            None,
+        )
+        .expect("check_merge_exit_before_merge succeeds");
+        assert!(check_none.is_none(), "no caller must not intercept merge");
+
+        // 3. Caller in worktree, but detached is used:
+        let caller_in_wt = crate::session_identity::CallerSession {
+            id: "sess-wt-detached".into(),
+            runtime: "claude".into(),
+        };
+        let rec_in_wt = json!({
+            "id": "sess-wt-detached",
+            "activity": {
+                "cwd": p(&wt_canon)
+            }
+        });
+        std::fs::write(
+            sessions_dir.join("sess-wt-detached.json"),
+            jsjson::stringify(&rec_in_wt),
+        )
+        .unwrap();
+
+        // Verify that with caller in worktree, non-detached check intercepts
+        let check_intercept = check_merge_exit_before_merge(
+            &main,
+            &created.id,
+            false,
+            false,
+            None,
+            Some(&caller_in_wt),
+        )
+        .expect("check succeeds");
+        assert!(check_intercept.is_some(), "non-detached must intercept");
+
+        // Now perform the direct merge (as detached would do)
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = match merge_feature_worktree(&main, &created.id, cleanup, None, true, None) {
+            Ok(a) => a,
+            Err(_) => panic!("merge failed"),
+        };
+        assert!(answer.ok);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let head_after = git_stdout(&main, &["rev-parse", "HEAD"]);
+        assert_ne!(head_before, head_after, "direct merge advances HEAD");
+    }
+
+    #[test]
+    fn codex_and_opencode_callers_get_waiting_on_mark() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let feature = "hwr-waiting-feature";
+
+        // Create a live workflow for this feature
+        let wf = crate::verbs::workflow_store::create_workflow(
+            &main,
+            crate::verbs::workflow_store::NewWorkflow::for_feature(feature),
+        )
+        .expect("create_workflow succeeds");
+        let wf_id = crate::verbs::workflow_store::wf_id(&wf);
+
+        // 1. Codex caller gets the waiting-on question mark
+        let codex_caller = crate::session_identity::CallerSession {
+            id: "codex-caller-sess".into(),
+            runtime: "codex".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&codex_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        let wait = &rec["waiting_on"];
+        assert_eq!(wait["kind"], json!("question"));
+        assert_eq!(wait["session"], json!("codex-caller-sess"));
+        assert_eq!(wait["subject"], json!(p(&main)));
+
+        // 2. OpenCode caller also gets the waiting-on mark
+        let opencode_caller = crate::session_identity::CallerSession {
+            id: "opencode-caller-sess".into(),
+            runtime: "opencode".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&opencode_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        let wait = &rec["waiting_on"];
+        assert_eq!(wait["kind"], json!("question"));
+        assert_eq!(wait["session"], json!("opencode-caller-sess"));
+
+        // 3. Claude caller does NOT write a waiting-on mark
+        // Clear first
+        let _ = crate::verbs::workflow_store::clear_workflow_waiting_on(&main, &wf_id);
+        let claude_caller = crate::session_identity::CallerSession {
+            id: "claude-caller-sess".into(),
+            runtime: "claude".into(),
+        };
+        maybe_record_waiting_on(&main, Some(feature), &main, Some(&claude_caller));
+
+        let rec = crate::verbs::workflow_store::read_workflow_record(&main, &wf_id)
+            .map_err(|e| e.0)
+            .expect("read_workflow_record succeeds");
+        assert!(rec.get("waiting_on").map_or(true, |v| v.is_null()));
     }
