@@ -175,25 +175,74 @@ Whole-subtree equality is one comparison cheaper and fails D2 on the
 `description` and `null` cases. Comparing normalized views is the cheapest shape
 that honors both. PASS.
 
-## Cells
+## Cells (current slice)
 
 One cell. The `hat-alternatives` seat was right that a three-cell split was one
 cell pretending to be three: the red-first test cannot go green until the wiring
 exists, and a red proof refuses a cap. Red-first runs INSIDE the cell.
 
-- `crkg-1` — the projection, the arm, the call site across all five surfaces,
-  and both test sets.
-  - Refusals: a `team.pi.review.agent` change via `Write`, `Edit` and
-    `MultiEdit`; the same change routed through `.bee/config.local.json`; the
-    legacy `models` spelling; a `herding.agents.<name>` argv rewrite; a
-    `hooks.write-guard: false` flip; an `apply_patch` and a `sed -i` at a config
-    path; a slot removal.
-  - Preserved: `uat_stop`, `commands.test`, `gate_bypass`, a re-indent, a
-    `description`-only edit, a dropped `null` slot, a NEW role slot (claim 16),
-    a first write with no file on disk, a repair of a corrupt config — and
-    `config_json_and_decisions_jsonl_stay_hand_writable` untouched and green.
-  - Files: `hooks/write_guard/guards.rs`, `hooks/write_guard/main.rs`,
-    `hooks/write_guard/tests.rs`.
+```json
+[
+  {
+    "id": "crkg-1",
+    "feature": "config-role-key-guard",
+    "title": "Refuse a config write that changes the resolved model table or disables the guard",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": ["521b2e62-1a31-4989-a89c-b880557ac532", "23cc5804-43de-4bd7-a88f-ff05c08ef694"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/config-role-key-guard/plan.md",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/state.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "RED FIRST, inside this cell: write the refusal tests before the arm exists, run them, and watch them fail for the reported reason. Then build the arm.\n\nIn guards.rs add two functions. (1) `config_governed_view(text: &str) -> Option<Value>` — parse `text` as a JSON object (non-object or unparseable returns None), then build a view from three parts: the role table (call `crate::verbs::drivers::fold_team_key` on a clone, hand `team` to `crate::verbs::drivers::normalize_models`, then DROP every slot whose normalized value is `Value::Null` so a null slot and an absent slot project alike — models.rs:134 is why); `herding.agents` and `herding.agent_command` verbatim; and the `hooks` subtree verbatim. Reuse normalize_models — do NOT hand-roll a key walk, because a `kind: \"cli\"` slot carries its model inside `command` (models.rs:140-147) and normalize_models already keeps it while stripping `description`. (2) `config_governed_change_deny(rel: &str, old_text: Option<&str>, new_text: &str) -> Option<String>` — fires only for `.bee/config.json` and `.bee/config.local.json`. Old text absent, or old unparseable while new parses, returns None (a first write and a corrupt-config repair both pass). New text unparseable returns None. Otherwise diff the two views: an ADD (address absent before, present after) inside the role table or `herding.agents` passes — bee's own FIX strings at verbs/drivers/prepare.rs:212 and :1976 instruct exactly that write; a CHANGE or a REMOVAL refuses; ANY difference in the `hooks` part refuses in either direction, with no add carve-out. The refusal names the FIRST differing address and both values, e.g. `team.pi.review.agent: \"pi-gpt-5.6-luna\" -> \"pi-opencode-free\"`, and its FIX names the USER as the owner of that choice and the file as the place — there is no `bee team set`, `bee team show` is read-only.\n\nIn main.rs wire it inside the existing `write_capable` branch, once per resolved config rel_path, and honor the branch's established precedence: never overwrite an earlier `denial` (the D3 comment at main.rs:468-476 states the rule). Reconstruct the proposed content per surface: `Write` uses `content`; `Edit` applies `old_string`->`new_string` against the on-disk file, honoring `replace_all`; `MultiEdit` applies each `edits[]` pair in order. `apply_patch` and Bash cannot be reconstructed, so a config-file target on those two surfaces refuses outright with a message naming Edit/Write as the way in. Fail CLOSED: a config write the arm cannot reconstruct (an Edit with no `old_string`, unreadable on-disk content) refuses, matching this guard's stated posture elsewhere.\n\nDo not change any existing deny arm, and do not add config to `direct_edit_verb` — tests.rs:264 preserves config as hand-writable on purpose and must stay green.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "must_haves": {
+      "truths": [
+        "a Write, an Edit and a MultiEdit that change team.pi.review.agent in .bee/config.json each exit 2, and the message names team.pi.review.agent with both old and new values",
+        "the same change written into .bee/config.local.json exits 2",
+        "the same change spelled under the legacy models key exits 2",
+        "rewriting herding.agents.<name> argv exits 2",
+        "setting hooks.write-guard to false exits 2",
+        "an apply_patch and a sed -i targeting .bee/config.json exit 2 and name Edit/Write as the way in",
+        "removing an existing role slot exits 2",
+        "adding a role slot that did not exist before exits 0",
+        "changing gate_bypass, uat_stop or commands.test exits 0",
+        "a re-indent, a description-only edit, and a dropped null slot each exit 0",
+        "a first write with no config file on disk, and a repair of a corrupt config, each exit 0",
+        "config_json_and_decisions_jsonl_stay_hand_writable is unchanged and green"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs", "substantive": "config_governed_view and config_governed_change_deny, building on normalize_models and fold_team_key"},
+        {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs", "substantive": "the call site across all five write surfaces, respecting the existing first-denial-wins precedence"},
+        {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs", "substantive": "both test sets — every refusal truth and every preserved-surface truth above"}
+      ],
+      "key_links": [
+        "config_governed_view calls crate::verbs::drivers::normalize_models rather than walking team keys by hand",
+        "config_governed_view calls crate::verbs::drivers::fold_team_key so the legacy models spelling is covered",
+        "the main.rs call site never overwrites an earlier denial"
+      ],
+      "prohibitions": [
+        "Do not add .bee/config.json or .bee/config.local.json to direct_edit_verb",
+        "Do not modify config_json_and_decisions_jsonl_stay_hand_writable",
+        "Do not change any existing deny arm, refusal wording, or the read-side checks",
+        "Do not refuse an ADD of a previously absent role slot"
+      ]
+    },
+    "behavior_change": true
+  }
+]
+```
 
 ## Verify
 
