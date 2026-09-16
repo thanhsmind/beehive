@@ -1,0 +1,101 @@
+{
+  "id": "prd-5",
+  "feature": "pi-relocation-delivery",
+  "title": "Run the relocation rebind from the main checkout, not the worktree",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "52d1e3aa-97d3-4a0d-a89a-67f0822ec695"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-relocation-delivery/CONTEXT.md",
+    "docs/history/pi-relocation-delivery/reports/uat-correction.md",
+    ".pi/extensions/bee-guard.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "A live acceptance run found the shipped relocation rebind refused every time. The belt calls `bee cells rebind-session` with a worktree cwd, and that verb is refused inside a granted feature worktree (reproduced: from the worktree it exits 1 with 'refused inside a granted feature worktree — ... FIX: run it from <main>'; from the main checkout the same call exits 0). Fix all three call sites in .pi/extensions/bee-guard.ts to pass the already-resolved `mainRoot` (computed at :1605) instead of a worktree path: the forward rebind at :1635 passes `intent.targetCwd`, and the two compensating rollbacks at :1688 and :1730 pass `intent.sourceCwd`, which is the worktree on the exit-before-merge direction. RED FIRST: the existing contract case missed this because the harness fakes the bee CLI and its stub records only argv and stdin, never the working directory — extend the stub prelude to append its own $PWD beside the argv it logs, add an assertion that the rebind invocation ran with the main checkout root, watch it fail against the current belt, then fix. Finally run `bee dev regen` so the embedded belt bytes and the release manifest match.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+  "must_haves": {
+    "truths": [
+      "every bee cells rebind-session call the belt makes runs with the main checkout root as its cwd",
+      "the stub bee records the working directory of each invocation",
+      "the contract test asserts that cwd and fails against the pre-fix belt",
+      "the compensating rollback on a cancelled or failed switch also runs from the main root",
+      "doctor --runtime pi reports wiring_matches_binary ok after regen"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "all three rebind call sites pass mainRoot"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "the stub logs its cwd and the case asserts the rebind ran from the main root"
+      }
+    ],
+    "key_links": [
+      "mainRoot is already computed at bee-guard.ts:1605 and is in scope for all three sites"
+    ],
+    "prohibitions": [
+      "Do not change the carry mechanism itself",
+      "Do not touch Claude, Codex or OpenCode paths"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prd-5",
+    "outcome": "Run every relocation rebind from the main checkout, proven by a case that failed on the claim before the fix",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Taught the fixture's stub bee to model `cells rebind-session`, refusal included — why: the stub delegated cells verbs to the real binary, which refused under the fixture's worktree cwd, so the rebound-claim assertion rested on a call that rewrote nothing — the plan was wrong about a fact",
+      "Forced a rebuild by touching doctor.rs and re-vendored the newer artifact — why: the first vendored binary predated the belt fix, so doctor reported wiring_matches_binary not_ok — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-16T02:29:00.579Z",
+    "behavior_change": true,
+    "verification_evidence": "leader watched the case fail first on the claim (left sess-old-reloc, right sess-new-reloc), then re-ran the approved chain: 68 passed 0 failed, manifest 376 files match, doctor --runtime pi ready with wiring_matches_binary ok",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "6f3236e7-8071-46e7-aa47-bd47394b0ba6",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json",
+    "claimed_at": "2026-09-16T02:14:57.433Z",
+    "mistakes": [
+      {
+        "wrong": "Judged the rebuilt binary by grepping it for a marker string and read 0 hits as proof the belt was not embedded",
+        "better": "grep finds none of the belt's strings in that artifact, including ones predating my change, so the test could never answer the question; bee doctor's wiring row is what knows"
+      }
+    ],
+    "inline_reason": "Fix-first repair of a defect a live acceptance run reproduced in already-merged work: the leader held the whole diagnosis (the reproduced refusal, the three call sites, why the contract case could not catch it) and executed the cell inline rather than briefing a worker on a three-line change it would have had to re-derive.",
+    "report": {
+      "outcome": "Every relocation rebind now runs from the main checkout (bee-guard.ts:1640, :1693, :1735 pass mainRoot), proven by a case that failed on the rebound-claim assertion before the fix; the stub bee models cells rebind-session including its worktree refusal and logs each invocation's cwd, and the regen commit 18585cf13b498f2f4847611802403171f8fe624d refreshed the manifest for the fixed belt",
+      "commit": "c65eaaef13c4496b15b44d99b0ad0b8fe9e29dca",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && .bee/bin/bee doctor --runtime pi --json — green:live — leader watched the case fail first on the claim (left sess-old-reloc, right sess-new-reloc), then re-ran the approved chain: 68 passed 0 failed, manifest 376 files match, doctor --runtime pi ready with wiring_matches_binary ok",
+      "deviations": [
+        "Taught the fixture's stub bee to model `cells rebind-session`, refusal included — why: the stub delegated cells verbs to the real binary, which refused under the fixture's worktree cwd, so the rebound-claim assertion rested on a call that rewrote nothing — the plan was wrong about a fact",
+        "Forced a rebuild by touching doctor.rs and re-vendored the newer artifact — why: the first vendored binary predated the belt fix, so doctor reported wiring_matches_binary not_ok — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "Judged the rebuilt binary by grepping it for a marker string and read 0 hits as proof the belt was not embedded — grep finds none of the belt's strings in that artifact, including ones predating my change, so the test could never answer the question; bee doctor's wiring row is what knows"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "id": "prd-1",
+  "feature": "pi-relocation-delivery",
+  "title": "Add bee cells rebind-session --from --to",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "52d1e3aa-97d3-4a0d-a89a-67f0822ec695"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/pi-relocation-delivery/CONTEXT.md",
+    "docs/history/pi-relocation-delivery/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add the control-plane verb `bee cells rebind-session --from <old-session> --to <new-session>` (both required, non-empty). It rewrites every ACTIVE claim in .bee/claims whose `session` field equals --from so that it names --to, through the cells module's own rewriter `adopt_claim` (packages/bee-rs/crates/bee/src/verbs/cells/claims.rs:339) — never a second writer, and never the narrowed state_group twin. Claims of any other session, and expired claims, are untouched. No match is a clean no-op: exit 0 with an empty list. Human output names each cell rebound; --json returns {\"rebound\":[{\"cell\":\"<id>\",\"from\":\"<old>\",\"to\":\"<new>\",\"fence_epoch\":<n>}]}. Serve it in the cells verb table (util.rs try_mutating) AND declare it in src/generated/registry_payload.json in the same change — a served-and-undeclared verb reads as unknown to `bee --help --all`, and a declared-and-unserved one fails tests/registry_dispatch.rs. State in one line, in the verb's doc comment, what a bumped fence_epoch means for any other holder of that cell (see CLAIM_FENCE_STALE, claims.rs:234 and :311).",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee rebind",
+  "must_haves": {
+    "truths": [
+      "bee cells rebind-session --from A --to B rewrites only active claims whose session is A",
+      "a rebound claim's fence_epoch is exactly one higher than before",
+      "no matching claim exits 0 and reports an empty list",
+      "the verb is both served and declared in the registry"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "substantive": "the handler, with its own unit tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "the verb declaration with both flags required"
+      }
+    ],
+    "key_links": [
+      "the handler calls claims.rs adopt_claim rather than duplicating the claim rewrite",
+      "util.rs try_mutating routes the verb name to the handler"
+    ],
+    "prohibitions": [
+      "Do not change existing claim, cap, or handoff-adopt behavior",
+      "Do not touch .pi/extensions/bee-guard.ts or the test file pi_plugin_contracts.rs"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prd-1",
+    "outcome": "Add the cells rebind-session verb over the cells-module claim rewriter",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No skill text changes with this cell: cells rebind-session is internal plumbing the Pi belt calls in prd-2, and its one user-facing mention is the failure-path warning prd-2 adds, so the skill and knowledge wording lands with prd-2 and the capture step. The 244 changed lines carry their own tests inside handlers_write.rs (four new cases, re-run green by the leader), which the advisory's test-shaped-path heuristic does not see."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-15T23:08:41.852Z",
+    "behavior_change": true,
+    "verification_evidence": "the four new handler tests cover the scoped rewrite, the exact +1 fence epoch, the clean no-op and flag validation; leader re-ran the approved command and saw 4 passed, 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6f3236e7-8071-46e7-aa47-bd47394b0ba6",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee rebind",
+    "claimed_at": "2026-09-15T22:56:10.832Z",
+    "sync_ack": "No skill text changes with this cell: cells rebind-session is internal plumbing the Pi belt calls in prd-2, and its one user-facing mention is the failure-path warning prd-2 adds, so the skill and knowledge wording lands with prd-2 and the capture step. The 244 changed lines carry their own tests inside handlers_write.rs (four new cases, re-run green by the leader), which the advisory's test-shaped-path heuristic does not see.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee cells rebind-session --from --to rewrites only the active claims of the named session through claims.rs adopt_claim (handlers_write.rs:2782 rebind_session_core, :2858 run_rebind_session), routed in util.rs:107 and declared as cells.rebind-session in the registry",
+      "commit": "a193d8da4bc01cf1e15796f486d20cdcb7de24d7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee rebind — green:unit — the four new handler tests cover the scoped rewrite, the exact +1 fence epoch, the clean no-op and flag validation; leader re-ran the approved command and saw 4 passed, 0 failed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 244 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "verb-served-and-declared",
+            "status": "PASS",
+            "evidence": "util.rs:107 routes \"rebind-session\" to run_rebind_session, and generated/registry_payload.json declares cells.rebind-session (invoke \"bee cells rebind-session\"); flags null matches cells.claim, cells.unclaim and cells.judge-record, so the house style is unchanged."
+          },
+          {
+            "id": "single-writer-reuse",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:2823 calls adopt_claim from the cells module rather than duplicating the claim rewrite; claims.rs:334-339 is the rewriter the plan named."
+          },
+          {
+            "id": "scoped-rewrite-and-epoch",
+            "status": "PASS",
+            "evidence": "handlers_write.rs tests rebind_rewrites_only_active_claims_for_matching_session, rebind_increments_fence_epoch_by_exactly_one, rebind_no_matching_claims_is_clean_noop and rebind_flag_validation_and_keys_known; the leader re-ran the approved verify and saw 4 passed, 0 failed."
+          },
+          {
+            "id": "fence-epoch-consequence-stated",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:2781 and :2857 state that a bumped fence_epoch refuses any other holder presenting a stale epoch with CLAIM_FENCE_STALE on a later renew or release."
+          },
+          {
+            "id": "scope-and-prohibitions",
+            "status": "PASS",
+            "evidence": "git show a193d8da --stat lists only the four declared files; .pi/extensions/bee-guard.ts and packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, both forbidden to this cell, are untouched."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-15T23:32:32.288Z"
+      }
+    ]
+  }
+}

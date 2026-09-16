@@ -44,6 +44,8 @@ herding-only (`pi-stage-dispatch` D9).
 
 ## Load-bearing claims
 
+<!-- bee:not-a-deferral: the rows below are evidence about what the code does today and what it refuses later at runtime — a claims table, not a promise of future work -->
+
 Every row is load-bearing; no `guessed` row survives the gate.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
@@ -60,6 +62,8 @@ Every row is load-bearing; no `guessed` row survives the gate.
 | 10 | The contract harness hands the replaced context the OLD session id, so a relocation test cannot tell the two ids apart today | read | `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:701` | `const replacedCtx = createCommandContext(newCwd, ctxSessionId, {` |
 | 11 | The loss is real, twice, in one live run | ran | `/tmp/bee-verify/evidence/20260915-224413-891129/pi-leader-log.md` | markers stranded under `.bee/result-inbox/01a0a5be…/` and `…/01a0a5c9…/` while the session ran as `01a0a5c9…` then `01a0a5e1…` |
 | 12 | The installed belt must match the bytes bee embeds, or Pi doctor fails closed | read | `packages/bee-rs/crates/bee/src/doctor.rs:312` | `.pi/extensions/bee-guard.ts differs from what this bee embeds` |
+
+<!-- /bee:not-a-deferral -->
 
 ## Discovery
 
