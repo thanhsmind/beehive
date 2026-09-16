@@ -779,7 +779,13 @@ mod tests {
         // `--release-version` names the immutable release artifact version.
         // Neither existing flag conveys deployment lifecycle stage or release
         // version identifier.
-        const PINNED_FLAG_COUNT: usize = 207;
+        //
+        // 207 -> 208 (harness-worktree-relocation hwr-2): `worktree.merge`
+        // gains `--detached`, which skips the caller-session relocation check
+        // so a sessionless caller merges directly. Checked first: `no-lane`
+        // picks the default record, `skip-uat` skips one door, and `force`
+        // overrides an ownership guard; none means "do not move the session".
+        const PINNED_FLAG_COUNT: usize = 208;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
