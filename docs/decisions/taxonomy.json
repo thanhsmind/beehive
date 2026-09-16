@@ -517,6 +517,7 @@
     "release-red-fixes",
     "touches-sweep",
     "deploy",
-    "plan"
+    "plan",
+    "verify-app"
   ]
 }

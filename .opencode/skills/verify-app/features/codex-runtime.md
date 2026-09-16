@@ -18,7 +18,7 @@ completion.
 
 Set `CODEX_BIN` to the absolute path of the direct Codex executable before these commands. Do not use a PATH wrapper.
 
-- Run `bash .bee/verify/verify-app/control-bee host -- bee onboard --repo-root <target> --apply --runtime codex --json`.
+- Run `bash .bee/verify/verify-app/control-bee host -- bee onboard --repo-root <target> --apply --repo-hooks --runtime codex --json`. Without `--repo-hooks` no `.codex/hooks.json` is written and every check below refuses.
 - Run `BEE_CODEX_PROBE_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime codex --kind gather --role extraction --json`.
 - Execute the isolated canary script via `BEE_BIN="$(bash .bee/verify/verify-app/control-bee bin)" CANARY_CODEX_HOME="<private-codex-home>" CODEX_BIN="${CODEX_BIN:?Set the absolute path to the direct Codex executable}" TMPDIR=/var/tmp bash scripts/codex-parity-canary.sh`.
 - Inspect retained evidence in `$TMPDIR/bee-codex-canary-*/evidence/`: installed commands, raw guard exit codes, and byte checks.
