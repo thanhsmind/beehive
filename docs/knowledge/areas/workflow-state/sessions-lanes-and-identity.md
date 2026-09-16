@@ -171,7 +171,12 @@ epoch is refused afterwards rather than racing. What each actor observes: the
 capping step after the move succeeds as ordinary ownership — the audited
 override that a stale owner used to require is no longer part of the normal
 path — and a reassignment that fails leaves the move intact and says so, naming
-the one command that repairs it (pi-relocation-delivery D2).
+the one command that repairs it (pi-relocation-delivery D2). The reassignment
+itself runs from the MAIN checkout, never from the worktree the session is
+moving into: it reads the shared control plane, which refuses inside a granted
+feature worktree, so a runtime that asks from the destination gets a refusal and
+the claims stay behind — the failure a live run surfaced after the first
+implementation shipped.
 
 **A session's own record now carries its workspace, stamped once and reused
 by its claims (multisession-native D2/D3, msn-19).** Trigger: session
