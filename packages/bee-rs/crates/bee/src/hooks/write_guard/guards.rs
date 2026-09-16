@@ -918,9 +918,20 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
 
     // 1. The role table: fold_team_key on a clone, normalize_models on team,
     // and drop every slot whose normalized value is Value::Null.
+    //
+    // The fallback when neither `team` nor `models` is present is NOT an empty
+    // table: model_guard.rs:532-539 reads the WHOLE config object as the table
+    // in that shape (`Some(&cfg_val)`), so a host config that never wrote a
+    // `team` wrapper still resolves `claude`/`codex`/`opencode`/`pi` from its
+    // top level. Projecting an empty table here instead would leave exactly
+    // that config shape unguarded — the arm must see what the dispatcher sees.
     let mut folded = root_obj.clone();
     crate::verbs::drivers::fold_team_key(&mut folded);
-    let team_val = folded.get("team");
+    let whole = Value::Object(root_obj.clone());
+    let team_val = match folded.get("team") {
+        Some(v) => Some(v),
+        None => Some(&whole),
+    };
     let mut team_map = crate::verbs::drivers::normalize_models(team_val);
     for (_rt, rt_val) in team_map.iter_mut() {
         if let Value::Object(slots) = rt_val {
@@ -947,6 +958,37 @@ pub(crate) fn config_governed_view(text: &str) -> Option<Value> {
     }
 
     Some(Value::Object(view))
+}
+
+/// The merged config text `state.rs`'s `read_config_raw` produces from a tracked
+/// `.bee/config.json` and its `.bee/config.local.json` overlay.
+///
+/// Neither file can be judged on its own. The overlay DEEP-merges
+/// (state.rs:176-184), so a `config.local.json` that names only unrelated keys
+/// does not remove the tracked team table — and a `config.json` change can be
+/// masked by an overlay that already overrides the same slot. Both directions
+/// are visible only in the merged result, which is what the dispatcher reads.
+///
+/// `None` when `tracked` is present but is not a JSON object: the caller reads
+/// that as "no comparable state", which is how a corrupt-config repair passes.
+pub(crate) fn config_merged_text(tracked: Option<&str>, overlay: Option<&str>) -> Option<String> {
+    let base = match tracked {
+        None => Value::Object(Map::new()),
+        Some(t) => {
+            let v: Value = serde_json::from_str(t).ok()?;
+            if !v.is_object() {
+                return None;
+            }
+            v
+        }
+    };
+    // An unparseable overlay is what read_config_raw already treats as absent
+    // (its ReadJson::Corrupt arm warns and merges on without it).
+    let merged = match overlay.and_then(|o| serde_json::from_str::<Value>(o).ok()) {
+        Some(o) if o.is_object() => crate::state::merge_config_overlay(&base, &o),
+        _ => base,
+    };
+    serde_json::to_string(&merged).ok()
 }
 
 fn format_diff_val(val: Option<&Value>) -> String {

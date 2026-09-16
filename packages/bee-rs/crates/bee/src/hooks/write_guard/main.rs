@@ -510,6 +510,36 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         ));
                         break;
                     }
+                    // The comparison is over the MERGED view, never one file
+                    // alone: .bee/config.local.json deep-merges over
+                    // .bee/config.json on every read (state.rs:176-184), so a
+                    // per-file projection cannot tell a masked change from a
+                    // removal in either direction. Both sides of the diff are
+                    // built the way read_config_raw builds what the dispatcher
+                    // resolves against.
+                    let tracked_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.json")).ok();
+                    let overlay_disk =
+                        std::fs::read_to_string(root_pb.join(".bee/config.local.json")).ok();
+                    let is_overlay_file = norm == ".bee/config.local.json";
+                    // Two distinct "nothing to compare" cases, both None, both
+                    // allowed: NEITHER config file exists yet (a first write
+                    // has no prior table to change), and the tracked file
+                    // exists but does not parse (config_merged_text returns
+                    // None, which is how a corrupt-config repair stays possible).
+                    let old_merged = if tracked_disk.is_none() && overlay_disk.is_none() {
+                        None
+                    } else {
+                        config_merged_text(tracked_disk.as_deref(), overlay_disk.as_deref())
+                    };
+                    let merged_with = |proposed: &str| -> Option<String> {
+                        if is_overlay_file {
+                            config_merged_text(tracked_disk.as_deref(), Some(proposed))
+                        } else {
+                            config_merged_text(Some(proposed), overlay_disk.as_deref())
+                        }
+                    };
+
                     if tool_name == "Write" {
                         let Some(content) = tool_input.get("content").and_then(Value::as_str) else {
                             denial = Some(format!(
@@ -518,25 +548,22 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             ));
                             break;
                         };
-                        let old_text = std::fs::read_to_string(root_pb.join(rel)).ok().or_else(|| {
-                            if norm == ".bee/config.local.json" {
-                                std::fs::read_to_string(root_pb.join(".bee/config.json")).ok()
-                            } else {
-                                None
+                        if let Some(new_merged) = merged_with(content) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
                             }
-                        });
-                        if let Some(reason) = config_governed_change_deny(rel, old_text.as_deref(), content) {
-                            denial = Some(reason);
-                            break;
                         }
                     } else if tool_name == "Edit" {
-                        let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)).or_else(|_| {
-                            if norm == ".bee/config.local.json" {
-                                std::fs::read_to_string(root_pb.join(".bee/config.json"))
-                            } else {
-                                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
-                            }
-                        }) else {
+                        // Reconstruction reads the file actually being edited —
+                        // never a fallback to the other config file, which
+                        // would apply this edit's strings to bytes that are not
+                        // its target.
+                        let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
                             denial = Some(format!(
                                 "bee config guard: \"{}\" Edit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
                                 rel
@@ -570,18 +597,18 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         } else {
                             current_text.replacen(old_s, new_s, 1)
                         };
-                        if let Some(reason) = config_governed_change_deny(rel, Some(&current_text), &proposed) {
-                            denial = Some(reason);
-                            break;
+                        if let Some(new_merged) = merged_with(&proposed) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
+                            }
                         }
                     } else if tool_name == "MultiEdit" {
-                        let Ok(mut current_text) = std::fs::read_to_string(root_pb.join(rel)).or_else(|_| {
-                            if norm == ".bee/config.local.json" {
-                                std::fs::read_to_string(root_pb.join(".bee/config.json"))
-                            } else {
-                                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
-                            }
-                        }) else {
+                        let Ok(mut current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
                             denial = Some(format!(
                                 "bee config guard: \"{}\" MultiEdit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
                                 rel
@@ -631,9 +658,16 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             ));
                             break;
                         }
-                        if let Some(reason) = config_governed_change_deny(rel, Some(&old_text_saved), &current_text) {
-                            denial = Some(reason);
-                            break;
+                        let _ = &old_text_saved;
+                        if let Some(new_merged) = merged_with(&current_text) {
+                            if let Some(reason) = config_governed_change_deny(
+                                rel,
+                                old_merged.as_deref(),
+                                &new_merged,
+                            ) {
+                                denial = Some(reason);
+                                break;
+                            }
                         }
                     } else {
                         denial = Some(format!(

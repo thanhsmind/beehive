@@ -419,6 +419,94 @@ use std::process::ExitCode;
         assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
     }
 
+    /// `.bee/config.local.json` deep-merges over `.bee/config.json`
+    /// (state.rs:176-184) — it does not replace it. Creating the overlay with
+    /// only unrelated keys therefore removes nothing, and must pass. Judging
+    /// the overlay file on its own reads the tracked team table as deleted and
+    /// refuses a legitimate first write.
+    #[test]
+    fn config_role_key_guard_allows_creating_a_local_overlay_with_unrelated_keys() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": "{\n  \"doc_viewer\": \"local-only\"\n}\n"
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 0, "stderr={}", ew.stderr);
+    }
+
+    /// The overlay's other direction: the same role change written into
+    /// `.bee/config.local.json` still wins at read time, so it must still
+    /// refuse even though `.bee/config.json` is untouched.
+    #[test]
+    fn config_role_key_guard_refuses_a_role_override_added_by_the_local_overlay() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&sample_config_with_pi_review()).unwrap(),
+        )
+        .unwrap();
+
+        let overlay = json!({
+            "team": { "pi": { "review": { "kind": "herding", "agent": "pi-opencode-free" } } }
+        });
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.local.json",
+                "content": serde_json::to_string_pretty(&overlay).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
+    /// The third config shape: neither `team` nor `models` present, so the
+    /// dispatcher reads the WHOLE config object as the role table
+    /// (hooks/model_guard.rs:532-539, `Some(&cfg_val)`). A view that projected
+    /// an empty table for this shape would leave it entirely unguarded — the
+    /// arm must see what the dispatcher sees.
+    #[test]
+    fn config_role_key_guard_refuses_bare_runtime_table_with_no_team_wrapper() {
+        let fx = build_fixture("swarming", true);
+        let bare_cfg = json!({
+            "pi": {
+                "review": {
+                    "kind": "herding",
+                    "agent": "pi-gpt-5.6-luna"
+                }
+            }
+        });
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string_pretty(&bare_cfg).unwrap(),
+        )
+        .unwrap();
+
+        let mut modified_cfg = bare_cfg.clone();
+        modified_cfg["pi"]["review"]["agent"] = json!("pi-opencode-free");
+        let write_payload = json!({
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".bee/config.json",
+                "content": serde_json::to_string_pretty(&modified_cfg).unwrap()
+            }
+        });
+        let ew = expect_done(write_payload, &fx.root);
+        assert_eq!(ew.code, 2, "stderr={}", ew.stderr);
+        assert!(ew.stderr.contains("team.pi.review.agent"), "stderr={}", ew.stderr);
+    }
+
     #[test]
     fn config_role_key_guard_refuses_rewriting_herding_agents_argv() {
         let fx = build_fixture("swarming", true);
