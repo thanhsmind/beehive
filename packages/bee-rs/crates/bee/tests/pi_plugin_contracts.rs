@@ -1709,6 +1709,24 @@ fn pi_call_fixtures() -> Vec<PiCallFixture> {
             expected_tool_name: "Write",
             expected_tool_input: json!({"file_path": ""}),
         },
+        PiCallFixture {
+            name: "UNMAPPED tool fetch_content carrying url/mode -> WebFetch",
+            tool: "fetch_content",
+            input: json!({"url": "https://example.com/api", "mode": "json"}),
+            expected_tool_name: "WebFetch",
+            expected_tool_input: json!({"url": "https://example.com/api", "mode": "json"}),
+        },
+        PiCallFixture {
+            name: "UNMAPPED tool carrying a url AND a path field -> Write on the path",
+            tool: "sibling_extension_downloader",
+            input: json!({"url": "https://example.com/archive.tar.gz", "path": "/tmp/pi-fixture/archive.tar.gz"}),
+            expected_tool_name: "Write",
+            expected_tool_input: json!({
+                "url": "https://example.com/archive.tar.gz",
+                "path": "/tmp/pi-fixture/archive.tar.gz",
+                "file_path": "/tmp/pi-fixture/archive.tar.gz",
+            }),
+        },
     ]
 }
 
@@ -1774,8 +1792,8 @@ fn the_unknown_tool_route_is_fail_safe_never_a_typescript_side_allow() {
     );
     assert!(
         arm.matches("hook: \"write-guard\"").count() >= 2,
-        ".pi/extensions/bee-guard.ts: mapToolCall's `default:` arm no longer routes BOTH unknown \
-         shapes (command-carrying -> Bash, everything else -> Write) to write-guard. Arm source:\n{arm}"
+        ".pi/extensions/bee-guard.ts: mapToolCall's `default:` arm no longer routes unknown \
+         shapes (command-carrying -> Bash, url-only -> WebFetch, everything else -> Write) to write-guard. Arm source:\n{arm}"
     );
     // Non-vacuity: the live proof that an unmapped name really reaches bee
     // lives in the fixture rows above; this is the source-level cross-check

@@ -1664,6 +1664,15 @@ pub(crate) fn claim_cell_from_flags_ex(
         }
 
         let session_id = resolve_session_flag_env(session_flag);
+        if let Some(sid) = session_id.as_deref() {
+            if let Err(e) = crate::verbs::state_group::check_not_borrowed_closed_session(sid, &control) {
+                let msg = match e {
+                    Err2::Msg(m) => m,
+                    Err2::Ex => format!("refused \u{2014} session \"{sid}\" is closed and belongs to another session."),
+                };
+                return Err(Fail::Thrown(msg));
+            }
+        }
 
         // applyWritePolicy (state.mjs) with enforceIsolation:false — only the
         // observe/shared-disjoint arms can act; 'isolated' passes through.

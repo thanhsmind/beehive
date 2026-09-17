@@ -86,12 +86,12 @@ Decision: `91450355-8261-4e25-b6cd-a2f9660d45a3`.
     "role": "code",
     "deps": [],
     "decisions": ["91450355-8261-4e25-b6cd-a2f9660d45a3"],
-    "files": [".pi/extensions/bee-guard.ts"],
+    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"],
     "read_first": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs", "packages/bee-rs/crates/bee/src/doctor.rs"],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "The Pi tool fetch_content({url, mode}) was denied as a write with the containment message, because the default arm routes an unknown tool with no command to Write with file_path \"\". Keep the fail-safe (never a silent allow for a write-capable shape). Change only: when an unknown tool has no command and no PATH_FIELDS value, but has a string `url` (or `urls`) field, route it as a read-only web fetch shape bee already lets through (check main.rs: which tool names are not write tools — e.g. tool_name \"WebFetch\" with tool_input {url}) instead of Write with an empty path. An unknown tool with neither command, path nor url keeps today's behavior. Find how the belt is tested (rg for a bee-guard test harness, e.g. a node/bun test or a Rust test that runs the extension; doctor.rs include_str keeps the source canonical). If a harness exists add a case; if none exists, prove with a short node/bun script run that imports or evaluates the routing function and state that proof in the cap.",
-    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+    "action": "The Pi tool fetch_content({url, mode}) was denied as a write with the containment message, because the default arm routes an unknown tool with no command to Write with file_path \"\". Keep the fail-safe (never a silent allow for a write-capable shape). Change only: when an unknown tool has no command and no PATH_FIELDS value, but has a string `url` (or `urls`) field, route it as a read-only web fetch shape bee already lets through (check main.rs: which tool names are not write tools — e.g. tool_name \"WebFetch\" with tool_input {url}) instead of Write with an empty path. An unknown tool with neither command, path nor url keeps today's behavior. Find how the belt is tested (rg for a bee-guard test harness, e.g. a node/bun test or a Rust test that runs the extension; doctor.rs include_str keeps the source canonical). If a harness exists add a case; if none exists, prove with a short node/bun script run that imports or evaluates the routing function and state that proof in the cap. REWORK (judge NEEDS_REVISION no-harness-case-for-url-route): the belt change is already merged (commit e56b0f217) — do not change bee-guard.ts unless a test proves it wrong. In packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs add PiCallFixture rows to pi_call_fixtures(): an unmapped tool `fetch_content` with input {url, mode} expecting tool_name WebFetch and tool_input carrying that url; and an unmapped tool with a url AND a path field still expecting Write on the path. Update the stale failure message in the_unknown_tool_route_is_fail_safe_never_a_typescript_side_allow ('everything else -> Write') to name the url-only -> WebFetch route. Run the file's tests.",
+    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
     "must_haves": {"truths": ["a tool call with only url/mode args is not routed to Write with an empty path"], "artifacts": [], "key_links": [], "prohibitions": ["Do not allow an unknown tool that carries a path field or a command without a bee verdict"]},
     "behavior_change": true
   },
@@ -179,6 +179,23 @@ Decision: `91450355-8261-4e25-b6cd-a2f9660d45a3`.
     "action": "Found while capping this wave: the cells finish verb with a bare no-mistakes flag is refused with 'unsupported argument shape' because no-mistakes is not in FLAG_ALONE_BOOLEANS, so the bare flag never parses as Present. Red first: a parse_flags test that `--no-mistakes` at the end and before another flag parses as FlagV::Present; then add \"no-mistakes\" to FLAG_ALONE_BOOLEANS.",
     "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee reservations::flags",
     "must_haves": {"truths": ["a bare --no-mistakes parses as a boolean"], "artifacts": [], "key_links": [], "prohibitions": []},
+    "behavior_change": true
+  },
+  {
+    "id": "prf-9",
+    "feature": "pi-run-friction-fixes",
+    "title": "Refuse a borrowed closed session id on the cells claim path",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": ["91450355-8261-4e25-b6cd-a2f9660d45a3"],
+    "files": ["packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs", "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"],
+    "read_first": ["packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs", "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs", "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs"],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "prf-2 added check_not_borrowed_closed_session in verbs/state_group/store.rs and wired it into resolve_session_id, but the judge found `cells claim` resolves its session through verbs/cells/claims.rs resolve_session_flag_env (handlers_write.rs claim_cell_from_flags_ex, near `let session_id = resolve_session_flag_env(session_flag);`), which never runs that check — so a borrowed closed id still claims a cell. Red first in verbs/cells/tests.rs: a claim with --session-id naming a CLOSED session record that is not the caller's own harness id is refused with the same FIX text; a missing record and the caller's own closed id still claim. Fix only the claim path in handlers_write.rs: after resolving session_id, call crate::verbs::state_group::check_not_borrowed_closed_session(id, &control) and turn its error into the claim path's typed refusal with the message (never a silent delegate). Do not change resolve_session_flag_env itself — mailbox, work and close use it for run attribution, where a closed id is harmless.",
+    "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::cells",
+    "must_haves": {"truths": ["cells claim refuses a closed session id that is not the caller's own, with a FIX line", "cells claim still accepts a missing record and the caller's own id"], "artifacts": [], "key_links": [], "prohibitions": ["Do not change resolve_session_flag_env"]},
     "behavior_change": true
   }
 ]
