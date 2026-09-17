@@ -62,6 +62,36 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/activity.rs:905-910 resolve_feature tries resolve_herded_feature (job.json cwd to worktree-grants key, then --wt-- dir name) before lane and state.json"
+          },
+          {
+            "id": "truth-2",
+            "status": "PASS",
+            "evidence": "activity.rs:907 herded lookup only when herded is Some; test :2333 case C non-herded still records stale-main-feature"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "activity.rs:2333 asserts recorded feature via grants and dir-name fallback; herded_session_with_result_file_sets_work_status_done asserts open to done"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.834Z"
+      }
+    ]
   }
 }

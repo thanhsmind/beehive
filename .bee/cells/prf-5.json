@@ -63,6 +63,41 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/herding/mailbox.rs:306 expertise_clause empty when spec.expertise is empty; zero-expertise test asserts the clause is absent"
+          },
+          {
+            "id": "truth-2",
+            "status": "PASS",
+            "evidence": "mailbox.rs:388 required schema closes after report_path; a separate OPTIONAL block holds options/leaning/dissent; byte-identical test at :1200 re-cut with a prf-5 comment"
+          },
+          {
+            "id": "truth-3",
+            "status": "PASS",
+            "evidence": "mailbox.rs:431 read_proof_command reads commands.test; :351 renders Proof command before Files you may touch; test :1356"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "mailbox.rs:1344, :1356, :1378 assert rendered or parsed behavior; ack/report/result paths unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.829Z"
+      }
+    ]
   }
 }

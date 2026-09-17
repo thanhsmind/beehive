@@ -64,6 +64,41 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs:392-414 refuses a closed/dead record whose id is not locate_caller() with a FIX line; wired at :423 (flag) and :433 (BEE_SESSION_ID); verbs/reservations/emit.rs:169 turns Err2::Msg into ctx.fail"
+          },
+          {
+            "id": "truth-2",
+            "status": "PASS",
+            "evidence": "store.rs:393 only checks when read_session returns Some; test_missing_record_allowed store.rs:937"
+          },
+          {
+            "id": "truth-3",
+            "status": "PASS",
+            "evidence": "store.rs:406 is_own = caller.id == id; test_closed_own_allowed store.rs:918"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "store.rs:873 test_closed_foreign_refused covers flag (closed and dead) and env var, asserting the refusal and FIX line"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.810Z"
+      }
+    ]
   }
 }

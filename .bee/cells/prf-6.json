@@ -75,6 +75,31 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:1444-1452 reviewer with blank expertise and brief uses reviewer_default_expertise_block(root); explicit --expertise wins; reviewer.md lens line regenerated in a016c6ad1"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "prepare.rs:5466 asserts the payload prompt without the file, with it, and with explicit --expertise; companion test covers gather and advisor"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.832Z"
+      }
+    ]
   }
 }

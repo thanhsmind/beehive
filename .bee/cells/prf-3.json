@@ -10,7 +10,8 @@
     "91450355-8261-4e25-b6cd-a2f9660d45a3"
   ],
   "files": [
-    ".pi/extensions/bee-guard.ts"
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
   ],
   "read_first": [
     ".pi/extensions/bee-guard.ts",
@@ -19,8 +20,8 @@
   ],
   "affects_skills": [],
   "affects_specs": [],
-  "action": "The Pi tool fetch_content({url, mode}) was denied as a write with the containment message, because the default arm routes an unknown tool with no command to Write with file_path \"\". Keep the fail-safe (never a silent allow for a write-capable shape). Change only: when an unknown tool has no command and no PATH_FIELDS value, but has a string `url` (or `urls`) field, route it as a read-only web fetch shape bee already lets through (check main.rs: which tool names are not write tools — e.g. tool_name \"WebFetch\" with tool_input {url}) instead of Write with an empty path. An unknown tool with neither command, path nor url keeps today's behavior. Find how the belt is tested (rg for a bee-guard test harness, e.g. a node/bun test or a Rust test that runs the extension; doctor.rs include_str keeps the source canonical). If a harness exists add a case; if none exists, prove with a short node/bun script run that imports or evaluates the routing function and state that proof in the cap.",
-  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "action": "The Pi tool fetch_content({url, mode}) was denied as a write with the containment message, because the default arm routes an unknown tool with no command to Write with file_path \"\". Keep the fail-safe (never a silent allow for a write-capable shape). Change only: when an unknown tool has no command and no PATH_FIELDS value, but has a string `url` (or `urls`) field, route it as a read-only web fetch shape bee already lets through (check main.rs: which tool names are not write tools — e.g. tool_name \"WebFetch\" with tool_input {url}) instead of Write with an empty path. An unknown tool with neither command, path nor url keeps today's behavior. Find how the belt is tested (rg for a bee-guard test harness, e.g. a node/bun test or a Rust test that runs the extension; doctor.rs include_str keeps the source canonical). If a harness exists add a case; if none exists, prove with a short node/bun script run that imports or evaluates the routing function and state that proof in the cap. REWORK (judge NEEDS_REVISION no-harness-case-for-url-route): the belt change is already merged (commit e56b0f217) — do not change bee-guard.ts unless a test proves it wrong. In packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs add PiCallFixture rows to pi_call_fixtures(): an unmapped tool `fetch_content` with input {url, mode} expecting tool_name WebFetch and tool_input carrying that url; and an unmapped tool with a url AND a path field still expecting Write on the path. Update the stale failure message in the_unknown_tool_route_is_fail_safe_never_a_typescript_side_allow ('everything else -> Write') to name the url-only -> WebFetch route. Run the file's tests.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
   "must_haves": {
     "truths": [
       "a tool call with only url/mode args is not routed to Write with an empty path"
@@ -34,23 +35,24 @@
   "behavior_change": true,
   "status": "capped",
   "trace": {
-    "worker": "w-prf-3",
-    "outcome": "The Pi belt routes a url-only unknown tool as WebFetch, which the guard allows",
+    "worker": "w2-prf-3",
+    "outcome": "The Pi harness now drives a url-only tool to WebFetch and a url-plus-path tool to Write on the path; the stale fail-safe message names the url route",
     "files_changed": [
-      ".pi/extensions/bee-guard.ts"
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
     ],
     "deviations": [
       "sync-ack: internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows"
     ],
     "friction": null,
-    "capped_at": "2026-09-17T11:10:57.735Z",
+    "capped_at": "2026-09-17T11:28:07.388Z",
     "behavior_change": true,
-    "verification_evidence": "cell scope; full cargo test --release suite 4066 passed 0 failed",
+    "verification_evidence": "cell scope; full cargo test --release suite 4067 passed 0 failed",
     "verify_output": "green:unit",
     "verify_passed": true,
     "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
-    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
-    "claimed_at": "2026-09-17T10:42:24.503Z",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "claimed_at": "2026-09-17T11:16:33.391Z",
     "sync_ack": "internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows",
     "mistakes": [
       {
@@ -59,15 +61,80 @@
       }
     ],
     "report": {
-      "outcome": "The Pi belt routes a url-only unknown tool as WebFetch, which the guard allows",
-      "commit": "e56b0f217",
+      "outcome": "The Pi harness now drives a url-only tool to WebFetch and a url-plus-path tool to Write on the path; the stale fail-safe message names the url route",
+      "commit": "8155c3642",
       "files": [
-        ".pi/extensions/bee-guard.ts"
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
       ],
-      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor — green:unit — cell scope; full cargo test --release suite 4066 passed 0 failed",
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts — green:unit — cell scope; full cargo test --release suite 4067 passed 0 failed",
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:492-500 default arm routes a url-only tool to WebFetch; hooks/write_guard/main.rs:64 treats only Edit|Write|MultiEdit as write tools; path and command branches unchanged"
+          },
+          {
+            "id": "red-first-test",
+            "status": "FAIL",
+            "evidence": "Commit e56b0f217 touches only bee-guard.ts. packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:1597 pi_call_fixtures runs mapToolCall through node, but no url-only fixture was added"
+          }
+        ],
+        "failure_signature": "no-harness-case-for-url-route",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.812Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-url-only-not-write-empty-path",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:492-500 routes url/urls to WebFetch before the empty-path Write fallback; fixture pi_plugin_contracts.rs:1712-1718 expects WebFetch with {url, mode}"
+          },
+          {
+            "id": "prohibition-path-or-command-still-gated",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:483-490 checks the path field before url; fixture pi_plugin_contracts.rs:1719-1729 expects url+path to route to Write on the path"
+          },
+          {
+            "id": "red-first-test-asserts-behavior",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts.rs:1908-1950 runs each fixture through node mapToolCall and compares the captured payload exactly; ran it: 1 passed, node present so not skipped"
+          },
+          {
+            "id": "stale-failure-message-updated",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts.rs:1795-1796 names command-carrying -> Bash, url-only -> WebFetch, everything else -> Write"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:28:07.322Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-17T11:14:43.812Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "no_mistakes": true
   }
 }

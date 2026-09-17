@@ -1,0 +1,106 @@
+{
+  "id": "prf-9",
+  "feature": "pi-run-friction-fixes",
+  "title": "Refuse a borrowed closed session id on the cells claim path",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "91450355-8261-4e25-b6cd-a2f9660d45a3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "prf-2 added check_not_borrowed_closed_session in verbs/state_group/store.rs and wired it into resolve_session_id, but the judge found `cells claim` resolves its session through verbs/cells/claims.rs resolve_session_flag_env (handlers_write.rs claim_cell_from_flags_ex, near `let session_id = resolve_session_flag_env(session_flag);`), which never runs that check — so a borrowed closed id still claims a cell. Red first in verbs/cells/tests.rs: a claim with --session-id naming a CLOSED session record that is not the caller's own harness id is refused with the same FIX text; a missing record and the caller's own closed id still claim. Fix only the claim path in handlers_write.rs: after resolving session_id, call crate::verbs::state_group::check_not_borrowed_closed_session(id, &control) and turn its error into the claim path's typed refusal with the message (never a silent delegate). Do not change resolve_session_flag_env itself — mailbox, work and close use it for run attribution, where a closed id is harmless.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::cells",
+  "must_haves": {
+    "truths": [
+      "cells claim refuses a closed session id that is not the caller's own, with a FIX line",
+      "cells claim still accepts a missing record and the caller's own id"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not change resolve_session_flag_env"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w2-prf-9",
+    "outcome": "cells claim refuses a borrowed closed session id with a FIX line and still accepts a missing record or the caller's own id",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T11:27:55.470Z",
+    "behavior_change": true,
+    "verification_evidence": "cell scope; full cargo test --release suite 4067 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::cells",
+    "claimed_at": "2026-09-17T11:16:33.687Z",
+    "sync_ack": "internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "cells claim refuses a borrowed closed session id with a FIX line and still accepts a missing record or the caller's own id",
+      "commit": "5851f3c35",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee verbs::cells — green:unit — cell scope; full cargo test --release suite 4067 passed 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-refuse-borrowed-closed-with-fix",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:1667-1675 calls check_not_borrowed_closed_session and returns Fail::Thrown(msg); store.rs:408-410 message carries the FIX line; test claim_refuses_borrowed_closed_session_with_fix_line asserts refusal, no claim file, cell still open"
+          },
+          {
+            "id": "truth-2-missing-record-and-own-id-accepted",
+            "status": "PASS",
+            "evidence": "store.rs:393 Ok on no record; store.rs:399-401 own id passes; test steps 2 and 3 assert status claimed"
+          },
+          {
+            "id": "prohibition-resolve_session_flag_env-unchanged",
+            "status": "PASS",
+            "evidence": "commit 5851f3c35 touches only handlers_write.rs and cells/tests.rs; claims.rs:632 untouched"
+          },
+          {
+            "id": "red-first-test-asserts-behavior",
+            "status": "PASS",
+            "evidence": "without the fix the claim path had no check, so step 1 would claim and the test would fail; it asserts refusal and state"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:28:07.325Z"
+      }
+    ]
+  }
+}

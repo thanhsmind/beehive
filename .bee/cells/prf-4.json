@@ -70,6 +70,36 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/intent_group.rs:265 has_other_live_lane blocks the active_feature push at :323; test cases 2 and 6 expect None; a016c6ad1 keeps the request when the only live lane is the active feature (case 2b)"
+          },
+          {
+            "id": "truth-2",
+            "status": "PASS",
+            "evidence": "intent_group.rs:1131 case 1: no lanes returns the state.json fallback; default.json is not read"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "intent_group.rs:1131 dispatch_original_request_suppresses_state_fallback_when_live_lanes_exist asserts rendered output across 7 cases"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.826Z"
+      }
+    ]
   }
 }

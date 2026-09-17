@@ -63,6 +63,31 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs:37 no-mistakes added to FLAG_ALONE_BOOLEANS"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "flags.rs:371 bare_no_mistakes_parses_as_a_boolean: trailing and leading forms parse as Present and --id is not swallowed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.837Z"
+      }
+    ]
   }
 }

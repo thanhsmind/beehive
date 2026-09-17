@@ -65,6 +65,36 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs:714 check_git_bash_command now calls tokenize_deep(&fence_heredocs(command)), so heredoc body text is fenced before the git verb scan"
+          },
+          {
+            "id": "truth-2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs:4263 a heredoc followed by && git push still exits 2 with git push is blocked"
+          },
+          {
+            "id": "red-first-test",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs:4255 drives the exact reported heredoc shape through the hook and expects exit 0; the depth-bound fail-open branch is unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-17T11:14:43.806Z"
+      }
+    ]
   }
 }
