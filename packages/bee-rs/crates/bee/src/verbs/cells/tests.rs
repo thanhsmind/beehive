@@ -10359,3 +10359,137 @@ use std::time::Instant;
         let (flags_missing, _) = crate::verbs::reservations::parse_flags(&["--id", "c-cli", "--role", "test"]).unwrap();
         assert!(crate::verbs::cells::handlers_write::run_reroute(flags_missing, true, std::time::Instant::now()).is_none());
     }
+
+    static TEST_CLAIM_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct ClaimTestEnvGuard {
+        prev_pi: Option<std::ffi::OsString>,
+        prev_claude: Option<std::ffi::OsString>,
+        prev_codex: Option<std::ffi::OsString>,
+        prev_bee: Option<std::ffi::OsString>,
+    }
+
+    impl ClaimTestEnvGuard {
+        fn set(pi: Option<&str>, claude: Option<&str>, codex: Option<&str>, bee: Option<&str>) -> Self {
+            let guard = Self {
+                prev_pi: std::env::var_os("PI_SESSION_ID"),
+                prev_claude: std::env::var_os("CLAUDE_CODE_SESSION_ID"),
+                prev_codex: std::env::var_os("CODEX_THREAD_ID"),
+                prev_bee: std::env::var_os("BEE_SESSION_ID"),
+            };
+            unsafe {
+                match pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+                match bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+            }
+            guard
+        }
+    }
+
+    impl Drop for ClaimTestEnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.prev_pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match &self.prev_claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match &self.prev_codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+                match &self.prev_bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+            }
+        }
+    }
+
+    fn write_closed_session_fixture(root: &Path, id: &str, status: &str) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("started_at".into(), json!("2026-01-01T00:00:00.000Z"));
+        rec.insert("last_heartbeat".into(), json!("2026-01-01T00:00:00.000Z"));
+        rec.insert("status".into(), json!(status));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(rec)),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn claim_refuses_borrowed_closed_session_with_fix_line() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(Some("pi-caller-own"), None, None, None);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        lane_with_route(root, "feat");
+
+        // 1. Closed foreign session -> claim refuses with FIX line
+        write_cell_fixture(root, "c-foreign", &cell("c-foreign", "open", "feat", json!([])));
+        write_closed_session_fixture(root, "foreign-closed", "closed");
+
+        let refusal = thrown(claim_cell_from_flags(
+            root,
+            "c-foreign",
+            "w1",
+            Some("foreign-closed"),
+            None,
+        ));
+        assert!(
+            refusal.contains("is closed and belongs to another session"),
+            "expected refusal text in {refusal}"
+        );
+        assert!(
+            refusal.contains("FIX: use your own session id (PI_SESSION_ID) or start/bind your own session."),
+            "expected FIX text in {refusal}"
+        );
+        assert!(!claims_dir(root).join("c-foreign.json").exists());
+        let untouched = read_cell_norm(root, "c-foreign").unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+
+        // 2. Missing session record -> still claims
+        write_cell_fixture(root, "c-missing", &cell("c-missing", "open", "feat", json!([])));
+        let door_missing = claim_cell_from_flags(
+            root,
+            "c-missing",
+            "w1",
+            Some("nonexistent-session"),
+            None,
+        ).unwrap();
+        assert_eq!(door_missing.cell["status"], json!("claimed"));
+
+        // 3. Caller's own closed session -> still claims
+        write_cell_fixture(root, "c-own", &cell("c-own", "open", "feat", json!([])));
+        write_closed_session_fixture(root, "pi-caller-own", "closed");
+        let door_own = claim_cell_from_flags(
+            root,
+            "c-own",
+            "w1",
+            Some("pi-caller-own"),
+            None,
+        ).unwrap();
+        assert_eq!(door_own.cell["status"], json!("claimed"));
+    }
+
