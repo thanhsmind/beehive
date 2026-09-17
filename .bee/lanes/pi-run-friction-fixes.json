@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pi-run-friction-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"pi-run-friction-fixes\" (lane).",
+  "next_action": "Merged into main at 26f0e4f; reload the product and test \"pi-run-friction-fixes\", then either approve uat (\"bee gate --name uat --approved true --lane pi-run-friction-fixes\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-17T10:39:29.809Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-run-friction-fixes",
+    "asked_at": "2026-09-17T11:28:14.335Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -667,12 +672,5 @@
         "behavior_change": true
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-17T11:28:07.395Z",
-    "branch": "wt/pi-run-friction-fixes",
-    "worktree_id": "beehive--wt--pi-run-friction-fixes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
