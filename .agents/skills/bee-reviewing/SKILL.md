@@ -38,11 +38,13 @@ from here the diff is immutable.
 
 Spawn the core four in parallel — `code-quality`, `architecture`,
 `security`, `test-coverage` — plus any conditional reviewer whose
-trigger the diff matches, capped at six. A small scope takes one
+trigger the diff matches, capped at six. Each is a lens, not a team
+member: dispatch it with `bee dispatch prepare --kind reviewer` and no
+`--role`, and name the lens in the prompt. A small scope takes one
 correctness reviewer; high-risk content (auth, migration, data loss,
-external providers) warrants the full wave. Role cards — Purpose,
+external providers) warrants the full wave. Lens cards — Purpose,
 Scope, Method — and the dispatch prompt shape:
-`references/reviewing-reference.md` ("Reviewer roles"). Each reviewer
+`references/reviewing-reference.md` ("Reviewer lenses"). Each reviewer
 gets the cumulative diff, the in-scope features' `CONTEXT.md` and
 `plan.md`, and nothing else — never session history. Review-tier
 model, inline persona, never another plugin's agent type.
@@ -181,6 +183,6 @@ concern has one route:
 
 | File | When to load |
 |---|---|
-| `references/reviewing-reference.md` | Reviewer role cards (Purpose/Scope/Method), finding schema, UAT wording |
+| `references/reviewing-reference.md` | Reviewer lens cards (Purpose/Scope/Method), finding schema, UAT wording |
 | `.bee/expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |
 | `.bee/expertise/INDEX.md` | A reviewer lens needs domain grounding — stored data, a caller-facing contract, a trust boundary, a rollout, a speed budget, a surface people use: route from the index, one guide per lens |

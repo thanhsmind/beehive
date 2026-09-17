@@ -124,7 +124,7 @@ rule there. A second copy of a rule is the copy that goes stale.
 | Data contract | What does the store promise about this data, and what holds the promise? | [data.md](data.md) ("The store is a contract", "Constraints belong beside the data") |
 | Happy path | Is the representative, intended use covered at its smallest demonstrating size? | [tests.md](tests.md) ("Choosing cases") |
 | Failure edge | Empty, boundary, arrives twice, dependency dies halfway — which of these does the change meet? | [tests.md](tests.md) ("Choosing cases"); on `high-risk` work, `skills/bee-planning/references/edge-dimensions.md` ("The 12 Edge-Case Dimensions") |
-| NFR | Speed, exposure, failure handling — the qualities no request names out loud | [performance.md](performance.md), [security.md](security.md), and the triggers in `skills/bee-reviewing/references/reviewing-reference.md` ("Conditional roles — spawned by diff triggers") |
+| NFR | Speed, exposure, failure handling — the qualities no request names out loud | [performance.md](performance.md), [security.md](security.md), and the triggers in `skills/bee-reviewing/references/reviewing-reference.md` ("Conditional lenses — spawned by diff triggers") |
 | Definition of done | What proof exists that this works, and who checked it? | `AGENTS.md` ("Done means done", "Prove, then say so"), and the cell's own `must_haves` |
 
 The rubric earns its keep by finding the layer you skipped, never by

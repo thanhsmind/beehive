@@ -1,30 +1,35 @@
 # Reviewing Reference
 
-Companion to SKILL.md — judgment lives there; reviewer role cards, the
+Companion to SKILL.md — judgment lives there; reviewer lens cards, the
 finding schema, and the acceptance wording live here.
 
-## Reviewer roles
+## Reviewer lenses
 
-Every dispatched reviewer receives a role card in the same shape:
+A lens here is a review angle, never a team member. Dispatch every lens
+through `bee dispatch prepare --kind reviewer` with no `--role`: `--role`
+names a team member configured in `.bee/config.json`, and a lens name
+there refuses. The lens rides the prompt below.
+
+Every dispatched reviewer receives a lens card in the same shape:
 **Purpose** (one line — the lens), **Scope** (set by the invoking
 layer: the frozen diff, the in-scope `CONTEXT.md` and `plan.md`,
 nothing else — never widened by the reviewer), and **Method** (the
 numbered steps below, whose quoted names resolve to entries in
-`.bee/expertise/review.md`). Role cards stay thin lens contracts — no
+`.bee/expertise/review.md`). Lens cards stay thin lens contracts — no
 failure-mode catalogs. The model already knows the domain; the trigger
 and the lens are the value.
 
 Dispatch prompt shape, every reviewer:
 
 ```text
-You are the <role> reviewer.
-Purpose: <the role's Purpose line>
+You are the <lens> reviewer.
+Purpose: <the lens's Purpose line>
 Scope: <the frozen scope the invoking layer hands you>
 Method: follow the reviewer method; your step-2 lens is your Purpose.
 Lead with findings. Do not rewrite code.
 ```
 
-### Reviewer method (shared by all roles)
+### Reviewer method (shared by all lenses)
 
 1. From the scope you were handed, write down what a correct change
    must handle before reading the diff — "Adversarial reading". The
@@ -52,7 +57,7 @@ Lead with findings. Do not rewrite code.
    "Label uncertainty exactly"; keep out-of-scope bugs in a separate
    follow-up note, never against the verdict — "Scope discipline".
 
-### Core roles — always dispatched, in parallel
+### Core lenses — always dispatched, in parallel
 
 #### code-quality
 
@@ -78,12 +83,12 @@ Lead with findings. Do not rewrite code.
 - **Scope:** Set by the invoking layer.
 - **Method:** Reviewer method 1–5, step-2 lens as Purpose; a missing test is filed with the uncovered scenario named — "What a finding is".
 
-### Conditional roles — spawned by diff triggers
+### Conditional lenses — spawned by diff triggers
 
 Scan the diff once, mechanically — file paths and hunks, not vibes —
-and spawn every matched role in the same parallel wave, same isolation
+and spawn every matched lens in the same parallel wave, same isolation
 contract, same card shape. Cap the wave at six total; if more triggers
-match, fold the extra lens into the closest core role's Purpose and say
+match, fold the extra lens into the closest core lens's Purpose and say
 so in the synthesis.
 
 #### performance

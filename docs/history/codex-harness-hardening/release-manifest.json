@@ -98,7 +98,7 @@
     },
     {
       "path": ".bee/expertise/review.md",
-      "sha256": "1f052a9e34464259467ad5c5cee91a5c51a5f5aad964caf48f120ffd7a5f6969",
+      "sha256": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "e3d4800e6a201adf01d398dbad013f4c0f004b880b4d712b3a98912b38bdea13",
+      "sha256": "171619d4ad9dbf9cbfbae214e6ba2ca03a67d50432dc069b57066f811ec2beb6",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -591,14 +591,14 @@
     },
     {
       "path": ".claude-plugin/skills/bee-reviewing/references/reviewing-reference.md",
-      "sha256": "993cdf62ef76d933c6b7677325b0a9e264a3b085be8675b4e1eef6fc93928502",
+      "sha256": "76b52a86447b724522c7e564a254dbfd48e193240b8ff75440aa30d9dc86558d",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-reviewing/references/reviewing-reference.md"
     },
     {
       "path": ".claude-plugin/skills/bee-reviewing/SKILL.md",
-      "sha256": "098417b1e18e90dbc454e5f2954e708ac6a2adbf3422be008e4c3390c829e758",
+      "sha256": "2bb27ca379018a629ae3973fb6833d870fa78cfea148cb1562ff706294b19e11",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-reviewing/SKILL.md"
@@ -892,7 +892,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "89a2a93f2c66988054bf62408a6755246c9f62c7346f5ee911ef9505fa601bf0",
+      "sha256": "94dd2d90286a34c4cc161181a2990a1f1bf1a9e352f25ac9dd4b26f1f279efe7",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1347,14 +1347,14 @@
     },
     {
       "path": ".codex-plugin/skills/bee-reviewing/references/reviewing-reference.md",
-      "sha256": "993cdf62ef76d933c6b7677325b0a9e264a3b085be8675b4e1eef6fc93928502",
+      "sha256": "76b52a86447b724522c7e564a254dbfd48e193240b8ff75440aa30d9dc86558d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-reviewing/references/reviewing-reference.md"
     },
     {
       "path": ".codex-plugin/skills/bee-reviewing/SKILL.md",
-      "sha256": "098417b1e18e90dbc454e5f2954e708ac6a2adbf3422be008e4c3390c829e758",
+      "sha256": "2bb27ca379018a629ae3973fb6833d870fa78cfea148cb1562ff706294b19e11",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-reviewing/SKILL.md"
@@ -1739,7 +1739,7 @@
     },
     {
       "path": "expertise/review.md",
-      "sha256": "1f052a9e34464259467ad5c5cee91a5c51a5f5aad964caf48f120ffd7a5f6969",
+      "sha256": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -2314,14 +2314,14 @@
     },
     {
       "path": "skills/bee-reviewing/references/reviewing-reference.md",
-      "sha256": "993cdf62ef76d933c6b7677325b0a9e264a3b085be8675b4e1eef6fc93928502",
+      "sha256": "76b52a86447b724522c7e564a254dbfd48e193240b8ff75440aa30d9dc86558d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-reviewing/references/reviewing-reference.md"
     },
     {
       "path": "skills/bee-reviewing/SKILL.md",
-      "sha256": "5b18f52f14b40f527fee72fa87cb685f3cfad52f6c07cee9cbffc8640bb55d5c",
+      "sha256": "6113741981ad20ec557d82a6761fbfe2e1412b21fe7406dc1555c41e7e3a6e62",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-reviewing/SKILL.md"
