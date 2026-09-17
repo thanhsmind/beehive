@@ -79,6 +79,7 @@ Decision: `91450355-8261-4e25-b6cd-a2f9660d45a3`.
   },
   {
     "id": "prf-3",
+    "regen_obligation_ack": "wave-barrier",
     "feature": "pi-run-friction-fixes",
     "title": "Route a url-only Pi tool as a non-write",
     "lane": "standard",
@@ -130,6 +131,7 @@ Decision: `91450355-8261-4e25-b6cd-a2f9660d45a3`.
   },
   {
     "id": "prf-6",
+    "regen_obligation_ack": "wave-barrier",
     "feature": "pi-run-friction-fixes",
     "title": "Give reviewer dispatches the review method",
     "lane": "standard",
