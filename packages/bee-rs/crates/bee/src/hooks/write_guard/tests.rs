@@ -4251,6 +4251,24 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["out.txt"]);
     }
 
+    #[test]
+    fn heredoc_prose_containing_git_words_is_not_judged_as_git_verb() {
+        let fx = build_fixture("idle", false);
+        let cmd = "{ cat <<'PROMPT'\nreview the git range af..d5\nPROMPT\n} | echo hi";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn real_git_verb_outside_heredoc_is_still_judged() {
+        let fx = build_fixture("idle", false);
+        let cmd = "{ cat <<'PROMPT'\nreview the git range af..d5\nPROMPT\n} && git push";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("`git push` is blocked"));
+        assert!(e.stderr.contains("never exempted"));
+    }
+
     // ── tokenize_deep / find_git_invocations (gpd-1) ────────────────────────
 
     #[test]
