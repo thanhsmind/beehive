@@ -520,6 +520,7 @@
     "plan",
     "verify-app",
     "session-relocation",
-    "cli-vocabulary"
+    "cli-vocabulary",
+    "statusline"
   ]
 }

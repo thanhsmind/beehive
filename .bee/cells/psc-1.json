@@ -1,0 +1,180 @@
+{
+  "id": "psc-1",
+  "feature": "pi-statusline-cache-by-model",
+  "title": "Show active-branch token totals by provider and model in Pi",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "72f4a8b2-b1f4-467a-bfe0-56cf22da2565"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-statusline-cache-by-model/CONTEXT.md",
+    "docs/history/pi-statusline-cache-by-model/plan.md",
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+    ".bee/verify/verify-app/features/pi-runtime.md"
+  ],
+  "action": "RED FIRST. Extend the existing HARNESS_JS so FakeSessionManager.getBranch() returns per-call branch entries, the fake UI records setStatus(key, text), the JSON result returns those calls, and HarnessRun parses them. Add one contract test named with the filter `model_usage_status`. Drive the REAL extension in one ordered run: session_start restores totals from multiple assistant messages; repeated provider/model messages aggregate; another provider/model gets its own row; nested tool-result usage and non-assistant entries do not count; turn_end refreshes after a new assistant message; session_tree with an empty branch clears the named status. Assert the exact compact display and first-appearance order. Add `turn_end` and `session_tree` to never_throw_event_rows. Run the filtered test and record the expected RED because the belt has no model-usage status. Then implement pure aggregation and formatting helpers in `.pi/extensions/bee-guard.ts`. Read only ctx.sessionManager.getBranch(). Count assistant-message usage by full provider/model. Compute new as input + output + cacheWrite and cached as cacheRead. Accept only finite positive numbers. Render `<provider>/<model> <new> new/<cached> cached`; compact thousands and millions; join rows with ` · `. Refresh one stable status key on session_start, turn_end, and session_tree. Call setStatus with undefined when no positive usage exists. Keep all status work advisory: catch and log failures without throwing or blocking. Do not call setFooter. Update the Pi runtime verification map with this status contract and its command. Run `bee dev regen` so the release manifest fingerprints the changed extension.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Pi's default footer remains installed and one status segment shows model usage",
+      "new tokens equal input plus output plus cache-write tokens",
+      "cached tokens equal cache-read tokens",
+      "totals use only assistant messages on the active branch",
+      "each provider/model pair has an independent total",
+      "the segment refreshes after turn completion, session restore, and branch navigation",
+      "the segment is absent when the active branch has no positive model usage",
+      "status calculation and display failures never interrupt the session"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "active-branch aggregation, compact formatting, advisory refresh handlers, and setStatus integration"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "branch-aware status harness plus exact lifecycle and aggregation contract"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/pi-runtime.md",
+        "substantive": "mapped user-facing status proof"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "updated Pi extension fingerprint"
+      }
+    ],
+    "key_links": [
+      "the status helper reads getBranch rather than the full session log",
+      "session_start, turn_end, and session_tree call the same refresh helper",
+      "the contract harness loads PI_PLUGIN_SOURCE from the real extension file",
+      "the token equation matches packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+    ],
+    "prohibitions": [
+      "Do not replace Pi's footer or call ctx.ui.setFooter",
+      "Do not count tool-result usage or sibling branches",
+      "Do not poll the session file or add a timer",
+      "Do not change Claude, Codex, or OpenCode status behavior"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "Kevin-psc-1",
+    "outcome": "Pi shows active-branch token totals by provider and model.",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T16:18:57.467Z",
+    "behavior_change": true,
+    "verification_evidence": "main had no model-usage status calls; the real Pi extension harness now observes restore, refresh, and clear behavior, and all 71 Pi contracts passed",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "01a0afca-c094-72b7-a2f6-f151c372a155",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-17T16:09:08.258Z",
+    "verified_at": null,
+    "escalation_reason": "The configured Pi code worker exhausted its provider quota before making an edit; retry this only cell on the session model.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi now shows active-branch new and cached token totals for each provider/model through a default-footer status segment.",
+      "commit": "1edb89fbdbc0c75503f233774a906ce17700bc92",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:live — main had no model-usage status calls; the real Pi extension harness now observes restore, refresh, and clear behavior, and all 71 Pi contracts passed",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "Pi's default footer remains installed and one status segment shows model usage",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1902-1911` defines one stable `model-usage` key and calls `setStatus`; no `setFooter` call exists in the changed extension. The contract test passed with the expected status key at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8155-8158`."
+          },
+          {
+            "id": "new tokens equal input plus output plus cache-write tokens",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1869` computes `input + output + cacheWrite`; the passing contract fixture at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:7981-7999` produces the asserted `5k new` at lines 8155-8159."
+          },
+          {
+            "id": "cached tokens equal cache-read tokens",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1870` assigns `cachedTokens = cacheRead`; the passing contract fixture asserts `4k cached` from cache-read values at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8155-8159`."
+          },
+          {
+            "id": "totals use only assistant messages on the active branch",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1830-1836` iterates the supplied branch and continues only for `msg.role === \"assistant\"`; `getBranch()` is the only source at lines 1907-1909. The fixture includes user and tool-result usage at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8003-8025` and 8041-8051, and the full suite passed."
+          },
+          {
+            "id": "each provider/model pair has an independent total",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1872-1884` keys aggregation by `${provider}/${model}` and preserves insertion order. The passing assertion at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8155-8159` shows separate anthropic and openai rows in first-appearance order."
+          },
+          {
+            "id": "the segment refreshes after turn completion, session restore, and branch navigation",
+            "status": "PASS",
+            "evidence": "The extension refreshes on `session_start` at `.pi/extensions/bee-guard.ts:1946-1947`, `turn_end` at lines 2251-2253, and `session_tree` at lines 2255-2257. The ordered fixture drives those three events at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8122-8145` and asserts refreshed output at lines 8161-8165."
+          },
+          {
+            "id": "the segment is absent when the active branch has no positive model usage",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1887-1889` removes zero-total rows and `:1892-1894` returns `undefined` for no summaries. The empty-branch lifecycle assertion passes at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:8167-8168`."
+          },
+          {
+            "id": "status calculation and display failures never interrupt the session",
+            "status": "PASS",
+            "evidence": "`.pi/extensions/bee-guard.ts:1904-1914` wraps branch access, calculation, formatting, and `setStatus` in a catch that logs without throwing. The new events have never-throw rows at `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:2742-2743`; the full release suite passed with 0 failures, including all 71 Pi contracts."
+          },
+          {
+            "id": "user-facing proof map and release fingerprint match the changed extension",
+            "status": "PASS",
+            "evidence": "`.bee/verify/verify-app/features/pi-runtime.md:13,20,138` maps the status contract and command; `docs/history/codex-harness-hardening/release-manifest.json:1651` carries the changed extension fingerprint. `./.bee/bin/bee dev release-manifest --check` printed `376 file(s) match stored manifest`."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-17T16:26:59.249Z"
+      }
+    ]
+  },
+  "escalate": true
+}
