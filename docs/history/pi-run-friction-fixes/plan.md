@@ -176,7 +176,7 @@ Decision: `91450355-8261-4e25-b6cd-a2f9660d45a3`.
     "read_first": ["packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs", "packages/bee-rs/crates/bee/src/verbs/cells/util.rs"],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Found while capping this wave: `bee cells finish ... --no-mistakes` is refused with 'unsupported argument shape' because no-mistakes is not in FLAG_ALONE_BOOLEANS, so the bare flag never parses as Present. Red first: a parse_flags test that `--no-mistakes` at the end and before another flag parses as FlagV::Present; then add \"no-mistakes\" to FLAG_ALONE_BOOLEANS.",
+    "action": "Found while capping this wave: the cells finish verb with a bare no-mistakes flag is refused with 'unsupported argument shape' because no-mistakes is not in FLAG_ALONE_BOOLEANS, so the bare flag never parses as Present. Red first: a parse_flags test that `--no-mistakes` at the end and before another flag parses as FlagV::Present; then add \"no-mistakes\" to FLAG_ALONE_BOOLEANS.",
     "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee reservations::flags",
     "must_haves": {"truths": ["a bare --no-mistakes parses as a boolean"], "artifacts": [], "key_links": [], "prohibitions": []},
     "behavior_change": true
