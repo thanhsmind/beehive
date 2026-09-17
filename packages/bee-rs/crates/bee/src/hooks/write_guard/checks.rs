@@ -711,7 +711,8 @@ pub(crate) fn check_git_bash_command(
     control_root_override: Option<&str>,
     emit: &mut Emit,
 ) -> R<Option<WV>> {
-    let deep = tokenize_deep(command);
+    let fenced = fence_heredocs(command);
+    let deep = tokenize_deep(&fenced);
     if deep.truncated {
         // A wrapper nested past the depth bound could hide a git verb this
         // scan cannot see — fail open (delegate) rather than silently allow.

@@ -311,7 +311,7 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
     // part in the transition test, so a session that changes lane or picks up
     // a new cell without changing state refreshes the record and appends
     // nothing to the sidecar; the sidecar stays a state history.
-    if let Some(feature) = resolve_feature(&ctrl, prior.lane.as_deref()) {
+    if let Some(feature) = resolve_feature(&ctrl, prior.lane.as_deref(), herded.as_deref()) {
         activity.insert("feature".into(), Value::String(feature));
     }
     if let Some(cell) = resolve_cell(&ctrl, &session_id) {
@@ -789,6 +789,16 @@ fn write_activity_herded(
             }
         }
     }
+    let round = record
+        .get("round")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| current_round(ctrl, job_id));
+    let result_file = mailbox_dir(ctrl, job_id).join(format!("result-{round}.json"));
+    if result_file.is_file() {
+        if let Some(Value::Object(work)) = record.get_mut("work") {
+            work.insert("status".into(), Value::String("done".into()));
+        }
+    }
     write_json_atomic_retry(&mailbox_activity_file(ctrl, job_id), &Value::Object(record))
 }
 
@@ -830,12 +840,74 @@ fn write_json_atomic_retry(file: &Path, value: &Value) -> Result<(), String> {
 
 // ── what this session is working on (D2, additive) ──────────────────────────
 
-/// The feature this session is on: its OWN bound lane first — a lane-bound
-/// session is working on that lane whatever the shared default says — and the
-/// control root's default `state.json` feature only when it has none. A
-/// missing or corrupt `state.json` reads as "unknown", the same fail-open
-/// collapse every other display read here makes.
-fn resolve_feature(ctrl: &Path, lane: Option<&str>) -> Option<String> {
+fn feature_from_worktree_name(name: &str) -> Option<String> {
+    let (repo, slug) = name.split_once("--wt--")?;
+    let slug = slug.trim();
+    if !repo.is_empty() && !slug.is_empty() {
+        Some(slug.to_string())
+    } else {
+        None
+    }
+}
+
+fn resolve_herded_feature(ctrl: &Path, job_id: &str) -> Option<String> {
+    let job_file = mailbox_dir(ctrl, job_id).join("job.json");
+    let ReadJson::Parsed(Value::Object(job)) = read_json(&job_file) else {
+        return None;
+    };
+    let cwd_str = job.get("cwd").and_then(Value::as_str)?.trim();
+    if cwd_str.is_empty() {
+        return None;
+    }
+    let cwd_path = Path::new(cwd_str);
+    let dir_name = cwd_path.file_name()?.to_str()?.trim();
+    if dir_name.is_empty() {
+        return None;
+    }
+
+    // 1. The granted worktree record in .bee/runtime/worktree-grants.json
+    let grants_file = ctrl.join(".bee").join("runtime").join("worktree-grants.json");
+    if let ReadJson::Parsed(Value::Object(grants)) = read_json(&grants_file) {
+        if let Some(grant) = grants.get(dir_name).or_else(|| grants.get(cwd_str)) {
+            match grant {
+                Value::Object(obj) => {
+                    if let Some(f) = obj.get("feature").and_then(Value::as_str) {
+                        let f = f.trim();
+                        if !f.is_empty() {
+                            return Some(f.to_string());
+                        }
+                    }
+                }
+                Value::String(s) => {
+                    let s = s.trim();
+                    if !s.is_empty() {
+                        return Some(s.to_string());
+                    }
+                }
+                _ => {}
+            }
+            if let Some(f) = feature_from_worktree_name(dir_name) {
+                return Some(f);
+            }
+        }
+    }
+
+    // 2. <repo>--wt--<slug> directory name as fallback
+    feature_from_worktree_name(dir_name)
+}
+
+/// The feature this session is on: in a herded session, the job's own feature
+/// first; its OWN bound lane second — a lane-bound session is working on that
+/// lane whatever the shared default says — and the control root's default
+/// `state.json` feature only when it has none. A missing or corrupt
+/// `state.json` reads as "unknown", the same fail-open collapse every other
+/// display read here makes.
+fn resolve_feature(ctrl: &Path, lane: Option<&str>, herded: Option<&str>) -> Option<String> {
+    if let Some(job) = herded {
+        if let Some(f) = resolve_herded_feature(ctrl, job) {
+            return Some(f);
+        }
+    }
     if let Some(lane) = lane.map(str::trim).filter(|s| !s.is_empty()) {
         return Some(lane.to_string());
     }
@@ -2255,5 +2327,69 @@ mod tests {
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
             .collect();
         assert!(survivors.is_empty(), "the work outlived its session file in {survivors:?}");
+    }
+
+    #[test]
+    fn herded_job_in_feature_worktree_records_that_feature_from_grants_and_fallback() {
+        let repo = repo();
+        // Set main store feature to something stale
+        std::fs::write(
+            repo.root.join(".bee").join("state.json"),
+            serde_json::json!({ "feature": "stale-main-feature" }).to_string(),
+        ).unwrap();
+
+        // Case A: cwd is in worktree-grants.json
+        let dir_a = mailbox_dir(&repo.root, "job-grant");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::write(
+            dir_a.join("job.json"),
+            serde_json::json!({ "job_id": "job-grant", "cwd": "/path/to/repo--wt--reviewed-feature" }).to_string(),
+        ).unwrap();
+        std::fs::create_dir_all(repo.root.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            repo.root.join(".bee").join("runtime").join("worktree-grants.json"),
+            serde_json::json!({ "repo--wt--reviewed-feature": true }).to_string(),
+        ).unwrap();
+
+        brief(&repo, "job-grant", 1);
+        ok(fire_herded(&repo, Some("job-grant"), event("UserPromptSubmit", "s-grant")));
+        let rec_grant = mailbox_record(&repo, "job-grant");
+        assert_eq!(rec_grant.get("feature").and_then(Value::as_str), Some("reviewed-feature"));
+
+        // Case B: worktree-grants.json does not mention this worktree, but cwd name has <repo>--wt--<slug>
+        let dir_b = mailbox_dir(&repo.root, "job-fallback");
+        std::fs::create_dir_all(&dir_b).unwrap();
+        std::fs::write(
+            dir_b.join("job.json"),
+            serde_json::json!({ "job_id": "job-fallback", "cwd": "/path/to/other--wt--fallback-feature" }).to_string(),
+        ).unwrap();
+
+        brief(&repo, "job-fallback", 1);
+        ok(fire_herded(&repo, Some("job-fallback"), event("UserPromptSubmit", "s-fb")));
+        let rec_fb = mailbox_record(&repo, "job-fallback");
+        assert_eq!(rec_fb.get("feature").and_then(Value::as_str), Some("fallback-feature"));
+
+        // Case C: non-herded session's feature resolution is unchanged (still gets stale-main-feature)
+        ok(fire(&repo, event("UserPromptSubmit", "s-regular")));
+        let rec_reg = activity(&repo, "s-regular");
+        assert_eq!(rec_reg.get("feature").and_then(Value::as_str), Some("stale-main-feature"));
+    }
+
+    #[test]
+    fn herded_session_with_result_file_sets_work_status_done() {
+        let repo = repo();
+        brief(&repo, "job-res", 1);
+        fire_herded(&repo, Some("job-res"), prompt_event("s-res", "first prompt"));
+        let rec1 = mailbox_record(&repo, "job-res");
+        assert_eq!(rec1["work"]["status"].as_str(), Some("open"));
+
+        // Write round 1 result file
+        let res_file = mailbox_dir(&repo.root, "job-res").join("result-1.json");
+        std::fs::write(res_file, r#"{"status":"done"}"#).unwrap();
+
+        // Next event should set work status to done
+        fire_herded(&repo, Some("job-res"), event("Stop", "s-res"));
+        let rec2 = mailbox_record(&repo, "job-res");
+        assert_eq!(rec2["work"]["status"].as_str(), Some("done"));
     }
 }

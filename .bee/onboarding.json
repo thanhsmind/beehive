@@ -37,7 +37,7 @@
     "prompts": {
       "advisor.md": "608dab75e064bc4affd30db5e548acdbc3d42b80e091329f03ede9ef9bdd6cf8",
       "gather.md": "4430b983d3985a2e298622088857defb305261f122f9bc95490e3edf60aea4b5",
-      "reviewer.md": "e6375deeb0e771829ce599cd3969846ddd8ec9915c5c3682a94a8979911b1e13",
+      "reviewer.md": "2cc56b39d5399e0d988ea3bbdaaf131d6acdda266a8bb00db4263d7f42d2410c",
       "worker-cell.md": "8de76182920befc11bc2daab4b0454d61b3e8b6775c951044122aa8ee09cbf57"
     },
     "repo_hooks": {
@@ -75,5 +75,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-17T09:55:09.024Z"
+  "updated_at": "2026-09-17T11:01:08.490Z"
 }

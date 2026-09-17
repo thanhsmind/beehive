@@ -34,7 +34,7 @@ pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
     "with-companion", "lanes-full", "strict", "queue-submit", "show",
     "isolate", "set", "brief", "all-but-active", "merge", "claim", "skip-uat",
-    "preview",
+    "preview", "no-mistakes",
 ];
 
 #[derive(Clone, PartialEq)]
@@ -357,5 +357,22 @@ pub(crate) fn np_basename(p: &str) -> String {
                 trimmed.to_string()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod flag_alone_tests {
+    use super::*;
+
+    /// prf-8: `cells finish --no-mistakes` was refused as an unsupported
+    /// argument shape, because the bare flag was not flag-alone and so read
+    /// as missing its value (or swallowed the next token).
+    #[test]
+    fn bare_no_mistakes_parses_as_a_boolean() {
+        let (flags, _) = parse_flags(&["--id", "c-1", "--no-mistakes"]).expect("trailing --no-mistakes parses");
+        assert!(matches!(flags.get("no-mistakes"), Some(FlagV::Present)));
+        let (flags, _) = parse_flags(&["--no-mistakes", "--id", "c-1"]).expect("leading --no-mistakes parses");
+        assert!(matches!(flags.get("no-mistakes"), Some(FlagV::Present)));
+        assert!(matches!(flags.get("id"), Some(FlagV::S(s)) if s == "c-1"));
     }
 }

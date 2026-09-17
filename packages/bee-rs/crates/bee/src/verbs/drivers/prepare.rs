@@ -939,6 +939,22 @@ pub(crate) fn parse_expertise(raw: &str) -> Result<Vec<ExpertiseEntry>, String> 
     Ok(entries)
 }
 
+pub(crate) const REVIEWER_DEFAULT_EXPERTISE: &str =
+    ".bee/expertise/review.md :: finding quality and severity calibration :: Where to look";
+
+pub(crate) fn reviewer_default_expertise_block(root: &Path) -> Option<String> {
+    if root.join(".bee/expertise/review.md").exists() {
+        let entries = parse_expertise(REVIEWER_DEFAULT_EXPERTISE).ok()?;
+        let lines: Vec<String> = entries
+            .iter()
+            .map(|e| format!("- {} — {}. Read it to {}.", e.path, e.purpose, e.read_to))
+            .collect();
+        Some(lines.join("\n"))
+    } else {
+        None
+    }
+}
+
 /// D5/D6 — the user's verbatim request, framed for a prompt, or `""`.
 ///
 /// The framing is the intent anchor's OWN header and footer constants, reused
@@ -1427,6 +1443,16 @@ pub(crate) fn prepare_dispatch_wire(
     let mut cell: Option<Value> = None;
     let mut ownership_override: Option<Value> = None;
     let mut resolved_worker: Option<String> = None;
+
+    let default_reviewer_expertise = if kind == "reviewer"
+        && (expertise.is_none() || expertise.map_or(false, |e| e.trim().is_empty()))
+        && (brief.is_none() || brief.map_or(false, |b| b.trim().is_empty()))
+    {
+        reviewer_default_expertise_block(root)
+    } else {
+        None
+    };
+    let expertise = expertise.filter(|e| !e.trim().is_empty()).or(default_reviewer_expertise.as_deref());
 
     if kind == "cell" {
         let Some(cell_id) = cell_id else {
@@ -5415,7 +5441,127 @@ mod role_flag_tests {
     }
 }
 
+// ═══ tests — reviewer default expertise (.bee/expertise/review.md) ═════════
+
+#[cfg(test)]
+mod reviewer_expertise_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    const REVIEW_HOST: &str =
+        r#"{"models":{"claude":{"review":"opus","generation":"sonnet"}}}"#;
+
+    #[test]
+    fn reviewer_dispatch_defaults_expertise_to_review_md_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, REVIEW_HOST);
+
+        // Repo without .bee/expertise/review.md carries none
+        let out_without = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v_without) = out_without else { panic!("expected envelope") };
+        let prompt_without = v_without
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            !prompt_without.contains(".bee/expertise/review.md"),
+            "without review.md, no expertise entry should be present: {prompt_without}"
+        );
+        assert!(
+            !prompt_without.contains("Expertise — dispatcher-picked; read/load before you start:"),
+            "without review.md, no expertise section should be present: {prompt_without}"
+        );
+
+        // Repo with .bee/expertise/review.md carries the default entry
+        let review_md_path = root.join(".bee/expertise/review.md");
+        std::fs::create_dir_all(review_md_path.parent().unwrap()).unwrap();
+        std::fs::write(&review_md_path, "# How to Review\n").unwrap();
+
+        let out_with = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v_with) = out_with else { panic!("expected envelope") };
+        let prompt_with = v_with
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            prompt_with.contains("- .bee/expertise/review.md — finding quality and severity calibration. Read it to Where to look."),
+            "with review.md present, prompt must carry the default expertise entry: {prompt_with}"
+        );
+        assert!(
+            prompt_with.contains("Expertise — dispatcher-picked; read/load before you start:"),
+            "with review.md present, prompt must carry expertise header: {prompt_with}"
+        );
+
+        // An explicit --expertise wins unchanged
+        let explicit = "- other.md — some purpose. Read it to some section.";
+        let out_explicit = prepare_dispatch_with_role(
+            &root, "claude", "reviewer", None, None, None, false, None, None, false, Some(explicit),
+        )
+        .unwrap();
+        let Prepared::Value(v_explicit) = out_explicit else { panic!("expected envelope") };
+        let prompt_explicit = v_explicit
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(prompt_explicit.contains("- other.md — some purpose. Read it to some section."));
+        assert!(!prompt_explicit.contains(".bee/expertise/review.md"));
+    }
+
+    #[test]
+    fn non_reviewer_kinds_do_not_default_review_md_expertise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, REVIEW_HOST);
+        let review_md_path = root.join(".bee/expertise/review.md");
+        std::fs::create_dir_all(review_md_path.parent().unwrap()).unwrap();
+        std::fs::write(&review_md_path, "# How to Review\n").unwrap();
+
+        for kind in ["gather", "advisor"] {
+            let out = prepare_dispatch_with_role(
+                &root, "claude", kind, None, None, None, false, None, None, false, None,
+            )
+            .unwrap();
+            let Prepared::Value(v) = out else { panic!("expected envelope for {kind}") };
+            let prompt = v
+                .get("payload")
+                .and_then(|p| p.get("prompt"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(
+                !prompt.contains(".bee/expertise/review.md"),
+                "{kind} must not default review.md expertise: {prompt}"
+            );
+        }
+    }
+}
+
 // ═══ tests — the detached-delivery instruction (pi-result-mailbox D6) ══════
+
 
 #[cfg(test)]
 mod detached_delivery_tests {

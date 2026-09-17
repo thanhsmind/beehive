@@ -470,7 +470,7 @@ function mapToolCall(tool: string, input: any): MappedCall {
 
     default: {
       // FAIL-SAFE. Never a silent allow: bee decides, on the write-capable
-      // shape that best fits the unknown arguments.
+      // shape (or read-only web fetch) that best fits the unknown arguments.
       const command = firstString(args, ["command"])
       if (command !== undefined) {
         return {
@@ -480,10 +480,28 @@ function mapToolCall(tool: string, input: any): MappedCall {
           passthrough: false,
         }
       }
+      const pathTarget = firstString(args, PATH_FIELDS)
+      if (pathTarget !== undefined) {
+        return {
+          hook: "write-guard",
+          tool_name: "Write",
+          tool_input: { ...args, file_path: pathTarget },
+          passthrough: false,
+        }
+      }
+      const url = firstString(args, ["url", "urls"])
+      if (url !== undefined) {
+        return {
+          hook: "write-guard",
+          tool_name: "WebFetch",
+          tool_input: { ...args, url },
+          passthrough: false,
+        }
+      }
       return {
         hook: "write-guard",
         tool_name: "Write",
-        tool_input: { ...args, file_path: firstString(args, PATH_FIELDS) ?? "" },
+        tool_input: { ...args, file_path: "" },
         passthrough: false,
       }
     }

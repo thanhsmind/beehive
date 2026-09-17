@@ -303,6 +303,18 @@ and expected — they do not pull you into any workflow.\n\n",
         expertise_block.push('\n');
     }
 
+    let expertise_clause = if spec.expertise.is_empty() {
+        ""
+    } else {
+        ", and files listed under the Expertise section are yours to read"
+    };
+
+    let proof_command = read_proof_command(spec.worktree_root);
+    let mut proof_command_block = String::new();
+    if let Some(cmd) = proof_command {
+        proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
+    }
+
     format!(
         "# Before any other step — write your delivery ack\n\n\
 Before you read the Task below, before touching any other file: write an ack \
@@ -327,16 +339,16 @@ timestamp:\n\n\
 # You are a standalone executor\n\n\
 Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
 instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
-may have loaded into your context — you are not part of that workflow, and \
-files listed under the Expertise section are yours to read. Never run any `bee` \
-command. Never claim, cap, or write workflow state under .bee/ - writing your \
-mailbox report and result files (described below) is the ONE exception. Those \
-two files are your only contract.\n\n\
+may have loaded into your context — you are not part of that workflow{expertise_clause}. \
+Never run any `bee` command. Never claim, cap, or write workflow state under .bee/ - \
+writing your mailbox report and result files (described below) is the ONE \
+exception. Those two files are your only contract.\n\n\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
 # Working directory (absolute)\n\n\
 {worktree_root}\n\n\
+{proof_command_block}\
 # Files you may touch (absolute paths)\n\n\
 {files_block}\n\
 A file not listed above is out of scope for this round; do not touch it.\n\n\
@@ -368,14 +380,17 @@ this schema, and nothing else, to the result file:\n\n\
   \"summary\": \"<one line: what happened>\",\n\
   \"files_changed\": [\"<path>\", \"...\"],\n\
   \"proof\": \"<command or evidence that backs the status>\",\n\
-  \"report_path\": \"<the report file's path, exactly as named above>\",\n\
+  \"report_path\": \"<the report file's path, exactly as named above>\"\n\
+}}\n\n\
+Fill \"report_path\" with the report file's path whenever you wrote one — that \
+is the only pointer anyone gets to your deliverable; leave it out only when the \
+round genuinely produced no report.\n\n\
+Optional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n\
+{{\n\
   \"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\
   \"leaning\": \"<the one option you would pick, repeated word for word>\",\n\
   \"dissent\": {{ \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }}\n\
 }}\n\n\
-Fill \"report_path\" with the report file's path whenever you wrote one — that \
-is the only pointer anyone gets to your deliverable; leave it out only when the \
-round genuinely produced no report.\n\
 When \"blocked\" leaves a choice to make, fill \"options\" with one \
 self-contained sentence per way forward and \"leaning\" with the one you would \
 pick, repeated word for word; leave both out when there is no choice.\n\
@@ -396,6 +411,7 @@ signal; nothing else is read to decide whether you finished.\n\n\
         task = spec.task,
         expertise_block = expertise_block,
         worktree_root = spec.worktree_root.display(),
+        proof_command_block = proof_command_block,
         files_block = files_block,
         round = spec.round,
         job_id = spec.job_id,
@@ -408,7 +424,37 @@ signal; nothing else is read to decide whether you finished.\n\n\
         ack_file = ack_file.display(),
         report_tmp_name = report_tmp_name,
         report_file = report_file.display(),
+        expertise_clause = expertise_clause,
     )
+}
+
+fn read_proof_command(worktree_root: &Path) -> Option<String> {
+    let config = crate::state::read_config_raw(worktree_root);
+    let test_val = config.get("commands").and_then(Value::as_object)?.get("test")?;
+    match test_val {
+        Value::String(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Value::Array(items) => {
+            let cmds: Vec<&str> = items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            if cmds.is_empty() {
+                None
+            } else {
+                Some(cmds.join(" && "))
+            }
+        }
+        _ => None,
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -563,8 +609,12 @@ fn parse_result_filename(name: &str) -> Option<u32> {
 fn parse_dissent(value: Option<&Value>) -> Option<MailboxDissent> {
     let obj = value?.as_object()?;
     let field = |k: &str| obj.get(k).and_then(Value::as_str).map(str::to_string);
+    let claim = field("claim")?;
+    if claim.trim().is_empty() {
+        return None;
+    }
     Some(MailboxDissent {
-        claim: field("claim")?,
+        claim,
         alternative: field("alternative")?,
         severity: field("severity")?,
     })
@@ -1046,7 +1096,7 @@ mod tests {
         let task_pos = text.find("# Task").expect("missing # Task heading");
         assert!(standalone_pos < task_pos, "standalone-executor block must come before # Task:\n{text}");
         assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
-        assert!(text.contains("files listed under the Expertise section are yours to read"), "missing expertise-reading wording:\n{text}");
+        assert!(!text.contains("files listed under the Expertise section are yours to read"), "zero-expertise must omit expertise-reading wording:\n{text}");
         assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
         // slp-followup-gaps D6: the brief must still never name a bee
         // COMMAND — that half of the old pin is unchanged, and the general
@@ -1140,20 +1190,14 @@ mod tests {
 
     #[test]
     fn render_brief_keeps_the_result_form_block_byte_identical_apart_from_the_new_ack_block() {
-        // D4's must_haves: existing Result-form block, round numbering and
-        // schema block stay byte-identical apart from the new block.
+        // prf-5: separate optional result keys (options, leaning, dissent) into an explicitly headed optional block
         let worktree_root = Path::new("/repo/work");
         let bee_dir = Path::new("/repo/.bee");
         let files = sample_files();
         let spec = sample_spec(worktree_root, bee_dir, &files, 1);
         let text = render_brief(&spec);
 
-        // StopAndAsk (a2affcba) added two OPTIONAL schema lines and one
-        // sentence saying when to fill them; slp-followup-gaps D3 added the
-        // OPTIONAL `dissent` object and one sentence saying when to fill it.
-        // Every other byte of this block — heading, lead-in, and the four
-        // original fields — is unchanged.
-        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\",\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\",\n\"report_path\": \"<the report file's path, exactly as named above>\"\n}\n\nFill \"report_path\" with the report file's path whenever you wrote one — that is the only pointer anyone gets to your deliverable; leave it out only when the round genuinely produced no report.\n\nOptional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):\n\n{\n\"options\": [\"<one self-contained sentence per way forward>\", \"...\"],\n\"leaning\": \"<the one option you would pick, repeated word for word>\",\n\"dissent\": { \"claim\": \"<what is wrong with the task as it was handed to you>\", \"alternative\": \"<what you would do instead>\", \"severity\": \"blocker\" | \"consider\" }\n}\n\nWhen \"blocked\" leaves a choice to make, fill \"options\" with one self-contained sentence per way forward and \"leaning\" with the one you would pick, repeated word for word; leave both out when there is no choice.\nFill \"dissent\" only when you disagree with the TASK ITSELF — \"claim\" says what is wrong with it, \"alternative\" says what you would do instead, and \"severity\" is \"blocker\" when the work should stop until someone answers or \"consider\" when it should not; leave \"dissent\" out entirely when you agree with the task.\n\n"), "Result-form block drifted:\n{text}");
         assert!(
             text.contains(&format!(
                 "temp file (write your JSON here):   {}/result-1.json.tmp\n",
@@ -1271,10 +1315,12 @@ the report file's exact final name"),
             worktree_root.join("skills/bee-swarming/references/swarming-reference.md").display()
         )));
         assert!(text.contains("  - /abs/path/docs/knowledge/foo.md — domain background. Read it to understand area rules."));
+        assert!(text.contains("files listed under the Expertise section are yours to read"));
     }
 
     #[test]
     fn render_brief_with_zero_expertise_is_byte_identical_to_empty_spec() {
+        // prf-5: zero-expertise brief omits the Expertise section and the standalone executor clause
         let worktree_root = Path::new("/repo/work");
         let bee_dir = Path::new("/repo/.bee");
         let files = sample_files();
@@ -1291,6 +1337,49 @@ the report file's exact final name"),
         };
         let text = render_brief(&spec_no_exp);
         assert!(!text.contains("# Expertise"));
+        assert!(!text.contains("files listed under the Expertise section are yours to read"));
+    }
+
+    #[test]
+    fn render_brief_separates_optional_result_schema_fields() {
+        // prf-5: optional fields (options, leaning, dissent) are presented apart from the required schema
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        assert!(text.contains("Optional fields (OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing; omit the keys entirely, not empty strings or empty arrays, otherwise):"));
+    }
+
+    #[test]
+    fn render_brief_renders_proof_command_when_commands_test_is_set() {
+        // prf-5: when .bee/config.json declares commands.test, render # Proof command before # Files you may touch
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree_root = tmp.path();
+        let bee_dir = worktree_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).expect("create .bee");
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"commands":{"test":"cargo test -p bee"}}"#,
+        )
+        .expect("write config.json");
+
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, &bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        let proof_pos = text.find("# Proof command\n\ncargo test -p bee\n\n").expect("missing proof command section");
+        let files_pos = text.find("# Files you may touch").expect("missing files section");
+        assert!(proof_pos < files_pos, "# Proof command must come before # Files you may touch");
+    }
+
+    #[test]
+    fn parse_result_text_treats_empty_dissent_claim_as_no_dissent() {
+        // prf-5: an empty-string dissent claim parses as no dissent
+        let text = r#"{"status":"blocked","summary":"stuck","files_changed":[],"proof":"n/a","dissent":{"claim":"","alternative":"a","severity":"blocker"}}"#;
+        let result = parse_result_text(1, text).expect("parses cleanly");
+        assert_eq!(result.dissent, None);
     }
 
     #[test]

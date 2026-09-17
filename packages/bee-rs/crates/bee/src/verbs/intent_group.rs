@@ -245,6 +245,41 @@ fn locate_intent_key(root: &Path, feature: Option<&str>, session: Option<&str>) 
     Ok(None)
 }
 
+/// A live lane is a `.bee/lanes/*.json` or workflow record whose phase is not
+/// idle/compounding-complete and whose status is not closed.
+fn is_live_lane_record(rec: &Map<String, Value>) -> bool {
+    if matches!(rec.get("status"), Some(Value::String(s)) if s == "closed") {
+        return false;
+    }
+    match rec.get("phase") {
+        Some(Value::String(s)) => {
+            !s.is_empty() && s != "idle" && s != "compounding-complete"
+        }
+        _ => false,
+    }
+}
+
+/// Whether a live lane or workflow record exists for a feature OTHER than
+/// `active`. A live lane for the active feature itself agrees with state.json,
+/// so it never makes the fallback ambiguous.
+fn has_other_live_lane(root: &Path, active: &str) -> bool {
+    let other = |rec: &Map<String, Value>| {
+        is_live_lane_record(rec)
+            && !matches!(rec.get("feature"), Some(Value::String(f)) if js_trim(f) == active)
+    };
+    if let Ok(lanes) = crate::verbs::workflow_store::list_lanes(root) {
+        if lanes.iter().any(|r| other(r)) {
+            return true;
+        }
+    }
+    if let Ok(workflows) = crate::verbs::workflow_store::list_workflows(root) {
+        if workflows.iter().any(|r| other(r)) {
+            return true;
+        }
+    }
+    false
+}
+
 /// The dispatch door's read of the anchor's VERBATIM request (D5/D6).
 ///
 /// Deliberately NOT `read_intent`: the candidate walk above ends with an
@@ -256,7 +291,10 @@ fn locate_intent_key(root: &Path, feature: Option<&str>, session: Option<&str>) 
 /// nothing is safe; rendering the wrong request is not.
 ///
 /// So the resolution is FEATURE-KEYED ONLY: the caller's feature (a cell's
-/// own `feature`), then the active feature from state, then None. The session
+/// own `feature`), then the active feature from state ONLY when no live lane
+/// or workflow record exists for another feature, then None. When another
+/// feature's lane is live and no feature was resolved, None is returned —
+/// silence beats a wrong anchor. The session
 /// key is not consulted either — `prompt_body_for` takes no session, and
 /// `--session-id` is meaningful only with `--claim`, which every non-cell
 /// kind refuses.
@@ -280,7 +318,11 @@ pub(crate) fn dispatch_original_request(root: &Path, feature: Option<&str>) -> O
     if let Some(f) = feature.map(js_trim).filter(|f| !f.is_empty()) {
         push(f);
     } else if let Ok(Some(active)) = active_feature(root) {
-        push(&active);
+        // A live lane for another feature makes state.json's feature a guess
+        // about someone else's work: render no request rather than a wrong one.
+        if !has_other_live_lane(root, &active) {
+            push(&active);
+        }
     }
     for key in keys {
         let Ok(Some(anchor)) = read_anchor_at(root, &key) else { continue };
@@ -1083,5 +1125,118 @@ mod tests {
         let block = res["block"].as_str().unwrap();
         assert!(block.starts_with(RESUME_HEADER), "{block}");
         assert!(block.contains(REQUEST), "{block}");
+    }
+
+    #[test]
+    fn dispatch_original_request_suppresses_state_fallback_when_live_lanes_exist() {
+        let repo = tempfile::tempdir().unwrap();
+        let root = repo.path();
+
+        // Stale state.json feature anchor
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("state.json"),
+            r#"{"phase":"planning","feature":"stale-feature"}"#,
+        )
+        .unwrap();
+
+        std::fs::create_dir_all(root.join(".bee").join("intent")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("intent").join("stale-feature.json"),
+            r#"{"schema_version":"1.0","request":"stale feature request","acceptance":"done"}"#,
+        )
+        .unwrap();
+
+        // Case 1: no lanes -> the state.json anchor as before
+        assert_eq!(
+            dispatch_original_request(root, None).as_deref(),
+            Some("stale feature request"),
+            "with no lanes, state.json active feature is used as fallback"
+        );
+
+        // Case 2: one live lane exists -> dispatch with feature None returns None
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        let lane_path = root.join(".bee").join("lanes").join("active-lane.json");
+        std::fs::write(
+            &lane_path,
+            r#"{"schema_version":"1.0","feature":"active-lane","phase":"planning"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            dispatch_original_request(root, None),
+            None,
+            "with a live lane and no resolved feature, no request is rendered"
+        );
+
+        // An explicit feature still resolves its own anchor regardless of live lanes
+        assert_eq!(
+            dispatch_original_request(root, Some("stale-feature")).as_deref(),
+            Some("stale feature request"),
+            "an explicit feature still resolves its anchor"
+        );
+
+        // Case 2b: the only live lane is the active feature itself -> it agrees
+        // with state.json, so the fallback still renders
+        std::fs::write(
+            &lane_path,
+            r#"{"schema_version":"1.0","feature":"stale-feature","phase":"planning"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            dispatch_original_request(root, None).as_deref(),
+            Some("stale feature request"),
+            "a live lane for the active feature does not suppress its own anchor"
+        );
+
+        // Case 3: lane phase is idle -> not live, falls back to state.json
+        std::fs::write(
+            &lane_path,
+            r#"{"schema_version":"1.0","feature":"active-lane","phase":"idle"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            dispatch_original_request(root, None).as_deref(),
+            Some("stale feature request"),
+            "an idle lane is not live"
+        );
+
+        // Case 4: lane phase is compounding-complete -> not live, falls back to state.json
+        std::fs::write(
+            &lane_path,
+            r#"{"schema_version":"1.0","feature":"active-lane","phase":"compounding-complete"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            dispatch_original_request(root, None).as_deref(),
+            Some("stale feature request"),
+            "a compounding-complete lane is not live"
+        );
+
+        // Case 5: lane status is closed -> not live, falls back to state.json
+        std::fs::write(
+            &lane_path,
+            r#"{"schema_version":"1.0","feature":"active-lane","phase":"planning","status":"closed"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            dispatch_original_request(root, None).as_deref(),
+            Some("stale feature request"),
+            "a closed lane is not live"
+        );
+
+        // Case 6: a live workflow record exists -> returns None
+        let wf_dir = root.join(".bee").join("runtime").join("workflows").join("wf-1");
+        std::fs::create_dir_all(&wf_dir).unwrap();
+        std::fs::write(
+            wf_dir.join("state.json"),
+            r#"{"id":"wf-1","feature":"wf-feat","status":"active","phase":"planning"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            dispatch_original_request(root, None),
+            None,
+            "with a live workflow record and no resolved feature, no request is rendered"
+        );
     }
 }

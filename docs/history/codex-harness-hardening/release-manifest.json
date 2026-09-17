@@ -1648,7 +1648,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard.ts",
-      "sha256": "d0bad32b3064869416a0b373555bf9e1b215e98134feececde3a9c64544732ec",
+      "sha256": "b06ae90472ed30b4ec692e8a939a6644d8bfbce13a88f0afafd485353c76088f",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard.ts"
@@ -1833,7 +1833,7 @@
     },
     {
       "path": "packages/bee/prompts/reviewer.md",
-      "sha256": "e6375deeb0e771829ce599cd3969846ddd8ec9915c5c3682a94a8979911b1e13",
+      "sha256": "2cc56b39d5399e0d988ea3bbdaaf131d6acdda266a8bb00db4263d7f42d2410c",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/reviewer.md"
