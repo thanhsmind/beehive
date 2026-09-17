@@ -10,12 +10,14 @@ bee integrates with the Pi runtime using an extension file, fail-closed health i
 - `pi-early-write-denial` denies unauthorized file edits and bash tool execution before Gate 2 approval.
 - `pi-turn-tracking` tracks session turn completion and records idle and turn-end state without cross-session contamination.
 - `pi-herding-transport` validates agent pane transport for Pi worker execution.
+- `pi-model-usage-status` aggregates active-branch assistant token totals by provider and model and renders compact new and cached token counts in Pi's statusline.
 
 ## How to get to it (user POV)
 
 - Run `bash .bee/verify/verify-app/control-bee cli -- doctor --runtime pi --json`.
 - Run `bash .bee/verify/verify-app/control-bee cli -- doctor attest --runtime pi --json`.
 - Execute Pi integration contracts via `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts`.
+- Execute Pi model usage status contract via `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status`.
 
 ## Driving it with control-bee
 
@@ -130,6 +132,15 @@ Preconditions:
   - All contract tests pass with status `ok`.
   - Early write denial blocks unauthorized edits before Gate 2 approval.
   - Session activity and turn tracking complete cleanly.
+
+- **Model usage status contract verifies active-branch token aggregation by provider and model.**
+  Execute the Pi model usage status contract test:
+  `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status`
+  Assert the suite output:
+  - The contract test passes with status `ok`.
+  - Assistant message tokens on the active branch aggregate by provider and model.
+  - Compact format displays thousands (`k`) and millions (`m`).
+  - Turn completion refreshes totals and empty branch clears status.
 
 ## Gotchas
 
