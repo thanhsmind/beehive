@@ -35,6 +35,7 @@ that resolves none simply renders the first line without the token/cost line.
 | absent status entry | The project's assistant-settings file is missing or contains no `statusLine` key. This is the trigger for the default install. |
 | project-level status entry | The project's assistant-settings file declares a status-display command that points at the **project's own** copy of the display script — either anchored by the project-directory variable or written as a bare project-relative path. A reference to a user-level (home-directory) copy is NOT a project-level entry. |
 | managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record whenever the project-level entry is present, so later runs can tell current from drifted. Projects without a project-level entry carry no such record. |
+| active-branch model usage | New and cached token totals for each provider/model pair on the current session branch. New tokens include input, output, and cache-write tokens. Cached tokens include cache-read tokens. |
 
 ## Behaviors & Operations
 
@@ -84,6 +85,16 @@ version control, a model without an effort setting — each simply drops its seg
 | weekly usage | Percentage of the rolling weekly subscription limit consumed, when the runtime reports one |
 | cost | Per-model new/cached token totals and their billed cost, aggregated over the session and every subagent transcript. Rendered by `bee dev statusline`; the whole line is omitted when the script resolves no bee binary |
 
+### Pi active-branch model usage
+
+Pi keeps its native footer and adds one model-usage segment. The segment reads assistant messages on the active branch only.
+
+Each provider/model pair has one total. The segment shows `<provider>/<model> <new> new/<cached> cached` and keeps first-use order.
+
+The segment refreshes after a completed turn, session restoration, or branch navigation. It disappears when no pair has positive usage.
+
+A calculation or display failure is advisory. It does not interrupt the session.
+
 **Context colour is a workflow signal, not a gauge.** The colour of the context
 segment answers one question — "does the human need to think about a handoff?" —
 so its thresholds track bee's handoff mark (rule: agents-context-handoff-65),
@@ -113,6 +124,18 @@ first runtime's status line) is spliced under the existing TUI section or
 appended as a new one, with a backup written first. What the human observes:
 after one apply per machine, the second runtime shows the same status story as
 the first; a re-run plans nothing.
+
+## Diagrams
+
+```mermaid
+flowchart LR
+    A[Completed turn] --> D[Read active session branch]
+    B[Session restored] --> D
+    C[Branch selected] --> D
+    D --> E{Positive model usage exists?}
+    E -- Yes --> F[Show provider and model totals in native footer]
+    E -- No --> G[Hide model usage segment]
+```
 
 ## Business Rules
 
@@ -145,6 +168,10 @@ the first; a re-run plans nothing.
   (statusline-binary-lookup, 2026-09-01).
 - **R5** — The command bee writes must satisfy R3's own detector, pinned by a
   test — otherwise a host silently un-adopts on the next run.
+- **R6** — Pi keeps its native footer and shows active-branch assistant usage by
+  provider/model. New tokens are input plus output plus cache-write tokens;
+  cached tokens are cache-read tokens. Empty usage stays hidden, and display
+  failures stay advisory (decision 72f4a8b2).
 
 **Turning an opt-in into a default promotes its rough edges into the vendor's
 bugs.** The status display had shipped for a year with a hard `jq` dependency
@@ -209,3 +236,6 @@ All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
   (`codex_user_config_path()`, `codex_statusline_missing()`,
   `codex_statusline_next_text()`), `src/onboard/plan.rs:679-680` (the
   `ensure_codex_statusline` action — `~/.codex/config.toml`, never repoRoot-joined).
+- Pi active-branch status: `.pi/extensions/bee-guard.ts` owns aggregation and
+  lifecycle refresh. `tests/pi_plugin_contracts.rs` drives the real extension
+  through restore, completed-turn, branch-change, and empty-branch cases.
