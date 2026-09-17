@@ -1800,6 +1800,120 @@ async function performSessionTransition(ctx: any, intent: SessionTransitionInten
   }
 }
 
+// ─── active-branch model usage statusline ──────────────────────────────────
+
+function formatTokens(n: number): string {
+  if (n >= 1e6) {
+    return (n / 1e6).toFixed(1) + "m"
+  }
+  if (n >= 1e3) {
+    return Math.round(n / 1e3) + "k"
+  }
+  return String(Math.round(n))
+}
+
+function positiveNum(val: unknown): number {
+  return typeof val === "number" && Number.isFinite(val) && val > 0 ? val : 0
+}
+
+interface ModelUsageSummary {
+  provider: string
+  model: string
+  newTokens: number
+  cachedTokens: number
+}
+
+function aggregateModelUsage(branch: unknown): ModelUsageSummary[] {
+  if (!Array.isArray(branch)) return []
+  const map = new Map<string, ModelUsageSummary>()
+
+  for (const entry of branch) {
+    if (!entry || typeof entry !== "object") continue
+    const msg = (entry as any).message && typeof (entry as any).message === "object"
+      ? (entry as any).message
+      : entry
+
+    if (msg.role !== "assistant") continue
+
+    const provider = typeof msg.provider === "string" ? msg.provider.trim() : ""
+    const model = typeof msg.model === "string" ? msg.model.trim() : ""
+    if (!provider || !model) continue
+
+    const usage = msg.usage
+    let input = 0
+    let output = 0
+    let cacheWrite = 0
+    let cacheRead = 0
+
+    if (usage && typeof usage === "object") {
+      input = positiveNum(usage.input ?? usage.input_tokens ?? usage.inputTokens)
+      output = positiveNum(usage.output ?? usage.output_tokens ?? usage.outputTokens)
+      cacheWrite = positiveNum(
+        usage.cacheWrite ??
+        usage.cache_write ??
+        usage.cacheCreationInputTokens ??
+        usage.cache_creation_input_tokens,
+      )
+      if (usage.cache_creation && typeof usage.cache_creation === "object") {
+        cacheWrite += positiveNum(usage.cache_creation.ephemeral_5m_input_tokens)
+        cacheWrite += positiveNum(usage.cache_creation.ephemeral_1h_input_tokens)
+      }
+      cacheRead = positiveNum(
+        usage.cacheRead ??
+        usage.cache_read ??
+        usage.cacheReadInputTokens ??
+        usage.cache_read_input_tokens,
+      )
+    }
+
+    const newTokens = input + output + cacheWrite
+    const cachedTokens = cacheRead
+
+    const key = `${provider}/${model}`
+    const existing = map.get(key)
+    if (existing) {
+      existing.newTokens += newTokens
+      existing.cachedTokens += cachedTokens
+    } else {
+      map.set(key, {
+        provider,
+        model,
+        newTokens,
+        cachedTokens,
+      })
+    }
+  }
+
+  return Array.from(map.values()).filter(
+    (row) => row.newTokens > 0 || row.cachedTokens > 0,
+  )
+}
+
+function formatModelUsage(summaries: ModelUsageSummary[]): string | undefined {
+  if (summaries.length === 0) return undefined
+  return summaries
+    .map(
+      (s) =>
+        `${s.provider}/${s.model} ${formatTokens(s.newTokens)} new/${formatTokens(s.cachedTokens)} cached`,
+    )
+    .join(" · ")
+}
+
+const MODEL_USAGE_STATUS_KEY = "model-usage"
+
+function refreshModelUsageStatus(ctx: any): void {
+  try {
+    if (!ctx?.ui || typeof ctx.ui.setStatus !== "function") return
+    if (!ctx?.sessionManager || typeof ctx.sessionManager.getBranch !== "function") return
+    const branch = ctx.sessionManager.getBranch()
+    const summaries = aggregateModelUsage(branch)
+    const text = formatModelUsage(summaries)
+    ctx.ui.setStatus(MODEL_USAGE_STATUS_KEY, text)
+  } catch (err: any) {
+    console.error(`bee model-usage status (advisory): ${err?.message ?? err}`)
+  }
+}
+
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
@@ -1830,6 +1944,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── ADVISORY: session-init, ONCE per session, cached (D8). ───────────────
   pi.on("session_start", (async (event: any, ctx: any) => {
+    refreshModelUsageStatus(ctx)
     try {
       const reason = event?.reason as string | undefined
       if (reason === "reload" && sessionInitRun) return // /reload is idempotent
@@ -2130,6 +2245,15 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee session-close (advisory): ${err?.message ?? err}`)
     }
+  }) as any)
+
+  // ── ADVISORY: active-branch model usage statusline refresh ─────────────────
+  pi.on("turn_end", (async (_event: any, ctx: any) => {
+    refreshModelUsageStatus(ctx)
+  }) as any)
+
+  pi.on("session_tree", (async (_event: any, ctx: any) => {
+    refreshModelUsageStatus(ctx)
   }) as any)
 
   // ── ADVISORY: pre-compact session check (b1a26071). Must return nothing /

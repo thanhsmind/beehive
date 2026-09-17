@@ -590,6 +590,7 @@ const commands = new Map();
 const switches = [];
 const forks = [];
 const notifications = [];
+const statusCalls = [];
 const orderLog = [];
 const initialProcessCwd = process.cwd();
 
@@ -597,17 +598,21 @@ let currentCallCwd = null;
 let currentCallSessionId = null;
 
 class FakeSessionManager {
-  constructor(mgrCwd, mgrFile) {
+  constructor(mgrCwd, mgrFile, branchEntries = []) {
     this.cwd = mgrCwd;
     this.sessionFile = mgrFile;
     this._sessionId = "stub-session-id";
     this._isInMemory = false;
+    this._branch = Array.isArray(branchEntries) ? branchEntries : [];
   }
   getSessionId() {
     return this._sessionId || "stub-session-id";
   }
   getSessionFile() {
     return this.sessionFile;
+  }
+  getBranch() {
+    return Array.isArray(this._branch) ? this._branch : [];
   }
   isPersisted() {
     return !this._isInMemory;
@@ -648,7 +653,8 @@ class FakeSessionManager {
 
 function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
   const sessionFile = ctxCall?.session_file || path.join(ctxCwd, "session.jsonl");
-  const sm = new FakeSessionManager(ctxCwd, sessionFile);
+  const branchEntries = ctxCall?.branch ?? spec.branch ?? [];
+  const sm = new FakeSessionManager(ctxCwd, sessionFile, branchEntries);
   sm._sessionId = ctxSessionId;
   sm._isInMemory = Boolean(ctxCall?.is_in_memory);
   return {
@@ -656,6 +662,12 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
     isIdle: () => ctxCall?.is_idle !== false,
     sessionManager: sm,
     ui: {
+      setStatus(key, text) {
+        statusCalls.push({
+          key: String(key),
+          text: text === undefined || text === null ? null : String(text),
+        });
+      },
       notify(msg, type) {
         if ((spec.throw_notify_after_teardown || ctxCall?.throw_notify_after_teardown) && orderLog.includes("teardown_resume")) {
           throw new Error("simulated post-invalidation UI notification failure");
@@ -846,6 +858,7 @@ console.log(JSON.stringify({
   switches,
   forks,
   notifications,
+  statusCalls,
   execCalls,
   orderLog,
   commands: Array.from(commands.keys()),
@@ -904,6 +917,7 @@ struct HarnessRun {
     switches: Vec<Value>,
     forks: Vec<Value>,
     notifications: Vec<Value>,
+    status_calls: Vec<Value>,
     order_log: Vec<String>,
     commands: Vec<String>,
     process_cwd_unchanged: bool,
@@ -912,6 +926,17 @@ struct HarnessRun {
 }
 
 impl HarnessRun {
+    fn status_calls(&self) -> Vec<(String, Option<String>)> {
+        self.status_calls
+            .iter()
+            .map(|s| {
+                let key = s.get("key").and_then(Value::as_str).unwrap_or("").to_string();
+                let text = s.get("text").and_then(Value::as_str).map(str::to_string);
+                (key, text)
+            })
+            .collect()
+    }
+
     /// The directory listing a `snapshot` step took, by step index.
     fn snapshot(&self, index: usize) -> Vec<String> {
         self.results[index]
@@ -1064,6 +1089,12 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
     let switches = v.get("switches").and_then(Value::as_array).cloned().unwrap_or_default();
     let forks = v.get("forks").and_then(Value::as_array).cloned().unwrap_or_default();
     let notifications = v.get("notifications").and_then(Value::as_array).cloned().unwrap_or_default();
+    let status_calls = v
+        .get("statusCalls")
+        .or_else(|| v.get("status_calls"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let order_log = v
         .get("orderLog")
         .and_then(Value::as_array)
@@ -1083,6 +1114,7 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         switches,
         forks,
         notifications,
+        status_calls,
         order_log,
         commands,
         process_cwd_unchanged,
@@ -2707,6 +2739,8 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("ui_prompt_start", json!({"reason": "ui_prompt", "kind": "select", "title": "Pick option"})),
         ("ui_prompt_start", json!({})),
         ("ui_prompt_end", json!({})),
+        ("turn_end", json!({})),
+        ("session_tree", json!({})),
         ("agent_settled", json!({})),
         ("session_before_compact", json!({})),
         ("session_shutdown", json!({"reason": "quit"})),
@@ -7923,6 +7957,215 @@ fn relocation_with_a_job_in_flight_carries_inbox_and_rebinds_claims() {
         "relocation notice must name rebound claims and carried jobs when non-zero, got notifications: {:?}",
         run.notifications
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn model_usage_status_tracks_active_branch_tokens_by_provider_and_model() {
+    node_or_skip!("model_usage_status_tracks_active_branch_tokens_by_provider_and_model");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-model-usage";
+
+    let branch_step1 = json!([
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "anthropic",
+                "model": "claude-3-5-sonnet",
+                "usage": {
+                    "input": 1200,
+                    "output": 800,
+                    "cacheWrite": 500,
+                    "cacheRead": 2500
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "anthropic",
+                "model": "claude-3-5-sonnet",
+                "usage": {
+                    "input": 1500,
+                    "output": 500,
+                    "cacheWrite": 0,
+                    "cacheRead": 1000
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "user",
+                "content": "do something",
+                "usage": {
+                    "input": 99999,
+                    "output": 99999,
+                    "cacheRead": 99999
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "toolResult",
+                "toolName": "bash",
+                "usage": {
+                    "input": 88888,
+                    "output": 88888,
+                    "cacheRead": 88888
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "usage": {
+                    "input": 400,
+                    "output": 100,
+                    "cacheWrite": 0,
+                    "cacheRead": 50
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "toolResult",
+                "toolName": "read",
+                "usage": {
+                    "input": 77777,
+                    "output": 77777
+                }
+            }
+        }
+    ]);
+
+    let branch_step2 = json!([
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "anthropic",
+                "model": "claude-3-5-sonnet",
+                "usage": {
+                    "input": 1200,
+                    "output": 800,
+                    "cacheWrite": 500,
+                    "cacheRead": 2500
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "anthropic",
+                "model": "claude-3-5-sonnet",
+                "usage": {
+                    "input": 1500,
+                    "output": 500,
+                    "cacheWrite": 0,
+                    "cacheRead": 1000
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "user",
+                "content": "do something"
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "usage": {
+                    "input": 400,
+                    "output": 100,
+                    "cacheWrite": 0,
+                    "cacheRead": 50
+                }
+            }
+        },
+        {
+            "type": "message",
+            "message": {
+                "role": "assistant",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "usage": {
+                    "input": 1000000,
+                    "output": 500000,
+                    "cacheWrite": 0,
+                    "cacheRead": 1200000
+                }
+            }
+        }
+    ]);
+
+    let branch_step3 = json!([]);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "session_start",
+                "event_arg": { "reason": "new" },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": TOKEN,
+                "branch": branch_step1,
+            }),
+            json!({
+                "event": "turn_end",
+                "event_arg": {},
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": TOKEN,
+                "branch": branch_step2,
+            }),
+            json!({
+                "event": "session_tree",
+                "event_arg": {},
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": TOKEN,
+                "branch": branch_step3,
+            }),
+        ],
+    );
+
+    let status_calls = run.status_calls();
+    assert!(
+        status_calls.len() >= 3,
+        "expected at least 3 status calls (session_start, turn_end, session_tree), got {status_calls:?}"
+    );
+
+    assert_eq!(status_calls[0].0, "model-usage");
+    assert_eq!(
+        status_calls[0].1.as_deref(),
+        Some("anthropic/claude-3-5-sonnet 5k new/4k cached · openai/gpt-4o 500 new/50 cached")
+    );
+
+    assert_eq!(status_calls[1].0, "model-usage");
+    assert_eq!(
+        status_calls[1].1.as_deref(),
+        Some("anthropic/claude-3-5-sonnet 5k new/4k cached · openai/gpt-4o 1.5m new/1.2m cached")
+    );
+
+    assert_eq!(status_calls[2].0, "model-usage");
+    assert_eq!(status_calls[2].1, None);
 }
 
 #[cfg(not(unix))]
