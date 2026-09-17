@@ -383,19 +383,56 @@ pub(crate) fn env_nonempty(name: &str) -> Option<String> {
     }
 }
 
+impl From<Err2> for Exotic {
+    fn from(_: Err2) -> Self {
+        Exotic
+    }
+}
+
+pub(crate) fn check_not_borrowed_closed_session(id: &str, root: &Path) -> R2<()> {
+    if let Some(record) = read_session(root, id)? {
+        let is_closed_or_dead = matches!(
+            record.get("status"),
+            Some(Value::String(s)) if s == "closed" || s == "dead"
+        );
+        if is_closed_or_dead {
+            let caller = crate::session_identity::locate_caller();
+            let is_own = matches!(&caller, Some(c) if c.id == id);
+            if !is_own {
+                let env_var = match caller.as_ref().map(|c| c.runtime.as_str()) {
+                    Some("pi") => "PI_SESSION_ID",
+                    Some("claude") => "CLAUDE_CODE_SESSION_ID",
+                    Some("codex") => "CODEX_THREAD_ID",
+                    _ => "BEE_SESSION_ID",
+                };
+                return Err(Err2::Msg(format!(
+                    "refused \u{2014} session \"{id}\" is closed and belongs to another session. FIX: use your own session id ({env_var}) or start/bind your own session."
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// claims.mjs resolveSessionId({flag, root}) — the explicit flag wins, then
 /// the env chain, then single-live-session adoption.
-pub(crate) fn resolve_session_id(flag: Option<&str>, root: &Path) -> Ex<Option<String>> {
+pub(crate) fn resolve_session_id(flag: Option<&str>, root: &Path) -> R2<Option<String>> {
     if let Some(f) = flag {
-        if !js_trim(f).is_empty() {
-            return Ok(Some(js_trim(f).to_string()));
+        let trimmed = js_trim(f);
+        if !trimmed.is_empty() {
+            check_not_borrowed_closed_session(trimmed, root)?;
+            return Ok(Some(trimmed.to_string()));
         }
     }
     resolve_session_id_no_flag(root)
 }
 
 /// resolveSessionId({root}) — env chain, then single-live-session adoption.
-pub(crate) fn resolve_session_id_no_flag(root: &Path) -> Ex<Option<String>> {
+pub(crate) fn resolve_session_id_no_flag(root: &Path) -> R2<Option<String>> {
+    if let Some(v) = env_nonempty("BEE_SESSION_ID") {
+        check_not_borrowed_closed_session(&v, root)?;
+        return Ok(Some(v));
+    }
     if let Some(v) = crate::session_identity::env_session_id() {
         return Ok(Some(v));
     }
@@ -416,7 +453,7 @@ pub(crate) fn resolve_session_id_no_flag(root: &Path) -> Ex<Option<String>> {
 
 /// The `(sessionId, boundLane)` pair every resolution seam shares:
 /// `session && typeof session.lane === 'string' ? session.lane.trim() : ''`.
-pub(crate) fn session_binding(flag: Option<&str>, root: &Path) -> Ex<(Option<String>, Option<String>)> {
+pub(crate) fn session_binding(flag: Option<&str>, root: &Path) -> R2<(Option<String>, Option<String>)> {
     let Some(sid) = resolve_session_id(flag, root)? else { return Ok((None, None)) };
     let Some(sess) = read_session(root, &sid)? else { return Ok((Some(sid), None)) };
     let bound = match sess.get("lane") {
@@ -751,4 +788,166 @@ pub(crate) fn dismiss_handoff(root: &Path) -> Result<HandoffDismiss, Err2> {
     }
     let _ = std::fs::remove_file(handoff_path(root)); // rmSync force:true
     Ok(HandoffDismiss::Ok { record: handoff })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_test_session(root: &Path, id: &str, status: Option<&str>) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("last_heartbeat".into(), json!(now_iso()));
+        if let Some(s) = status {
+            rec.insert("status".into(), json!(s));
+        }
+        let file = dir.join(format!("{id}.json"));
+        write_json_atomic(&file, &Value::Object(rec)).unwrap();
+    }
+
+    static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct EnvGuard {
+        prev_bee: Option<std::ffi::OsString>,
+        prev_claude: Option<std::ffi::OsString>,
+        prev_pi: Option<std::ffi::OsString>,
+        prev_codex: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(bee: Option<&str>, claude: Option<&str>, pi: Option<&str>, codex: Option<&str>) -> Self {
+            let guard = Self {
+                prev_bee: std::env::var_os("BEE_SESSION_ID"),
+                prev_claude: std::env::var_os("CLAUDE_CODE_SESSION_ID"),
+                prev_pi: std::env::var_os("PI_SESSION_ID"),
+                prev_codex: std::env::var_os("CODEX_THREAD_ID"),
+            };
+            unsafe {
+                match bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+                match claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+            }
+            guard
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.prev_bee {
+                    Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                    None => std::env::remove_var("BEE_SESSION_ID"),
+                }
+                match &self.prev_claude {
+                    Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                    None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+                }
+                match &self.prev_pi {
+                    Some(v) => std::env::set_var("PI_SESSION_ID", v),
+                    None => std::env::remove_var("PI_SESSION_ID"),
+                }
+                match &self.prev_codex {
+                    Some(v) => std::env::set_var("CODEX_THREAD_ID", v),
+                    None => std::env::remove_var("CODEX_THREAD_ID"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_closed_foreign_refused() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        write_test_session(tmp.path(), "foreign-closed-1", Some("closed"));
+        write_test_session(tmp.path(), "foreign-dead-1", Some("dead"));
+
+        // Caller is Pi harness "pi-own-1"
+        let _env = EnvGuard::set(None, None, Some("pi-own-1"), None);
+
+        // Explicit flag with closed foreign session
+        let res = resolve_session_id(Some("foreign-closed-1"), tmp.path());
+        match res {
+            Err(Err2::Msg(msg)) => {
+                assert!(msg.contains("foreign-closed-1"), "expected session name in {msg}");
+                assert!(msg.contains("is closed and belongs to another session"), "expected refusal text in {msg}");
+                assert!(msg.contains("FIX: use your own session id (PI_SESSION_ID) or start/bind your own session."), "expected FIX line in {msg}");
+            }
+            other => panic!("expected Err(Err2::Msg(...)), got {other:?}"),
+        }
+
+        // Explicit flag with dead foreign session
+        let res_dead = resolve_session_id(Some("foreign-dead-1"), tmp.path());
+        match res_dead {
+            Err(Err2::Msg(msg)) => {
+                assert!(msg.contains("foreign-dead-1"), "expected session name in {msg}");
+                assert!(msg.contains("is closed and belongs to another session"), "expected refusal text in {msg}");
+                assert!(msg.contains("FIX: use your own session id (PI_SESSION_ID) or start/bind your own session."), "expected FIX line in {msg}");
+            }
+            other => panic!("expected Err(Err2::Msg(...)), got {other:?}"),
+        }
+
+        // BEE_SESSION_ID with closed foreign session
+        let _env2 = EnvGuard::set(Some("foreign-closed-1"), None, Some("pi-own-1"), None);
+        let res_env = resolve_session_id(None, tmp.path());
+        match res_env {
+            Err(Err2::Msg(msg)) => {
+                assert!(msg.contains("foreign-closed-1"), "expected session name in {msg}");
+                assert!(msg.contains("is closed and belongs to another session"), "expected refusal text in {msg}");
+                assert!(msg.contains("FIX: use your own session id (PI_SESSION_ID) or start/bind your own session."), "expected FIX line in {msg}");
+            }
+            other => panic!("expected Err(Err2::Msg(...)), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_closed_own_allowed() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        write_test_session(tmp.path(), "own-closed-1", Some("closed"));
+
+        // Caller is Claude harness "own-closed-1"
+        let _env = EnvGuard::set(None, Some("own-closed-1"), None, None);
+
+        // Explicit flag with caller's own closed session resolves
+        let res = resolve_session_id(Some("own-closed-1"), tmp.path());
+        assert_eq!(res.unwrap(), Some("own-closed-1".to_string()));
+
+        // BEE_SESSION_ID with caller's own closed session resolves
+        let _env2 = EnvGuard::set(Some("own-closed-1"), Some("own-closed-1"), None, None);
+        let res_env = resolve_session_id(None, tmp.path());
+        assert_eq!(res_env.unwrap(), Some("own-closed-1".to_string()));
+    }
+
+    #[test]
+    fn test_missing_record_allowed() {
+        let _lock = TEST_ENV_LOCK.lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Caller is Pi harness "pi-own-1"
+        let _env = EnvGuard::set(None, None, Some("pi-own-1"), None);
+
+        // Explicit flag with non-existent session id still resolves
+        let res = resolve_session_id(Some("brand-new-sess"), tmp.path());
+        assert_eq!(res.unwrap(), Some("brand-new-sess".to_string()));
+
+        // BEE_SESSION_ID with non-existent session id still resolves
+        let _env2 = EnvGuard::set(Some("brand-new-sess"), None, Some("pi-own-1"), None);
+        let res_env = resolve_session_id(None, tmp.path());
+        assert_eq!(res_env.unwrap(), Some("brand-new-sess".to_string()));
+    }
 }
