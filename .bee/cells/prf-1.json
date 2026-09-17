@@ -1,0 +1,70 @@
+{
+  "id": "prf-1",
+  "feature": "pi-run-friction-fixes",
+  "title": "Fence heredoc bodies before the git guard scans for git verbs",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "91450355-8261-4e25-b6cd-a2f9660d45a3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Red first: add a test in write_guard/tests.rs where the default record is idle and a Bash command pipes a heredoc whose body is prose containing the words 'git range' into another command (shape: `{ cat <<'PROMPT'\\nreview the git range af..d5\\nPROMPT\\n} | echo hi`). Today the intake gate refuses with 'running `git range` is blocked'; watch it fail for that reason. Fix: in check_git_bash_command (checks.rs:714) tokenize `fence_heredocs(command)` instead of the raw command. Also add a test that a REAL git verb outside a heredoc (e.g. `git push` after a heredoc) is still judged as before.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee write_guard",
+  "must_haves": {
+    "truths": [
+      "prose inside a heredoc body never reaches the git verb scan",
+      "a git verb outside a heredoc is still judged"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not weaken the depth-bound fail-open branch"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prf-1",
+    "outcome": "Heredoc prose no longer reaches the git verb scan; a real git push after a heredoc is still judged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T11:10:57.589Z",
+    "behavior_change": true,
+    "verification_evidence": "cell scope; full cargo test --release suite 4066 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee write_guard",
+    "claimed_at": "2026-09-17T10:42:24.112Z",
+    "sync_ack": "internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Heredoc prose no longer reaches the git verb scan; a real git push after a heredoc is still judged",
+      "commit": "1fd041d16",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee write_guard — green:unit — cell scope; full cargo test --release suite 4066 passed 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

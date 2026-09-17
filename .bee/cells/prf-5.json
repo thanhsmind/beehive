@@ -1,0 +1,68 @@
+{
+  "id": "prf-5",
+  "feature": "pi-run-friction-fixes",
+  "title": "Make the herding brief say only what applies",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "91450355-8261-4e25-b6cd-a2f9660d45a3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Three brief fixes in render_brief (mailbox.rs:257), each red first in the mailbox test module. (1) The clause 'and files listed under the Expertise section are yours to read' (line 331) renders only when spec.expertise is non-empty. (2) The result schema block: keep status, summary, files_changed, proof, report_path as the required object; move options, leaning and dissent into a separate block headed so a worker sees they are OPTIONAL — options+leaning only when status is blocked with a choice, dissent only when disagreeing — and say to omit the keys entirely (not empty strings or empty arrays) otherwise. Keep the parser unchanged, but make an empty-string dissent claim parse as no dissent if it does not already (parse_dissent). (3) When the job's worktree root .bee/config.json (read via the existing config reader, e.g. crate::state config helper) has a non-empty commands.test, render a '# Proof command' section with that exact command, before '# Files you may touch'; absent → no section. Update render_brief_keeps_the_result_form_block_byte_identical_apart_from_the_new_ack_block and the zero-expertise byte-identical test deliberately, with a one-line comment naming this cell. If BriefSpec needs a new field for the proof command, add it and fill it in run.rs where BriefSpec is built — run.rs is read-only for this cell unless that one construction site needs the field; if so, touch only that site.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "must_haves": {
+    "truths": [
+      "no Expertise clause without an Expertise section",
+      "optional result keys are presented apart from required ones",
+      "commands.test reaches the brief when set"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not change the ack, report or result file protocol or paths"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prf-5",
+    "outcome": "The herding brief drops the empty Expertise clause, marks optional result keys, and carries commands.test",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "deviations": [
+      "sync-ack: internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T11:10:57.885Z",
+    "behavior_change": true,
+    "verification_evidence": "cell scope; full cargo test --release suite 4066 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-09-17T10:42:24.874Z",
+    "sync_ack": "internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The herding brief drops the empty Expertise clause, marks optional result keys, and carries commands.test",
+      "commit": "f1fe075ff",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:unit — cell scope; full cargo test --release suite 4066 passed 0 failed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

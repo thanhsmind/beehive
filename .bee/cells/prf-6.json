@@ -1,0 +1,80 @@
+{
+  "id": "prf-6",
+  "regen_obligation_ack": "wave-barrier",
+  "feature": "pi-run-friction-fixes",
+  "title": "Give reviewer dispatches the review method",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "91450355-8261-4e25-b6cd-a2f9660d45a3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/reviewer.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/reviewer.md",
+    "skills/bee-reviewing/references/reviewing-reference.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Six reviewer jobs ran with expertise [] and no lens card, so each invented its own method. In prepare.rs, for kind reviewer with no --expertise and no --brief-file: when <root>/.bee/expertise/review.md exists, default the expertise to one entry `.bee/expertise/review.md :: finding quality and severity calibration :: Where to look` (use parse_expertise's line format so every transport renders it the same). An explicit --expertise wins unchanged. In packages/bee/prompts/reviewer.md add a short lens line: the dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity. Red first: a prepare test that a reviewer dispatch in a repo with .bee/expertise/review.md carries that expertise entry, and one without the file carries none. If the prompts are rendered/vendored by regen (check .bee/bin/prompts), note it in the cap; the orchestrator runs regen.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+  "must_haves": {
+    "truths": [
+      "a reviewer dispatch carries .bee/expertise/review.md when it exists and no expertise was passed"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not add a new CLI flag",
+      "Do not change cell, gather or advisor kinds"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-prf-6",
+    "outcome": "Reviewer dispatches default their expertise to .bee/expertise/review.md and the reviewer prompt names the lens",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee/prompts/reviewer.md"
+    ],
+    "deviations": [
+      "orchestrator commit a016c6ad1 re-cut the reviewer payload golden and ran regen (wave-barrier)",
+      "sync-ack: internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-17T11:10:57.958Z",
+    "behavior_change": true,
+    "verification_evidence": "cell scope; full cargo test --release suite 4066 passed 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "56ecea1f-ddd1-440e-919d-9edff0cff7d7",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+    "claimed_at": "2026-09-17T10:42:25.048Z",
+    "sync_ack": "internal Rust/TS fix with no skill-facing behavior change; skills already describe these flows",
+    "mistakes": [
+      {
+        "wrong": "packages/bee/prompts/reviewer.md changed without the payload golden and the vendored prompt",
+        "better": "run the drivers tests and regen with a prompt edit"
+      }
+    ],
+    "report": {
+      "outcome": "Reviewer dispatches default their expertise to .bee/expertise/review.md and the reviewer prompt names the lens",
+      "commit": "12df00152",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee/prompts/reviewer.md"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare — green:unit — cell scope; full cargo test --release suite 4066 passed 0 failed",
+      "deviations": [
+        "orchestrator commit a016c6ad1 re-cut the reviewer payload golden and ran regen (wave-barrier)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

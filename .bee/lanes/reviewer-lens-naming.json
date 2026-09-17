@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "reviewer-lens-naming",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"reviewer-lens-naming\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 89c76c1; capture what settled, then bee close --feature reviewer-lens-naming.",
+  "next_action": "bee close finished \"reviewer-lens-naming\" — feature is closed.",
   "created_at": "2026-09-17T09:55:55.880Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",
