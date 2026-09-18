@@ -1,5 +1,5 @@
-promote proposal for work item "pi-version-floor" (.bee/lanes/pi-version-floor.json + docs/history/pi-version-floor/promote-proposals.md) — 1 capped cell(s): pvf-1
-anchor: ledger — .bee/lanes/pi-version-floor.json, docs/history/pi-version-floor/promote-proposals.md
+promote proposal for work item "pi-version-floor" (docs/history/pi-version-floor/plan.md) — 1 capped cell(s): pvf-1
+anchor: history — docs/history/pi-version-floor/plan.md
 PROPOSAL ONLY — nothing was written. Applying any section below is a human or agent decision.
 
 (a) DELIVERY DRAFT — save as docs/knowledge/work/pi-version-floor/delivery.md
@@ -12,8 +12,8 @@ timestamp: 2026-09-18
 bee:
   id: pi-version-floor-delivery
   lifecycle: active
-  required_context: [.bee/lanes/pi-version-floor.json, docs/history/pi-version-floor/promote-proposals.md]
-  sources: [.bee/lanes/pi-version-floor.json, docs/history/pi-version-floor/promote-proposals.md, .bee/cells/archive/pi-version-floor/pvf-1.json]
+  required_context: [docs/history/pi-version-floor/plan.md]
+  sources: [docs/history/pi-version-floor/plan.md, .bee/cells/archive/pi-version-floor/pvf-1.json]
 ---
 
 # pi-version-floor — Delivery
@@ -34,7 +34,7 @@ Each cell below was capped only against a recorded passing verify result — bee
 
 ## Provenance
 
-Proposed by `bee knowledge promote --work pi-version-floor` from 1 capped cell trace(s) in `.bee/cells/` and the anchor `.bee/lanes/pi-version-floor.json`, `docs/history/pi-version-floor/promote-proposals.md`. Every line above is copied from a trace or from the work item; nothing here is curated truth until a human or agent accepts it.
+Proposed by `bee knowledge promote --work pi-version-floor` from 1 capped cell trace(s) in `.bee/cells/` and the anchor `docs/history/pi-version-floor/plan.md`. Every line above is copied from a trace or from the work item; nothing here is curated truth until a human or agent accepts it.
 
 (b) AREA UPDATES — candidate spec-sync bullets, each citing its cell
 
