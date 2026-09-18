@@ -523,6 +523,7 @@
     "cli-vocabulary",
     "statusline",
     "role",
-    "abandoned"
+    "abandoned",
+    "contract:pi-version-range"
   ]
 }
