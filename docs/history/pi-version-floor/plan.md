@@ -52,7 +52,12 @@ The floor statement is therefore an addition, not a relabel.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| pvf-1 | State the Pi version range the belt supports | the belt plus two contract tests | — | A reader of the belt learns it needs Pi 0.84.4 or newer, instead of inferring 0.84.3 from a provenance note | the declared release suite green |
+| pvf-1 | State the Pi version range the belt supports | the belt, two contract tests, and the release manifest | — | A reader of the belt learns it needs Pi 0.84.4 or newer, instead of inferring 0.84.3 from a provenance note | the declared release suite green, plus the release-manifest check |
+
+`.pi/extensions` is a root the release manifest hashes, so the cell owes the
+regen chain and carries both the manifest file and `bee dev release-manifest
+--check` in its own verify. The first draft of this packet missed that; the
+`REGEN_OBLIGATION` guard refused the write and named the remedy.
 
 ```json
 [
@@ -68,7 +73,8 @@ The floor statement is therefore an addition, not a relabel.
     "files": [
       ".pi/extensions/bee-guard.ts",
       "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
-      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
     ],
     "read_first": [
       "docs/history/pi-version-floor/plan.md",
@@ -78,7 +84,7 @@ The floor statement is therefore an addition, not a relabel.
     "affects_skills": [],
     "affects_specs": [],
     "action": "Add a titled comment block to the belt header, directly above the imports, stating the supported Pi range: FLOOR 0.84.4 because the belt registers ui_prompt_start and ui_prompt_end and Pi added both in 0.84.4; CEILING none proven, with 0.85.1 named as the newest version a bee workflow was driven on. Say in that block that the provenance comments elsewhere in the file record which docs were READ and are a different fact, so nobody rewrites them later. Point at docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md for the per-version dispositions. Then extend the PI_BUILTIN_TOOLS comment so it keeps its 0.84.3 provenance and adds that the same eight names were re-verified unchanged in Pi 0.85.1's docs/settings.md. In the two contract tests, extend the comment and the assertion message the same way: keep the 0.84.3 wording, add the re-verification, so the next reader does not file the label as stale. Comments and assertion strings only — change no code path, no assertion condition, and no provenance citation.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "The belt header states a floor of 0.84.4 and names the two events that set it",
