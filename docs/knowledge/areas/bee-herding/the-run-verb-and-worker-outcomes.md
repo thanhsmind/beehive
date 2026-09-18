@@ -299,6 +299,22 @@ dispatch. Who drains those markers, and the at-least-once guarantee that comes
 with it, is Pi's half: `areas/hook-runtime/catalog-projections-and-activation.md`
 and `docs/config-reference.md` (§ Pi).
 
+**`--seat <name>` labels a detached run with the job it answers for.** Where
+`--inbox-session` decides *whether* a run is detached, `--seat` says *which
+seat* the detached run belongs to, and it travels two places: into the pending
+marker beside `job_id` (`herding/run.rs:2220`) and into the run's own JSON
+result envelope (`run.rs:3261`), present only when the flag was passed.
+`dispatch prepare` appends it on runtime pi for every non-cell dispatch that
+names a role, so a drained result says which seat produced it instead of
+arriving anonymous. It is a label: nothing routes on it, and omitting it
+changes no other field.
+
+Both flags were parsed and emitted for several releases before they were
+published in the command registry, so neither appeared in
+`bee herding run --help` until three-findings thf-3 added their rows. A flag
+the verb accepts but the registry does not carry is invisible to every reader
+of help — the registry is the only home for that text.
+
 **Pi result drain reads only result file headers, never run envelope keys.** The
 Pi extension's result drain (`renderResultInjection` in
 `.pi/extensions/bee-guard.ts:729-743`) parses only `{job_id, cell_id, status,

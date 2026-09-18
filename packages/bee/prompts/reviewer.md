@@ -4,11 +4,6 @@ The dispatcher names one review lens (Purpose) in the purpose/prompt; review thr
 
 {{original_request}}
 {{/if}}
-{{#if paths}}
-
-Paths:
-{{paths}}
-{{/if}}
 {{#if purpose}}
 
 Purpose:

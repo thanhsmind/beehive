@@ -7,11 +7,6 @@ Seat: {{seat}}. Your perspective and instrument are the row for this role in the
 
 {{original_request}}
 {{/if}}
-{{#if paths}}
-
-Paths:
-{{paths}}
-{{/if}}
 {{#if purpose}}
 
 Purpose:
