@@ -1,0 +1,407 @@
+{
+  "schema_version": "1.0",
+  "feature": "three-findings",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"three-findings\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge, rebuild the vendored binary, hand main to the user for uat.",
+  "created_at": "2026-09-18T14:26:21.003Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 10,
+    "rationale": null,
+    "updated_at": "2026-09-18T14:26:21.084Z",
+    "feature": "three-findings"
+  },
+  "gate_preview": {
+    "feature": "three-findings",
+    "plan_sha256": "fec4c377728cf3c994756a2c37495bd7b840bfacab951525fe598941466bd455",
+    "previewed_at": "2026-09-18T14:29:16.660Z",
+    "cells": [
+      {
+        "id": "thf-1",
+        "feature": "three-findings",
+        "title": "Delete the dead paths block from the dispatch prompts",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee/prompts/gather.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/prompts/advisor.md",
+          ".bee/bin/prompts/gather.md",
+          ".bee/bin/prompts/reviewer.md",
+          ".bee/bin/prompts/advisor.md",
+          "docs/product-description/delegation/dispatch.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "packages/bee/prompts/gather.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Delete the `{{#if paths}}` … `{{/if}}` block, including its `Paths:` line and the `{{paths}}` placeholder, from packages/bee/prompts/gather.md, reviewer.md and advisor.md. Per D1 it is dead surface: nothing supplies the var (prepare.rs:1080-1084 passes brief, expertise, purpose, original_request, seat and nothing else), so the block already renders to nothing on every dispatch and its removal changes zero rendered bytes. Delete the block only — leave every other line of all three templates byte-identical, and do NOT add a supplier. Then sync the three .bee/bin/prompts/ twins so both on-disk copies stay byte-identical, because verbs/drivers/prompt.rs prompt_skew checks BOTH and refuses a dispatch on either mismatch; .bee/bin is covered by the onboarding managed-hash ledger, so do that sync by running `bee onboard --repo-root . --apply` rather than by hand. Then fix the one stale sentence at docs/product-description/delegation/dispatch.md:47, which still says the agent's task text is 'filled into the prompt's `Paths:` line' — that stopped being true at commit 58be9dfec; rewrite it to describe what the payload actually carries, without inventing a new mechanism. Finally run the regen chain (bee dev regen, or at minimum bee dev release-manifest --write) because packages/bee is a release-manifest inventory root.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+        "must_haves": {
+          "truths": [
+            "No `{{#if paths}}` block and no `{{paths}}` placeholder remains in any of the three templates",
+            "Every other line of the three templates is byte-identical to before",
+            "packages/bee/prompts and .bee/bin/prompts hold byte-identical copies of all three files",
+            "No supplier for a paths var is added anywhere",
+            "The product-description sentence no longer claims a `Paths:` line exists"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/gather.md",
+              "substantive": "no paths block; the digest-contract line and the expertise block survive unchanged"
+            },
+            {
+              "path": ".bee/bin/prompts/gather.md",
+              "substantive": "byte-identical to packages/bee/prompts/gather.md"
+            }
+          ],
+          "key_links": [
+            "both on-disk prompt copies agree, so prompt_skew stays None"
+          ],
+          "prohibitions": [
+            "No new template var and no supplier in prepare.rs",
+            "No edit to the grammar corpus in devtools/prompts.rs",
+            "No change to any other block in the three templates"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "thf-2",
+        "feature": "three-findings",
+        "title": "Point the codex probe concept at the mechanism that exists",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2, correct this concept's dead pointers. Three things it names do not exist at this commit: the constant PROBED_CODEX_VERSION 'in the bee binary' (rg 'PROBED' over packages/bee-rs/crates/bee/src returns nothing), the canary scripts/canary_codex.mjs (fd finds nothing), and the cell trace .bee/cells/i54-closeout-8.json (fd finds nothing). One thing it names DOES exist and must stay cited: docs/history/i54-closeout/reports/validation-canary.md. Replace the dead ones with the mechanism that survived the Rust port: the attestation record .bee/doctor-attest.json (doctor.rs:46 ATTEST_REL), written by `bee doctor attest --runtime codex`, whose three legs are the hooks-file hash, the codex version and the repo identity, and whose version leg yields reason `unprobed_version` when the live CLI does not answer and `version_changed` when it answers differently (doctor.rs:772-784). Keep the concept's RULE intact — a pin moves only on live evidence — because that rule is this page's reason to exist and it is unchanged; only its implementation pointers and its frontmatter sources were wrong. Update the frontmatter sources list to drop the dead cell-trace entry. Do not restate anything the Pi sibling page owns.",
+        "verify": ".bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check --json",
+        "must_haves": {
+          "truths": [
+            "Every path and symbol the page names exists at this commit",
+            "The evidence-gated pin rule is unchanged in substance",
+            "validation-canary.md stays cited"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+              "substantive": "Pointers section names .bee/doctor-attest.json and the attest verb; no PROBED_CODEX_VERSION, no canary_codex.mjs"
+            }
+          ],
+          "key_links": [
+            "the page still reads as the home of the evidence-gated pin rule that the Pi audit page cites"
+          ],
+          "prohibitions": [
+            "No change to the rule the page owns",
+            "No new claim about Pi — that belongs to the sibling page"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "thf-3",
+        "feature": "three-findings",
+        "title": "Publish the two herding flags in the command registry",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3. `bee herding run` parses --seat and --inbox-session (herding/run.rs:369-373) and bee dispatch prepare emits both for runtime pi, but neither appears in the command registry, so neither shows in `bee herding run --help`. Add both to the herding.run entry's parameters.properties in packages/bee-rs/crates/bee/src/generated/registry_payload.json, as string flags, each with a description written from the parser and its call sites — --seat names the seat this detached run belongs to and rides the result envelope and the result-inbox marker; --inbox-session names the orchestrator session token that makes the run detached, writing the .bee/result-inbox marker the Pi drain reads. Match the surrounding entries' wording style. This payload is checked in and no bee dev verb regenerates it, so edit it directly and keep the file's existing single-line JSON formatting. Both names are new spellings nowhere else in the registry, so the distinct flag-name count moves 208 to 210: bump PINNED_FLAG_COUNT at catalog.rs:788 and add one ledger comment in the same style as the entries above it, recording the +2 and stating that the check for an existing flag meaning the same thing was made and found none.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "`bee herding run --help` lists both flags with their descriptions",
+            "The pinned flag-count test passes at 210",
+            "The ledger comment records the +2 and the reuse check"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "herding.run carries seat and inbox-session; file stays valid JSON in its existing format"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "PINNED_FLAG_COUNT is 210 with a ledger comment"
+            }
+          ],
+          "key_links": [
+            "the descriptions match what herding/run.rs actually does with each flag"
+          ],
+          "prohibitions": [
+            "No new flag beyond these two",
+            "No rename of any existing flag",
+            "No change to herding/run.rs parsing"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "three-findings",
+    "plan_sha256": "fec4c377728cf3c994756a2c37495bd7b840bfacab951525fe598941466bd455",
+    "previewed_at": "2026-09-18T14:29:16.660Z",
+    "cells": [
+      {
+        "id": "thf-1",
+        "feature": "three-findings",
+        "title": "Delete the dead paths block from the dispatch prompts",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee/prompts/gather.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/prompts/advisor.md",
+          ".bee/bin/prompts/gather.md",
+          ".bee/bin/prompts/reviewer.md",
+          ".bee/bin/prompts/advisor.md",
+          "docs/product-description/delegation/dispatch.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "packages/bee/prompts/gather.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Delete the `{{#if paths}}` … `{{/if}}` block, including its `Paths:` line and the `{{paths}}` placeholder, from packages/bee/prompts/gather.md, reviewer.md and advisor.md. Per D1 it is dead surface: nothing supplies the var (prepare.rs:1080-1084 passes brief, expertise, purpose, original_request, seat and nothing else), so the block already renders to nothing on every dispatch and its removal changes zero rendered bytes. Delete the block only — leave every other line of all three templates byte-identical, and do NOT add a supplier. Then sync the three .bee/bin/prompts/ twins so both on-disk copies stay byte-identical, because verbs/drivers/prompt.rs prompt_skew checks BOTH and refuses a dispatch on either mismatch; .bee/bin is covered by the onboarding managed-hash ledger, so do that sync by running `bee onboard --repo-root . --apply` rather than by hand. Then fix the one stale sentence at docs/product-description/delegation/dispatch.md:47, which still says the agent's task text is 'filled into the prompt's `Paths:` line' — that stopped being true at commit 58be9dfec; rewrite it to describe what the payload actually carries, without inventing a new mechanism. Finally run the regen chain (bee dev regen, or at minimum bee dev release-manifest --write) because packages/bee is a release-manifest inventory root.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+        "must_haves": {
+          "truths": [
+            "No `{{#if paths}}` block and no `{{paths}}` placeholder remains in any of the three templates",
+            "Every other line of the three templates is byte-identical to before",
+            "packages/bee/prompts and .bee/bin/prompts hold byte-identical copies of all three files",
+            "No supplier for a paths var is added anywhere",
+            "The product-description sentence no longer claims a `Paths:` line exists"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/gather.md",
+              "substantive": "no paths block; the digest-contract line and the expertise block survive unchanged"
+            },
+            {
+              "path": ".bee/bin/prompts/gather.md",
+              "substantive": "byte-identical to packages/bee/prompts/gather.md"
+            }
+          ],
+          "key_links": [
+            "both on-disk prompt copies agree, so prompt_skew stays None"
+          ],
+          "prohibitions": [
+            "No new template var and no supplier in prepare.rs",
+            "No edit to the grammar corpus in devtools/prompts.rs",
+            "No change to any other block in the three templates"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "thf-2",
+        "feature": "three-findings",
+        "title": "Point the codex probe concept at the mechanism that exists",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2, correct this concept's dead pointers. Three things it names do not exist at this commit: the constant PROBED_CODEX_VERSION 'in the bee binary' (rg 'PROBED' over packages/bee-rs/crates/bee/src returns nothing), the canary scripts/canary_codex.mjs (fd finds nothing), and the cell trace .bee/cells/i54-closeout-8.json (fd finds nothing). One thing it names DOES exist and must stay cited: docs/history/i54-closeout/reports/validation-canary.md. Replace the dead ones with the mechanism that survived the Rust port: the attestation record .bee/doctor-attest.json (doctor.rs:46 ATTEST_REL), written by `bee doctor attest --runtime codex`, whose three legs are the hooks-file hash, the codex version and the repo identity, and whose version leg yields reason `unprobed_version` when the live CLI does not answer and `version_changed` when it answers differently (doctor.rs:772-784). Keep the concept's RULE intact — a pin moves only on live evidence — because that rule is this page's reason to exist and it is unchanged; only its implementation pointers and its frontmatter sources were wrong. Update the frontmatter sources list to drop the dead cell-trace entry. Do not restate anything the Pi sibling page owns.",
+        "verify": ".bee/bin/bee knowledge check --json && .bee/bin/bee knowledge index --check --json",
+        "must_haves": {
+          "truths": [
+            "Every path and symbol the page names exists at this commit",
+            "The evidence-gated pin rule is unchanged in substance",
+            "validation-canary.md stays cited"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md",
+              "substantive": "Pointers section names .bee/doctor-attest.json and the attest verb; no PROBED_CODEX_VERSION, no canary_codex.mjs"
+            }
+          ],
+          "key_links": [
+            "the page still reads as the home of the evidence-gated pin rule that the Pi audit page cites"
+          ],
+          "prohibitions": [
+            "No change to the rule the page owns",
+            "No new claim about Pi — that belongs to the sibling page"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "thf-3",
+        "feature": "three-findings",
+        "title": "Publish the two herding flags in the command registry",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "read_first": [
+          "docs/history/three-findings/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D3. `bee herding run` parses --seat and --inbox-session (herding/run.rs:369-373) and bee dispatch prepare emits both for runtime pi, but neither appears in the command registry, so neither shows in `bee herding run --help`. Add both to the herding.run entry's parameters.properties in packages/bee-rs/crates/bee/src/generated/registry_payload.json, as string flags, each with a description written from the parser and its call sites — --seat names the seat this detached run belongs to and rides the result envelope and the result-inbox marker; --inbox-session names the orchestrator session token that makes the run detached, writing the .bee/result-inbox marker the Pi drain reads. Match the surrounding entries' wording style. This payload is checked in and no bee dev verb regenerates it, so edit it directly and keep the file's existing single-line JSON formatting. Both names are new spellings nowhere else in the registry, so the distinct flag-name count moves 208 to 210: bump PINNED_FLAG_COUNT at catalog.rs:788 and add one ledger comment in the same style as the entries above it, recording the +2 and stating that the check for an existing flag meaning the same thing was made and found none.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "`bee herding run --help` lists both flags with their descriptions",
+            "The pinned flag-count test passes at 210",
+            "The ledger comment records the +2 and the reuse check"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "herding.run carries seat and inbox-session; file stays valid JSON in its existing format"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "PINNED_FLAG_COUNT is 210 with a ledger comment"
+            }
+          ],
+          "key_links": [
+            "the descriptions match what herding/run.rs actually does with each flag"
+          ],
+          "prohibitions": [
+            "No new flag beyond these two",
+            "No rename of any existing flag",
+            "No change to herding/run.rs parsing"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-09-18T14:43:24.915Z",
+    "branch": "wt/three-findings",
+    "worktree_id": "beehive--wt--three-findings",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "three-findings",
+    "date": "2026-09-18",
+    "at": "2026-09-18T14:48:55.417Z",
+    "areas_synced": [
+      "bee-herding",
+      "hook-runtime"
+    ],
+    "next_action": "Merge, rebuild the vendored binary, hand main to the user for uat."
+  }
+}

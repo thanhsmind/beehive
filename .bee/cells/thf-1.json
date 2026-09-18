@@ -1,0 +1,106 @@
+{
+  "id": "thf-1",
+  "feature": "three-findings",
+  "title": "Delete the dead paths block from the dispatch prompts",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee/prompts/gather.md",
+    "packages/bee/prompts/reviewer.md",
+    "packages/bee/prompts/advisor.md",
+    ".bee/bin/prompts/gather.md",
+    ".bee/bin/prompts/reviewer.md",
+    ".bee/bin/prompts/advisor.md",
+    "docs/product-description/delegation/dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/three-findings/CONTEXT.md",
+    "packages/bee/prompts/gather.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Delete the `{{#if paths}}` … `{{/if}}` block, including its `Paths:` line and the `{{paths}}` placeholder, from packages/bee/prompts/gather.md, reviewer.md and advisor.md. Per D1 it is dead surface: nothing supplies the var (prepare.rs:1080-1084 passes brief, expertise, purpose, original_request, seat and nothing else), so the block already renders to nothing on every dispatch and its removal changes zero rendered bytes. Delete the block only — leave every other line of all three templates byte-identical, and do NOT add a supplier. Then sync the three .bee/bin/prompts/ twins so both on-disk copies stay byte-identical, because verbs/drivers/prompt.rs prompt_skew checks BOTH and refuses a dispatch on either mismatch; .bee/bin is covered by the onboarding managed-hash ledger, so do that sync by running `bee onboard --repo-root . --apply` rather than by hand. Then fix the one stale sentence at docs/product-description/delegation/dispatch.md:47, which still says the agent's task text is 'filled into the prompt's `Paths:` line' — that stopped being true at commit 58be9dfec; rewrite it to describe what the payload actually carries, without inventing a new mechanism. Finally run the regen chain (bee dev regen, or at minimum bee dev release-manifest --write) because packages/bee is a release-manifest inventory root.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "No `{{#if paths}}` block and no `{{paths}}` placeholder remains in any of the three templates",
+      "Every other line of the three templates is byte-identical to before",
+      "packages/bee/prompts and .bee/bin/prompts hold byte-identical copies of all three files",
+      "No supplier for a paths var is added anywhere",
+      "The product-description sentence no longer claims a `Paths:` line exists"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/prompts/gather.md",
+        "substantive": "no paths block; the digest-contract line and the expertise block survive unchanged"
+      },
+      {
+        "path": ".bee/bin/prompts/gather.md",
+        "substantive": "byte-identical to packages/bee/prompts/gather.md"
+      }
+    ],
+    "key_links": [
+      "both on-disk prompt copies agree, so prompt_skew stays None"
+    ],
+    "prohibitions": [
+      "No new template var and no supplier in prepare.rs",
+      "No edit to the grammar corpus in devtools/prompts.rs",
+      "No change to any other block in the three templates"
+    ]
+  },
+  "trace": {
+    "worker": "w-thf-1",
+    "outcome": "Delete the dead paths block from the dispatch prompts",
+    "files_changed": [
+      "packages/bee/prompts/gather.md",
+      "packages/bee/prompts/reviewer.md",
+      "packages/bee/prompts/advisor.md",
+      ".bee/bin/prompts/gather.md",
+      ".bee/bin/prompts/reviewer.md",
+      ".bee/bin/prompts/advisor.md",
+      ".bee/onboarding.json",
+      "docs/product-description/delegation/dispatch.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-18T14:43:24.889Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran the exact compound: exit 0, 0 failures, manifest 376 files matched, onboard up_to_date; cmp also confirms each template matches its .bee/bin twin",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+    "claimed_at": "2026-09-18T14:29:35.935Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The dead paths block is gone from all three dispatch templates (15 deletions, 0 additions), both on-disk copies stay byte-identical, and the product-description sentence no longer claims a Paths: line exists.",
+      "commit": "41578c465",
+      "files": [
+        "packages/bee/prompts/gather.md",
+        "packages/bee/prompts/reviewer.md",
+        "packages/bee/prompts/advisor.md",
+        ".bee/bin/prompts/gather.md",
+        ".bee/bin/prompts/reviewer.md",
+        ".bee/bin/prompts/advisor.md",
+        ".bee/onboarding.json",
+        "docs/product-description/delegation/dispatch.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json — green:unit — leader re-ran the exact compound: exit 0, 0 failures, manifest 376 files matched, onboard up_to_date; cmp also confirms each template matches its .bee/bin twin",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
