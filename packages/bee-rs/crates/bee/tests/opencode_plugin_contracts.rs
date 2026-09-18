@@ -446,6 +446,11 @@ fn opencode_advisory_hooks() -> BTreeSet<String> {
 /// `case "bash":` and `case "powershell":`, and a parser that only credits
 /// the case carrying the `hook:` literal would under-report the routed set
 /// and could let a rule look unrouted on this belt when it is not.
+///
+/// The assertion below names Pi 0.84.3's eight built-ins. That version is the
+/// Pi docs the list was read from, not the version the belt supports: the
+/// supported floor is 0.84.4 (see the belt header). The same eight names were
+/// re-verified unchanged in Pi 0.85.1 on 2026-09-18.
 fn pi_tool_hook_pairs() -> Vec<(String, String)> {
     let fn_start = PI_PLUGIN_SOURCE
         .find("function mapToolCall")
