@@ -521,6 +521,8 @@
     "verify-app",
     "session-relocation",
     "cli-vocabulary",
-    "statusline"
+    "statusline",
+    "role",
+    "abandoned"
   ]
 }
