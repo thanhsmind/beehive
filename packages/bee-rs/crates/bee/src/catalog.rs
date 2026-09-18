@@ -787,11 +787,16 @@ mod tests {
         // overrides an ownership guard; none means "do not move the session".
         //
         // 208 -> 210 (three-findings thf-3): `herding.run` gains `--seat` and
-        // `--inbox-session` for detached stage runs and async result delivery.
-        // `--seat` names the seat the detached run belongs to; `--inbox-session`
-        // names the orchestrator session token into which the detached run
-        // writes its result-inbox marker. Checked first: checked for an
-        // existing flag meaning the same thing and found none.
+        // `--inbox-session`. Both were already parsed by the verb and emitted
+        // by `dispatch prepare` on runtime pi; only their registry rows were
+        // missing, so neither showed in help. `--seat` names the seat a
+        // detached run belongs to, carried on the result envelope and the
+        // result-inbox marker; `--inbox-session` names the orchestrator
+        // session token whose presence is what makes a run detached. Checked
+        // first: `--agent` names which herdr agent to spawn, `--job-id` names
+        // the mailbox identity, and `--worker` names a claim owner — none of
+        // the three carries "which seat this run answers for", and no existing
+        // flag names an inbox target at all. Both are new.
         const PINNED_FLAG_COUNT: usize = 210;
 
         let names: std::collections::BTreeSet<&str> =
