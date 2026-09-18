@@ -1,0 +1,67 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "pi-capability-audit",
+  "closed_at": "2026-09-18T14:01:44.291Z",
+  "sessions": [
+    {
+      "session_id": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9",
+      "models": {
+        "claude-opus-5": {
+          "input": 442,
+          "output": 144709,
+          "cache_write": 858137,
+          "cache_read": 57925235,
+          "new": 1003288,
+          "cached": 57925235,
+          "total": 58928523
+        }
+      },
+      "subagent_models": {
+        "claude-fable-5-1": {
+          "input": 1256,
+          "output": 82992,
+          "cache_write": 710260,
+          "cache_read": 3893708,
+          "new": 794508,
+          "cached": 3893708,
+          "total": 4688216
+        },
+        "claude-opus-5": {
+          "input": 60,
+          "output": 30904,
+          "cache_write": 116716,
+          "cache_read": 2422820,
+          "new": 147680,
+          "cached": 2422820,
+          "total": 2570500
+        }
+      },
+      "subagent_count": 5,
+      "started_ms": 1789655030207,
+      "ended_ms": 1789740101023,
+      "totals": {
+        "new": 1945476,
+        "cached": 64241763,
+        "total": 66187239
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1003288,
+      "cached": 57925235,
+      "total": 58928523
+    },
+    "subagents": {
+      "new": 942188,
+      "cached": 6316528,
+      "total": 7258716
+    },
+    "total": {
+      "new": 1945476,
+      "cached": 64241763,
+      "total": 66187239
+    }
+  }
+}

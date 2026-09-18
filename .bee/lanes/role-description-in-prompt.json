@@ -1,0 +1,235 @@
+{
+  "schema_version": "1.0",
+  "feature": "role-description-in-prompt",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"role-description-in-prompt\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"role-description-in-prompt\" (lane).",
+  "created_at": "2026-09-18T12:27:43.307Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "retire doctrine B12 display-only law, or drop role-description-in-prompt",
+    "asked_at": "2026-09-18T12:46:13.257Z",
+    "session": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-09-18T12:27:55.731Z",
+    "feature": "role-description-in-prompt"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-18T12:41:34.542Z",
+    "feature": "role-description-in-prompt",
+    "newest_decision_id": "44cddbe1-b12d-4fc9-ac3d-1a56625be1a1",
+    "plan_sha256": "8010b9e87fcbb447bc8bab4b6b48cac898e7bd3ea54271bc0b0515705850f1b8",
+    "advisor": "hat-facts-gaps (opus)",
+    "digest_head": "# Hat wave synthesis — role-description-in-prompt\n\nSeats opened: 1 of 5 (`hat-facts-gaps`). The narrowed scope and its reason are\ndecision-logged: the ask is one cell and one variable, so the wave's threshold\n(\"big, vague, or high-risk\"; five dispatches on a small change is the named\nceremony-capture failure) did not carry the other four seats. The one real\nrisk was a wrong row in the claims table, and the claims-table audit is\n`hat-facts-gaps`' own named instrument.\n\nSeats dropped: `hat-alterna"
+  },
+  "gate_preview": {
+    "feature": "role-description-in-prompt",
+    "plan_sha256": "ccd72502f2039bddfdfe570f89ca73ec664fc11fde3a684c073f3e16fde3ca76",
+    "previewed_at": "2026-09-18T12:43:46.985Z",
+    "cells": [
+      {
+        "id": "rdp-1",
+        "feature": "role-description-in-prompt",
+        "title": "Carry the role description into every dispatched prompt",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d45c79e7-7de1-4d49-86b3-f1b07be1de0c",
+          "44cddbe1-b12d-4fc9-ac3d-1a56625be1a1"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/gather.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/prompts/advisor.md",
+          ".bee/bin/prompts/worker-cell.md",
+          ".bee/bin/prompts/gather.md",
+          ".bee/bin/prompts/reviewer.md",
+          ".bee/bin/prompts/advisor.md"
+        ],
+        "read_first": [
+          "docs/history/role-description-in-prompt/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Factor the description lookup so ONE home returns the role's trimmed FULL description text, and leave the 60-char display cap at the model-guard door that needs it (D3; the lookup lives at hooks/model_guard.rs:449-467 today and its production caller narrows the config three ways at :532-540 — team, then models, then the config object itself; carry that fallback). Add `role` and `role_description` vars to `prompt_body_for` (prepare.rs:1035-1123) and supply BOTH in BOTH render arms — the non-cell arm and the cell arm — because a bare {{NAME}} surviving pass 2 with no value refuses the dispatch. Resolve both at the one call site (prepare.rs:2269) from `cfg`, the folded raw config already in scope at :1932, keyed on `marker_role`. Suppress the whole block when the dispatch is a hat seat, keyed on the SEAT name not the marker role (D7; prepare.rs:2263 shows they diverge for a fallen-through hat, and the existing `hat_seat` resolution at :2263-2266 is the condition to reuse). Add the `{{#if role_description}}` block to all four templates, modelled on the existing `{{#if seat}}` block in advisor.md, with the joining prose IN the template and the role named there. Finally write the same four template bytes to .bee/bin/prompts/ (D8) — prompt_skew checks both copies and refuses on either mismatch.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A dispatch whose role carries a description renders that description, trimmed and UNTRUNCATED, in the worker prompt — proven with a description longer than 60 characters",
+            "A role with no description, a blank one, or a whitespace-only one renders the prompt byte-identically to before this change — one test per render arm",
+            "An escalated (ceiling) dispatch carries no description block",
+            "A hat-* dispatch carries no description block, including a hat seat that fell through to the advisor slot",
+            "The lookup finds the role table under `team`, under `models`, and at the config root",
+            "The door's own rendered line is unchanged — its 60-char cap still applies"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "carries a {{#if role_description}} block naming the role; no TODO"
+            },
+            {
+              "path": "packages/bee/prompts/gather.md",
+              "substantive": "carries the same block"
+            },
+            {
+              "path": "packages/bee/prompts/reviewer.md",
+              "substantive": "carries the same block"
+            },
+            {
+              "path": "packages/bee/prompts/advisor.md",
+              "substantive": "carries the same block, placed beside the existing seat block"
+            },
+            {
+              "path": ".bee/bin/prompts/advisor.md",
+              "substantive": "byte-identical to packages/bee/prompts/advisor.md"
+            }
+          ],
+          "key_links": [
+            "prompt_body_for supplies role and role_description in BOTH render arms",
+            "the call site resolves both from the folded raw config keyed on marker_role",
+            "the hat suppression reuses the existing hat_seat resolution, keyed on the seat name"
+          ],
+          "prohibitions": [
+            "No edit to a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block — it must pass as written",
+            "No retirement of pi-stage-dispatch D5",
+            "No change to ROLE_DESCRIPTION_MAX or to what the door line renders",
+            "No joining prose composed in Rust — the template owns the wording",
+            "No edit to the grammar corpus in devtools/prompts.rs"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "role-description-in-prompt",
+    "plan_sha256": "ccd72502f2039bddfdfe570f89ca73ec664fc11fde3a684c073f3e16fde3ca76",
+    "previewed_at": "2026-09-18T12:43:46.985Z",
+    "cells": [
+      {
+        "id": "rdp-1",
+        "feature": "role-description-in-prompt",
+        "title": "Carry the role description into every dispatched prompt",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d45c79e7-7de1-4d49-86b3-f1b07be1de0c",
+          "44cddbe1-b12d-4fc9-ac3d-1a56625be1a1"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee/prompts/gather.md",
+          "packages/bee/prompts/reviewer.md",
+          "packages/bee/prompts/advisor.md",
+          ".bee/bin/prompts/worker-cell.md",
+          ".bee/bin/prompts/gather.md",
+          ".bee/bin/prompts/reviewer.md",
+          ".bee/bin/prompts/advisor.md"
+        ],
+        "read_first": [
+          "docs/history/role-description-in-prompt/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Factor the description lookup so ONE home returns the role's trimmed FULL description text, and leave the 60-char display cap at the model-guard door that needs it (D3; the lookup lives at hooks/model_guard.rs:449-467 today and its production caller narrows the config three ways at :532-540 — team, then models, then the config object itself; carry that fallback). Add `role` and `role_description` vars to `prompt_body_for` (prepare.rs:1035-1123) and supply BOTH in BOTH render arms — the non-cell arm and the cell arm — because a bare {{NAME}} surviving pass 2 with no value refuses the dispatch. Resolve both at the one call site (prepare.rs:2269) from `cfg`, the folded raw config already in scope at :1932, keyed on `marker_role`. Suppress the whole block when the dispatch is a hat seat, keyed on the SEAT name not the marker role (D7; prepare.rs:2263 shows they diverge for a fallen-through hat, and the existing `hat_seat` resolution at :2263-2266 is the condition to reuse). Add the `{{#if role_description}}` block to all four templates, modelled on the existing `{{#if seat}}` block in advisor.md, with the joining prose IN the template and the role named there. Finally write the same four template bytes to .bee/bin/prompts/ (D8) — prompt_skew checks both copies and refuses on either mismatch.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+        "must_haves": {
+          "truths": [
+            "A dispatch whose role carries a description renders that description, trimmed and UNTRUNCATED, in the worker prompt — proven with a description longer than 60 characters",
+            "A role with no description, a blank one, or a whitespace-only one renders the prompt byte-identically to before this change — one test per render arm",
+            "An escalated (ceiling) dispatch carries no description block",
+            "A hat-* dispatch carries no description block, including a hat seat that fell through to the advisor slot",
+            "The lookup finds the role table under `team`, under `models`, and at the config root",
+            "The door's own rendered line is unchanged — its 60-char cap still applies"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "carries a {{#if role_description}} block naming the role; no TODO"
+            },
+            {
+              "path": "packages/bee/prompts/gather.md",
+              "substantive": "carries the same block"
+            },
+            {
+              "path": "packages/bee/prompts/reviewer.md",
+              "substantive": "carries the same block"
+            },
+            {
+              "path": "packages/bee/prompts/advisor.md",
+              "substantive": "carries the same block, placed beside the existing seat block"
+            },
+            {
+              "path": ".bee/bin/prompts/advisor.md",
+              "substantive": "byte-identical to packages/bee/prompts/advisor.md"
+            }
+          ],
+          "key_links": [
+            "prompt_body_for supplies role and role_description in BOTH render arms",
+            "the call site resolves both from the folded raw config keyed on marker_role",
+            "the hat suppression reuses the existing hat_seat resolution, keyed on the seat name"
+          ],
+          "prohibitions": [
+            "No edit to a_hat_advisor_prompt_differs_from_the_plain_one_only_by_its_seat_block — it must pass as written",
+            "No retirement of pi-stage-dispatch D5",
+            "No change to ROLE_DESCRIPTION_MAX or to what the door line renders",
+            "No joining prose composed in Rust — the template owns the wording",
+            "No edit to the grammar corpus in devtools/prompts.rs"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ]
+  }
+}
