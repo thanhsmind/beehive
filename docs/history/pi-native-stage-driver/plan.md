@@ -174,6 +174,187 @@ warn-only close guard naming the uncapped cell (D5).
 | `pnsd-3` | Give the dispatch door a native arm for Pi | `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, `packages/bee-rs/crates/bee/src/config.rs` | `pnsd-1` | `bee dispatch prepare --runtime pi` returns a native payload for a `pi`-agent role and still returns herding for every other role | `cargo test -p bee` green; a byte-equality test that the claude and codex payloads are unchanged (D9) |
 | `pnsd-4` | Drive one native worker end to end and record the evidence | `.bee/verify/verify-app/features/pi-runtime.md` | `pnsd-2`, `pnsd-3` | `doctor --runtime pi` still reports `ready`, and the verify recipe drives a real native dispatch | `green:live` — the verify recipe run against a launched sandbox, evidence attached |
 
+```json
+[
+  {
+    "id": "pnsd-1",
+    "feature": "pi-native-stage-driver",
+    "title": "Scope the approved plan packet to its own feature",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": ["D8"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "docs/history/pi-native-stage-driver/evidence.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Make an approved plan packet belong to the feature that produced it. Today get_approved_preview_packet returns whatever packet sits in the store as long as the ACTIVE feature name matches the requested one; it never reads the packet's own `feature` field, so a new feature inherits the previous feature's role plan and every non-cell dispatch then refuses. Read evidence.md section C for the reproduction and the exact refusal strings. Find the two return sites by searching for `approved_cell_packet` in plan_packets.rs — one reads the lane file, one reads state.json; carry the enclosing function name, not a line number. At each site, if the stored packet carries a non-empty `feature` field that differs from the requested feature, treat it as absent and return None. A packet with no `feature` field at all keeps today's behavior, so older stores do not break. Write the test red first: assert that a packet whose own feature is \"other-feature\" is NOT returned when the active feature is \"this-feature\", watch it fail for that reason, then fix. Do not change how a matching packet is returned, and do not touch the gate or dispatch code (per D8: the door keeps one shape).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee plan_packets",
+    "must_haves": {
+      "truths": [
+        "A packet whose own feature field differs from the active feature is not returned",
+        "A packet with no feature field is still returned, so existing stores keep working",
+        "Starting a new feature after another one no longer refuses a non-cell dispatch with stage_not_applicable"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "both packet return sites compare the packet's own feature field; no TODO stubs"},
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs", "substantive": "a test that fails before the fix for the mismatched-feature reason"}
+      ],
+      "key_links": ["get_approved_role_plan still reads through get_approved_preview_packet, unchanged"],
+      "prohibitions": [
+        "No change to prepare.rs or any gate verb",
+        "No change to the shape of a packet that does match"
+      ]
+    },
+    "trace": {
+      "worker": null, "outcome": null, "files_changed": [],
+      "deviations": [], "friction": null, "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "pnsd-2",
+    "feature": "pi-native-stage-driver",
+    "title": "Register the native dispatch tool in the Pi belt",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": ["pnsd-1"],
+    "decisions": ["D2", "D5", "D7", "D9"],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "read_first": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/pi-native-stage-driver/evidence.md",
+      "docs/history/pi-native-stage-driver/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Give the Pi belt one registered tool that runs a bee worker as a child pi process, with no tmux pane. Copy the spawn shape from evidence.md section B1 verbatim in spirit (per D2): argv starts [\"--mode\",\"json\",\"-p\",\"--no-session\"], then --model, optionally --thinking, then --tools, then the task as the final positional; spawn with shell:false and stdio [\"ignore\",\"pipe\",\"pipe\"] and an explicit cwd. Parse stdout as JSONL and SKIP any line that does not parse — evidence.md section A4 shows a non-JSON mise banner arrives first. Return the child's full assistant text, never a one-line summary (per D4 of pi-stage-dispatch, and the reason this feature exists). Surface a non-zero exit with the child's stderr attached; never report a silent success. Add the new tool name as an EXPLICIT case in mapToolCall rather than letting it fall to the default arm, and keep `hook: \"write-guard\"` for it — the contract suite asserts the default arm has no null return and at least two write-guard literals, and it derives the pi.on and registerCommand name sets from this source, so add the matching fixture rows in pi_plugin_contracts.rs in the same cell. The belt keeps exactly two failure policies (per D5): tool_call stays the only blocking surface, everything this cell adds is advisory and swallows its own errors. Do not add a pi.on handler in this cell. Do not edit .opencode/plugins/bee-guard.ts (per D7). Write the contract test rows first and watch them fail before the belt edit.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "must_haves": {
+      "truths": [
+        "A Pi session can run one bee worker with no tmux pane and receive its full answer",
+        "Unparseable stdout lines are skipped and the answer still returns",
+        "A non-zero child exit surfaces the child's stderr to the leader",
+        "The new tool has an explicit mapToolCall row routed to write-guard"
+      ],
+      "artifacts": [
+        {"path": ".pi/extensions/bee-guard.ts", "substantive": "one registered tool that spawns and parses a child pi process; no TODO stubs"},
+        {"path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", "substantive": "fixture rows for the new tool name and its mapToolCall route"}
+      ],
+      "key_links": ["mapToolCall routes the new tool name explicitly, not through its default arm"],
+      "prohibitions": [
+        "No new blocking surface: tool_call stays the only one",
+        "No edit to .opencode/plugins/bee-guard.ts",
+        "No change to the existing five pi.on handlers",
+        "No second returner added to tool_result"
+      ]
+    },
+    "trace": {
+      "worker": null, "outcome": null, "files_changed": [],
+      "deviations": [], "friction": null, "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "pnsd-3",
+    "feature": "pi-native-stage-driver",
+    "title": "Give the dispatch door a native arm for Pi",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": ["pnsd-1"],
+    "decisions": ["D1", "D3", "D8", "D9"],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "docs/history/pi-native-stage-driver/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Turn the Pi herding-only refusal into a per-slot arm (per D8). Find it by searching prepare.rs for `pi_requires_herding_refusal`; the guard reads `if runtime == \"pi\" && !matches!(resolved, Resolved::Herding { .. })` and refuses every other resolution. Replace the blanket refusal with this rule: when the role's configured agent is a pi binary, return the native payload the belt's tool from pnsd-2 consumes; otherwise keep returning today's herding payload byte-for-byte (per D1 and D3). Decide 'is a pi binary' from the configured agent command in herding.agents — the first argv element being `pi` — never from the role name, and never from a leader-supplied flag: the leader must not be able to pick the transport (per D8). A role that resolves to neither still refuses, with the existing reason string unchanged. Claude, Codex and OpenCode payloads must come out identical to main (per D9); add a test that asserts that byte-equality rather than trusting review. Keep the pi-only detached_delivery note on the herding arm only.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "must_haves": {
+      "truths": [
+        "A pi-agent role returns a native payload on runtime pi",
+        "A non-pi-agent role returns today's herding payload, unchanged",
+        "Claude and Codex payloads are byte-identical to main",
+        "The leader cannot select the transport by flag"
+      ],
+      "artifacts": [
+        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "substantive": "per-slot native arm beside the herding arm; no TODO stubs"}
+      ],
+      "key_links": ["the native arm reads the configured agent command, not the role name"],
+      "prohibitions": [
+        "No new CLI flag that selects a transport",
+        "No change to the claude or codex payloads",
+        "No change to the existing refusal reason string for an unresolvable role"
+      ]
+    },
+    "trace": {
+      "worker": null, "outcome": null, "files_changed": [],
+      "deviations": [], "friction": null, "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "pnsd-4",
+    "feature": "pi-native-stage-driver",
+    "title": "Drive one native worker end to end and record the evidence",
+    "lane": "high-risk",
+    "role": "test",
+    "status": "open",
+    "deps": ["pnsd-2", "pnsd-3"],
+    "decisions": ["D7", "D10"],
+    "files": [
+      ".bee/verify/verify-app/features/pi-runtime.md"
+    ],
+    "read_first": [
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      ".bee/verify/verify-app/features/README.md",
+      "docs/history/pi-native-stage-driver/plan.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [".bee/verify/verify-app/features/pi-runtime.md"],
+    "action": "Prove the native path works for a real user, not only in unit tests. Rebuild the binary first, because doctor embeds the belt with include_str! and byte-compares the on-disk file — a stale binary reports drift and the run is worthless (per D7). Then launch a sandbox with control-bee, run doctor --runtime pi and require overall_status ready with wiring_matches_binary ok. Add one sub-feature to pi-runtime.md, named for the native dispatch path, following the file's existing four-H2 contract: what it is, how a user reaches it, how to drive it, its gotchas. Drive it: one native dispatch, one full answer returned, evidence captured as the --json payload plus a control-bee snapshot. Record the proof line as green:live with the command and the scope reason. Do not modify pi-hat-wave.md in this cell — the wave arrives in the next slice (per D10).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "must_haves": {
+      "truths": [
+        "doctor --runtime pi reports ready after the belt edit and a rebuild",
+        "One native dispatch is driven end to end against a launched sandbox",
+        "The full worker answer is returned, not a one-line summary"
+      ],
+      "artifacts": [
+        {"path": ".bee/verify/verify-app/features/pi-runtime.md", "substantive": "a new sub-feature for native dispatch with its driving recipe and gotchas"}
+      ],
+      "key_links": ["the recipe drives the binary rebuilt from this branch, not a vendored stale copy"],
+      "prohibitions": [
+        "No edit to pi-hat-wave.md in this cell",
+        "No claim of green without the fresh command output beside it"
+      ]
+    },
+    "trace": {
+      "worker": null, "outcome": null, "files_changed": [],
+      "deviations": [], "friction": null, "capped_at": null,
+      "behavior_change": true
+    }
+  }
+]
+```
+
 ## Test matrix
 
 High-risk: probes per applicable dimension of `references/edge-dimensions.md`.
