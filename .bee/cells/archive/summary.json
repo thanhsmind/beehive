@@ -1278,5 +1278,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-18T14:16:55.915Z"
+  },
+  "three-findings": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-18T14:53:00.220Z"
   }
 }
