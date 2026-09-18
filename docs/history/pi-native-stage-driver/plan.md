@@ -10,114 +10,134 @@ mode: high-risk
 Today every bee worker on Pi is launched into a tmux pane. That pane is the
 reason stages feel slow and lossy: the leader waits in the foreground, the
 answer comes back as a one-line summary, and a seat that runs long is simply
-gone. This work lets bee start a worker as a plain child process instead, with
-no pane, and read its full answer back. Panes stay available for the jobs that
-still need them.
+gone. This work lets bee start that same worker as a plain child process, with
+no pane. Panes stay available for the jobs that still need them.
 
-Two smaller things ride along, because they live in the same file. The session
-narrows the model's tool list to what the current stage allows, so it stops
-trying calls that would be refused anyway. And when a session ends with work
-still claimed, it says so by name instead of ending quietly.
+The child is started by bee's own Rust code, in the same place that starts a
+pane today. That choice is what keeps this small: the job id, the seat name, the
+ten-minute cap and the path the answer comes back on already exist there and are
+reused untouched. bee's guard belt is not modified for the transport at all.
+
+Two smaller things follow in the last slice, because they live in the belt. The
+session narrows the model's tool list to what the current stage allows, and says
+so — to the user and to the model. And a session that ends with work still
+claimed writes that into the transcript instead of ending quietly.
 
 Mode: `high-risk` — 6 risk flags: audit-security, authorization,
 external-systems, public-contracts, covered-contract-change, multi-domain.
-Why this is the least workflow that protects the work: the belt is bee's only
-enforcement point on Pi, so a change there is a change to a trust boundary —
-and the contract suite asserts its exact handler and command sets, so any
-addition is a deliberate, reviewed edit rather than a silent one.
+Why this is the least workflow that protects the work: spawning a process that
+inherits bee's environment and writes to the repo is a trust boundary, and the
+plan-step hat wave already found six blockers in the first draft of this shape.
 
 ## Requirements (from CONTEXT.md)
 
-- **D1** Native dispatch is the DEFAULT on Pi; herding is the fallback, not removed. Herding serves a write-capable cell in a worktree, a seat the user wants to watch live, and every role whose configured agent is not a `pi` binary. Both transports stay tested.
-- **D2** The native transport is a child `pi` SUBPROCESS (`pi --mode json -p …`), never the in-process SDK and never a `--mode rpc` bridge.
-- **D3** A role reaches the native path only when its configured agent is a `pi` binary; any other agent falls back to herding, by config, with no leader choice.
-- **D4** Per-stage tool gating is a HARD gate via `pi.setActiveTools`; one slash command re-opens the full set.
+- **D1** Native dispatch is the DEFAULT on Pi; herding panes remain the fallback. Both stay tested.
+- **D2** The transport is a child `pi` subprocess (`pi --mode json -p …`), never the in-process SDK and never `--mode rpc`. Amended by D11: spawned from Rust.
+- **D3** A role reaches the native path only when its configured agent is a `pi` binary; anything else falls back, by config, with no leader choice.
+- **D4** Per-stage tool gating is a HARD gate via `pi.setActiveTools`.
 - **D5** The close guard is WARN ONLY; `tool_call` stays the ONLY blocking surface in the Pi belt.
 - **D6** `.bee/*.json` stays the single store; the pi-workflows engine is not adopted.
-- **D7** `.pi/extensions/bee-guard.ts` is the hand-written source of truth; the Rust binary is rebuilt so `doctor`'s byte-compare agrees. `.opencode/plugins/bee-guard.ts` is not edited.
-- **D8** One door: `bee dispatch prepare --runtime pi` gains a native arm beside herding; the leader never picks the transport.
+- **D7** `.pi/extensions/bee-guard.ts` is hand-written source of truth; the Rust binary is rebuilt so `doctor`'s byte-compare agrees.
+- **D8** One door: the leader never picks the transport.
 - **D9** Claude, Codex and OpenCode behavior does not change.
-- **D10** The hat wave contract holds unchanged: 3 seats (5 on high-risk), one wave, 10-minute ceiling, seat-named results, a late seat DROPPED and named.
+- **D10** The hat wave contract holds — 10-minute ceiling, seat-named results, a late seat DROPPED and named. Under D11 this is inherited, not rebuilt.
+- **D11** The child is spawned in Rust inside `bee herding run`. The belt gains NO dispatch tool and NO spawner; model-guard stays a named exclusion on it.
+- **D12** The hard tool gate names its re-open command, announces the narrowing to the user, and tells the model a tool was removed by stage policy.
+- **D13** The close-guard warning lands in the visible transcript, never only a UI toast.
 
 ## Load-bearing claims
 
 Labels: `ran` = a command was executed this session and its bytes are quoted.
 `read` = the file was opened at the cited line and its bytes are quoted.
-No `guessed` row survives the gate.
+No `guessed` row survives the gate. Rows marked **(corrected)** were found wrong
+or weak by the plan-step hat wave and re-verified; `hat-synthesis.md` records
+what each one said before.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | A child `pi -p --no-session` loads `.pi/extensions/bee-guard.ts`, so the belt is active inside a native worker. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A1-A2 | `bee: hook prompt-context could not decide this payload — allowing the operation (fail-open).          The guard did NOT run on it.` |
-| 2 | bee's session preamble reaches that child, so a native worker starts with bee context, not blank. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A3 | `"text":"Yes.\n\nPhase: \`idle\` \| Mode: \`none\`  \nFeature: \`pi-native-stage-driver\`  \nGates: \`none pending (no active work)\`"` |
-| 3 | The child's stdout is JSONL preceded by non-JSON noise, so a parser must skip unparseable lines. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A4 | `mise ~/.config/mise/config.toml tools: pi@0.85.1` then `{"type":"session","version":3,"id":"01a0b519-…","cwd":"…/beehive--wt--pi-native-stage-driver"}` |
-| 4 | The child settles normally and reports cost, so a budget can be enforced per worker. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A5 | `"usage":{"input":13924,"output":114,…"cost":{…"total":0.001253952112}},"stopReason":"stop"` then `{"type":"agent_settled"}` |
-| 5 | Pi ships a working precedent for the exact spawn shape D2 requires. | read | `docs/history/pi-native-stage-driver/evidence.md` § B1 | `const args: string[] = ["--mode", "json", "-p", "--no-session"];` … `const proc = spawn(invocation.command, invocation.args, { cwd: cwd ?? defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"], });` |
+| 1 | A child `pi -p --no-session` LOADS `.pi/extensions/bee-guard.ts`. It is not yet shown to ENFORCE — see Open Questions. **(corrected)** | ran | `docs/history/pi-native-stage-driver/evidence.md` § A1-A2 | `bee: hook prompt-context could not decide this payload — allowing the operation (fail-open).          The guard did NOT run on it.` |
+| 2 | bee's session preamble reaches that child, so a worker starts with bee context, not blank. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A3 | `"text":"Yes.\n\nPhase: \`idle\` \| Mode: \`none\`  \nFeature: \`pi-native-stage-driver\`  \nGates: \`none pending (no active work)\`"` |
+| 3 | The child's stdout is JSONL preceded by non-JSON noise, so the parser must skip unparseable lines. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A4 | `mise ~/.config/mise/config.toml tools: pi@0.85.1` then `{"type":"session","version":3,"id":"01a0b519-…","cwd":"…/beehive--wt--pi-native-stage-driver"}` |
+| 4 | The child settles and reports cost, so a per-worker budget is enforceable from its own output. | ran | `docs/history/pi-native-stage-driver/evidence.md` § A5 | `"usage":{"input":13924,"output":114,…"cost":{…"total":0.001253952112}},"stopReason":"stop"` then `{"type":"agent_settled"}` |
+| 5 | Pi ships a working precedent for the exact spawn argv D2 requires. | read | `docs/history/pi-native-stage-driver/evidence.md` § B1 | `const args: string[] = ["--mode", "json", "-p", "--no-session"];` … `const proc = spawn(invocation.command, invocation.args, { cwd: cwd ?? defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"], });` |
 | 6 | `setActiveTools` narrows the model's list, so D4's hard gate is reachable. | read | `docs/history/pi-native-stage-driver/evidence.md` § B2 | `pi.setActiveTools(["read", "bash"]); // Switch to read-only` |
-| 7 | The additive-only rule binds a loader tool's own execution, not an event handler, so narrowing from an event handler is legal. | read | `docs/history/pi-native-stage-driver/evidence.md` § B3 | `3. During loader execution, call \`pi.setActiveTools([...currentTools, ...matchingTools])\`. The change must be additive: do not remove currently active tools in the same call.` |
-| 8 | pi 0.85.1 has no `session_stop`, so D5's warn-only close guard must hang on `agent_settled`. | ran | `docs/history/pi-native-stage-driver/evidence.md` § B4 | count `0`, beside `Use \`agent_settled\` for status integrations that need to know Pi will not continue running automatically.` |
-| 9 | The door refuses every non-herding resolution for Pi today; that refusal is the one place D8 changes. | read | `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2237-2243` | `if runtime == "pi" && !matches!(resolved, Resolved::Herding { .. }) { return Ok(Prepared::Value(pi_requires_herding_refusal(marker_role, &resolved, is_escalated))); }` |
-| 10a | `doctor` embeds the belt at compile time and byte-compares the on-disk file, so D7's rebuild step is mandatory. | read | `packages/bee-rs/crates/bee/src/doctor.rs:47` | the file is pulled in with `include_str!` and compared at `:310-312` |
-| 10b | No generator writes the belt, so the checked-in copy is the source of truth. | read | `packages/bee-rs/crates/bee/src/devtools/mod.rs:529-547` | the runtime match returns `None` for `"pi"`, so `bee dev regen` renders nothing for it |
-| 11 | The contract suite parses the belt source and asserts its handler and command sets, so every added `pi.on` / `registerCommand` needs a matching fixture row. | read | `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:107` | the suite `include_str!`s the belt, then derives the `pi.on("<event>"` set at `:285-313` and the `pi.registerCommand("<name>"` set at `:315`+ |
-| 12 | `team.pi` routes most roles to a non-`pi` agent, so D1/D3's fallback is forced by config, not preference. | ran | `.bee/bin/bee team show --runtime pi --json` | `code/read/test/docs/extraction/generation/supervisor/lane-3 → gemini-3.8-flash-high (herding: agy-flash)`; only `plan/review/advisor/hat-*/lane-1/lane-2` run a `pi` agent |
-| 13a | A brand-new feature inherits the previous feature's role plan, so the dispatch door refuses every non-cell dispatch. | ran | `docs/history/pi-native-stage-driver/evidence.md` § C1 | `"reason":"stage_required"`, then with `--stage read-only-gather`, `"reason":"stage_not_applicable"` |
+| 7 | The additive-only rule binds a loader tool's own execution, so narrowing from an event handler is legal. | read | `docs/history/pi-native-stage-driver/evidence.md` § B3 | `3. During loader execution, call \`pi.setActiveTools([...currentTools, ...matchingTools])\`. The change must be additive: do not remove currently active tools in the same call.` |
+| 8 | pi 0.85.1 has no `session_stop`, so D5/D13 must hang on `agent_settled` — which the belt already registers at `bee-guard.ts:2305`. | ran | `docs/history/pi-native-stage-driver/evidence.md` § B4 | count `0`, beside `Use \`agent_settled\` for status integrations that need to know Pi will not continue running automatically.` |
+| 9a | The Pi refusal the door changes sits at one site. **(corrected: a second call site exists.)** | read | `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2237-2243` | `if runtime == "pi" && !matches!(resolved, Resolved::Herding { .. }) { return Ok(Prepared::Value(pi_requires_herding_refusal(marker_role, &resolved, is_escalated))); }` |
+| 9b | A second `pi_requires_herding_refusal` call site exists and must be handled too. **(corrected)** | ran | `rg -n 'runtime == "pi"' packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` | five sites: `2184`, `2237`, `2464`, `2480`, `2524` |
+| 9c | `--seat`, the 600 s hat clamp and `detached_delivery` all live INSIDE the herding payload branch — which is why D11 keeps the work there. **(new)** | read | `prepare.rs:2464`, `:2480`, `:2524` | `if runtime == "pi" && kind != "cell" && role.is_some()` (seat); `configured if runtime == "pi" && hat_seat.is_some()` (clamp); `if runtime == "pi"` (detached) |
+| 10a | `doctor` embeds the belt at compile time and byte-compares the on-disk file. **(corrected anchor)** | read | `packages/bee-rs/crates/bee/src/doctor.rs:47` and `:305` | `include_str!` at `:47`; the compare is `let same = on_disk.as_slice() == PI_EXTENSION_SOURCE.as_bytes();` at `:305` |
+| 10b | No generator writes the belt, so the checked-in copy is the source of truth. | read | `packages/bee-rs/crates/bee/src/devtools/mod.rs:547` | `"pi" => return None,` |
+| 11a | The contract suite parses the belt source and derives its `pi.on` and `registerCommand` sets. | read | `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:107`, `:288` | `include_str!` at `:107`; `const MARKER: &str = "pi.on(\"";` at `:288` |
+| 11b | That suite has NO `registerTool` derivation, so it could never have proved a belt-hosted tool. This is why D11 moves the work out of the belt. **(new)** | ran | `rg -n 'registerTool' packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs` | one hit, line 35, inside a comment: `//      \`PI_BUILTIN_TOOLS\` export — a sibling extension's \`pi.registerTool\`` |
+| 12 | On runtime `pi`, an execution role is configured to a non-`pi` agent, so D1/D3's fallback is forced by config. **(corrected: the old row's "verbatim" string was hand-composed.)** | ran | `.bee/bin/bee team show --runtime pi --json` | role `code`: `"model": "gemini-3.8-flash-high"`, `"transport": "herding: agy-flash"`, `"slot": {"kind": "herding", "agent": "agy-flash", …}`. Role `advisor`: `"transport": "herding: pi-gpt-6-astra"` |
+| 13a | A brand-new feature inherits the previous feature's role plan, so the door refuses every non-cell dispatch. | ran | `docs/history/pi-native-stage-driver/evidence.md` § C1 | `"reason":"stage_required"`, then with `--stage read-only-gather`, `"reason":"stage_not_applicable"` |
 | 13b | The cause is that the stored packet keeps its own, different feature name. | ran | `docs/history/pi-native-stage-driver/evidence.md` § C2 | `packet.feature : release-2-41-2` while `state.feature : pi-native-stage-driver` |
-| 13c | The lookup never compares that field, so the fix has one home. | read | `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:641-649` | the state branch matches only `m.get("feature") == Some(feature)` before returning `approved_cell_packet` |
+| 13c | The fix has TWO homes, not one: the state branch compares the active feature, and the lane branch compares nothing at all. **(corrected)** | read | `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:633-639` and `:641-649` | the lane branch returns `approved_cell_packet` with no feature comparison; the state branch guards only on `m.get("feature") == Some(feature)` |
+| 14 | A herding worker runs with a muted hook posture that a belt-spawned child would not have had — the reason D11 keeps the spawn on this path. **(new)** | read | `packages/bee-rs/crates/bee/src/herding/run.rs:2499` and `packages/bee-rs/crates/bee/src/hooks/mod.rs:91` | `pane_env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());` and `std::env::var("BEE_HERDING_WORKER").is_ok_and(\|v\| !v.is_empty())`, with `:145-146` muting every hook but `activity` |
+| 15 | `herding.agents` carries TWO config shapes, so "is this a `pi` binary" cannot be `agents[name][0]`. **(new)** | ran | `.bee/config.json` `herding.agents`, read with `python3` | `pi-gpt-5.6-luna  ARRAY  argv0='pi'` versus `agy-flash  DICT  argv0='agy'` (argv nested under an `argv` key) |
 
 ## Discovery
 
-The one unknown that could have killed the shape — whether bee's guard survives
-inside a native child — was settled by running a real child from this worktree
-(claims 1–4). The belt loads, the preamble arrives, the process settles and
-reports cost. Pi's own shipped subagent example gives the exact spawn shape
-(claim 5), so D2 copies a working precedent rather than inventing one.
+The first draft of this plan put the spawner in bee's Pi extension. The
+plan-step hat wave returned five seats and found six blockers in it; the full
+record is `docs/history/pi-native-stage-driver/hat-synthesis.md`. Five of the six
+disappear if the spawn happens where a pane is started today, because the seat
+name, the ceiling, the result drain, the worker hook posture and the per-agent
+environment already exist there. The owner chose that shape on 2026-09-19
+(decision `31fb9e15`), and CONTEXT.md gained D11 to D13.
 
-One finding changed the slice order. Starting this feature left the previous
-feature's approved packet in `.bee/state.json`, so the dispatch door refuses
-every non-cell dispatch for a brand-new feature (claim 13). That is a red base
-under this feature's own execution, so it becomes cell 1 — fix first, then build.
+The wave also corrected five rows of this table, including one where the
+"verbatim" evidence had been hand-composed rather than copied. Those are fixed
+above and the mistake is recorded.
 
 ## Approach
 
 **Recommended path.** Four slices, walking-skeleton first.
 
-Slice 1 fixes the stale-packet bug (claim 13) so the door works at all. Slice 2
-is the walking skeleton: one registered tool that spawns one child, returns one
-full answer, end to end, real behavior, no stubs — plus the door arm (D8) and
-the config slot (D1, D3). Slice 3 makes it a fan-out: parallel seats, the
-10-minute ceiling, seat-named results, drop-and-name (D10). Slice 4 adds the two
-session-surface behaviors that share the file: the hard tool gate (D4) and the
-warn-only close guard (D5).
+Slice 1 fixes the stale-packet bug so the dispatch door works at all (claims
+13a-13c). Slice 2 is the walking skeleton: a no-pane runner in `bee herding run`,
+the door arm that selects it, and one real end-to-end drive. Slice 3 proves the
+hat wave runs with no panes at all, including drop-and-name. Slice 4 adds the two
+belt behaviors — the hard tool gate with D12's obligations, and the close guard
+with D13's.
 
 Rejected alternatives, one line each:
-- In-process SDK (`createAgentSession`) — rejected by D2; no `dist/*.d.ts` on this host to pin against.
-- `pi --mode rpc` bridge — rejected by D2; stable protocol but no shipped example and a bridge to maintain.
-- Replacing herding on Pi — rejected by D1; `team.pi` routes most roles to a non-`pi` agent (claim 12).
-- Doing the tool gate and close guard first — rejected; they are session polish, and the transport is what the user actually reported.
+- A registered spawner tool in the belt — rejected by D11; six blockers, and it makes the belt's own recorded premise false.
+- In-process SDK (`createAgentSession`) — rejected by D2; least stable, no types on this host to pin against.
+- `pi --mode rpc` bridge — rejected by D2; stable protocol, no shipped example, a bridge to maintain.
+- Replacing panes on Pi entirely — rejected by D1; `team.pi` routes execution roles to a non-`pi` agent (claim 12).
 
 **SMALLER PATH check.** Is there a cheaper shape that still honors every locked
-decision? Considered: ship slice 2 alone and stop. It would honor D2, D6, D7,
-D8 and D9 — but D10 names the hat wave budget and drop-and-name explicitly, and
-D4/D5 are locked decisions, so stopping early would quietly shrink the agreed
-scope. FAIL on scope integrity, not on cost. Kept at four slices, with slice 1
-justified by a reproduced red base rather than by preference.
+decision? The wave supplied one, and it was taken — that is what D11 is. Asked
+again of the shape as it now stands: could slice 2 alone ship? It would honor D1,
+D2, D3, D8, D9 and D11, but D10, D12 and D13 are locked decisions, so stopping
+there would quietly deliver less than was agreed. FAIL on scope integrity. Kept
+at four slices. Slice 3 is much smaller than it was, because D11 inherits the
+seat, the ceiling and the drain rather than rebuilding them.
 
 **Risk map.**
 
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
-| Stale approved packet | MEDIUM | `pnsd-1` | a red-first test that a new feature does not inherit a prior packet |
-| Belt gains a registered tool | HIGH | `pnsd-2` | the new tool has an explicit `mapToolCall` row and the fail-safe default test stays green |
-| Door gains a native arm | HIGH | `pnsd-3` | Claude/Codex/OpenCode payloads byte-unchanged; pi native arm covered |
-| Parallel seats + ceiling | MEDIUM | `pnsd-5` | a late seat is dropped AND named, never silently lost |
-| Hard tool gate | MEDIUM | `pnsd-6` | off-stage tool absent from the active set; the re-open command restores it |
-| Close guard | LOW | `pnsd-7` | warning names the cell; the session still ends |
-| Binary/byte drift | MEDIUM | every belt cell | `doctor --runtime pi` reports `ready` after a rebuild |
+| Stale approved packet, two homes | MEDIUM | `pnsd-1` | red-first test per branch; a lane-file packet and a state packet both refused when the feature differs |
+| Child spawn in the runner | HIGH | `pnsd-2` | the child inherits the worker posture and per-agent env, not the leader's; a denied write inside the child is blocked, `green:live` |
+| Agent-shape detection | HIGH | `pnsd-3` | both config shapes classified correctly; a non-`pi` agent still returns a pane payload byte-identical to main |
+| Door payload regression | HIGH | `pnsd-3` | claude and codex payloads byte-identical to main (D9) |
+| Binary/byte drift | MEDIUM | `pnsd-4`, `pnsd-6`, `pnsd-7` | `doctor --runtime pi` reports `ready` after every belt edit and rebuild |
+| Tool gate legibility | MEDIUM | `pnsd-6` | the user sees the re-open command; the model is told why a tool went away |
+| Close-guard visibility | LOW | `pnsd-7` | the warning is in the transcript, and is present with `ctx.hasUI` false |
 
-Waves: `pnsd-1` runs alone (it unblocks dispatch). Then `pnsd-2` and `pnsd-3`
-run in parallel — different files, no overlap. `pnsd-4` is serial after both
-(it is the end-to-end proof that needs them). `pnsd-5`, `pnsd-6` and `pnsd-7`
-all touch the belt, so they run serially after `pnsd-4`, in that order.
+Waves: `pnsd-1` runs alone. Then `pnsd-2` and `pnsd-3` run in parallel — different
+files, and the payload contract between them is fixed in this plan below, not left
+to either cell. `pnsd-4` is serial after both.
+
+**The payload contract, fixed here so two parallel cells cannot disagree.**
+The door's native payload is the SAME `bee herding run` command it returns today,
+with one added flag naming the no-pane runner. No new JSON shape, no new keys, no
+new delivery carrier: the result comes back exactly as a pane worker's does, through
+the existing mailbox report and result drain. `pnsd-3` adds the flag; `pnsd-2`
+implements it. Neither cell may invent a second carrier.
 
 ## Role assignments
 
@@ -128,10 +148,10 @@ all touch the belt, so they run serially after `pnsd-4`, in that order.
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
     {"stage": "planning", "classification": "required", "role": "plan", "reason": "High-risk lane: the shape and its slices need plan-altitude reasoning."},
-    {"stage": "implementation", "classification": "required", "role": "code", "reason": "Every slice writes TypeScript in the belt or Rust in the door."},
-    {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "The contract suite asserts the belt's handler and command sets; each belt change needs its fixture row red-first."},
+    {"stage": "implementation", "classification": "required", "role": "code", "reason": "Every slice writes Rust in the runner and the door, or TypeScript in the belt."},
+    {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "A spawn that inherits env and writes to the repo is only proven by a live drive."},
     {"stage": "documentation-and-capture", "classification": "required", "role": "docs", "reason": "Two mapped verify features (pi-runtime, pi-hat-wave) change and must be re-synced."},
-    {"stage": "read-only-gather", "classification": "required", "role": "read", "reason": "Multi-file hunts across the belt, the door and the contract suite."},
+    {"stage": "read-only-gather", "classification": "required", "role": "read", "reason": "Multi-file hunts across the runner, the door, the hooks and the contract suite."},
     {"stage": "fact-extraction", "classification": "conditional", "role": "extraction", "condition": "a single already-located fact is needed during execution", "reason": "Cheap tier for narrow lookups only."},
     {"stage": "generation-fallback", "classification": "conditional", "role": "generation", "condition": "a role with no configured slot is requested", "reason": "Fallback only; never selected directly."},
     {"stage": "independent-review", "classification": "conditional", "role": "review", "condition": "the user invokes a review", "reason": "Review is user-invoked, never automatic."},
@@ -140,11 +160,11 @@ all touch the belt, so they run serially after `pnsd-4`, in that order.
     {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "No convergence lane: the shape is settled, not contested."},
     {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "No convergence lane."},
     {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "No convergence lane."},
-    {"stage": "hat-facts-gaps", "classification": "required", "role": "hat-facts-gaps", "reason": "High-risk: 5 seats. This seat checks the claims table against the code."},
-    {"stage": "hat-risks", "classification": "required", "role": "hat-risks", "reason": "The belt is a trust boundary; the risk seat is the one that must not be skipped."},
-    {"stage": "hat-value", "classification": "required", "role": "hat-value", "reason": "Five Pi features already shipped without fixing this; the value seat tests whether the sixth is different."},
-    {"stage": "hat-alternatives", "classification": "required", "role": "hat-alternatives", "reason": "Carries the SMALLER PATH question against the four-slice shape."},
-    {"stage": "hat-user-impact", "classification": "required", "role": "hat-user-impact", "reason": "D4's hard tool gate changes what the user can do in every turn."},
+    {"stage": "hat-facts-gaps", "classification": "required", "role": "hat-facts-gaps", "reason": "High-risk: 5 seats. This seat audited the claims table and found the fabricated row."},
+    {"stage": "hat-risks", "classification": "required", "role": "hat-risks", "reason": "The spawn is a trust boundary; this seat found the worker-posture blocker."},
+    {"stage": "hat-value", "classification": "required", "role": "hat-value", "reason": "Five Pi features already shipped without fixing this."},
+    {"stage": "hat-alternatives", "classification": "required", "role": "hat-alternatives", "reason": "This seat produced the shape now locked as D11."},
+    {"stage": "hat-user-impact", "classification": "required", "role": "hat-user-impact", "reason": "D4's hard gate changes what the user can do in every turn."},
     {"stage": "deployment", "classification": "not-applicable", "role": "deploy", "reason": "No release is cut by this feature; the release script owns that."}
   ]
 }
@@ -153,26 +173,26 @@ all touch the belt, so they run serially after `pnsd-4`, in that order.
 ## Shape
 
 **Slice 1 — unblock the door.** `pnsd-1`.
-**Slice 2 — walking skeleton.** `pnsd-2`, `pnsd-3`, then `pnsd-4` end to end.
-**Slice 3 — fan-out.** `pnsd-5`.
-**Slice 4 — session surface.** `pnsd-6`, `pnsd-7`.
+**Slice 2 — walking skeleton.** `pnsd-2` and `pnsd-3` in parallel, then `pnsd-4`.
+**Slice 3 — the wave with no panes.** `pnsd-5`.
+**Slice 4 — the belt's session surface.** `pnsd-6`, `pnsd-7`.
 
-Only slice 1 and slice 2 are previewed as cells below. Later slices keep
-one-line headlines and become cells when their slice starts.
+Only slices 1 and 2 are previewed as cells. Later slices keep headlines.
 
-Slice 3 headline: parallel seats, 10-minute ceiling, seat-named results,
-drop-and-name a late seat (D10).
-Slice 4 headlines: hard per-stage tool gate with a re-open command (D4);
-warn-only close guard naming the uncapped cell (D5).
+Slice 3 headline: drive a 5-seat hat wave with every seat a child process, prove
+the 10-minute ceiling and that a late seat is dropped AND named (D10) — inherited
+machinery, so this slice is proof, not construction.
+Slice 4 headlines: hard per-stage tool gate with a named re-open command, a user
+notice and a model notice (D4, D12); close-guard warning in the transcript (D5, D13).
 
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| `pnsd-1` | Scope the approved plan packet to its own feature | `packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs`, `packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs` | — | Starting a new feature right after another one no longer refuses every advisor, gather and hat dispatch with `stage_not_applicable` | red-first test: a packet whose own `feature` differs from the active feature is not returned; `cargo test -p bee state_group` green |
-| `pnsd-2` | Register the native dispatch tool in the Pi belt | `.pi/extensions/bee-guard.ts`, `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs` | `pnsd-1` | A Pi session can start one bee worker with no tmux pane and get its full answer back | `cargo test -p bee --test pi_plugin_contracts` green, including the unchanged fail-safe `default:` assertion and a new explicit `mapToolCall` row for the tool |
-| `pnsd-3` | Give the dispatch door a native arm for Pi | `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, `packages/bee-rs/crates/bee/src/config.rs` | `pnsd-1` | `bee dispatch prepare --runtime pi` returns a native payload for a `pi`-agent role and still returns herding for every other role | `cargo test -p bee` green; a byte-equality test that the claude and codex payloads are unchanged (D9) |
-| `pnsd-4` | Drive one native worker end to end and record the evidence | `.bee/verify/verify-app/features/pi-runtime.md` | `pnsd-2`, `pnsd-3` | `doctor --runtime pi` still reports `ready`, and the verify recipe drives a real native dispatch | `green:live` — the verify recipe run against a launched sandbox, evidence attached |
+| `pnsd-1` | Scope the approved plan packet to its own feature | `plan_packets.rs`, `state_group/tests.rs` | — | Starting a new feature right after another no longer refuses every advisor, gather and hat dispatch | red-first test per branch; scoped `cargo test` green |
+| `pnsd-2` | Add a no-pane runner to `bee herding run` | `herding/run.rs`, `herding/tests.rs` | `pnsd-1` | A bee worker on Pi runs as a child process with no tmux pane, and its answer comes back the same way a pane worker's does | scoped `cargo test` green, plus a denied write attempted inside the child and blocked |
+| `pnsd-3` | Select the no-pane runner from the dispatch door | `prepare.rs` | `pnsd-1` | `bee dispatch prepare --runtime pi` picks the no-pane runner for a `pi`-agent role and still returns a pane payload for every other role | scoped `cargo test` green, including byte-equality of the claude and codex payloads |
+| `pnsd-4` | Drive one native worker end to end and record the evidence | `.bee/verify/verify-app/features/pi-runtime.md` | `pnsd-2`, `pnsd-3` | `doctor --runtime pi` still reports `ready`, and the verify recipe drives a real no-pane dispatch | `green:live` — the recipe run against a launched sandbox, evidence attached |
 
 ```json
 [
@@ -195,17 +215,18 @@ warn-only close guard naming the uncapped cell (D5).
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Make an approved plan packet belong to the feature that produced it. Today get_approved_preview_packet returns whatever packet sits in the store as long as the ACTIVE feature name matches the requested one; it never reads the packet's own `feature` field, so a new feature inherits the previous feature's role plan and every non-cell dispatch then refuses. Read evidence.md section C for the reproduction and the exact refusal strings. Find the two return sites by searching for `approved_cell_packet` in plan_packets.rs — one reads the lane file, one reads state.json; carry the enclosing function name, not a line number. At each site, if the stored packet carries a non-empty `feature` field that differs from the requested feature, treat it as absent and return None. A packet with no `feature` field at all keeps today's behavior, so older stores do not break. Write the test red first: assert that a packet whose own feature is \"other-feature\" is NOT returned when the active feature is \"this-feature\", watch it fail for that reason, then fix. Do not change how a matching packet is returned, and do not touch the gate or dispatch code (per D8: the door keeps one shape).",
+    "action": "Make an approved plan packet belong to the feature that produced it. Read evidence.md section C for the reproduction and the exact refusal strings. `get_approved_preview_packet` has TWO return sites — find them by searching for `approved_cell_packet`, and carry the enclosing function name rather than a line number. They differ today and both are wrong in different ways: the lane-file branch compares NO feature at all, and the state branch compares only the ACTIVE feature name, never the packet's own `feature` field. At BOTH sites, if the stored packet carries a non-empty `feature` that differs from the requested feature, treat the packet as absent and return None. A packet with no `feature` field keeps today's behavior so older stores do not break. Write one red test per branch first — a lane-file packet and a state packet, each carrying a foreign feature name — watch both fail for that reason, then fix. Do not change how a matching packet is returned, and do not touch the gate or dispatch code.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee plan_packets",
     "must_haves": {
       "truths": [
-        "A packet whose own feature field differs from the active feature is not returned",
+        "A lane-file packet whose own feature differs from the active feature is not returned",
+        "A state packet whose own feature differs from the active feature is not returned",
         "A packet with no feature field is still returned, so existing stores keep working",
-        "Starting a new feature after another one no longer refuses a non-cell dispatch with stage_not_applicable"
+        "Starting a new feature after another one no longer refuses a non-cell dispatch"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "both packet return sites compare the packet's own feature field; no TODO stubs"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs", "substantive": "a test that fails before the fix for the mismatched-feature reason"}
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "both return sites compare the packet's own feature field; no TODO stubs"},
+        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs", "substantive": "one test per branch, each failing before the fix for the mismatched-feature reason"}
       ],
       "key_links": ["get_approved_role_plan still reads through get_approved_preview_packet, unchanged"],
       "prohibitions": [
@@ -222,43 +243,47 @@ warn-only close guard naming the uncapped cell (D5).
   {
     "id": "pnsd-2",
     "feature": "pi-native-stage-driver",
-    "title": "Register the native dispatch tool in the Pi belt",
+    "title": "Add a no-pane runner to bee herding run",
     "lane": "high-risk",
     "role": "code",
     "status": "open",
     "deps": ["pnsd-1"],
-    "decisions": ["D2", "D5", "D7", "D9"],
+    "decisions": ["D2", "D10", "D11"],
     "files": [
-      ".pi/extensions/bee-guard.ts",
-      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs"
     ],
     "read_first": [
-      ".pi/extensions/bee-guard.ts",
-      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
       "docs/history/pi-native-stage-driver/evidence.md",
-      "docs/history/pi-native-stage-driver/CONTEXT.md"
+      "docs/history/pi-native-stage-driver/hat-synthesis.md"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Give the Pi belt one registered tool that runs a bee worker as a child pi process, with no tmux pane. Copy the spawn shape from evidence.md section B1 verbatim in spirit (per D2): argv starts [\"--mode\",\"json\",\"-p\",\"--no-session\"], then --model, optionally --thinking, then --tools, then the task as the final positional; spawn with shell:false and stdio [\"ignore\",\"pipe\",\"pipe\"] and an explicit cwd. Parse stdout as JSONL and SKIP any line that does not parse — evidence.md section A4 shows a non-JSON mise banner arrives first. Return the child's full assistant text, never a one-line summary (per D4 of pi-stage-dispatch, and the reason this feature exists). Surface a non-zero exit with the child's stderr attached; never report a silent success. Add the new tool name as an EXPLICIT case in mapToolCall rather than letting it fall to the default arm, and keep `hook: \"write-guard\"` for it — the contract suite asserts the default arm has no null return and at least two write-guard literals, and it derives the pi.on and registerCommand name sets from this source, so add the matching fixture rows in pi_plugin_contracts.rs in the same cell. The belt keeps exactly two failure policies (per D5): tool_call stays the only blocking surface, everything this cell adds is advisory and swallows its own errors. Do not add a pi.on handler in this cell. Do not edit .opencode/plugins/bee-guard.ts (per D7). Write the contract test rows first and watch them fail before the belt edit.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "action": "Give `bee herding run` a second way to start a worker: spawn it as a child process instead of splitting a tmux pane (per D11). Everything around the worker stays exactly as it is — same job id, same `--seat`, same ceiling handling, same mailbox report path, same result-inbox marker and drain. Only the launch changes. Build the child argv the way Pi's own example does (evidence.md section B1): `--mode json -p --no-session`, then `--model`, then `--tools`, then the task, spawned with shell false and an explicit cwd, stdout and stderr piped. Parse stdout as JSONL and SKIP every line that does not parse — evidence.md section A4 shows a non-JSON banner arrives first. Take the assistant text and the usage/cost from the child's own events (evidence.md section A5) and write the same report file a pane worker writes, so the leader reads it by the path it already reads. Two things the pane path already gets right and this path MUST get right the same way, both found by the hat wave: build the child environment EXPLICITLY the way the pane env is built near the `BEE_HERDING_WORKER` insertion — never let the child inherit the leader's session identity — and set `BEE_HERDING_WORKER=1` in it, because `hooks/mod.rs` reads that marker to mute every leader-only hook; without it the child registers its own acting session and can adopt the leader's handoff. Find the cwd the same way the pane path finds it, from the prepared `--cwd`, never from the process cwd. Do not add any new result carrier and do not change the report format. Do not touch `.pi/extensions/bee-guard.ts` (per D11).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
     "must_haves": {
       "truths": [
-        "A Pi session can run one bee worker with no tmux pane and receive its full answer",
+        "A worker starts as a child process with no tmux pane and its answer lands in the same report file a pane worker writes",
+        "The child environment carries BEE_HERDING_WORKER=1 and does not carry the leader's session identity",
         "Unparseable stdout lines are skipped and the answer still returns",
-        "A non-zero child exit surfaces the child's stderr to the leader",
-        "The new tool has an explicit mapToolCall row routed to write-guard"
+        "A non-zero child exit surfaces the child's stderr rather than reporting success",
+        "The job id, seat and ceiling behave exactly as on the pane path"
       ],
       "artifacts": [
-        {"path": ".pi/extensions/bee-guard.ts", "substantive": "one registered tool that spawns and parses a child pi process; no TODO stubs"},
-        {"path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", "substantive": "fixture rows for the new tool name and its mapToolCall route"}
+        {"path": "packages/bee-rs/crates/bee/src/herding/run.rs", "substantive": "a no-pane launch path beside the pane launch; explicit child env; JSONL parse that tolerates noise. No TODO stubs"},
+        {"path": "packages/bee-rs/crates/bee/src/herding/tests.rs", "substantive": "tests for env construction, noise-tolerant parsing, and non-zero exit surfacing"}
       ],
-      "key_links": ["mapToolCall routes the new tool name explicitly, not through its default arm"],
+      "key_links": [
+        "the no-pane path writes the same mailbox report the drain already reads",
+        "the child env is built by the same explicit construction the pane env uses"
+      ],
       "prohibitions": [
-        "No new blocking surface: tool_call stays the only one",
-        "No edit to .opencode/plugins/bee-guard.ts",
-        "No change to the existing five pi.on handlers",
-        "No second returner added to tool_result"
+        "No edit to .pi/extensions/bee-guard.ts",
+        "No new result carrier and no change to the report format",
+        "The child must not inherit BEE_SESSION_ID, CLAUDE_CODE_SESSION_ID or PI_SESSION_ID",
+        "No change to the pane launch path's behavior"
       ]
     },
     "trace": {
@@ -270,36 +295,39 @@ warn-only close guard naming the uncapped cell (D5).
   {
     "id": "pnsd-3",
     "feature": "pi-native-stage-driver",
-    "title": "Give the dispatch door a native arm for Pi",
+    "title": "Select the no-pane runner from the dispatch door",
     "lane": "high-risk",
     "role": "code",
     "status": "open",
     "deps": ["pnsd-1"],
-    "decisions": ["D1", "D3", "D8", "D9"],
+    "decisions": ["D1", "D3", "D8", "D9", "D11"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
     ],
     "read_first": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
-      "docs/history/pi-native-stage-driver/CONTEXT.md"
+      "docs/history/pi-native-stage-driver/CONTEXT.md",
+      "docs/history/pi-native-stage-driver/hat-synthesis.md"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Turn the Pi herding-only refusal into a per-slot arm (per D8). Find it by searching prepare.rs for `pi_requires_herding_refusal`; the guard reads `if runtime == \"pi\" && !matches!(resolved, Resolved::Herding { .. })` and refuses every other resolution. Replace the blanket refusal with this rule: when the role's configured agent is a pi binary, return the native payload the belt's tool from pnsd-2 consumes; otherwise keep returning today's herding payload byte-for-byte (per D1 and D3). Decide 'is a pi binary' from the configured agent command in herding.agents — the first argv element being `pi` — never from the role name, and never from a leader-supplied flag: the leader must not be able to pick the transport (per D8). A role that resolves to neither still refuses, with the existing reason string unchanged. Claude, Codex and OpenCode payloads must come out identical to main (per D9); add a test that asserts that byte-equality rather than trusting review. Keep the pi-only detached_delivery note on the herding arm only.",
+    "action": "Make the door choose the no-pane runner for a Pi role whose configured agent is a `pi` binary, and keep the pane payload for everything else (per D1, D3, D11). The payload contract is fixed in plan.md and is deliberately small: return the SAME `bee herding run` command returned today, with one added flag naming the no-pane runner. No new JSON shape, no new keys, no new delivery carrier. Do NOT add a new `Resolved` variant or a second refusal path; the Pi arm stays inside the herding branch so that `--seat`, the 600 s hat clamp and `detached_delivery` keep applying — the hat wave found all three live there (claims 9c), and a new arm outside that branch would silently lose them. Deciding 'this agent is a pi binary' must handle BOTH config shapes in `herding.agents`: a bare argv array, and an object carrying an `argv` key (claim 15). Read the first argv element after normalizing the shape; `agents[name][0]` is correct only by luck. Never decide from the role name, and never from a leader-supplied flag — the leader must not pick the transport (per D8). A role that resolves to neither shape still refuses, with the existing reason string unchanged. Add a test asserting the claude and codex payloads are byte-identical to main (per D9) rather than trusting review. There are five `runtime == \"pi\"` sites in this file; search for them and say in the cap which ones you touched.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
     "must_haves": {
       "truths": [
-        "A pi-agent role returns a native payload on runtime pi",
-        "A non-pi-agent role returns today's herding payload, unchanged",
-        "Claude and Codex payloads are byte-identical to main",
-        "The leader cannot select the transport by flag"
+        "A pi-agent role on runtime pi returns a payload naming the no-pane runner",
+        "Both herding.agents config shapes are classified correctly",
+        "A non-pi-agent role returns today's pane payload, unchanged",
+        "Claude and codex payloads are byte-identical to main",
+        "--seat, the 600 s hat clamp and detached_delivery still apply on the native path"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "substantive": "per-slot native arm beside the herding arm; no TODO stubs"}
+        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "substantive": "shape-normalizing agent classification and the added flag, inside the existing herding branch. No TODO stubs"}
       ],
-      "key_links": ["the native arm reads the configured agent command, not the role name"],
+      "key_links": ["the native selection reads the configured agent argv, not the role name"],
       "prohibitions": [
-        "No new CLI flag that selects a transport",
+        "No new CLI flag that lets a caller select a transport",
+        "No new Resolved variant and no second refusal path",
         "No change to the claude or codex payloads",
         "No change to the existing refusal reason string for an unresolvable role"
       ]
@@ -318,7 +346,7 @@ warn-only close guard naming the uncapped cell (D5).
     "role": "test",
     "status": "open",
     "deps": ["pnsd-2", "pnsd-3"],
-    "decisions": ["D7", "D10"],
+    "decisions": ["D7", "D11"],
     "files": [
       ".bee/verify/verify-app/features/pi-runtime.md"
     ],
@@ -329,21 +357,23 @@ warn-only close guard naming the uncapped cell (D5).
     ],
     "affects_skills": [],
     "affects_specs": [".bee/verify/verify-app/features/pi-runtime.md"],
-    "action": "Prove the native path works for a real user, not only in unit tests. Rebuild the binary first, because doctor embeds the belt with include_str! and byte-compares the on-disk file — a stale binary reports drift and the run is worthless (per D7). Then launch a sandbox with control-bee, run doctor --runtime pi and require overall_status ready with wiring_matches_binary ok. Add one sub-feature to pi-runtime.md, named for the native dispatch path, following the file's existing four-H2 contract: what it is, how a user reaches it, how to drive it, its gotchas. Drive it: one native dispatch, one full answer returned, evidence captured as the --json payload plus a control-bee snapshot. Record the proof line as green:live with the command and the scope reason. Do not modify pi-hat-wave.md in this cell — the wave arrives in the next slice (per D10).",
+    "action": "Prove the no-pane path works for a real user, not only in unit tests — five Pi features already shipped unit-green without fixing this. Rebuild the binary first: `doctor` embeds the belt with `include_str!` and byte-compares the on-disk file, so a stale binary reports drift and the run is worthless (per D7). Launch a sandbox with control-bee, run `doctor --runtime pi`, and require `overall_status` ready with `wiring_matches_binary` ok. Add one sub-feature to pi-runtime.md for the no-pane dispatch path, following the file's existing four-H2 contract. Drive it: one no-pane dispatch, the full answer returned through the normal report path, evidence captured as the --json payload plus a control-bee snapshot. Then close the one trust-boundary question the plan could not close on paper: inside the child, attempt a write the guard should deny, and record what happened. The earlier probe never tested this — it ran with `--tools read` and an explicit instruction not to use a tool — so this is the first real test of enforcement inside a child. If the write is NOT blocked, stop and report it as a P1 rather than capping. Record the proof line as green:live with the command and the scope reason. Do not modify pi-hat-wave.md in this cell; the wave is the next slice.",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
     "must_haves": {
       "truths": [
-        "doctor --runtime pi reports ready after the belt edit and a rebuild",
-        "One native dispatch is driven end to end against a launched sandbox",
-        "The full worker answer is returned, not a one-line summary"
+        "doctor --runtime pi reports ready after a rebuild",
+        "One no-pane dispatch is driven end to end against a launched sandbox",
+        "The full worker answer is returned through the existing report path",
+        "A write denied by the guard is attempted inside the child and the outcome is recorded"
       ],
       "artifacts": [
-        {"path": ".bee/verify/verify-app/features/pi-runtime.md", "substantive": "a new sub-feature for native dispatch with its driving recipe and gotchas"}
+        {"path": ".bee/verify/verify-app/features/pi-runtime.md", "substantive": "a new sub-feature for the no-pane dispatch path with its driving recipe and gotchas"}
       ],
       "key_links": ["the recipe drives the binary rebuilt from this branch, not a vendored stale copy"],
       "prohibitions": [
         "No edit to pi-hat-wave.md in this cell",
-        "No claim of green without the fresh command output beside it"
+        "No claim of green without the fresh command output beside it",
+        "Do not cap if the in-child write is not blocked — report it"
       ]
     },
     "trace": {
@@ -357,32 +387,45 @@ warn-only close guard naming the uncapped cell (D5).
 
 ## Test matrix
 
-High-risk: probes per applicable dimension of `references/edge-dimensions.md`.
-Each writer judges existing coverage first and authors only the gap.
+High-risk: probes per applicable dimension. Each writer judges existing coverage
+first and authors only the gap.
 
 | # | Dimension | Scenario | Pass when |
 |---|---|---|---|
 | 1 | Happy path | New feature started after a tiny-lane feature; `dispatch prepare --kind advisor` | payload returned, no `stage_required` refusal |
-| 2 | Happy path | `dispatch prepare --runtime pi --kind gather` for a role whose agent is a `pi` binary | payload names the native transport |
-| 3 | Boundary | Same, for a role whose agent is `agy-flash` | payload is the herding command, unchanged from today (D3) |
-| 4 | Regression | `dispatch prepare --runtime claude` and `--runtime codex`, every kind | payload bytes identical to main (D9) |
-| 5 | Error path | Native child exits non-zero | leader sees the child's stderr, never a silent success |
-| 6 | Error path | Native child writes unparseable stdout lines | parser skips them and still returns the answer (claim 3) |
-| 7 | Timeout | A seat exceeds the 600 s ceiling | the seat is DROPPED and NAMED in the result set (D10) |
-| 8 | Concurrency | 5 hat seats dispatched at once | all 5 results arrive seat-named; the wave stays inside 10 minutes |
-| 9 | Trust boundary | A native child attempts a write the guard denies | the write is blocked inside the child, same verdict as the parent |
-| 10 | Trust boundary | The new tool passed to `mapToolCall` | routed by its explicit row; the `default:` fail-safe test stays green |
-| 11 | Idempotence | `doctor --runtime pi` after the belt edit and a rebuild | `overall_status: "ready"`, `wiring_matches_binary: "ok"` (D7) |
-| 12 | Behavior change | The `pi-hat-wave` verify recipe, on main and on head | both pass; head additionally passes with no pane |
+| 2 | Boundary | A lane-file packet carrying a foreign feature name | not returned |
+| 3 | Boundary | A packet carrying no `feature` field at all | still returned, old stores unbroken |
+| 4 | Happy path | `dispatch prepare --runtime pi` for a role whose agent argv starts with `pi` | payload names the no-pane runner |
+| 5 | Boundary | Same, for an agent configured in the OBJECT shape with `argv` | classified by argv, not by luck |
+| 6 | Boundary | A role whose agent is `agy-flash` | pane payload, byte-identical to today |
+| 7 | Regression | `dispatch prepare --runtime claude` and `--runtime codex`, every kind | payload bytes identical to main (D9) |
+| 8 | Regression | A Pi hat dispatch on the native path | `--seat`, the 600 s clamp and `detached_delivery` all still present |
+| 9 | Error path | Child exits non-zero | the child's stderr surfaces; never a silent success |
+| 10 | Error path | Child stdout carries non-JSON lines | parser skips them and still returns the answer (claim 3) |
+| 11 | Trust boundary | A write the guard denies, attempted INSIDE a native child | blocked, proven `green:live` — the open question claim 1 could not close |
+| 12 | Trust boundary | Child environment at spawn | carries `BEE_HERDING_WORKER=1`; carries no `BEE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID` or `PI_SESSION_ID` (claim 14) |
+| 13 | Concurrency | 5 hat seats dispatched at once, no panes | all 5 results arrive seat-named; the wave stays inside 10 minutes |
+| 14 | Timeout | A seat exceeds the ceiling | DROPPED and NAMED in the result set (D10) |
+| 15 | Idempotence | `doctor --runtime pi` after each belt edit and rebuild | `overall_status: "ready"`, `wiring_matches_binary: "ok"` |
+| 16 | Behavior change | The `pi-hat-wave` verify recipe, on main and on head | both pass; head additionally passes with no pane |
+| 17 | User-facing | A stage narrows the tool list | the user sees the re-open command named; the model is told a tool was removed by policy (D12) |
+| 18 | User-facing | A session settles with a claimed uncapped cell, `ctx.hasUI` false | the warning is in the transcript, not only a toast (D13) |
 
 ## Open Questions
 
-- Which ONE delivery path returns a worker's result to the leader — the tool's own return value, `sendMessage(…, { deliverAs: "followUp" })`, or the existing result-inbox drain? Claims 1–4 prove the child works; they do not pick the carrier. `pnsd-2` must pick one and record it, per pi-result-mailbox D6.
-- Whether a native child needs a reservation identity. `BEE_AGENT_NAME` has no native carrier today; it matters only once a native *execution* cell exists, which is beyond slice 2.
+- Does the write guard ENFORCE inside a child, or only load? Claim 1 proves loading
+  only. `pnsd-4` closes this with a live deny attempt, and is instructed to refuse to
+  cap if the write is not blocked. Until then it is a known unknown, not an assumption.
+- Does the child need an explicit recursion fence? Under D11 the child has no dispatch
+  tool, so the belt-hosted hazard is gone. `pnsd-2` should confirm the `--tools`
+  allowlist closes it rather than assume it does.
 
 ## Out of scope
 
 - The pi-workflows engine, durable park/resume, and a typed human-decision gate (D6).
-- The five design rules from `pi-workflows-xia.md` § "Five rules worth taking" — deferred in CONTEXT.md, still unshaped.
-- The dead Antigravity usage-limit code in the belt (filed P3 in `.bee/backlog.jsonl`).
-- Removing herding from Pi (D1).
+- The five design rules from `pi-workflows-xia.md` § "Five rules worth taking".
+- The dead Antigravity usage-limit code in the belt (filed P3).
+- The hat-wave ceiling drift between doctrine and the `runtime == "pi"` clamp (filed P2).
+- Removing panes from Pi (D1).
+- Giving execution roles a `pi` agent so they reach the native path — a config change the
+  owner may want later; this feature does not make it.
