@@ -74,6 +74,23 @@
 //   6. Notification        -> ui_prompt_start (session_id, cwd; notification_type: agent_needs_input)
 //   7. Stop                -> agent_settled (session_id, cwd)
 //   8. SessionEnd          -> session_shutdown when reason is not "reload" (session_id, cwd, reason)
+//
+// ── the Pi range this belt supports ────────────────────────────────────────
+// FLOOR: Pi 0.84.4. This belt registers `ui_prompt_start` and `ui_prompt_end`
+// (rows 6 and 1 above), and Pi added both events in 0.84.4, so the belt cannot
+// run on 0.84.3.
+// CEILING: none proven. 0.85.1 is the newest Pi a bee workflow has been driven
+// end to end on (.bee/verify/verify-app/features/pi-hat-wave.md).
+//
+// A version named anywhere else in this file records which Pi docs or binary
+// were READ for the fact beside it. That is a different claim from the range
+// above, it is still true as written, and it is deliberately left alone
+// (docs/history/pi-stage-dispatch/plan.md). Do not "fix" those to match this
+// block.
+//
+// The keep/adapt/delete disposition for every Pi extension-API change across
+// this range, and the list of Pi surfaces an upgrade can break, live in
+// docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFile, execFileSync } from "node:child_process"
@@ -328,7 +345,12 @@ type MappedCall = {
  * tool's schema with `bash`).
  *
  * Kept as a NAMED LIST, not a switch default, because the fail-safe below
- * depends on knowing exactly which names are enumerated. */
+ * depends on knowing exactly which names are enumerated.
+ *
+ * Re-verified 2026-09-18 against Pi 0.85.1: `docs/settings.md` carries the
+ * identical sentence and the identical eight names, and no changelog entry
+ * between 0.84.3 and 0.85.1 adds or removes a built-in. The list is still
+ * complete at the ceiling named in the header. */
 const PI_BUILTIN_TOOLS = [
   "bash",
   "powershell",
