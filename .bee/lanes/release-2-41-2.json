@@ -8,11 +8,11 @@
     "shape": false,
     "execution": false,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"release-2-41-2\" started at phase \"swarming\" (lane).",
   "next_action": "Continue bee-swarming for \"release-2-41-2\" (lane).",
   "created_at": "2026-09-18T02:11:28.602Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null
 }
