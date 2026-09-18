@@ -1,0 +1,49 @@
+{
+  "id": "psml-1",
+  "feature": "pi-statusline-model-limits",
+  "lane": "tiny",
+  "title": "Show 5h and weekly model rate limits in Pi extension statusline",
+  "description": "Integrate 5h and weekly model rate limits into .pi/extensions/bee-guard.ts and update pi_plugin_contracts.rs",
+  "action": "Add model rate limits query to .pi/extensions/bee-guard.ts, format 5h and weekly limits if available, and update tests in pi_plugin_contracts.rs.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status",
+  "role": "code",
+  "deps": [],
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "pi-worker",
+    "outcome": null,
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-09-18T09:50:17.769Z",
+    "behavior_change": false,
+    "verification_evidence": "touched .pi/extensions/bee-guard.ts",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "01a0b359-24ec-7037-b19f-769ba9fad70b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status",
+    "claimed_at": "2026-09-18T09:42:31.076Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Show 5h and weekly model rate limits in Pi extension statusline",
+      "commit": "bbfadae2486e03a510224c5cdbbfb9f5358b53b0",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status — green:unit — touched .pi/extensions/bee-guard.ts",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
