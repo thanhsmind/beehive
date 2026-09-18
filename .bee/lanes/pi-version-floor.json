@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-version-floor\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"pi-version-floor\" — feature is closed.",
+  "next_action": "Merged into main at f25206f; capture what settled, then bee close --feature pi-version-floor.",
   "created_at": "2026-09-18T14:06:37.494Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -147,12 +147,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-18T14:16:36.389Z",
-    "branch": "wt/pi-version-floor",
-    "worktree_id": "beehive--wt--pi-version-floor",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
