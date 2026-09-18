@@ -1263,5 +1263,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-17T11:48:01.543Z"
+  },
+  "pi-statusline-model-limits": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-18T09:52:20.950Z"
   }
 }
