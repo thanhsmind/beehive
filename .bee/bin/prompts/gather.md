@@ -3,11 +3,6 @@ Gather: locate and digest the requested paths/facts. Read-only — never write, 
 
 {{original_request}}
 {{/if}}
-{{#if paths}}
-
-Paths:
-{{paths}}
-{{/if}}
 {{#if purpose}}
 
 Purpose:

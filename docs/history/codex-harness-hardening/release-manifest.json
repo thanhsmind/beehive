@@ -1819,21 +1819,21 @@
     },
     {
       "path": "packages/bee/prompts/advisor.md",
-      "sha256": "608dab75e064bc4affd30db5e548acdbc3d42b80e091329f03ede9ef9bdd6cf8",
+      "sha256": "a6050c55972ddc090e4c09a711ae26887065b60e8a58fb2349f15154c6bb12ae",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/advisor.md"
     },
     {
       "path": "packages/bee/prompts/gather.md",
-      "sha256": "4430b983d3985a2e298622088857defb305261f122f9bc95490e3edf60aea4b5",
+      "sha256": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/gather.md"
     },
     {
       "path": "packages/bee/prompts/reviewer.md",
-      "sha256": "2cc56b39d5399e0d988ea3bbdaaf131d6acdda266a8bb00db4263d7f42d2410c",
+      "sha256": "12ae690a00e9eb073b2cecd4d9748df38eef44b64eaed51777579717f2d17f28",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/reviewer.md"

@@ -44,7 +44,7 @@ byte-identical to what the door returned before the read slot existed. A host
 that configures `read` gets that slot's model instead, and the marker and
 `logical_tier` both read `read`.
 
-The agent then makes exactly that call: the Agent tool, with that payload, its own task text filled into the prompt's `Paths:` line. The model guard sees a dispatch that already names its role and its agent, has no opinion to act on, and logs it.
+The agent then makes exactly that call: the Agent tool, with that payload and its rendered prompt. The model guard sees a dispatch that already names its role and its agent, has no opinion to act on, and logs it.
 
 For a cell, the door does more. `--claim` turns "cell chosen" into "worker prompt in hand" in one verb:
 
