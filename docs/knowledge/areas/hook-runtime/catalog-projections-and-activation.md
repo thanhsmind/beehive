@@ -354,7 +354,9 @@ recovery.
   fail-safe unknown-tool routing, throw-on-deny blocking runner, never-throw
   advisory wrappers) plus per-call passivity: each handler re-checks for the
   `.bee` directory at call time, so onboarding mid-session starts guarding
-  without a reload. The model-guard exclusion is commented at the top of that
+  without a reload. The Pi version those enumerated tool and event names were
+  read against, and the disposition of every Pi extension-API change since,
+  live in [the Pi version pin and capability audit](pi-version-pin-and-capability-audit.md). The model-guard exclusion is commented at the top of that
   file and asserted by name in the belt parity test that already covers
   Claude, Codex and OpenCode — the test keeps its name; the Pi rows are
   derived from the TS source and join its row set. The belt file grew a
