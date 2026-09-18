@@ -106,13 +106,15 @@ Nothing in the range earns `delete`.
 
 ## Known gaps
 
-- **The belt's floor is undocumented and its labels understate it.** The
-  `0.84.3` labels at `.pi/extensions/bee-guard.ts:19,317` sit below the real
-  0.84.4 floor. Two test files repeat the same label:
-  `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:111,139` and
-  `packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs:492`. Fixing
-  them is a source edit and did not belong to the docs lane that produced this
-  page.
+- ~~The belt's floor is undocumented.~~ **Settled** by pi-version-floor, cell
+  `pvf-1`. The belt header now states the range directly — floor 0.84.4,
+  ceiling unproven — and says that a version named anywhere else in the file
+  records which docs were READ, so the two are not confused again. The same
+  note rides both contract tests. The `0.84.3` provenance citations at
+  `.pi/extensions/bee-guard.ts:19,317` were deliberately left as written, per
+  `docs/history/pi-stage-dispatch/plan.md:207` ("leave comments that name which
+  Pi docs or binary were read unchanged"): they are true statements about what
+  was read. The range is a decision, tagged `contract:pi-version-range`.
 - **A delivery record claims a label change that did not reach every copy.**
   `docs/knowledge/work/pi-stage-dispatch/delivery.md:43` cites "the absence of
   the old Pi 0.84.x label". The label remains at `.pi/extensions/bee-guard.ts:19,317`,
