@@ -15,6 +15,7 @@
 .bee/cache/
 .bee/intent/
 .bee/locks/
+.bee/lanes/
 .bee/doctor-attest.json
 .bee/native-transport-probe.json
 .bee/config.local.json
