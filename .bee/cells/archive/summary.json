@@ -1273,5 +1273,10 @@
     "capped": 0,
     "dropped": 1,
     "archived_at": "2026-09-18T10:12:04.507Z"
+  },
+  "pi-version-floor": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-18T14:16:55.915Z"
   }
 }

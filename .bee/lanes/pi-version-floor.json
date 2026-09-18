@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-version-floor",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-version-floor\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"pi-version-floor\" (lane).",
+  "created_at": "2026-09-18T14:06:37.494Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-09-18T14:06:37.574Z",
+    "feature": "pi-version-floor"
+  },
+  "gate_preview": {
+    "feature": "pi-version-floor",
+    "plan_sha256": "6d055578c9f13e4b6c3308421a09b34dcea2da4b56d91fbf0a530a4e929d619e",
+    "previewed_at": "2026-09-18T14:14:04.611Z",
+    "cells": [
+      {
+        "id": "pvf-1",
+        "feature": "pi-version-floor",
+        "title": "State the Pi version range the belt supports",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/pi-version-floor/plan.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add a titled comment block to the belt header, directly above the imports, stating the supported Pi range: FLOOR 0.84.4 because the belt registers ui_prompt_start and ui_prompt_end and Pi added both in 0.84.4; CEILING none proven, with 0.85.1 named as the newest version a bee workflow was driven on. Say in that block that the provenance comments elsewhere in the file record which docs were READ and are a different fact, so nobody rewrites them later. Point at docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md for the per-version dispositions. Then extend the PI_BUILTIN_TOOLS comment so it keeps its 0.84.3 provenance and adds that the same eight names were re-verified unchanged in Pi 0.85.1's docs/settings.md. In the two contract tests, extend the comment and the assertion message the same way: keep the 0.84.3 wording, add the re-verification, so the next reader does not file the label as stale. Comments and assertion strings only — change no code path, no assertion condition, and no provenance citation.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "The belt header states a floor of 0.84.4 and names the two events that set it",
+            "Every existing comment naming which Pi docs or binary were read survives byte-identical except for appended re-verification text",
+            "No assertion condition changes; only comments and assertion message strings"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "carries a supported-range block above the imports; no TODO"
+            }
+          ],
+          "key_links": [
+            "the header block points at the capability-audit concept by path"
+          ],
+          "prohibitions": [
+            "No rewrite of the 0.84.3 provenance citations at :19 and :317",
+            "No change to PI_BUILTIN_TOOLS itself",
+            "No behavior change anywhere in the belt"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "pi-version-floor",
+    "plan_sha256": "6d055578c9f13e4b6c3308421a09b34dcea2da4b56d91fbf0a530a4e929d619e",
+    "previewed_at": "2026-09-18T14:14:04.611Z",
+    "cells": [
+      {
+        "id": "pvf-1",
+        "feature": "pi-version-floor",
+        "title": "State the Pi version range the belt supports",
+        "lane": "small",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/pi-version-floor/plan.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          ".pi/extensions/bee-guard.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add a titled comment block to the belt header, directly above the imports, stating the supported Pi range: FLOOR 0.84.4 because the belt registers ui_prompt_start and ui_prompt_end and Pi added both in 0.84.4; CEILING none proven, with 0.85.1 named as the newest version a bee workflow was driven on. Say in that block that the provenance comments elsewhere in the file record which docs were READ and are a different fact, so nobody rewrites them later. Point at docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md for the per-version dispositions. Then extend the PI_BUILTIN_TOOLS comment so it keeps its 0.84.3 provenance and adds that the same eight names were re-verified unchanged in Pi 0.85.1's docs/settings.md. In the two contract tests, extend the comment and the assertion message the same way: keep the 0.84.3 wording, add the re-verification, so the next reader does not file the label as stale. Comments and assertion strings only — change no code path, no assertion condition, and no provenance citation.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "The belt header states a floor of 0.84.4 and names the two events that set it",
+            "Every existing comment naming which Pi docs or binary were read survives byte-identical except for appended re-verification text",
+            "No assertion condition changes; only comments and assertion message strings"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "carries a supported-range block above the imports; no TODO"
+            }
+          ],
+          "key_links": [
+            "the header block points at the capability-audit concept by path"
+          ],
+          "prohibitions": [
+            "No rewrite of the 0.84.3 provenance citations at :19 and :317",
+            "No change to PI_BUILTIN_TOOLS itself",
+            "No behavior change anywhere in the belt"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-09-18T14:16:36.389Z",
+    "branch": "wt/pi-version-floor",
+    "worktree_id": "beehive--wt--pi-version-floor",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
