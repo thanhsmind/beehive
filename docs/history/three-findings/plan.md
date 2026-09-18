@@ -56,22 +56,27 @@ reappears anywhere.
 
 Three cells, no shared files, run in parallel.
 
-Waves: all three in one wave. No serial edge — tf-1 owns the prompt templates
-and the manifest, tf-2 owns one knowledge page, tf-3 owns the registry payload
-and `catalog.rs`.
+Waves: all three in one wave. No serial edge — thf-1 owns the prompt templates
+and the manifest, thf-2 owns one knowledge page, thf-3 owns the registry
+payload and `catalog.rs`.
+
+`.bee/bin` is covered by the onboarding managed-hash ledger as well as the
+release manifest, so thf-1 owes both regen doors and carries both in its own
+verify. The ids are `thf-*` rather than `tf-*` because cell ids are global and
+the dropped `two-flows` feature already holds `tf-1` and `tf-2`.
 
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| tf-1 | Delete the dead paths block from the dispatch prompts | 3 templates, 3 vendored twins, 1 product-description page, the manifest | — | Nothing changes in any prompt a worker receives; the templates stop carrying a block that could never fire | the declared suite plus the manifest check |
-| tf-2 | Point the codex probe concept at the mechanism that exists | 1 knowledge page | — | A reader following the concept's pointers lands on real files | knowledge check and index freshness |
-| tf-3 | Publish the two herding flags in the command registry | the registry payload and catalog.rs | — | `bee herding run --help` lists `--seat` and `--inbox-session` | the declared suite, including the pinned-count test |
+| thf-1 | Delete the dead paths block from the dispatch prompts | 3 templates, 3 vendored twins, 1 product-description page, the manifest | — | Nothing changes in any prompt a worker receives; the templates stop carrying a block that could never fire | the declared suite plus the manifest check |
+| thf-2 | Point the codex probe concept at the mechanism that exists | 1 knowledge page | — | A reader following the concept's pointers lands on real files | knowledge check and index freshness |
+| thf-3 | Publish the two herding flags in the command registry | the registry payload and catalog.rs | — | `bee herding run --help` lists `--seat` and `--inbox-session` | the declared suite, including the pinned-count test |
 
 ```json
 [
   {
-    "id": "tf-1",
+    "id": "thf-1",
     "feature": "three-findings",
     "title": "Delete the dead paths block from the dispatch prompts",
     "lane": "standard",
@@ -96,8 +101,8 @@ and `catalog.rs`.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Delete the `{{#if paths}}` … `{{/if}}` block, including its `Paths:` line and the `{{paths}}` placeholder, from packages/bee/prompts/gather.md, reviewer.md and advisor.md. Per D1 it is dead surface: nothing supplies the var (prepare.rs:1080-1084 passes brief, expertise, purpose, original_request, seat and nothing else), so the block already renders to nothing on every dispatch and its removal changes zero rendered bytes. Delete the block only — leave every other line of all three templates byte-identical, and do NOT add a supplier. Then copy the three edited files over their .bee/bin/prompts/ twins so both on-disk copies stay byte-identical, because verbs/drivers/prompt.rs prompt_skew checks BOTH and refuses a dispatch on either mismatch. Then fix the one stale sentence at docs/product-description/delegation/dispatch.md:47, which still says the agent's task text is 'filled into the prompt's `Paths:` line' — that stopped being true at commit 58be9dfec; rewrite it to describe what the payload actually carries, without inventing a new mechanism. Finally run the regen chain (bee dev regen, or at minimum bee dev release-manifest --write) because packages/bee is a release-manifest inventory root.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+    "action": "Delete the `{{#if paths}}` … `{{/if}}` block, including its `Paths:` line and the `{{paths}}` placeholder, from packages/bee/prompts/gather.md, reviewer.md and advisor.md. Per D1 it is dead surface: nothing supplies the var (prepare.rs:1080-1084 passes brief, expertise, purpose, original_request, seat and nothing else), so the block already renders to nothing on every dispatch and its removal changes zero rendered bytes. Delete the block only — leave every other line of all three templates byte-identical, and do NOT add a supplier. Then sync the three .bee/bin/prompts/ twins so both on-disk copies stay byte-identical, because verbs/drivers/prompt.rs prompt_skew checks BOTH and refuses a dispatch on either mismatch; .bee/bin is covered by the onboarding managed-hash ledger, so do that sync by running `bee onboard --repo-root . --apply` rather than by hand. Then fix the one stale sentence at docs/product-description/delegation/dispatch.md:47, which still says the agent's task text is 'filled into the prompt's `Paths:` line' — that stopped being true at commit 58be9dfec; rewrite it to describe what the payload actually carries, without inventing a new mechanism. Finally run the regen chain (bee dev regen, or at minimum bee dev release-manifest --write) because packages/bee is a release-manifest inventory root.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
     "must_haves": {
       "truths": [
         "No `{{#if paths}}` block and no `{{paths}}` placeholder remains in any of the three templates",
@@ -122,7 +127,7 @@ and `catalog.rs`.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
   },
   {
-    "id": "tf-2",
+    "id": "thf-2",
     "feature": "three-findings",
     "title": "Point the codex probe concept at the mechanism that exists",
     "lane": "standard",
@@ -162,7 +167,7 @@ and `catalog.rs`.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false}
   },
   {
-    "id": "tf-3",
+    "id": "thf-3",
     "feature": "three-findings",
     "title": "Publish the two herding flags in the command registry",
     "lane": "standard",
