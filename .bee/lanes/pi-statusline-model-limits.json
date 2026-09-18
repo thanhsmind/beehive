@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-statusline-model-limits\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"pi-statusline-model-limits\" (lane).",
+  "next_action": "Merged into main at 985d07c; capture what settled, then bee close --feature pi-statusline-model-limits.",
   "created_at": "2026-09-18T09:38:48.137Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": "Show 5h and weekly model rate limits in Pi extension statusline",
     "updated_at": "2026-09-18T09:40:23.533Z",
     "feature": "pi-statusline-model-limits"
-  },
-  "merge_ready": {
-    "since": "2026-09-18T09:50:17.792Z",
-    "branch": "wt/pi-statusline-model-limits",
-    "worktree_id": "beehive--wt--pi-statusline-model-limits",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
