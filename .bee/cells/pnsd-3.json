@@ -1,0 +1,100 @@
+{
+  "id": "pnsd-3",
+  "feature": "pi-native-stage-driver",
+  "title": "Select the no-pane runner from the dispatch door",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pnsd-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "D8",
+    "D9",
+    "D11",
+    "38110682-9e81-43d5-9aa8-dfe0864259da"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "docs/history/pi-native-stage-driver/CONTEXT.md",
+    "docs/history/pi-native-stage-driver/hat-synthesis.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Make the door choose the no-pane runner for a Pi role whose configured agent is a `pi` binary, and keep the pane payload for everything else (per D1, D3, D11). The payload contract is fixed in plan.md and is deliberately small: return the SAME `bee herding run` command returned today, with one added flag naming the no-pane runner. No new JSON shape, no new keys, no new delivery carrier. Do NOT add a new `Resolved` variant or a second refusal path; the Pi arm stays inside the herding branch so that `--seat`, the 600 s hat clamp and `detached_delivery` keep applying — the hat wave found all three live there (claims 9c), and a new arm outside that branch would silently lose them. Deciding 'this agent is a pi binary' must handle BOTH config shapes in `herding.agents`: a bare argv array, and an object carrying an `argv` key (claim 15). Read the first argv element after normalizing the shape; `agents[name][0]` is correct only by luck. Never decide from the role name, and never from a leader-supplied flag — the leader must not pick the transport (per D8). A role that resolves to neither shape still refuses, with the existing reason string unchanged. Add a test asserting the claude and codex payloads are byte-identical to main (per D9) rather than trusting review. There are five `runtime == \"pi\"` sites in this file; search for them and say in the cap which ones you touched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+  "must_haves": {
+    "truths": [
+      "A pi-agent role on runtime pi returns a payload naming the no-pane runner",
+      "Both herding.agents config shapes are classified correctly",
+      "A non-pi-agent role returns today's pane payload, unchanged",
+      "Claude and codex payloads are byte-identical to main",
+      "--seat, the 600 s hat clamp and detached_delivery still apply on the native path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "shape-normalizing agent classification and the added flag, inside the existing herding branch. No TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the native selection reads the configured agent argv, not the role name"
+    ],
+    "prohibitions": [
+      "No new CLI flag that lets a caller select a transport",
+      "No new Resolved variant and no second refusal path",
+      "No change to the claude or codex payloads",
+      "No change to the existing refusal reason string for an unresolvable role"
+    ]
+  },
+  "trace": {
+    "worker": "worker-door",
+    "outcome": "Select the no-pane runner from the dispatch door for pi-binary agents",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No skill text changes. The door keeps ONE shape and one vocabulary: the payload is the same bee herding run command it already returned, with one added flag, and the leader still never picks the transport (D8). Nothing in bee-planning, bee-swarming, bee-reviewing or bee-capturing describes how a slot resolves to a transport, because that has always been config. The user-visible effect is recorded by pnsd-4 in the verify-app feature file."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T00:08:47.572Z",
+    "behavior_change": true,
+    "verification_evidence": "59 passed, 0 failed, 8 ignored; leader re-ran it and then confirmed each NEW test executed by name rather than trusting the count (pattern 20260818). All six ran: agent_argv_first_normalizes_both_config_shapes, pi_role_with_pi_agent_returns_no_pane_runner, pi_role_with_object_shape_pi_agent_returns_no_pane_runner, non_pi_agent_on_pi_returns_pane_payload_unchanged, claude_and_codex_payloads_are_byte_identical_to_main, and pi_hat_dispatch_on_native_path_retains_seat_ceiling_and_detached_delivery. That last one is the guard for the hat-wave blocker the plan-step review found (synthesis B2): --seat, the 600 s clamp and detached_delivery all live inside the herding payload branch, so a selection made outside it would have silently lost D10.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "claimed_at": "2026-09-18T23:51:20.806Z",
+    "sync_ack": "No skill text changes. The door keeps ONE shape and one vocabulary: the payload is the same bee herding run command it already returned, with one added flag, and the leader still never picks the transport (D8). Nothing in bee-planning, bee-swarming, bee-reviewing or bee-capturing describes how a slot resolves to a transport, because that has always been config. The user-visible effect is recorded by pnsd-4 in the verify-app feature file.",
+    "mistakes": [
+      {
+        "wrong": "The worker paused mid-cell to consult its advisor with a nested claude -p call. herdr classified that running state as an approval or question UI, so bee herding run returned outcome pane_blocked with retryable false and exited while the pane agent was in fact healthy and still working. Reading the pane showed it progressing normally and it went on to commit. Judging the run by the transport verdict would have killed live work",
+        "better": "read the pane before acting on a blocked verdict."
+      }
+    ],
+    "report": {
+      "outcome": "The dispatch door now selects the no-pane runner on runtime pi when the configured agent argv starts with pi, normalizing both herding.agents config shapes, and keeps the pane payload byte-identical for every other role.",
+      "commit": "4244dbfd6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — 59 passed, 0 failed, 8 ignored; leader re-ran it and then confirmed each NEW test executed by name rather than trusting the count (pattern 20260818). All six ran: agent_argv_first_normalizes_both_config_shapes, pi_role_with_pi_agent_returns_no_pane_runner, pi_role_with_object_shape_pi_agent_returns_no_pane_runner, non_pi_agent_on_pi_returns_pane_payload_unchanged, claude_and_codex_payloads_are_byte_identical_to_main, and pi_hat_dispatch_on_native_path_retains_seat_ceiling_and_detached_delivery. That last one is the guard for the hat-wave blocker the plan-step review found (synthesis B2): --seat, the 600 s clamp and detached_delivery all live inside the herding payload branch, so a selection made outside it would have silently lost D10.",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "The worker paused mid-cell to consult its advisor with a nested claude -p call. herdr classified that running state as an approval or question UI, so bee herding run returned outcome pane_blocked with retryable false and exited while the pane agent was in fact healthy and still working. Reading the pane showed it progressing normally and it went on to commit. Judging the run by the transport verdict would have killed live work — read the pane before acting on a blocked verdict."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 241 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
