@@ -1,0 +1,53 @@
+{
+  "id": "sgpp-1",
+  "feature": "stage-gate-phase-parity",
+  "title": "Derive the Pi stage tool gate from the write guard's own rule",
+  "lane": "tiny",
+  "role": "code",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "docs/history/stage-gate-phase-parity/plan.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Make the stage-tools hook take its write-open verdict from the write guard instead of its own list. Today run_inner builds `is_after_gate` from a hand-kept four-phase match and then sets `execution_is_open = (!is_gated && is_after_gate) || gate_approved`. That list disagrees with `write_guard::is_gated_phase`, which gates only `exploring` and `planning`, so `grooming`, `idle` and `compounding-complete` wrongly come back read-only. Replace the whole computation with `execution_is_open = !is_gated_phase(phase) || gate_approved` and delete `is_after_gate`. Extract the mapping into one pure function, `pub(crate) fn allowed_tools_for(phase: &str, gate_approved: bool) -> &'static [&'static str]`, and have run_inner call it, so the rule is testable without stdout capture. Do not change READ_ONLY_TOOLS or FULL_TOOL_SET: the eight names are exactly Pi's eight built-in tools. Do not change the JSON key set the hook prints — the Pi belt reads `stage`, `stage_name`, `allowed_tools`, `user_message`/`user_notice` and `model_message`/`model_notice`, and dropping any of them breaks the belt. Keep the hook advisory: it still fails open and still returns SUCCESS on every path. Work RED FIRST: add the failing cases before the fix and record the red output. The existing test `stage_tools_decision_logic` asserts the `is_after_gate` local you are deleting; that is a structure assertion, so replace it with behavior assertions over `allowed_tools_for` rather than repairing it. Keep `stage_tools_returns_read_only_in_planning_phase_without_gate` and `stage_tools_fails_open_without_bee_store` working as they are.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --lib hooks::stage_tools",
+  "must_haves": {
+    "truths": [
+      "grooming, idle and compounding-complete return the full tool set when the execution gate is unapproved",
+      "exploring and planning still return read,bash when the execution gate is unapproved",
+      "an approved execution gate still returns the full tool set in every phase",
+      "the hook's printed JSON keys are unchanged, so the Pi belt still parses it",
+      "the phase-to-tools rule has one home and is derived from write_guard::is_gated_phase"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "substantive": "allowed_tools_for derived from is_gated_phase, is_after_gate deleted, behavior tests covering all nine known phases at both gate states"
+      }
+    ]
+  },
+  "judge_obligation_ack": "Tiny lane kept, but the independent read is NOT skipped: an independent bee-review worker reads this diff against the write-guard rule before the cap. The change deletes a duplicate rule rather than adding guard logic, and the hook stays advisory (D5: tool_call is the only blocking surface).",
+  "trace": {
+    "worker": "leader-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9dfaddd2-e6aa-4e31-9a9a-fd7b0ca112c9",
+    "verify_command": null,
+    "claimed_at": "2026-09-19T23:12:06.525Z"
+  }
+}

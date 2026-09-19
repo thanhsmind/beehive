@@ -538,6 +538,8 @@
     "contract:worker-cap-instruction",
     "one-fact-one-home",
     "contract:test-path-expectations",
-    "windows-ci-green"
+    "windows-ci-green",
+    "tool-gate",
+    "single-source-of-truth"
   ]
 }
