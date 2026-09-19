@@ -3531,7 +3531,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // runtime was deleted at R6, so `None` reaches the dispatcher's generic
     // argument-shape classifier and blames the caller's flags for a stale
     // binary. Name it instead.
-    if let Some(skew) = prompt_skew(&root, prompt_name) {
+    let check_root = here.as_deref().unwrap_or(&root);
+    if let Some(skew) = prompt_skew(check_root, prompt_name) {
         return Some(emit_prompt_skew(&cwd, "dispatch prepare", prompt_name, &skew, use_json, t0));
     }
     let classification = if runtime == "codex" {
