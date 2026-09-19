@@ -6531,7 +6531,7 @@ use std::time::Instant;
             Some(&opencode_caller),
         ).expect("new_worktree_transition_result_and_text succeeds");
         assert_eq!(new_res["sessionRuntime"], json!("opencode"));
-        let expected_new_inst = format!("Ask the user to type /move {target_str}, then send any message to continue.");
+        let expected_new_inst = format!("Ask the user to type /move {}, then send any message to continue.", p(&created.worktree_root));
         assert_eq!(new_res["instruction"], json!(expected_new_inst));
         assert!(new_text.contains(&expected_new_inst));
 
