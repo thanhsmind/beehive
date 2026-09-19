@@ -533,6 +533,9 @@
     "contract:pi-no-pane-runner",
     "contract:pi-native-door-selection",
     "contract:pi-stage-tool-gate",
-    "contract:pi-close-guard"
+    "contract:pi-close-guard",
+    "contract:herding-caps-on-clean-report",
+    "contract:worker-cap-instruction",
+    "one-fact-one-home"
   ]
 }

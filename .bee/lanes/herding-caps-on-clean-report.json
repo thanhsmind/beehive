@@ -1,0 +1,587 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-caps-on-clean-report",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-caps-on-clean-report\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge and close; the cause and the four blockers on the runner route are recorded in hat-synthesis.md.",
+  "created_at": "2026-09-19T04:49:00.960Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "audit-security",
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 2,
+    "rationale": "audit-security is the hard-gate flag and it is the real one: a cap IS the proof record, so making herding write it automatically changes who authors the audit trail. Also changes the documented end-of-run behaviour of bee herding run (public contract) and the tests that assert it.",
+    "updated_at": "2026-09-19T04:49:00.987Z",
+    "feature": "herding-caps-on-clean-report"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-19T05:10:38.389Z",
+    "feature": "herding-caps-on-clean-report",
+    "newest_decision_id": "7152ebab-5933-4af4-ae9e-2480656c49e7",
+    "plan_sha256": "9f2c972a9676157ea28648c42d770e3de8b4573055f153447f8524fb16c46220",
+    "advisor": "plan-step hat wave (3 seats: facts-gaps, risks, alternatives)",
+    "digest_head": "# Herding caps on a clean report — hat wave synthesis\n\nPlan-step wave, 2026-09-19, against `plan.md` as first drafted (the runner\nauto-cap). Seats dispatched: **3** — `hat-facts-gaps`, `hat-risks`,\n`hat-alternatives`. All three returned.\n\nDeviation, recorded in the plan's role assignments before the wave ran: 3 seats\nrather than the 5 a high-risk lane asks for. `hat-value` and `hat-user-impact`\nwere marked not-applicable because the owner had already chosen the behavior\nagainst a stated alternat"
+  },
+  "gate_preview": {
+    "feature": "herding-caps-on-clean-report",
+    "plan_sha256": "9f2c972a9676157ea28648c42d770e3de8b4573055f153447f8524fb16c46220",
+    "previewed_at": "2026-09-19T05:10:38.309Z",
+    "cells": [
+      {
+        "id": "wci-1",
+        "feature": "herding-caps-on-clean-report",
+        "title": "Give a worker one runnable finish instruction, last",
+        "lane": "high-risk",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "7152ebab-5933-4af4-ae9e-2480656c49e7"
+        ],
+        "files": [
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/prompts/worker-cell.md",
+          ".claude/agents/bee-build.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/history/herding-caps-on-clean-report/hat-synthesis.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "A dispatched worker is currently handed TWO finish instructions and meets the broken one first. packages/bee/agents/bee-build.md.tmpl:15 says `then bee cells finish --report`, which has no --id and no .bee/bin/ prefix and therefore refuses; packages/bee/prompts/worker-cell.md:49 carries the correct full command. Fix it so the worker is told ONCE, runnably, and last. In the tmpl: stop stating the command. That file's job is to say what the agent is FOR, so it should name the step in words and point at the one home that owns the command — it must not carry a second, competing spelling (one-fact-one-home). In worker-cell.md: keep the command as the single home, and make it the LAST thing the prompt asks of the worker. Today the Result form block comes after it, so the final instruction a worker reads is to emit a JSON block, and it emits that block and stops. Reorder so the cap is terminal and the status token plus JSON reads as the ECHO of having capped, not as the finishing act. Do not weaken or drop anything the existing text requires: the proof line, the red-refuses-the-cap rule, the mistakes answer, and the report keys all stay exactly as they are — this cell changes WHERE and HOW MANY TIMES the instruction appears, never what it demands. Then run the regen chain, because these files render into trees the release manifest hashes: bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order), and commit the refreshed manifest and rendered agent file with the change. Prove it by composing what a worker would actually receive rather than by reading either file alone: run `.bee/bin/bee dispatch prepare --runtime claude --kind cell` for a real claimed cell and assert the returned task text contains exactly one `cells finish` command and that it carries both `--id` and the `.bee/bin/` prefix.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "The composed worker task text contains exactly one cells finish command",
+            "That command carries --id and the .bee/bin/ prefix, so it runs as written",
+            "The cap is the last thing the prompt asks of the worker",
+            "Nothing the existing instruction demands is weakened or dropped",
+            "The rendered trees and the release manifest match the source"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/agents/bee-build.md.tmpl",
+              "substantive": "names the step and points at its one home; carries no competing command spelling"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the single home for the command, reordered so the cap is terminal"
+            },
+            {
+              "path": ".claude/agents/bee-build.md",
+              "substantive": "regenerated from the template"
+            }
+          ],
+          "key_links": [
+            "the proof is taken from the COMPOSED dispatch text, not from either file read alone"
+          ],
+          "prohibitions": [
+            "No second spelling of the finish command anywhere in the composed text",
+            "No weakening of the proof line, the red rule, the mistakes answer or the report keys",
+            "No change to the runner: it still does not cap for the worker"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "wci-2",
+        "feature": "herding-caps-on-clean-report",
+        "title": "Dispatch a real worker and watch it cap itself",
+        "lane": "high-risk",
+        "role": "test",
+        "status": "open",
+        "deps": [
+          "wci-1"
+        ],
+        "decisions": [
+          "7152ebab-5933-4af4-ae9e-2480656c49e7"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "read_first": [
+          ".bee/verify/verify-app/features/cells-and-proof.md",
+          ".bee/verify/verify-app/features/README.md",
+          "docs/history/herding-caps-on-clean-report/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "action": "The claim is that a worker will now take the step. Only a worker taking it proves that, so drive one. Rebuild and install the binary at .bee/bin/bee first; a stale vendored copy makes the run worthless. Against a launched control-bee sandbox: create one trivial cell, claim it, dispatch a real execution worker for it through the door, and let it run to completion. Then read the cell WITHOUT capping anything by hand and record what you find: status, trace.outcome, trace.capped_at and the recorded proof line. A cell that comes back capped by its own worker is the result this feature exists for. If it comes back claimed, that is a real finding and NOT a failure of this cell — record exactly what the worker did and did not do, quote the finish instruction it actually received from the composed task text, and report it rather than capping by hand to make the run look clean. Either outcome gets written into the verify-app feature file that owns cells and proof as a new sub-feature, following that file's existing four-H2 contract, with the exact commands and assertions. Record the proof line as green:live.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+        "must_haves": {
+          "truths": [
+            "A real execution worker was dispatched for a real claimed cell",
+            "The cell's post-run state is read and recorded without any manual cap",
+            "The finish instruction the worker actually received is quoted from the composed text",
+            "The outcome is reported honestly whether or not the worker capped"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+              "substantive": "a sub-feature covering the self-cap drive, with commands, assertions and what was observed"
+            }
+          ],
+          "key_links": [
+            "the drive runs the rebuilt binary installed at .bee/bin/bee"
+          ],
+          "prohibitions": [
+            "Never cap the drive's cell by hand to make the result look clean",
+            "No claim of green without the fresh command output beside it"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "planning",
+          "classification": "required",
+          "role": "plan",
+          "reason": "High-risk lane, inherited and non-demotable."
+        },
+        {
+          "stage": "implementation-code",
+          "classification": "conditional",
+          "role": "code",
+          "condition": "wci-2 shows a worker still skipping a runnable, single instruction, so the fix has to move back into code",
+          "reason": "This feature deliberately changes prompt text rather than code. The code role stays configured because the measurement in wci-2 can send the work back there."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "docs",
+          "reason": "The change is prompt text in two template files, not code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "The claim is that a worker now takes the step; only a live dispatch shows it."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "a verify-app feature file needs the drive recipe",
+          "reason": "Only if a verify-app feature file needs the recipe."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "execution finds prompt text beyond the two files already anchored",
+          "reason": "The two files are already read and anchored."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a single already-located fact is needed",
+          "reason": "Cheap tier for narrow lookups."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "conditional",
+          "role": "generation",
+          "condition": "a role with no configured slot is requested",
+          "reason": "Fallback only."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes a review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk owes a consult; the hat-wave synthesis serves it and is what re-shaped this plan."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Single-leader feature."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Ran; audited the claims table and found the cap door's unnamed preconditions."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Ran; found that an auto-cap moves the manual step to close rather than removing it."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Ran; found the duplicated instruction that re-shaped the feature."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Recorded deviation: the owner chose the behaviour against a stated alternative with the measured failure rate in hand."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Recorded deviation: no user-facing surface changes; the audience for this text is the dispatched worker."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release is cut."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "herding-caps-on-clean-report",
+    "plan_sha256": "9f2c972a9676157ea28648c42d770e3de8b4573055f153447f8524fb16c46220",
+    "previewed_at": "2026-09-19T05:10:38.309Z",
+    "cells": [
+      {
+        "id": "wci-1",
+        "feature": "herding-caps-on-clean-report",
+        "title": "Give a worker one runnable finish instruction, last",
+        "lane": "high-risk",
+        "role": "docs",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "7152ebab-5933-4af4-ae9e-2480656c49e7"
+        ],
+        "files": [
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/prompts/worker-cell.md",
+          ".claude/agents/bee-build.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "packages/bee/agents/bee-build.md.tmpl",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/history/herding-caps-on-clean-report/hat-synthesis.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "A dispatched worker is currently handed TWO finish instructions and meets the broken one first. packages/bee/agents/bee-build.md.tmpl:15 says `then bee cells finish --report`, which has no --id and no .bee/bin/ prefix and therefore refuses; packages/bee/prompts/worker-cell.md:49 carries the correct full command. Fix it so the worker is told ONCE, runnably, and last. In the tmpl: stop stating the command. That file's job is to say what the agent is FOR, so it should name the step in words and point at the one home that owns the command — it must not carry a second, competing spelling (one-fact-one-home). In worker-cell.md: keep the command as the single home, and make it the LAST thing the prompt asks of the worker. Today the Result form block comes after it, so the final instruction a worker reads is to emit a JSON block, and it emits that block and stops. Reorder so the cap is terminal and the status token plus JSON reads as the ECHO of having capped, not as the finishing act. Do not weaken or drop anything the existing text requires: the proof line, the red-refuses-the-cap rule, the mistakes answer, and the report keys all stay exactly as they are — this cell changes WHERE and HOW MANY TIMES the instruction appears, never what it demands. Then run the regen chain, because these files render into trees the release manifest hashes: bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order), and commit the refreshed manifest and rendered agent file with the change. Prove it by composing what a worker would actually receive rather than by reading either file alone: run `.bee/bin/bee dispatch prepare --runtime claude --kind cell` for a real claimed cell and assert the returned task text contains exactly one `cells finish` command and that it carries both `--id` and the `.bee/bin/` prefix.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "The composed worker task text contains exactly one cells finish command",
+            "That command carries --id and the .bee/bin/ prefix, so it runs as written",
+            "The cap is the last thing the prompt asks of the worker",
+            "Nothing the existing instruction demands is weakened or dropped",
+            "The rendered trees and the release manifest match the source"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/agents/bee-build.md.tmpl",
+              "substantive": "names the step and points at its one home; carries no competing command spelling"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the single home for the command, reordered so the cap is terminal"
+            },
+            {
+              "path": ".claude/agents/bee-build.md",
+              "substantive": "regenerated from the template"
+            }
+          ],
+          "key_links": [
+            "the proof is taken from the COMPOSED dispatch text, not from either file read alone"
+          ],
+          "prohibitions": [
+            "No second spelling of the finish command anywhere in the composed text",
+            "No weakening of the proof line, the red rule, the mistakes answer or the report keys",
+            "No change to the runner: it still does not cap for the worker"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "wci-2",
+        "feature": "herding-caps-on-clean-report",
+        "title": "Dispatch a real worker and watch it cap itself",
+        "lane": "high-risk",
+        "role": "test",
+        "status": "open",
+        "deps": [
+          "wci-1"
+        ],
+        "decisions": [
+          "7152ebab-5933-4af4-ae9e-2480656c49e7"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "read_first": [
+          ".bee/verify/verify-app/features/cells-and-proof.md",
+          ".bee/verify/verify-app/features/README.md",
+          "docs/history/herding-caps-on-clean-report/plan.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "action": "The claim is that a worker will now take the step. Only a worker taking it proves that, so drive one. Rebuild and install the binary at .bee/bin/bee first; a stale vendored copy makes the run worthless. Against a launched control-bee sandbox: create one trivial cell, claim it, dispatch a real execution worker for it through the door, and let it run to completion. Then read the cell WITHOUT capping anything by hand and record what you find: status, trace.outcome, trace.capped_at and the recorded proof line. A cell that comes back capped by its own worker is the result this feature exists for. If it comes back claimed, that is a real finding and NOT a failure of this cell — record exactly what the worker did and did not do, quote the finish instruction it actually received from the composed task text, and report it rather than capping by hand to make the run look clean. Either outcome gets written into the verify-app feature file that owns cells and proof as a new sub-feature, following that file's existing four-H2 contract, with the exact commands and assertions. Record the proof line as green:live.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee onboard",
+        "must_haves": {
+          "truths": [
+            "A real execution worker was dispatched for a real claimed cell",
+            "The cell's post-run state is read and recorded without any manual cap",
+            "The finish instruction the worker actually received is quoted from the composed text",
+            "The outcome is reported honestly whether or not the worker capped"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+              "substantive": "a sub-feature covering the self-cap drive, with commands, assertions and what was observed"
+            }
+          ],
+          "key_links": [
+            "the drive runs the rebuilt binary installed at .bee/bin/bee"
+          ],
+          "prohibitions": [
+            "Never cap the drive's cell by hand to make the result look clean",
+            "No claim of green without the fresh command output beside it"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "planning",
+          "classification": "required",
+          "role": "plan",
+          "reason": "High-risk lane, inherited and non-demotable."
+        },
+        {
+          "stage": "implementation-code",
+          "classification": "conditional",
+          "role": "code",
+          "condition": "wci-2 shows a worker still skipping a runnable, single instruction, so the fix has to move back into code",
+          "reason": "This feature deliberately changes prompt text rather than code. The code role stays configured because the measurement in wci-2 can send the work back there."
+        },
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "docs",
+          "reason": "The change is prompt text in two template files, not code."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "The claim is that a worker now takes the step; only a live dispatch shows it."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "a verify-app feature file needs the drive recipe",
+          "reason": "Only if a verify-app feature file needs the recipe."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "execution finds prompt text beyond the two files already anchored",
+          "reason": "The two files are already read and anchored."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a single already-located fact is needed",
+          "reason": "Cheap tier for narrow lookups."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "conditional",
+          "role": "generation",
+          "condition": "a role with no configured slot is requested",
+          "reason": "Fallback only."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes a review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk owes a consult; the hat-wave synthesis serves it and is what re-shaped this plan."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Single-leader feature."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No convergence lane."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Ran; audited the claims table and found the cap door's unnamed preconditions."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Ran; found that an auto-cap moves the manual step to close rather than removing it."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Ran; found the duplicated instruction that re-shaped the feature."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Recorded deviation: the owner chose the behaviour against a stated alternative with the measured failure rate in hand."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Recorded deviation: no user-facing surface changes; the audience for this text is the dispatched worker."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release is cut."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-09-19T05:34:14.372Z",
+    "branch": "wt/herding-caps-on-clean-report",
+    "worktree_id": "beehive--wt--herding-caps-on-clean-report",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "herding-caps-on-clean-report",
+    "date": "2026-09-19",
+    "at": "2026-09-19T05:37:54.605Z",
+    "areas_synced": [
+      "dispatch-door",
+      "herding",
+      "workflow-state"
+    ],
+    "next_action": "Merge and close; the cause and the four blockers on the runner route are recorded in hat-synthesis.md."
+  }
+}
