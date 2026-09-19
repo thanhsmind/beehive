@@ -21,7 +21,7 @@ Mode: `small` — no risk flags; test code only, two files.
 | 3 | The same test file already builds expected paths with that function. | read | `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:5896` | `assert_eq!(enter["sourceCwd"], json!(canonical_path_str(&src).unwrap()));` |
 | 4 | The failing test builds its expected path without it. | read | `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:6494` | `let target_str = p(&created.worktree_root);` |
 | 5 | The release-dirt test hides its own cause. | ran | `gh run view 35449141547 --log-failed` | `release-dirt.sh failed: ` followed by an empty line — stderr empty, exit code and stdout not printed |
-| 6 | `bash` resolves to a working shell on the Windows runner, so the launcher is not the cause. | ran | `gh run view 35449141547 --log-failed` | neither `tests.rs:11219`'s release-authorization test nor any of the five `statusline_contract.rs` tests appears in the failure list, and all of them call `Command::new("bash")` |
+| 6 | **(corrected)** On Windows the bare name `bash` resolves to the WSL launcher, not Git Bash — this IS the release-dirt cause. The original row claimed the opposite from the fact that other `bash` tests were absent from the failure list; none of them ever ran bash on Windows (the five in `statusline_contract.rs` are `#[cfg(unix)]`, and the release-authorization test returns early on every platform because it looks for `packages/scripts/release.sh`). | ran | `gh run view 35453818440 --log-failed` | stdout, decoded from UTF-16: `Windows Subsystem for Linux has no installed distributions` |
 | 7 | CRLF is not the cause. | read | `.gitattributes:15` | `* text=auto eol=lf` |
 
 ## Approach
@@ -35,11 +35,83 @@ leaves the workflow red and still unexplained. FAIL — both are in scope.
 
 ## Cells — current slice (preview)
 
+Slice 2. `win-1` is capped; its packet is kept below as a record.
+
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| `win-1` | Canonicalize the worktree test's expected paths, and make the release-dirt test show its real error | two test files | — | The worktree test agrees with the product on Windows, and the release-dirt failure prints something a person can act on | the full bin suite green on Linux; the Windows run is read after the branch push |
+| `win-2` | Run release-dirt under a real Windows bash, and match the merge path to what the product emits | two test files | — | Both Windows-only failures pass | full bin suite green on Linux; the Windows run on the branch |
 
 ```json
+[
+  {
+    "id": "win-2",
+    "feature": "windows-ci-green",
+    "title": "Run release-dirt under a real Windows bash, and match the merge path to what the product emits",
+    "lane": "small",
+    "role": "test",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/shell.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "docs/history/windows-ci-green/CONTEXT.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Two corrections, both in test code, both proven by the branch's own Windows run 35453818440. FIRST, in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs inside `fn test_release_dirt_script_filters_only_bee_paths`: both script runs call `Command::new(\"bash\")`, and on Windows that bare name resolves to the WSL launcher in C:\\Windows\\System32 \u2014 the run printed \"Windows Subsystem for Linux has no installed distributions\" in UTF-16 on stdout. The product already solves exactly this: read the header comment of packages/bee-rs/crates/bee/src/shell.rs, which describes this failure, and use `crate::shell::command()`, which pins the child PATH to a real Win32 bash. BUT use it on Windows ONLY. On every other platform `crate::shell::command()` returns /bin/sh, not bash (see `fn resolve` in shell.rs), and release-dirt.sh needs real bash \u2014 it uses [[ ]], ${x:0:2}, process substitution and read -d ''. On Ubuntu /bin/sh is dash and the script would break. So: on Windows build the command from `crate::shell::command()` (expect it to be present there, with a message naming the missing Win32 bash), elsewhere keep `Command::new(\"bash\")`. Put a one-line comment beside the branch saying why, citing shell.rs. Keep the diagnostic assertion messages from win-1 as they are. SECOND, in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`: win-1 changed BOTH expectation sites to canonical_path_str. The Windows run proved only the ENTER site needed it \u2014 the test now passes the enter assertion and fails the merge one at line 6517, because the product emits the merge instruction with the unconverted short path (RUNNER~1) while the enter instruction is canonical. Revert ONLY the merge site: `let main_str = canonical_path_str(&main).unwrap();` goes back to `let main_str = p(&main);`. Leave the enter site canonical. Do not change the product to make the two consistent; that inconsistency is filed separately. Do not touch scripts/release-dirt.sh.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+    "must_haves": {
+      "truths": [
+        "On Windows the release-dirt script runs through crate::shell::command(), so it reaches a real Win32 bash",
+        "On every other platform the release-dirt script still runs under bash, not /bin/sh",
+        "The worktree test's enter expectation stays canonical and its merge expectation matches the raw path the product emits",
+        "The full bin suite stays green on Linux"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+          "substantive": "a Windows-only branch to crate::shell::command() with a comment citing shell.rs"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "substantive": "the merge site reverted to p(&main); the enter site unchanged"
+        }
+      ],
+      "key_links": [
+        "the Windows bash comes from the product's own resolver, not a second implementation of it"
+      ],
+      "prohibitions": [
+        "No use of crate::shell::command() off Windows, where it is /bin/sh",
+        "No change to scripts/release-dirt.sh or any product source file",
+        "No weakening of an assertion condition"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  }
+]
+```
+
+### Capped packet, slice 1 (record only)
+
+```text
 [
   {
     "id": "win-1",
