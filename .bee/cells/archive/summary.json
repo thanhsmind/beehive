@@ -1288,5 +1288,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-09-19T03:47:13.869Z"
+  },
+  "herding-caps-on-clean-report": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-19T05:44:28.906Z"
   }
 }

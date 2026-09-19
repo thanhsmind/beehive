@@ -8,18 +8,13 @@
     "shape": false,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-caps-on-clean-report\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at bf13fbe; reload the product and test \"herding-caps-on-clean-report\", then either approve uat (\"bee gate --name uat --approved true --lane herding-caps-on-clean-report\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-19T04:49:00.960Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: herding-caps-on-clean-report",
-    "asked_at": "2026-09-19T05:42:16.163Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
