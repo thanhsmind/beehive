@@ -9,13 +9,17 @@
 ## Feature Boundary
 
 A Pi leader session runs every bee stage dispatch — gather, extraction, advisor,
-hat seat, reviewer, cell — through bee's own Pi extension as a child `pi`
-process, with no tmux pane required, and gets each worker's full answer back
-inside the stage budget; herding stays configured and serves every dispatch the
-native path cannot. The extension also narrows the model's tool list per stage
-and warns on a close that leaves a claimed cell uncapped. It ends at the
-transport and the stage surface: bee's store, gates, cells, proof and worktrees
-are unchanged.
+hat seat, reviewer, cell — as a child `pi` process with no tmux pane required,
+and gets each worker's full answer back inside the stage budget; herding stays
+configured and serves every dispatch the native path cannot. bee's Pi extension
+separately narrows the model's tool list per stage and warns on a close that
+leaves a claimed cell uncapped. It ends at the transport and the stage surface:
+bee's store, gates, cells, proof and worktrees are unchanged.
+
+**Amended 2026-09-19, after the plan-step hat wave** (decision `31fb9e15`,
+supersedes `0d11a415`): the child is spawned in Rust, inside `bee herding run`,
+NOT by the Pi extension. The extension gains no dispatch tool and no spawner.
+See D11. The rest of this boundary is unchanged.
 
 ## Why now
 
@@ -41,7 +45,7 @@ is stale from `0d11a415` forward and must be read with it.
 | ID | Decision | Rationale (only if it changes implementation) |
 |----|----------|-----------------------------------------------|
 | D1 | Native dispatch is the DEFAULT on Pi; herding is the fallback, not removed. Every kind resolves native first. Herding serves what native cannot: a write-capable cell in a worktree, a seat the user wants to watch live, and every role whose configured agent is not a `pi` binary. Both transports stay tested. | `7c980c9c`. Removing herding is not available: `team.pi` routes `code`, `read`, `test`, `docs`, `extraction`, `generation`, `supervisor` and `lane-3` to `agy-flash`, and a native child can only ever be a `pi` model. |
-| D2 | The native transport is a child `pi` SUBPROCESS (`pi --mode json -p …`), never the in-process SDK (`createAgentSession`) and never a `--mode rpc` bridge. | `pi-workflows-xia.md:347` — the SDK is the least stable of the three and ships no `dist/*.d.ts` on this host to pin against; the subprocess is CLI-flag surface bee already drives through herding panes, and Pi ships a working example at `pi/examples/extensions/subagent/`. |
+| D2 | The native transport is a child `pi` SUBPROCESS (`pi --mode json -p …`), never the in-process SDK (`createAgentSession`) and never a `--mode rpc` bridge. **Amended by D11: the subprocess is spawned from Rust, inside `bee herding run`.** | `pi-workflows-xia.md:347` — the SDK is the least stable of the three and ships no `dist/*.d.ts` on this host to pin against; the subprocess is CLI-flag surface bee already drives through herding panes, and Pi ships a working example at `pi/examples/extensions/subagent/`. D2 never said WHO spawns it, which is why D11 amends rather than supersedes it. |
 | D3 | A role reaches the native path only when its configured agent is a `pi` binary. Any other agent falls back to herding, by config, with no leader choice and no warning treated as an error. | D1. Keeps the Delegation contract's rule that transport is config, never the leader's choice. |
 | D4 | Per-stage tool gating is a HARD gate: the extension narrows the model's active tool list with `pi.setActiveTools` so an off-stage tool cannot be called at all. One slash command re-opens the full set. | `7c980c9c`. Verified reachable: pi 0.85.1 `docs/extensions.md:1694` switches to a read-only pair; the additive-only rule at `:2372` binds a loader tool's own execution, not an event handler. Matches the existing fail-closed `tool_call` write-guard and stops the model burning turns on calls the guard then denies. |
 | D5 | The close guard is WARN ONLY. An uncapped claimed cell at settle time gets a visible warning naming the cell and the verb to run; the session still ends. `tool_call` stays the ONLY blocking surface in the Pi belt. | `7c980c9c`. pi 0.85.1 ships no `session_stop` event (zero hits in its `extensions.md`), so blocking the close is not reachable at all; `agent_settled` is the settle event and is already wired. Preserves the belt's documented two-policy rule. |
@@ -49,7 +53,10 @@ is stale from `0d11a415` forward and must be read with it.
 | D7 | `.pi/extensions/bee-guard.ts` is hand-written and IS the source of truth. Edits land there, and the Rust binary is rebuilt so `doctor`'s compiled byte-compare agrees. `.opencode/plugins/bee-guard.ts` is a sibling belt and is not edited for this feature. | No generator exists: `hook_manifests.rs:46-64` names Pi a NAMED EXCLUSION, `devtools/mod.rs:529-547` returns `None` for `"pi"`, and `bee dev regen` writes nothing here. `doctor.rs:47` embeds the file with `include_str!` and byte-compares it at `:310-312`, so a stale binary reports drift. |
 | D8 | The dispatch door stays ONE door. `bee dispatch prepare --runtime pi` gains a native arm beside the herding arm; the leader never picks the transport and never hand-picks a model or `subagent_type`. | `prepare.rs:2237-2243` currently refuses every non-herding resolution for Pi with `reason: "pi_requires_herding"`. That refusal becomes a per-slot arm. |
 | D9 | Existing Claude, Codex and OpenCode behavior does not change. No shared payload, prompt or hook route changes shape for them. | Three belts share `bee hook <name>`; a regression there is a harness-wide outage. |
-| D10 | The hat wave contract holds unchanged on the native path: 3 seats default and 5 on high-risk, one wave, a 10-minute wall-clock ceiling, each result named by its seat, and a seat that misses the ceiling DROPPED and named — never silently lost. | `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave"); already proven on the herding path by `pi-hat-wave` in the verification map. |
+| D10 | The hat wave contract holds unchanged on the native path: 3 seats default and 5 on high-risk, one wave, a 10-minute wall-clock ceiling, each result named by its seat, and a seat that misses the ceiling DROPPED and named — never silently lost. | `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave"); already proven on the herding path by `pi-hat-wave` in the verification map. Under D11 this is inherited, not rebuilt: `--seat`, the 600 s clamp and the drain already live on that path. |
+| D11 | The child `pi` process is spawned in Rust, inside `bee herding run`, as a no-pane runner that keeps the same job id, `--seat`, ceiling, mailbox report and result drain. The dispatch door payload shape does not change. `.pi/extensions/bee-guard.ts` gains NO dispatch tool and NO spawner, so the belt keeps its recorded premise that Pi has no native subagent surface and model-guard stays a named exclusion on it. The belt is still edited for D4 and D5, which are session-surface behavior, not dispatch. | Decision `31fb9e15`, from the plan-step hat wave. The belt-hosted shape owed six blockers; this one removes five of them by inheriting machinery that already ships. `bee-guard.ts:52-59` records why: a `bee herding run` call is a bash CLI call, already covered by write-guard. |
+| D12 | The hard tool gate carries three obligations: the re-open slash command is named outright in the plan, the narrowing is announced to the USER where it happens, and the MODEL is told a tool was removed by stage policy. | Decision `2131829f`. Verified in the host's `docs/extensions.md` § "Fallback behavior": a non-additive active-tool change drops deferred loading and may invalidate the provider's cached prompt prefix. The owner kept the hard gate with that cost stated, on the condition the failure becomes legible — today the model apologizes, hallucinates, or falls back to `bash` redirection that trips write-guard, and the user reads that as the model being broken. |
+| D13 | The close-guard warning is written into the visible session transcript, never raised only as an ephemeral UI toast. | Decision `2131829f`. `ctx.ui.notify` is a no-op when a session has no UI (`-p` and JSON modes), and a toast is not where a user looks. |
 
 ### Agent's Discretion
 
@@ -83,10 +90,21 @@ From the quick scout only. Downstream agents read these before planning.
 
 ### Reusable Assets
 
-- `.pi/extensions/bee-guard.ts` — the belt. Factory at `:2069`; handlers `tool_call` `:2073`,
-  `session_start` `:2098`, `before_agent_start` `:2136`, `tool_result` `:2248`,
-  `agent_settled` `:2305`, `session_shutdown` `:2434`. Commands `bee-worktree-*` at
-  `:2482-2689`; `bee-worktree-exit` `:2566` is the house style for a `registerCommand`.
+- `.pi/extensions/bee-guard.ts` — the belt. Factory at `:2069`. It registers **twelve**
+  `pi.on` handlers, not five: `tool_call` `:2073`, `session_start` `:2098`,
+  `before_agent_start` `:2136`, `tool_execution_start` `:2183`, `ui_prompt_start` `:2201`,
+  `ui_prompt_end` `:2223`, `tool_result` `:2248`, `agent_settled` `:2305`, `turn_end` `:2403`,
+  `session_tree` `:2407`, `session_before_compact` `:2414`, `session_shutdown` `:2434`.
+  (An earlier revision of this file listed six and the plan said five; the hat wave caught
+  the undercount, which would have let a worker rationalize editing the ones nobody named.)
+  Commands `bee-worktree-*` at `:2482-2689`; `bee-worktree-exit` `:2566` is the house style
+  for a `registerCommand`.
+- `packages/bee-rs/crates/bee/src/herding/run.rs` — under D11 this is where the work lands.
+  `:2499` sets `BEE_HERDING_WORKER=1` in the pane env; `:2482-2500` builds the per-agent
+  environment explicitly; `--seat` rides the inbox marker and the result envelope.
+- `packages/bee-rs/crates/bee/src/hooks/mod.rs` — `:91` reads that marker and `:145-146`
+  make every hook invocation except `activity` exit 0 under it. This is the worker posture
+  a belt-spawned child would NOT have had.
 - `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` — the door. `DISPATCH_RUNTIMES` `:101`,
   the Pi herding-only refusal `:2237-2243`, the herding payload builder `:2444-2530`,
   the pi-only `detached_delivery` note `:163`, hat ceiling 600 s `:2477-2482`.
@@ -141,17 +159,25 @@ None. Every product decision is locked above.
 
 ### Deferred To Planning
 
-- [ ] Does a `pi -p` child load `.pi/extensions/bee-guard.ts`, and does the write guard
-      hold inside it? — Decides whether a native execution worker is safe at all. The
-      child must also carry a reservation identity; `BEE_AGENT_NAME` has no native
-      carrier today. Investigation: run a child against a sandbox and attempt a denied write.
-- [ ] Which ONE path returns a worker's result to the leader? — A tool return blocks the
-      leader's turn for the whole ceiling; `sendMessage(…, { deliverAs: "followUp" })`
-      needs gating on `ctx.isIdle()` and `ctx.hasPendingMessages()`. The existing
-      result-inbox drain is a third candidate already in the file. Pick one, per pi-result-mailbox D6.
-- [ ] How does config spell a native slot beside `{ kind: "herding" }`, and what shape does
-      `prepare.rs:2237` become? — Decides the config migration users must do, and whether
-      `doctor --runtime pi` grows a row.
+- [x] **Answered by D11.** Which ONE path returns a worker's result to the leader? — the
+      existing result drain, inherited from the herding path. A tool return would have held
+      the leader's turn for the whole ceiling; the drain is non-blocking by construction and
+      already ships `green:live`.
+- [x] **Answered by D11.** Does the child carry a reservation identity and a worker posture? —
+      yes, by inheritance: `herding/run.rs:2482-2500` builds the per-agent env and sets
+      `BEE_HERDING_WORKER=1`, which `hooks/mod.rs:91,145` read to mute leader-only hooks.
+- [ ] **Still open, and owed either way.** How does the runner decide "this agent is a `pi`
+      binary"? `.bee/config.json` `herding.agents` carries two shapes — a bare argv array
+      (`pi-gpt-5.6-luna`) and an object with an `argv` key (`agy-flash`). A naive
+      `agents[name][0]` is right only by luck today. The runner must also lift the model out
+      of that argv. Planning must name the shape rule and the model extraction explicitly.
+- [ ] Does the write guard actually ENFORCE inside a child, not merely load? — The probe run
+      proved loading only; it used `--tools read` and an explicit "do not use any tool", so a
+      denied write was never attempted. `write_guard/checks.rs:638-643` reaches `Allow` when no
+      agent name is present. Needs its own deny-path run before the gate, as `green:live`.
+- [ ] Does a `pi -p` child spawned by the runner need a recursion fence? — Under D11 the child
+      has no dispatch tool, so the belt-hosted recursion hazard is gone; confirm that the child's
+      `--tools` allowlist and the absent tool together close it, rather than assuming they do.
 
 ## Deferred Ideas
 
