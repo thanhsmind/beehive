@@ -4,7 +4,7 @@
   "title": "Derive the Pi stage tool gate from the write guard's own rule",
   "lane": "tiny",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "files": [
@@ -18,7 +18,7 @@
   "affects_skills": [],
   "affects_specs": [],
   "action": "Make the stage-tools hook take its write-open verdict from the write guard instead of its own list. Today run_inner builds `is_after_gate` from a hand-kept four-phase match and then sets `execution_is_open = (!is_gated && is_after_gate) || gate_approved`. That list disagrees with `write_guard::is_gated_phase`, which gates only `exploring` and `planning`, so `grooming`, `idle` and `compounding-complete` wrongly come back read-only. Replace the whole computation with `execution_is_open = !is_gated_phase(phase) || gate_approved` and delete `is_after_gate`. Extract the mapping into one pure function, `pub(crate) fn allowed_tools_for(phase: &str, gate_approved: bool) -> &'static [&'static str]`, and have run_inner call it, so the rule is testable without stdout capture. Do not change READ_ONLY_TOOLS or FULL_TOOL_SET: the eight names are exactly Pi's eight built-in tools. Do not change the JSON key set the hook prints — the Pi belt reads `stage`, `stage_name`, `allowed_tools`, `user_message`/`user_notice` and `model_message`/`model_notice`, and dropping any of them breaks the belt. Keep the hook advisory: it still fails open and still returns SUCCESS on every path. Work RED FIRST: add the failing cases before the fix and record the red output. The existing test `stage_tools_decision_logic` asserts the `is_after_gate` local you are deleting; that is a structure assertion, so replace it with behavior assertions over `allowed_tools_for` rather than repairing it. Keep `stage_tools_returns_read_only_in_planning_phase_without_gate` and `stage_tools_fails_open_without_bee_store` working as they are.",
-  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --lib hooks::stage_tools",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bins hooks::stage_tools",
   "must_haves": {
     "truths": [
       "grooming, idle and compounding-complete return the full tool set when the execution gate is unapproved",
@@ -37,17 +37,60 @@
   "judge_obligation_ack": "Tiny lane kept, but the independent read is NOT skipped: an independent bee-review worker reads this diff against the write-guard rule before the cap. The change deletes a duplicate rule rather than adding guard logic, and the hook stays advisory (D5: tool_call is the only blocking surface).",
   "trace": {
     "worker": "leader-inline",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Pi stage tool gate follows the write guard's phase groups; grooming keeps edit/write, unrecognized phases narrow",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+      "docs/history/stage-gate-phase-parity/plan.md"
+    ],
+    "deviations": [
+      "Ran the tiny cell inline in the main checkout rather than a feature worktree: solo session (bee status: Active workers: 1), one product file, which is the recorded tiny-fix exemption in AGENTS.md.",
+      "Kept the tiny lane past the JUDGE_OBLIGATION guard on hooks/ by recording judge_obligation_ack, but did NOT skip the independent read it protects: dispatched a bee-review worker, which found two P2 findings; both are fixed in this cell and the plan was revised to rev 1.",
+      "The approved cell verify named `--lib`, which this crate has no target for (`error: no library targets found in package bee`). Corrected the cell's verify to `--bins` via cells update before capping, rather than capping against a command that cannot run."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-19T23:22:56.696Z",
     "behavior_change": false,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "8 passed / 0 failed, red first; the whole hooks module also green at 626/626, and the rebuilt binary re-driven live against sandbox stores one run per phase",
+    "verify_output": "green:live",
+    "verify_passed": true,
     "claim_session": "9dfaddd2-e6aa-4e31-9a9a-fd7b0ca112c9",
-    "verify_command": null,
-    "claimed_at": "2026-09-19T23:12:06.525Z"
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bins hooks::stage_tools",
+    "claimed_at": "2026-09-19T23:22:41.131Z",
+    "verified_at": null,
+    "mistakes": [
+      {
+        "wrong": "The plan's whole rationale said write_guard 'permits writes' in idle and compounding-complete. It does not: is_terminal_phase plus GATE_ALLOWED_PREFIXES_INTAKE refuse a terminal-phase write outside .bee/, docs/, plans/ and AGENTS.md, and an unrecognized phase is refused for every write. I read is_gated_phase and stopped, never sweeping the other phase predicates in the same file.",
+        "better": "Before claiming one predicate IS a rule, grep the file for every sibling predicate on the same input (is_terminal_phase, is_known_phase sat 4 lines above is_gated_phase) and read each call site."
+      },
+      {
+        "wrong": "I wrote the corrected allowed_tools_for body in the same edit that extracted the function, so the first test run would have been green-on-arrival; I had to paste the old rule back to earn a real red.",
+        "better": "Extract as a behavior-preserving refactor first, watch the new tests fail, then change the rule: one edit per intent."
+      },
+      {
+        "wrong": "I wrote `--lib hooks::stage_tools` into the cell's verify at plan time without ever running it; the bee crate ships only a bin target, so the approved proof command was unrunnable and the cap refused.",
+        "better": "Run the verify command once at plan time, before it goes into the cell packet, so an approved proof is a proof that executes."
+      }
+    ],
+    "report": {
+      "outcome": "The Pi stage tool gate now follows the write guard's four phase groups instead of its own four-phase list: narrow in gated (exploring, planning) and in any unrecognized phase, open in terminal (idle, compounding-complete) and the rest. grooming keeps edit/write again.",
+      "commit": "5bcebcba2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "docs/history/stage-gate-phase-parity/plan.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --bins hooks::stage_tools — green:live — 8 passed / 0 failed, red first; the whole hooks module also green at 626/626, and the rebuilt binary re-driven live against sandbox stores one run per phase",
+      "deviations": [
+        "Ran the tiny cell inline in the main checkout rather than a feature worktree: solo session (bee status: Active workers: 1), one product file, which is the recorded tiny-fix exemption in AGENTS.md.",
+        "Kept the tiny lane past the JUDGE_OBLIGATION guard on hooks/ by recording judge_obligation_ack, but did NOT skip the independent read it protects: dispatched a bee-review worker, which found two P2 findings; both are fixed in this cell and the plan was revised to rev 1.",
+        "The approved cell verify named `--lib`, which this crate has no target for (`error: no library targets found in package bee`). Corrected the cell's verify to `--bins` via cells update before capping, rather than capping against a command that cannot run."
+      ],
+      "mistakes": [
+        "The plan's whole rationale said write_guard 'permits writes' in idle and compounding-complete. It does not: is_terminal_phase plus GATE_ALLOWED_PREFIXES_INTAKE refuse a terminal-phase write outside .bee/, docs/, plans/ and AGENTS.md, and an unrecognized phase is refused for every write. I read is_gated_phase and stopped, never sweeping the other phase predicates in the same file. — Before claiming one predicate IS a rule, grep the file for every sibling predicate on the same input (is_terminal_phase, is_known_phase sat 4 lines above is_gated_phase) and read each call site.",
+        "I wrote the corrected allowed_tools_for body in the same edit that extracted the function, so the first test run would have been green-on-arrival; I had to paste the old rule back to earn a real red. — Extract as a behavior-preserving refactor first, watch the new tests fail, then change the rule: one edit per intent.",
+        "I wrote `--lib hooks::stage_tools` into the cell's verify at plan time without ever running it; the bee crate ships only a bin target, so the approved proof command was unrunnable and the cap refused. — Run the verify command once at plan time, before it goes into the cell packet, so an approved proof is a proof that executes."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
