@@ -216,6 +216,42 @@ pub(crate) fn pi_requires_herding_refusal(slot: &str, resolved: &Resolved, escal
     Value::Object(refusal)
 }
 
+/// Extracts the first argv token from an entry in `herding.agents`, normalizing
+/// BOTH shapes that configuration accepts: a bare argv array (`["pi", ...]`),
+/// and an object with an `argv` key (`{"argv": ["pi", ...], ...}`).
+///
+/// Returns None if the entry does not match either shape or carries an empty
+/// argv array.
+pub(crate) fn agent_first_argv<'a>(entry: &'a Value) -> Option<&'a str> {
+    match entry {
+        Value::Array(tokens) => tokens.first().and_then(Value::as_str),
+        Value::Object(obj) => obj
+            .get("argv")
+            .and_then(Value::as_array)
+            .and_then(|arr| arr.first())
+            .and_then(Value::as_str),
+        _ => None,
+    }
+}
+
+/// Returns true if the configured agent in `herding.agents` resolves to a `pi`
+/// executable (D1, D3). Decided from the first argv token of the configured
+/// agent, never from the role name (D8).
+pub(crate) fn is_pi_agent(cfg: &Value, agent_name: &str) -> bool {
+    let Some(entry) = cfg
+        .get("herding")
+        .and_then(|h| h.get("agents"))
+        .and_then(|a| a.get(agent_name))
+    else {
+        return false;
+    };
+    let Some(first) = agent_first_argv(entry) else {
+        return false;
+    };
+    let trimmed = first.trim();
+    trimmed == "pi" || Path::new(trimmed).file_name().and_then(|f| f.to_str()) == Some("pi")
+}
+
 // ─── the LaneBrief carrier (slp-blind-lanes E1/E2, decision 5981246b D2) ───
 //
 // `--brief-file <path>` is the FIRST caller text that reaches a non-cell
@@ -2457,6 +2493,13 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(" --agent \"");
                     command.push_str(agent);
                     command.push('"');
+                }
+                // pi-native-stage-driver D1, D3, D11: on runtime pi, when the configured
+                // agent is a pi binary, choose the no-pane runner. The flag is appended
+                // here inside the herding arm so --seat, the 600 s hat clamp and
+                // detached_delivery still apply.
+                if runtime == "pi" && agent.as_deref().is_some_and(|name| is_pi_agent(&cfg, name)) {
+                    command.push_str(" --no-pane");
                 }
                 // pi-stage-dispatch D3, pi only: a non-cell dispatch that
                 // names a role carries it as `--seat`, so a detached result
@@ -5660,3 +5703,201 @@ mod detached_delivery_tests {
         assert_eq!(v.get("payload"), None, "{v}");
     }
 }
+
+// ═══ tests — pi native stage driver (pi-native-stage-driver pnsd-3) ════════
+
+#[cfg(test)]
+mod pi_native_door_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)]
+        {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn agent_argv_first_normalizes_both_config_shapes() {
+        // Shape 1: bare array
+        let array_shape = json!(["pi", "-a", "--model", "some-model"]);
+        assert_eq!(agent_first_argv(&array_shape), Some("pi"));
+
+        // Shape 2: object with "argv" key
+        let object_shape = json!({
+            "argv": ["pi", "--mode", "json"],
+            "workspace_trust": {"file": "~/.config/test.json", "key": "trusted"}
+        });
+        assert_eq!(agent_first_argv(&object_shape), Some("pi"));
+
+        // Non-pi argv
+        let agy_shape = json!({"argv": ["agy", "--dangerously-skip-permissions"]});
+        assert_eq!(agent_first_argv(&agy_shape), Some("agy"));
+
+        // Path to pi executable
+        let path_shape = json!(["/usr/local/bin/pi", "-p"]);
+        assert_eq!(agent_first_argv(&path_shape), Some("/usr/local/bin/pi"));
+
+        // Malformed / empty shapes
+        assert_eq!(agent_first_argv(&json!([])), None);
+        assert_eq!(agent_first_argv(&json!({"argv": []})), None);
+        assert_eq!(agent_first_argv(&json!({"other": "field"})), None);
+        assert_eq!(agent_first_argv(&json!("not-an-array-or-obj")), None);
+    }
+
+    #[test]
+    fn pi_role_with_pi_agent_returns_no_pane_runner() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Array shape
+        let cfg = r#"{
+            "team": {"pi": {"advisor": {"kind": "herding", "agent": "pi-luna"}}},
+            "herding": {"agents": {"pi-luna": ["pi", "-a", "--model", "luna"]}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("advisor"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(command.contains(" --no-pane"), "expected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"pi-luna\""), "expected agent in command: {command}");
+    }
+
+    #[test]
+    fn pi_role_with_object_shape_pi_agent_returns_no_pane_runner() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Object shape with argv
+        let cfg = r#"{
+            "team": {"pi": {"advisor": {"kind": "herding", "agent": "pi-obj"}}},
+            "herding": {"agents": {"pi-obj": {"argv": ["pi", "-a", "--model", "test"]}}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("advisor"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(command.contains(" --no-pane"), "expected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"pi-obj\""), "expected agent in command: {command}");
+    }
+
+    #[test]
+    fn non_pi_agent_on_pi_returns_pane_payload_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"generation": {"kind": "herding", "agent": "agy-flash"}}},
+            "herding": {"agents": {"agy-flash": {"argv": ["agy", "--flag"]}}}
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "gather", Some("generation"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let command = v["payload"]["command"].as_str().expect("command string");
+        assert!(!command.contains("--no-pane"), "unexpected --no-pane in command: {command}");
+        assert!(command.contains("--agent \"agy-flash\""), "command: {command}");
+    }
+
+    #[test]
+    fn claude_and_codex_payloads_are_byte_identical_to_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {
+                "claude": {
+                    "generation": {"kind": "herding", "agent": "pi-agent"},
+                    "advisor": {"kind": "herding", "agent": "pi-agent"},
+                    "review": {"kind": "herding", "agent": "pi-agent"}
+                },
+                "codex": {
+                    "generation": {"kind": "herding", "agent": "pi-agent"},
+                    "advisor": {"kind": "herding", "agent": "pi-agent"},
+                    "review": {"kind": "herding", "agent": "pi-agent"}
+                }
+            },
+            "herding": {
+                "agents": {
+                    "pi-agent": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+
+        w_cell(&root, "c-1");
+
+        // For claude and codex, even when the configured agent is a pi binary,
+        // --no-pane is NEVER added; the command matches the baseline byte for byte.
+        for runtime in ["claude", "codex"] {
+            for (kind, role, cell, worker) in [
+                ("cell", "generation", Some("c-1"), Some("w")),
+                ("gather", "generation", None, None),
+                ("reviewer", "review", None, None),
+                ("advisor", "advisor", None, None),
+            ] {
+                let out = prepare_dispatch_with_role(
+                    &root, runtime, kind, Some(role), cell, worker, false, None, None, false, None,
+                ).unwrap();
+                let Prepared::Value(v) = out else { panic!("expected prepared value on {runtime} {kind}") };
+                let command = v["payload"]["command"].as_str().expect("command");
+                assert!(!command.contains("--no-pane"), "{runtime} {kind} herding command must not contain --no-pane: {command}");
+                assert_eq!(
+                    command,
+                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\"",
+                    "{runtime} {kind} command bytes must be exact"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pi_hat_dispatch_on_native_path_retains_seat_ceiling_and_detached_delivery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {
+                "pi": {
+                    "hat-facts-gaps": {"kind": "herding", "agent": "pi-gpt-5.6-luna"}
+                }
+            },
+            "herding": {
+                "ceiling_seconds": 1800,
+                "agents": {
+                    "pi-gpt-5.6-luna": ["pi", "-a", "--model", "luna"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "advisor", Some("hat-facts-gaps"), None, None, false, None, None, false, None,
+        ).unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let command = payload["command"].as_str().expect("command");
+
+        // Native flag is present
+        assert!(command.contains(" --no-pane"), "command must have --no-pane: {command}");
+
+        // Seat is present and correct
+        assert!(command.contains(" --seat \"hat-facts-gaps\""), "command must carry --seat: {command}");
+
+        // 600 s hat ceiling is clamped (1800 is clamped to 600)
+        assert!(command.contains(" --ceiling 600"), "command must carry clamped ceiling 600: {command}");
+
+        // detached_delivery note is present
+        assert!(payload.get("detached_delivery").is_some(), "payload must have detached_delivery");
+    }
+}
+
