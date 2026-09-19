@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "stage-gate-phase-parity",
+  "closed_at": "2026-09-19T23:28:23.859Z",
+  "sessions": [
+    {
+      "session_id": "9dfaddd2-e6aa-4e31-9a9a-fd7b0ca112c9",
+      "models": {
+        "claude-opus-5": {
+          "input": 306,
+          "output": 77017,
+          "cache_write": 206969,
+          "cache_read": 23110292,
+          "new": 284292,
+          "cached": 23110292,
+          "total": 23394584
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5": {
+          "input": 42,
+          "output": 17276,
+          "cache_write": 67381,
+          "cache_read": 965510,
+          "new": 84699,
+          "cached": 965510,
+          "total": 1050209
+        }
+      },
+      "subagent_count": 1,
+      "started_ms": 1789857937015,
+      "ended_ms": 1789860494838,
+      "totals": {
+        "new": 368991,
+        "cached": 24075802,
+        "total": 24444793
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 284292,
+      "cached": 23110292,
+      "total": 23394584
+    },
+    "subagents": {
+      "new": 84699,
+      "cached": 965510,
+      "total": 1050209
+    },
+    "total": {
+      "new": 368991,
+      "cached": 24075802,
+      "total": 24444793
+    }
+  }
+}

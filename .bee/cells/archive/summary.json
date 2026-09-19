@@ -1298,5 +1298,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-19T22:44:25.559Z"
+  },
+  "stage-gate-phase-parity": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-19T23:28:23.833Z"
   }
 }
