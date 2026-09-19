@@ -187,14 +187,160 @@ notice and a model notice (D4, D12); close-guard warning in the transcript (D5, 
 
 ## Cells — current slice (preview)
 
+Slice 4, the last one. Slices 1-3 are capped; their packets are kept below as a record.
+
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| `pnsd-1` | Scope the approved plan packet to its own feature | `plan_packets.rs`, `state_group/tests.rs` | — | Starting a new feature right after another no longer refuses every advisor, gather and hat dispatch | red-first test per branch; scoped `cargo test` green |
-| `pnsd-2` | Add a no-pane runner to `bee herding run` | `herding/run.rs`, `herding/tests.rs` | `pnsd-1` | A bee worker on Pi runs as a child process with no tmux pane, and its answer comes back the same way a pane worker's does | scoped `cargo test` green, plus a denied write attempted inside the child and blocked |
-| `pnsd-3` | Select the no-pane runner from the dispatch door | `prepare.rs` | `pnsd-1` | `bee dispatch prepare --runtime pi` picks the no-pane runner for a `pi`-agent role and still returns a pane payload for every other role | scoped `cargo test` green, including byte-equality of the claude and codex payloads |
-| `pnsd-4` | Drive one native worker end to end and record the evidence | `.bee/verify/verify-app/features/pi-runtime.md` | `pnsd-2`, `pnsd-3` | `doctor --runtime pi` still reports `ready`, and the verify recipe drives a real no-pane dispatch | `green:live` — the recipe run against a launched sandbox, evidence attached |
+| `pnsd-6` | Narrow the model's tools per stage, and say so to the user and the model | `.pi/extensions/bee-guard.ts`, `pi_plugin_contracts.rs`, the release manifest | — | In a stage that forbids a tool, the model cannot call it at all, you are told why, and one named command gives the full set back | `cargo test --test pi_plugin_contracts` green plus `bee dev release-manifest --check` |
+| `pnsd-7` | Warn into the transcript when a session settles with a cell still claimed | `.pi/extensions/bee-guard.ts`, `pi_plugin_contracts.rs`, the release manifest | `pnsd-6` | Ending a session with work still claimed names that cell in the transcript instead of ending quietly — and still ends | same, plus the warning present with no UI |
 
 ```json
+[
+  {
+    "id": "pnsd-6",
+    "feature": "pi-native-stage-driver",
+    "title": "Narrow the model's tools per stage, and say so to the user and the model",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "D4",
+      "D7",
+      "D12"
+    ],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/pi-native-stage-driver/CONTEXT.md",
+      "docs/history/pi-native-stage-driver/hat-synthesis.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Make the Pi belt narrow the model's active tool list to what the current bee stage allows, and make that narrowing legible (per D4 and D12). Read the belt's header comment first: it holds ZERO rules of its own, every verdict comes from `bee hook <name>`, and it keeps exactly TWO failure policies. Honour both. The stage-to-tools mapping is a bee decision, not a TypeScript one, so the belt must ASK \u2014 do not hardcode a stage table in the extension. Narrow with pi.setActiveTools; the installed host documents the narrowing form and the leader recorded it at docs/history/pi-native-stage-driver/evidence.md section B2, with section B3 showing why calling it from an event handler is legal. D12 adds three obligations the first draft did not have, and all three are required here. One: name the re-open slash command outright and register it, following the house style of the existing bee-worktree-* commands in this same file. Two: when the tool list narrows, tell the USER where it happens - not a silent change they discover by failure. Three: tell the MODEL that a tool was removed by stage policy, because a model that simply finds a tool missing apologizes, hallucinates, or falls back to bash redirection that then trips write-guard, and the user reads that as the model being broken. Keep this ADVISORY throughout: tool_call stays the only blocking surface (per D5), so a failure to narrow logs and continues, never throws. Add the contract fixture rows for any new pi.on handler and for the new registerCommand in the same cell - the suite derives both name sets from this source and goes red without them. Note the belt registers TWELVE pi.on handlers today, not five; read them before adding a thirteenth. Finally, .pi/extensions is a root the release manifest hashes, so this cell owes the regen chain: after the belt edit run bee dev regen \u2014 render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order \u2014 and commit the refreshed manifest with the change. The verify carries bee dev release-manifest --check for exactly that reason.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "Off-stage tools are absent from the model's active tool list",
+        "The re-open command is registered under a named slash command and restores the full set",
+        "The user is told, where the narrowing happens, that tools were narrowed and how to re-open them",
+        "The model is told that a tool was removed by stage policy rather than being left to guess",
+        "The stage-to-tools mapping comes from bee, not from a table hardcoded in the extension"
+      ],
+      "artifacts": [
+        {
+          "path": ".pi/extensions/bee-guard.ts",
+          "substantive": "per-stage narrowing, the re-open command, and both notices; no TODO stubs"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "substantive": "fixture rows for the new handler and the new command name"
+        },
+        {
+          "path": "docs/history/codex-harness-hardening/release-manifest.json",
+          "substantive": "regenerated after the belt edit so the manifest hash matches the shipped extension"
+        }
+      ],
+      "key_links": [
+        "the narrowing reads its stage-to-tools answer from a bee hook, not from a literal in the extension"
+      ],
+      "prohibitions": [
+        "No second blocking surface: tool_call stays the only one",
+        "No hardcoded stage-to-tools table inside the extension",
+        "No edit to .opencode/plugins/bee-guard.ts",
+        "No change to the twelve existing pi.on handlers' behavior"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  },
+  {
+    "id": "pnsd-7",
+    "feature": "pi-native-stage-driver",
+    "title": "Warn into the transcript when a session settles with a cell still claimed",
+    "lane": "high-risk",
+    "role": "code",
+    "status": "open",
+    "deps": [
+      "pnsd-6"
+    ],
+    "decisions": [
+      "D5",
+      "D7",
+      "D13"
+    ],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      ".pi/extensions/bee-guard.ts",
+      "docs/history/pi-native-stage-driver/CONTEXT.md",
+      "docs/history/pi-native-stage-driver/evidence.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "When a Pi session settles with a claimed cell that was never capped, say so by name (per D5 and D13). Hang it on agent_settled, which the belt already registers - pi 0.85.1 ships NO session_stop event, verified and recorded at docs/history/pi-native-stage-driver/evidence.md section B4, so do not look for one. This is WARN ONLY and that is a locked decision: the session still ends, the warning never blocks, and tool_call remains the only blocking surface (per D5). D13 fixes where the warning lands: ctx.ui.notify is an ephemeral toast and is a NO-OP when a session has no UI, which is exactly the print and JSON modes a worker runs in, so a notify-only warning is invisible in the case that matters most. Put the warning in the visible session transcript instead, and name the cell and the verb that would resolve it rather than saying something generic. Read how agent_settled already sequences its five existing steps before adding to it, and give the new work its own try so a failure there cannot disturb them. The belt holds zero rules of its own, so ask bee which cells are claimed-and-uncapped rather than deciding it in TypeScript. Add the contract fixture row if this introduces a new handler name; the suite derives that set from this source. Finally, .pi/extensions is a root the release manifest hashes, so this cell owes the regen chain: after the belt edit run bee dev regen \u2014 render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order \u2014 and commit the refreshed manifest with the change. The verify carries bee dev release-manifest --check for exactly that reason.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "must_haves": {
+      "truths": [
+        "A session settling with a claimed uncapped cell produces a warning naming that cell and the verb to run",
+        "The warning is present in the visible transcript, not only as a UI toast",
+        "The warning appears even when the session has no UI",
+        "The session still settles: nothing blocks"
+      ],
+      "artifacts": [
+        {
+          "path": ".pi/extensions/bee-guard.ts",
+          "substantive": "a warn-only close guard on agent_settled writing into the transcript; no TODO stubs"
+        },
+        {
+          "path": "docs/history/codex-harness-hardening/release-manifest.json",
+          "substantive": "regenerated after the belt edit so the manifest hash matches the shipped extension"
+        }
+      ],
+      "key_links": [
+        "the claimed-cell answer comes from a bee hook, not from logic in the extension"
+      ],
+      "prohibitions": [
+        "Never block or delay the session settling",
+        "No use of session_stop: pi 0.85.1 does not have it",
+        "No edit to .opencode/plugins/bee-guard.ts",
+        "No disturbance to the existing agent_settled steps"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": true
+    }
+  }
+]
+```
+
+### Capped packets, slices 1-3 (record only)
+
+Kept so the approved shape of the finished work stays readable. Not the live packet —
+those cells are capped and the persisted cells are the authority.
+
+```text
 [
   {
     "id": "pnsd-1",
@@ -380,6 +526,72 @@ notice and a model notice (D4, D12); close-guard warning in the transcript (D5, 
       "worker": null, "outcome": null, "files_changed": [],
       "deviations": [], "friction": null, "capped_at": null,
       "behavior_change": true
+    }
+  }
+]
+```
+
+```text
+[
+  {
+    "id": "pnsd-5",
+    "feature": "pi-native-stage-driver",
+    "title": "Prove a five-seat hat wave runs with no panes and drops a late seat by name",
+    "lane": "high-risk",
+    "role": "test",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "D10",
+      "D11",
+      "cca2b21c-b932-44f4-ba22-1c483a558a0b",
+      "38110682-9e81-43d5-9aa8-dfe0864259da"
+    ],
+    "files": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "read_first": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      "docs/history/pi-native-stage-driver/evidence.md",
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "action": "This slice is PROOF, not construction: the seat name, the 600 second hat clamp and the result drain already live on the herding path and the no-pane runner inherits them (per D11). Do not add new mechanism for any of it \u2014 if something is missing, report it rather than building it. Rebuild first and install the binary at .bee/bin/bee, because doctor byte-compares the belt against the compiled copy and a stale vendored binary makes the whole run worthless (this bit pnsd-4: doctor reported binary_freshness not_ok). Then prove four things about a five-seat hat wave where every seat runs as a child process. One: all five seats run in parallel with NO tmux pane opened \u2014 count panes before and after with bee herding pane list and assert the count is unchanged, the way pnsd-4 did (26 before, 26 after). Two: every result is named by its seat \u2014 assert the seat field on each result envelope matches the seat that was dispatched, and that five distinct seats come back. Three: the wave stays inside its budget. Four, and this is the one that matters most: a seat that exceeds the ceiling is DROPPED AND NAMED, never silently lost. Force it rather than waiting for it \u2014 dispatch one seat with a deliberately tiny --ceiling and a task that cannot finish in time, then assert the run returns outcome TimedOutCeiling AND that the result still carries its seat name. The runner kills the child at the ceiling and returns RunOutcome::TimedOutCeiling; confirm the seat survives onto that envelope rather than assuming it does. Record the whole drive as a new sub-feature in pi-hat-wave.md, following that file's existing four-H2 contract, with the exact commands and their assertions.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+    "must_haves": {
+      "truths": [
+        "Five hat seats run as child processes with no tmux pane opened, proven by an unchanged pane count",
+        "Every seat's result is named by its seat, and five distinct seats return",
+        "A seat that exceeds its ceiling returns TimedOutCeiling and is still named by its seat",
+        "The wave stays inside its wall-clock budget"
+      ],
+      "artifacts": [
+        {
+          "path": ".bee/verify/verify-app/features/pi-hat-wave.md",
+          "substantive": "a new sub-feature for the no-pane wave with its driving commands, assertions and gotchas"
+        }
+      ],
+      "key_links": [
+        "the drive runs the rebuilt binary installed at .bee/bin/bee, not a stale vendored copy"
+      ],
+      "prohibitions": [
+        "No new seat-naming, ceiling or drain mechanism \u2014 it is inherited; report a gap instead of building one",
+        "No edit to herding/run.rs or prepare.rs in this cell",
+        "No claim of green without the fresh command output beside it"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
     }
   }
 ]
