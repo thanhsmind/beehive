@@ -91,6 +91,7 @@ Waves: `wci-1` then `wci-2`, serial.
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
     {"stage": "planning", "classification": "required", "role": "plan", "reason": "High-risk lane, inherited and non-demotable."},
+    {"stage": "implementation-code", "classification": "conditional", "role": "code", "condition": "wci-2 shows a worker still skipping a runnable, single instruction, so the fix has to move back into code", "reason": "This feature deliberately changes prompt text rather than code. The code role stays configured because the measurement in wci-2 can send the work back there."},
     {"stage": "implementation", "classification": "required", "role": "docs", "reason": "The change is prompt text in two template files, not code."},
     {"stage": "test-and-live-proof", "classification": "required", "role": "test", "reason": "The claim is that a worker now takes the step; only a live dispatch shows it."},
     {"stage": "documentation-and-capture", "classification": "conditional", "role": "docs", "condition": "a verify-app feature file needs the drive recipe", "reason": "Only if a verify-app feature file needs the recipe."},
