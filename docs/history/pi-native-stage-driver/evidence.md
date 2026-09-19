@@ -192,3 +192,77 @@ The guard is `state.feature == requested feature`. The packet's own `feature`
 field is never read, so any packet left in `state.json` is inherited by whatever
 feature is active next. `bee state start-feature` resets the four gates but does
 not clear `approved_cell_packet` or `gate_preview`.
+
+---
+
+## D — The write guard ENFORCES inside a child, not only loads
+
+Section A proved the belt *loaded* in a child. It did not prove enforcement: that
+probe ran with `--tools read` and an explicit instruction not to use a tool, so no
+write was ever attempted. Claim 1 was narrowed to "loads" for exactly that reason,
+and the plan carried the enforcement question as open. This section closes it.
+
+Run 2026-09-19 from the feature worktree, by the leader.
+
+### D1 — picking a target that denial cannot be explained away
+
+Gate 2 was approved by then, so ordinary source writes are legal and would prove
+nothing. Probing the parent guard for a path denied regardless of phase:
+
+```
+.env                                exit=0
+.env.local                          exit=0
+secrets.json                        exit=0
+id_rsa                              exit=0
+.agents/skills/bee-hive/SKILL.md    exit=0
+.claude/skills/bee-hive/SKILL.md    exit=0
+.bee/state.json                     exit=2   bee direct-edit guard: ".bee/state.json" is CLI-owned — direct edits are blocked in every phase.
+.bee/decisions.jsonl                exit=0
+```
+
+`.bee/state.json` is the one target whose refusal cannot be attributed to gate
+state. (Worth noting separately: the secret-shaped paths above were all allowed
+by the guard at this phase.)
+
+### D2 — the child was refused, in the guard's own words
+
+The child was given `--tools write` and told to replace that file. From its
+transcript, the tool result:
+
+```
+"text": "bee direct-edit guard: \".bee/state.json\" is CLI-owned — direct edits are blocked in every phase. Hand-edited state files reintroduce schema drift (the exact class the CLI validates away). FIX: use bee state set --owner <selected pre-mutation phase>, or the dedicated state gate/worker/scribing-run verb instead of editing this file directly."}], "details": {}, "isError": true
+```
+
+and the child's own reply:
+
+```
+"text": "REFUSED bee direct-edit guard: \".bee/state.json\" is CLI-owned — direct edits are blocked in every phase. …"
+```
+
+### D3 — and the file was untouched
+
+A second run asserted on content rather than on a hash:
+
+```
+### did the payload land?
+  the child's payload is NOT in the file
+
+### is it still valid bee state after?
+  valid json, feature = pi-native-stage-driver | keys = 12
+
+### what changed in the file, if anything
+  identical once last_activity is ignored
+```
+
+**Conclusion: a child `pi` process inherits bee's write guard and is refused by it.**
+The trust boundary holds across the spawn.
+
+### D4 — a false alarm worth recording
+
+The first version of this probe judged the outcome with `sha256sum` on
+`.bee/state.json` and printed *"FILE CHANGED — the guard did NOT enforce in the
+child"*. That was wrong: bee writes `last_activity` into that same file on a
+heartbeat, so the hash moved on its own while the child ran. A whole-file hash is
+not a valid assertion against live state the system mutates itself. The D3 form —
+is the attacker payload present, is the file still valid, is it identical once the
+known-volatile field is excluded — is the one that answers the question.
