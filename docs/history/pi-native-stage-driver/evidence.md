@@ -254,8 +254,23 @@ A second run asserted on content rather than on a hash:
   identical once last_activity is ignored
 ```
 
-**Conclusion: a child `pi` process inherits bee's write guard and is refused by it.**
-The trust boundary holds across the spawn.
+**Conclusion, stated at its true scope: a BARE child `pi` process — one spawned
+without bee's herding worker marker — inherits the write guard and is refused by
+it. The spawn itself does not leak past the guard.**
+
+That is NOT the same as saying a no-pane WORKER is guarded, and the difference
+matters. A worker started through `bee herding run` carries
+`BEE_HERDING_WORKER=1`, and `packages/bee-rs/crates/bee/src/hooks/mod.rs:144-155`
+short-circuits every hook except `activity` under that marker, with the reason
+stated in the code: *"the worker's posture is already fully-open (herding-adopt
+D7), so it gets zero bee preamble, zero guards, zero nudges."* So a no-pane
+worker has no write guard — and neither does a pane worker. That is existing,
+deliberate herding posture, identical on both transports, which is exactly the
+parity D11 requires. This feature does not change it in either direction.
+
+The probe above therefore proves the narrow thing it can prove: spawning a child
+does not by itself create an unguarded hole. What makes a worker unguarded is the
+marker, not the transport.
 
 ### D4 — a false alarm worth recording
 
