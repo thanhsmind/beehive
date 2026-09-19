@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "stage-gate-phase-parity",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"stage-gate-phase-parity\" started at phase \"planning\" (lane).",
-  "next_action": "sgpp-1 capped and committed. Next: bee-capturing to sync docs/knowledge, then close the lane. The shipped .bee/bin/bee still carries the old rule until the next release build.",
+  "next_action": "Closed. Source fixed; the vendored .bee/bin/bee still carries the old rule until the next release build.",
   "created_at": "2026-09-19T23:10:01.581Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -115,5 +115,21 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "stage-gate-phase-parity",
+    "date": "2026-09-19",
+    "at": "2026-09-19T23:31:50.997Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "Compound the lane."
+  },
+  "last_compounding_run": {
+    "feature": "stage-gate-phase-parity",
+    "date": "2026-09-19",
+    "at": "2026-09-19T23:32:13.766Z",
+    "learnings": "docs/history/learnings/20260920-stage-gate-phase-parity.md",
+    "next_action": "Lane complete."
   }
 }

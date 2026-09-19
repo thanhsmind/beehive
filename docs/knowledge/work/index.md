@@ -87,6 +87,7 @@ never a generation timestamp or any other wall-clock value.
 - [slp-followup-gaps/](slp-followup-gaps/index.md) — 1 concept(s)
 - [slp-spec-drop-procedure/](slp-spec-drop-procedure/index.md) — 1 concept(s)
 - [slp-supervisor-heartbeat/](slp-supervisor-heartbeat/index.md) — 1 concept(s)
+- [stage-gate-phase-parity/](stage-gate-phase-parity/index.md) — 1 concept(s)
 - [stale-worktree-lock/](stale-worktree-lock/index.md) — 1 concept(s)
 - [supervisor-tick-contract/](supervisor-tick-contract/index.md) — 1 concept(s)
 - [sweep-at-every-door/](sweep-at-every-door/index.md) — 1 concept(s)

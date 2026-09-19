@@ -64,3 +64,10 @@ when a downstream decision (suppress cleanup, block an action) depends on a fact
 it from the same source the upstream decision already trusted — never from a side effect
 (a write succeeding, a file existing) that can diverge from that fact for reasons that
 have nothing to do with it.
+
+The reading-side twin of this pitfall is
+[The predicate you found first is not the rule](20260919-the-predicate-you-found-first-is-not-the-rule-read-its-siblings-before-you-derive-from-it.md):
+here two homes for one rule drift apart, there a single home is read partially —
+one predicate is taken for the whole rule while its siblings, a few lines away,
+decide the other branches. Both end the same way: a confident, tested,
+documented rule that the code it claims to follow contradicts.
