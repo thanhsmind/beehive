@@ -6491,7 +6491,7 @@ use std::time::Instant;
         let (enter_res, enter_text) = enter_worktree_core(&main, &main, &created.id, Some(&claude_caller))
             .expect("enter_worktree_core succeeds");
         assert_eq!(enter_res["sessionRuntime"], json!("claude"));
-        let target_str = p(&created.worktree_root);
+        let target_str = canonical_path_str(&created.worktree_root).unwrap();
         let expected_enter_inst = format!("Call EnterWorktree with path={target_str}.");
         assert_eq!(enter_res["instruction"], json!(expected_enter_inst));
         assert!(enter_text.contains(&expected_enter_inst));
@@ -6531,7 +6531,7 @@ use std::time::Instant;
             Some(&opencode_caller),
         ).expect("new_worktree_transition_result_and_text succeeds");
         assert_eq!(new_res["sessionRuntime"], json!("opencode"));
-        let expected_new_inst = format!("Ask the user to type /move {target_str}, then send any message to continue.");
+        let expected_new_inst = format!("Ask the user to type /move {}, then send any message to continue.", p(&created.worktree_root));
         assert_eq!(new_res["instruction"], json!(expected_new_inst));
         assert!(new_text.contains(&expected_new_inst));
 

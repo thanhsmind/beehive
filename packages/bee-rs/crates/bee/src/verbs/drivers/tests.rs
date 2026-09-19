@@ -11273,12 +11273,27 @@ advance_on — falling to another model there hides the defect (D11)"
         std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{\"dirty\":true}\n").unwrap();
         std::fs::write(td.join("b.txt"), "b untracked\n").unwrap();
 
-        let out = Command::new("bash")
+        // On Windows use crate::shell::command() to reach a real Win32 bash (see shell.rs); elsewhere use Command::new("bash") because shell::command() returns /bin/sh.
+        let bash_cmd = || -> Command {
+            if cfg!(windows) {
+                crate::shell::command().expect("real Win32 bash must be present on Windows (see shell.rs)")
+            } else {
+                Command::new("bash")
+            }
+        };
+
+        let out = bash_cmd()
             .arg(&script)
             .current_dir(td)
             .output()
             .unwrap();
-        assert!(out.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(stdout.contains("a.txt"), "output should contain a.txt: {stdout:?}");
         assert!(stdout.contains("b.txt"), "output should contain b.txt: {stdout:?}");
@@ -11288,12 +11303,18 @@ advance_on — falling to another model there hides the defect (D11)"
         run_git(&["checkout", "--", "a.txt"]);
         std::fs::remove_file(td.join("b.txt")).unwrap();
 
-        let out_clean = Command::new("bash")
+        let out_clean = bash_cmd()
             .arg(&script)
             .current_dir(td)
             .output()
             .unwrap();
-        assert!(out_clean.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out_clean.stderr));
+        assert!(
+            out_clean.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out_clean.status,
+            String::from_utf8_lossy(&out_clean.stdout),
+            String::from_utf8_lossy(&out_clean.stderr)
+        );
         let stdout_clean = String::from_utf8_lossy(&out_clean.stdout);
         assert!(stdout_clean.is_empty(), "expected empty output when only bee paths dirty, got: {stdout_clean:?}");
     }
