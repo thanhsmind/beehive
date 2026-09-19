@@ -22,6 +22,7 @@ pub mod session_init;
 pub mod session_preamble;
 pub mod state_sync;
 pub mod tools_logger;
+pub mod stage_tools;
 pub mod write_guard;
 
 use std::ffi::OsString;
@@ -72,7 +73,7 @@ fn emit_undecidable(name: &str) -> ExitCode {
 /// The hook names `bee hook <name>` dispatches to. Kept as one list so the
 /// usage line and the dispatch match arm can never drift apart silently —
 /// add a hook to both, or the usage line lies.
-const HOOK_NAMES: [&str; 10] = [
+const HOOK_NAMES: [&str; 11] = [
     "tools-logger",
     "activity",
     "codex-subagent-audit",
@@ -83,6 +84,7 @@ const HOOK_NAMES: [&str; 10] = [
     "session-close",
     "model-guard",
     "write-guard",
+    "stage-tools",
 ];
 
 /// The herded-worker marker (herding/run.rs D2): set and non-empty means
@@ -183,6 +185,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "session-close" => session_close::run(&rest, &stdin_str),
         "model-guard" => model_guard::run(&rest, &stdin_str),
         "write-guard" => write_guard::run(&rest, &stdin_str),
+        "stage-tools" => stage_tools::run(&rest, &stdin_str),
         // Every name that reaches here passed the HOOK_NAMES membership
         // check above, and the arms cover exactly that list.
         _ => unreachable!("unknown hook names are refused before the stdin read"),

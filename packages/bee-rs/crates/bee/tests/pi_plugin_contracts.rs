@@ -8329,6 +8329,121 @@ fn stage_tools_narrowing_and_reopen_command() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn real_bee_hook_stage_tools_end_to_end() {
+    node_or_skip!("real_bee_hook_stage_tools_end_to_end");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let bee_dir = dir.path().join(".bee");
+    std::fs::write(
+        bee_dir.join("onboarding.json"),
+        r#"{"completed": true}"#,
+    )
+    .expect("write onboarding.json");
+    std::fs::write(
+        bee_dir.join("state.json"),
+        r#"{"phase": "planning", "approved_gates": {"execution": false}}"#,
+    )
+    .expect("write state.json");
+
+    // 1. Direct real CLI execution test: prove bee hook stage-tools returns a verdict JSON
+    use std::io::Write;
+    let mut child = std::process::Command::new(bee_bin())
+        .args(["hook", "stage-tools"])
+        .env_remove("BEE_HERDING_WORKER")
+        .current_dir(dir.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn bee hook stage-tools");
+
+    let payload = json!({
+        "hook_event_name": "TurnStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-direct-cli",
+    })
+    .to_string();
+
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(payload.as_bytes())
+        .expect("write stdin");
+
+    let output = child.wait_with_output().expect("wait");
+    assert!(
+        output.status.success(),
+        "bee hook stage-tools failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("verdict must be valid JSON");
+    assert_eq!(parsed["stage"], "planning");
+    assert_eq!(
+        parsed["allowed_tools"],
+        json!(["read", "bash"])
+    );
+
+    // 2. Drive belt end-to-end through node harness with real binary
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "turn_start",
+                "event_arg": { "turnIndex": 1 },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": "sess-stage-real",
+            }),
+            command_call(dir.path(), "sess-stage-real", "bee-tools-reopen", ""),
+        ],
+    );
+
+    // Tool narrowing happened via real bee hook stage-tools
+    assert_eq!(
+        run.active_tools_history.get(1),
+        Some(&vec!["read".to_string(), "bash".to_string()]),
+        "expected active tools to narrow to [read, bash] on turn_start, history: {:?}",
+        run.active_tools_history
+    );
+
+    // User was notified
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("planning") && msg.contains("/bee-tools-reopen") && msg.contains("write")
+        }),
+        "expected user notification from real hook narrowing: {:?}",
+        run.notifications
+    );
+
+    // Model was notified
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-stage-tools"
+                && content.contains("planning")
+                && content.contains("write")
+        }),
+        "expected model notice from real hook narrowing: {:?}",
+        run.custom_messages
+    );
+
+    // bee-tools-reopen restored tools
+    assert_eq!(
+        run.active_tools,
+        vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
+        "expected active tools restored"
+    );
+}
+
 #[cfg(not(unix))]
 #[test]
 fn pi_plugin_fixtures_skip_on_non_unix() {
