@@ -648,3 +648,15 @@
 {"ts":"2026-09-19T03:47:13.870Z","event":"add","id":"b380db09-d95e-4e0d-9557-08d105fe57ce","kind":"promote","feature":"pi-native-stage-driver","cells":[],"areas":[],"files":["docs/history/pi-native-stage-driver/promote-proposals.md"],"reason":"Promote proposal for \"pi-native-stage-driver\" awaiting apply — docs/history/pi-native-stage-driver/promote-proposals.md."}
 {"ts":"2026-09-19T05:42:16.192Z","event":"add","id":"08133dba-6fc5-46c2-83bd-9b2dd5fb7a2b","kind":"worktree-cleanup","feature":"herding-caps-on-clean-report","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--herding-caps-on-clean-report"],"reason":"Worktree beehive--wt--herding-caps-on-clean-report (branch wt/herding-caps-on-clean-report) merged into main at bf13fbe6d38d92b442ca315451ec9846c460d1d6 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-09-19T05:44:28.907Z","event":"add","id":"8745352b-e2e9-4db3-baae-071337b53f2a","kind":"promote","feature":"herding-caps-on-clean-report","cells":[],"areas":[],"files":["docs/history/herding-caps-on-clean-report/promote-proposals.md"],"reason":"Promote proposal for \"herding-caps-on-clean-report\" awaiting apply — docs/history/herding-caps-on-clean-report/promote-proposals.md."}
+{"ts":"2026-09-19T13:13:13.892Z","event":"complete","id":"3d7cf549-908e-4057-b651-dd9ca444ceb9"}
+{"ts":"2026-09-19T13:13:14.179Z","event":"complete","id":"4859d793-4637-4f70-8c3a-53c0f196ce33"}
+{"ts":"2026-09-19T13:13:14.600Z","event":"complete","id":"93a58694-2da0-45f5-a653-220dd286801e"}
+{"ts":"2026-09-19T13:13:15.023Z","event":"complete","id":"a294ccfb-89be-49db-87e3-f84c6cd52f2a"}
+{"ts":"2026-09-19T13:13:15.298Z","event":"complete","id":"d84e4fe3-71a1-4f6e-81b1-f098b5c9676d"}
+{"ts":"2026-09-19T13:13:15.576Z","event":"complete","id":"6a47eff3-99c9-4f24-b970-21b081d4b4a8"}
+{"ts":"2026-09-19T13:13:15.861Z","event":"complete","id":"56f1b678-a48b-48d9-b734-92fddbb12ac1"}
+{"ts":"2026-09-19T13:13:16.263Z","event":"complete","id":"110655f8-3440-48a8-873d-ba72d990b9db"}
+{"ts":"2026-09-19T13:13:16.263Z","event":"complete","id":"d89d08a6-56b8-4296-87b6-8b11789537bb"}
+{"ts":"2026-09-19T13:13:16.263Z","event":"complete","id":"9d269f4a-474c-46df-ade1-0c8c88295aac"}
+{"ts":"2026-09-19T13:13:16.557Z","event":"complete","id":"5b955c2b-29e0-4eeb-9569-6b6bfa0196c6"}
+{"ts":"2026-09-19T13:13:16.842Z","event":"complete","id":"2c9cd37d-eab8-4aaa-90fb-72b088cda78a"}
