@@ -24,6 +24,7 @@ the behavior; the recurrence rate here was total, not intermittent. A leader who
 trusts the returned `outcome=done` without checking cell status ends a feature
 with uncapped cells and no recorded proof — and `bee close` then refuses.
 
+<!-- bee:not-a-deferral: This table records D1-D7, which describe a runner auto-cap the plan-step hat wave ruled out on evidence before any of it was built. They are kept as the record of a rejected shape, not as work postponed; decision 974f2a70 routes them as feature-local. -->
 ## Locked Decisions
 
 These are fixed. Planning must implement them exactly — cited, never reinterpreted.
@@ -39,6 +40,8 @@ Decision log: `9d2347e4` (the contract).
 | D5 | No new trust is extended. `bee cells finish` records the proof line it is handed and runs nothing; this feature changes only WHO calls it, never what is checked. | The owner accepted the behavior on that basis. If a later change makes the cap validate more or less than `cells finish` does, it has left this decision. |
 | D6 | The cap reuses the existing callable entry point rather than shelling out to the bee binary or duplicating cap logic. | `cap_cell_from_flags` exists, and herding already calls into the cells module directly for dissent — this is the same road, not a new one. |
 | D7 | One visible line per cap, naming the cell and the result segment. A refusal line is never silenced. | A leader must be able to see, in the run output, that a cap happened and on what proof. |
+
+<!-- /bee:not-a-deferral -->
 
 ### Agent's Discretion
 

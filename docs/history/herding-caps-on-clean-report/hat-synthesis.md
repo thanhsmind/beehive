@@ -18,6 +18,7 @@ before it was accepted.
 
 ---
 
+<!-- bee:not-a-deferral: The flagged word is "later" used positionally, not temporally: it describes where text sits inside a prompt ("about two hundred words later"), which is the defect this feature fixed. Nothing here is postponed. -->
 ## The finding that re-shaped the feature
 
 **An execution worker is handed two different finish instructions in one task
@@ -48,8 +49,11 @@ with no `--no-pane` flag, so they ran as pane workers and could have run a secon
 command. The unrunnable instruction stands as the explanation; the unreachable
 runtime does not.
 
+<!-- /bee:not-a-deferral -->
+
 ---
 
+<!-- bee:not-a-deferral: These blockers describe why a shape was abandoned. They are written down so a later attempt starts from them rather than rediscovering them — a record of rejection, not a promise to revisit. -->
 ## Why the drafted auto-cap could not be built honestly
 
 ### B1 — The runner cannot produce the worker's bytes (from `hat-facts-gaps` G1, `hat-risks` P1)
@@ -102,14 +106,19 @@ collided immediately.
 
 ---
 
+<!-- /bee:not-a-deferral -->
+
 ## What the wave did NOT change
 
 `hat-alternatives` judged the SMALLER PATH reasoning sound and the live-drive cell
 worth keeping. That holds in the new shape: the whole value is that a mechanical
 step fires, and only a real dispatch shows it.
 
+<!-- bee:not-a-deferral: The flagged phrase is "a later attempt", naming a hypothetical future try at a shape this feature examined and rejected. The blockers are written down so such an attempt would start from them; nobody has committed to making one. -->
 ## Outcome
 
 Decision `9d2347e4` is superseded by `7152ebab`: fix the instruction, do not build
 the runner auto-cap. The auto-cap route is recorded here with its blockers so a
 later attempt starts from B1-B4 rather than rediscovering them.
+<!-- /bee:not-a-deferral -->
+

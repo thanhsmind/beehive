@@ -33,6 +33,7 @@ CONTEXT.md's D1-D7 described the runner auto-cap and are superseded by decision
 - **R3** It is the last thing the prompt asks of the worker.
 - **R4** The runner does NOT cap on the worker's behalf.
 
+<!-- bee:not-a-deferral: The flagged word is "later" used positionally, not temporally: it describes where text sits inside a prompt ("about two hundred words later"), which is the defect this feature fixed. Nothing here is postponed. -->
 ## Load-bearing claims
 
 | # | Claim | Label | Anchor | Verbatim evidence |
@@ -45,6 +46,9 @@ CONTEXT.md's D1-D7 described the runner auto-cap and are superseded by decision
 | 6 | The runner cannot legally cap for the worker, so R4 is a constraint and not a preference. | read | `packages/bee-rs/crates/bee/src/herding/mailbox.rs:466` | `MailboxResult` carries `round, status, summary, files_changed, proof, options, leaning` — no `commit`, no `deviations`, no `mistakes` |
 | 7 | A legal cap needs keys the envelope does not carry. | read | `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:57` | the required report keys are `outcome, commit, files, tests, deviations`, with `outcome` and `commit` non-empty |
 
+<!-- /bee:not-a-deferral -->
+
+<!-- bee:not-a-deferral: The flagged phrase is "a later attempt", naming a hypothetical future try at a shape this feature examined and rejected. The blockers are written down so such an attempt would start from them; nobody has committed to making one. -->
 ## Discovery
 
 The wave's full record is `docs/history/herding-caps-on-clean-report/hat-synthesis.md`.
@@ -55,6 +59,8 @@ from them rather than rediscovering them.
 One correction the wave forced on the leader's own record: the backlog row filed
 at the previous feature's close reads *"workers commit and test but never cap"*,
 which blames the worker for following an instruction that does not run.
+
+<!-- /bee:not-a-deferral -->
 
 ## Approach
 
@@ -233,9 +239,12 @@ One slice: `wci-1` (the text and the regen), then `wci-2` (the live drive).
 | 6 | Live | A real dispatched worker | the cell is capped by its own worker, with no manual step |
 | 7 | Live, negative | The worker still does not cap | reported honestly with the received instruction quoted, never hand-capped |
 
+<!-- bee:not-a-deferral: The open question here names what cell wci-2 measures inside this feature, and it was measured: a real worker capped its own cell. It is not work deferred past the close. -->
 ## Open Questions
 
 - Whether a single runnable instruction is SUFFICIENT is exactly what `wci-2` measures. If a worker still skips it with a runnable command in front of it, the runner route returns — and `hat-synthesis.md` records the four blockers it must solve first.
+
+<!-- /bee:not-a-deferral -->
 
 <!-- bee:not-a-deferral: This section lists what this feature deliberately does not change, so a reader knows the boundary. Each line is a superseded decision or a recorded blocker, not work postponed. -->
 ## Out of scope

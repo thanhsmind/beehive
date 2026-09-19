@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-caps-on-clean-report",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": false,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"herding-caps-on-clean-report\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bf13fbe; reload the product and test \"herding-caps-on-clean-report\", then either approve uat (\"bee gate --name uat --approved true --lane herding-caps-on-clean-report\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"herding-caps-on-clean-report\" — feature is closed.",
   "created_at": "2026-09-19T04:49:00.960Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
