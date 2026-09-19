@@ -536,6 +536,7 @@
     "contract:pi-close-guard",
     "contract:herding-caps-on-clean-report",
     "contract:worker-cap-instruction",
-    "one-fact-one-home"
+    "one-fact-one-home",
+    "contract:test-path-expectations"
   ]
 }

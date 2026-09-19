@@ -1,0 +1,91 @@
+{
+  "id": "win-2",
+  "feature": "windows-ci-green",
+  "title": "Run release-dirt under a real Windows bash, and match the merge path to what the product emits",
+  "lane": "small",
+  "role": "test",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "00967a93-511b-46bb-8b0e-f06e9bef8623"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/shell.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "docs/history/windows-ci-green/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Two corrections, both in test code, both proven by the branch's own Windows run 35453818440. FIRST, in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs inside `fn test_release_dirt_script_filters_only_bee_paths`: both script runs call `Command::new(\"bash\")`, and on Windows that bare name resolves to the WSL launcher in C:\\Windows\\System32 — the run printed \"Windows Subsystem for Linux has no installed distributions\" in UTF-16 on stdout. The product already solves exactly this: read the header comment of packages/bee-rs/crates/bee/src/shell.rs, which describes this failure, and use `crate::shell::command()`, which pins the child PATH to a real Win32 bash. BUT use it on Windows ONLY. On every other platform `crate::shell::command()` returns /bin/sh, not bash (see `fn resolve` in shell.rs), and release-dirt.sh needs real bash — it uses [[ ]], ${x:0:2}, process substitution and read -d ''. On Ubuntu /bin/sh is dash and the script would break. So: on Windows build the command from `crate::shell::command()` (expect it to be present there, with a message naming the missing Win32 bash), elsewhere keep `Command::new(\"bash\")`. Put a one-line comment beside the branch saying why, citing shell.rs. Keep the diagnostic assertion messages from win-1 as they are. SECOND, in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`: win-1 changed BOTH expectation sites to canonical_path_str. The Windows run proved only the ENTER site needed it — the test now passes the enter assertion and fails the merge one at line 6517, because the product emits the merge instruction with the unconverted short path (RUNNER~1) while the enter instruction is canonical. Revert ONLY the merge site: `let main_str = canonical_path_str(&main).unwrap();` goes back to `let main_str = p(&main);`. Leave the enter site canonical. Do not change the product to make the two consistent; that inconsistency is filed separately. Do not touch scripts/release-dirt.sh.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+  "must_haves": {
+    "truths": [
+      "On Windows the release-dirt script runs through crate::shell::command(), so it reaches a real Win32 bash",
+      "On every other platform the release-dirt script still runs under bash, not /bin/sh",
+      "The worktree test's enter expectation stays canonical and its merge expectation matches the raw path the product emits",
+      "The full bin suite stays green on Linux"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "a Windows-only branch to crate::shell::command() with a comment citing shell.rs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "the merge site reverted to p(&main); the enter site unchanged"
+      }
+    ],
+    "key_links": [
+      "the Windows bash comes from the product's own resolver, not a second implementation of it"
+    ],
+    "prohibitions": [
+      "No use of crate::shell::command() off Windows, where it is /bin/sh",
+      "No change to scripts/release-dirt.sh or any product source file",
+      "No weakening of an assertion condition"
+    ]
+  },
+  "trace": {
+    "worker": "worker-win2",
+    "outcome": "release-dirt runs under real Win32 bash on Windows; merge path expectation matches product",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "the leader capped the cell, not the worker — the herding worker reported done with a narrow proof and skipped its finish command — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T16:21:43.772Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify; 3689 passed 0 failed on Linux, Windows proof comes from the branch CI run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+    "claimed_at": "2026-09-19T16:18:24.377Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "release-dirt test runs through crate::shell::command() on Windows only, bash elsewhere; worktree merge expectation reverted to p(&main), enter stays canonical",
+      "commit": "603e2810f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee — green:unit — the cell verify; 3689 passed 0 failed on Linux, Windows proof comes from the branch CI run",
+      "deviations": [
+        "the leader capped the cell, not the worker — the herding worker reported done with a narrow proof and skipped its finish command — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
