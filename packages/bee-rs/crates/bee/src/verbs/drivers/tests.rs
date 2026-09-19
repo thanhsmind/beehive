@@ -119,8 +119,11 @@ use std::time::Instant;
         assert_eq!(normalize_template("a\r\nb\r\n"), "a\nb");
         assert_eq!(normalize_template("a\nb\n\n"), "a\nb\n");
         assert_eq!(normalize_template("a\nb"), "a\nb");
-        // The real worker-cell template ends with `{{/if}}\n` -> `{{/if}}`.
-        assert!(load_prompt("worker-cell").unwrap().ends_with("{{/if}}"));
+        // The invariant is the normalization, not which line happens to be last:
+        // exactly one trailing newline is stripped from every real template.
+        // (This used to assert the worker-cell tail was `{{/if}}`, which pinned
+        // the prompt's running order rather than loadPrompt's behavior.)
+        assert!(!load_prompt("worker-cell").unwrap().ends_with('\n'));
         assert!(!load_prompt("gather").unwrap().ends_with('\n'));
     }
 

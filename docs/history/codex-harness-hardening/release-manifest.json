@@ -1777,7 +1777,7 @@
     },
     {
       "path": "packages/bee/agents/bee-build.md.tmpl",
-      "sha256": "49a679570c4a08e9ee204f9cba53a4908dbafc7d057bc2e7bd277c350a624ca5",
+      "sha256": "420aeafac4de26e0f2cadb502b27e0f193f6ebb48d7715f8dd220de9b81764f5",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-build.md.tmpl"
@@ -1840,7 +1840,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "8de76182920befc11bc2daab4b0454d61b3e8b6775c951044122aa8ee09cbf57",
+      "sha256": "56c27a07200f7d5ab8fbe77ff3ab071fca1e1a5dc130cd12eb941b821dd667a5",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"
