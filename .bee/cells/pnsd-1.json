@@ -1,0 +1,97 @@
+{
+  "id": "pnsd-1",
+  "feature": "pi-native-stage-driver",
+  "title": "Scope the approved plan packet to its own feature",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "539bfbb2-c79b-4931-ada2-2b5d7ca9a973"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+    "docs/history/pi-native-stage-driver/evidence.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Make an approved plan packet belong to the feature that produced it. Read evidence.md section C for the reproduction and the exact refusal strings. `get_approved_preview_packet` has TWO return sites — find them by searching for `approved_cell_packet`, and carry the enclosing function name rather than a line number. They differ today and both are wrong in different ways: the lane-file branch compares NO feature at all, and the state branch compares only the ACTIVE feature name, never the packet's own `feature` field. At BOTH sites, if the stored packet carries a non-empty `feature` that differs from the requested feature, treat the packet as absent and return None. A packet with no `feature` field keeps today's behavior so older stores do not break. Write one red test per branch first — a lane-file packet and a state packet, each carrying a foreign feature name — watch both fail for that reason, then fix. Do not change how a matching packet is returned, and do not touch the gate or dispatch code.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee plan_packets",
+  "must_haves": {
+    "truths": [
+      "A lane-file packet whose own feature differs from the active feature is not returned",
+      "A state packet whose own feature differs from the active feature is not returned",
+      "A packet with no feature field is still returned, so existing stores keep working",
+      "Starting a new feature after another one no longer refuses a non-cell dispatch"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "substantive": "both return sites compare the packet's own feature field; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "one test per branch, each failing before the fix for the mismatched-feature reason"
+      }
+    ],
+    "key_links": [
+      "get_approved_role_plan still reads through get_approved_preview_packet, unchanged"
+    ],
+    "prohibitions": [
+      "No change to prepare.rs or any gate verb",
+      "No change to the shape of a packet that does match"
+    ]
+  },
+  "trace": {
+    "worker": "leader",
+    "outcome": "Scope the approved plan packet to its own feature at both lookup sites",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "get_approved_preview_packet was widened from private fn to pub(crate) fn so the new tests can call it directly — the cell did not name a visibility change and the worker reported no deviations — hit an unforeseen obstacle",
+      "The live end-to-end reproduction could not be re-run: the leader own bee gate --preview during Gate 2 overwrote the stranded release-2-41-2 packet, so the precondition no longer exists in this store. Truth 4 is proven by the unit test that recreates that exact state instead — the plan was wrong about a fact",
+      "sync-ack: No skill text changes. This cell fixes an internal invariant in a private lookup (get_approved_preview_packet): an approved packet must belong to the feature that produced it. No bee-planning, bee-swarming, bee-reviewing or bee-capturing step describes that lookup or changes shape because of it — the fix restores the behavior those skills already assume, rather than introducing a new one. The user-visible effect (a new feature no longer inherits a stale role plan) belongs in the workflow-state knowledge area, and is carried by decision 539bfbb2 plus the feature close capture."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-18T23:50:31.684Z",
+    "behavior_change": true,
+    "verification_evidence": "20 passed, 0 failed; leader re-ran it rather than trusting the worker report. Truth 1 lands in plan_packets_lane_packet_with_foreign_feature_is_not_returned, truth 2 in plan_packets_state_packet_with_foreign_feature_is_not_returned, truth 3 in plan_packets_packet_with_no_feature_field_is_still_returned, and truth 4 in plan_packets_role_plan_scoped_to_feature_not_stale_across_features, which reproduces the original store state (state.feature pi-native-stage-driver, packet.feature release-2-41-2, read-only-gather not-applicable) and asserts get_approved_role_plan returns None.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee plan_packets",
+    "claimed_at": "2026-09-18T23:42:50.259Z",
+    "sync_ack": "No skill text changes. This cell fixes an internal invariant in a private lookup (get_approved_preview_packet): an approved packet must belong to the feature that produced it. No bee-planning, bee-swarming, bee-reviewing or bee-capturing step describes that lookup or changes shape because of it — the fix restores the behavior those skills already assume, rather than introducing a new one. The user-visible effect (a new feature no longer inherits a stale role plan) belongs in the workflow-state knowledge area, and is carried by decision 539bfbb2 plus the feature close capture.",
+    "mistakes": [
+      {
+        "wrong": "The worker finished its commit and its tests but never ran bee cells finish, so the cell sat claimed with no proof line and no outcome",
+        "better": "the leader had to cap it; a herding worker cap step needs checking every time rather than trusting the returned outcome"
+      }
+    ],
+    "report": {
+      "outcome": "Both get_approved_preview_packet return sites now refuse a packet whose own feature differs from the requested one; a packet with no feature field still returns, so older stores keep working.",
+      "commit": "c1b6861598991ae31cf6cd603af8a75a4752a883",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee plan_packets — green:unit — 20 passed, 0 failed; leader re-ran it rather than trusting the worker report. Truth 1 lands in plan_packets_lane_packet_with_foreign_feature_is_not_returned, truth 2 in plan_packets_state_packet_with_foreign_feature_is_not_returned, truth 3 in plan_packets_packet_with_no_feature_field_is_still_returned, and truth 4 in plan_packets_role_plan_scoped_to_feature_not_stale_across_features, which reproduces the original store state (state.feature pi-native-stage-driver, packet.feature release-2-41-2, read-only-gather not-applicable) and asserts get_approved_role_plan returns None.",
+      "deviations": [
+        "get_approved_preview_packet was widened from private fn to pub(crate) fn so the new tests can call it directly — the cell did not name a visibility change and the worker reported no deviations — hit an unforeseen obstacle",
+        "The live end-to-end reproduction could not be re-run: the leader own bee gate --preview during Gate 2 overwrote the stranded release-2-41-2 packet, so the precondition no longer exists in this store. Truth 4 is proven by the unit test that recreates that exact state instead — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "The worker finished its commit and its tests but never ran bee cells finish, so the cell sat claimed with no proof line and no outcome — the leader had to cap it; a herding worker cap step needs checking every time rather than trusting the returned outcome"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

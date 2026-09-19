@@ -1,0 +1,118 @@
+{
+  "id": "pnsd-6",
+  "feature": "pi-native-stage-driver",
+  "title": "Narrow the model's tools per stage, and say so to the user and the model",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D7",
+    "D12",
+    "f3e80214-af9a-4045-b168-38d76d4eaa0f"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+  ],
+  "read_first": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/history/pi-native-stage-driver/CONTEXT.md",
+    "docs/history/pi-native-stage-driver/hat-synthesis.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "FINISH THE OTHER HALF. The belt side of this cell is already committed at b2cc78ddf and is correct in shape: it calls runAdvisoryHook(directory, \"stage-tools\", ...) instead of hardcoding a stage table, registers /bee-tools-reopen, and notifies the user. But bee has no such hook: `bee hook stage-tools` answers `unknown hook \"stage-tools\"` and exits 1, so the advisory wrapper swallows it and the gate narrows NOTHING. The feature is inert today. Do not redo the belt work; add the answering side. One: add \"stage-tools\" to HOOK_NAMES in packages/bee-rs/crates/bee/src/hooks/mod.rs — note the array length is declared, so the count changes too — and route it to a new hooks/stage_tools.rs module beside the existing hook modules, following whatever shape those already use for reading stdin and writing a JSON verdict. Two: the hook answers, for the feature's CURRENT phase, which tools are allowed. Keep the mapping small, explicit and in Rust where bee's other rules live: before the execution gate is approved the model gets read-only tools; after it, the full set. Read how the write-guard hook already decides phase and gate state and reuse that, rather than inventing a second reader. Three: the answer must carry, alongside the allowed tool names, a short human sentence the belt shows the USER and a short sentence it gives the MODEL naming stage policy as the reason (per D12) — the belt already expects both, so match what it reads. Four: prove it end to end, not just in unit tests. Run `bee hook stage-tools` with a real payload and show it returns a verdict rather than `unknown hook`. A test that only asserts the belt SOURCE contains the call is exactly the trap this cell already fell into once. Finally, .pi/extensions is a root the release manifest hashes: re-run bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write) if the belt changes again, and keep bee dev release-manifest --check in the proof.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Off-stage tools are absent from the model's active tool list",
+      "The re-open command is registered under a named slash command and restores the full set",
+      "The user is told, where the narrowing happens, that tools were narrowed and how to re-open them",
+      "The model is told that a tool was removed by stage policy rather than being left to guess",
+      "The stage-to-tools mapping comes from bee, not from a table hardcoded in the extension"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "per-stage narrowing, the re-open command, and both notices; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "fixture rows for the new handler and the new command name"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "regenerated after the belt edit so the manifest hash matches the shipped extension"
+      }
+    ],
+    "key_links": [
+      "the narrowing reads its stage-to-tools answer from a bee hook, not from a literal in the extension"
+    ],
+    "prohibitions": [
+      "No second blocking surface: tool_call stays the only one",
+      "No hardcoded stage-to-tools table inside the extension",
+      "No edit to .opencode/plugins/bee-guard.ts",
+      "No change to the twelve existing pi.on handlers' behavior"
+    ]
+  },
+  "trace": {
+    "worker": "worker-gate",
+    "outcome": "Narrow the model's tools per bee stage, answered by a real bee hook, announced to user and model",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The cell was dispatched TWICE. The first run (b2cc78ddf) built the belt side exactly as written — it calls runAdvisoryHook for stage-tools instead of hardcoding a table — but stage-tools was not one of bee ten HOOK_NAMES, so bee answered unknown hook with exit 1, the advisory wrapper swallowed it, and the gate narrowed nothing. The cell files named only the belt, its tests and the manifest, so the worker could not have added the answering side without leaving its scope, and correctly did not. The leader widened the cell to carry hooks/mod.rs and a new hooks/stage_tools.rs and re-dispatched — the plan was wrong about a fact",
+      "The declared verify covers the contract suite and the manifest, but the narrowing logic lives in bee own unit tests, which that suite never runs. The leader ran cargo test -p bee stage_tools separately rather than reporting a green that never executed the new branch — found a better route",
+      "sync-ack: No skill text changes. The stage gate is a belt behaviour plus a new bee hook; it adds no step to bee-planning, bee-swarming, bee-reviewing or bee-capturing and changes no verb a skill instructs. The user-facing half is announced in-session by the belt itself and by /bee-tools-reopen, which is where a user meets it."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T02:53:06.953Z",
+    "behavior_change": true,
+    "verification_evidence": "73 passed 0 failed (was 71 before this cell), and release_manifest --check reports 376 files match stored manifest. The leader did not accept a source-shape green: it ran the hook itself. Before the fix, bee hook stage-tools answered `unknown hook \"stage-tools\"` exit 1. After, with the rebuilt binary, it returns a real verdict: {\"stage\":\"swarming\",\"allowed_tools\":[\"read\",\"bash\",\"edit\",\"write\",\"find\",\"grep\",\"ls\",\"powershell\"],\"user_message\":\"bee stage gate: full tool set active for stage \\\"swarming\\\".\",\"model_message\":\"Notice: Full tool set is available for bee stage \\\"swarming\\\".\"}. The leader then confirmed the NEW tests execute by name rather than trusting the count: hooks::stage_tools::tests::stage_tools_returns_read_only_in_planning_phase_without_gate, hooks::stage_tools::tests::stage_tools_fails_open_without_bee_store, stage_tools_narrowing_and_reopen_command, and real_bee_hook_stage_tools_end_to_end all ran and passed. READ_ONLY_TOOLS is [read, bash] and applies whenever the execution gate is not open, which is the narrowing this cell exists for.",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-19T02:41:11.735Z",
+    "verified_at": null,
+    "sync_ack": "No skill text changes. The stage gate is a belt behaviour plus a new bee hook; it adds no step to bee-planning, bee-swarming, bee-reviewing or bee-capturing and changes no verb a skill instructs. The user-facing half is announced in-session by the belt itself and by /bee-tools-reopen, which is where a user meets it.",
+    "mistakes": [
+      {
+        "wrong": "I wrote pnsd-6 telling the belt to ASK bee for the stage-to-tools mapping, then listed only the belt, its tests and the manifest in the cell files, so the half that ANSWERS was never built and the gate shipped inert while its tests passed",
+        "better": "when a cell says one component must ask another, verify the answering side exists before writing the cell and put both halves in the same files or split them into two cells with an explicit dep; one check against HOOK_NAMES while drafting would have caught it."
+      }
+    ],
+    "report": {
+      "outcome": "The Pi belt narrows the model active tools to what the bee stage allows, asking bee rather than holding a table of its own, and both the user and the model are told why; /bee-tools-reopen restores the full set.",
+      "commit": "41d0287ef",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:live — 73 passed 0 failed (was 71 before this cell), and release_manifest --check reports 376 files match stored manifest. The leader did not accept a source-shape green: it ran the hook itself. Before the fix, bee hook stage-tools answered `unknown hook \"stage-tools\"` exit 1. After, with the rebuilt binary, it returns a real verdict: {\"stage\":\"swarming\",\"allowed_tools\":[\"read\",\"bash\",\"edit\",\"write\",\"find\",\"grep\",\"ls\",\"powershell\"],\"user_message\":\"bee stage gate: full tool set active for stage \\\"swarming\\\".\",\"model_message\":\"Notice: Full tool set is available for bee stage \\\"swarming\\\".\"}. The leader then confirmed the NEW tests execute by name rather than trusting the count: hooks::stage_tools::tests::stage_tools_returns_read_only_in_planning_phase_without_gate, hooks::stage_tools::tests::stage_tools_fails_open_without_bee_store, stage_tools_narrowing_and_reopen_command, and real_bee_hook_stage_tools_end_to_end all ran and passed. READ_ONLY_TOOLS is [read, bash] and applies whenever the execution gate is not open, which is the narrowing this cell exists for.",
+      "deviations": [
+        "The cell was dispatched TWICE. The first run (b2cc78ddf) built the belt side exactly as written — it calls runAdvisoryHook for stage-tools instead of hardcoding a table — but stage-tools was not one of bee ten HOOK_NAMES, so bee answered unknown hook with exit 1, the advisory wrapper swallowed it, and the gate narrowed nothing. The cell files named only the belt, its tests and the manifest, so the worker could not have added the answering side without leaving its scope, and correctly did not. The leader widened the cell to carry hooks/mod.rs and a new hooks/stage_tools.rs and re-dispatched — the plan was wrong about a fact",
+        "The declared verify covers the contract suite and the manifest, but the narrowing logic lives in bee own unit tests, which that suite never runs. The leader ran cargo test -p bee stage_tools separately rather than reporting a green that never executed the new branch — found a better route"
+      ],
+      "mistakes": [
+        "I wrote pnsd-6 telling the belt to ASK bee for the stage-to-tools mapping, then listed only the belt, its tests and the manifest in the cell files, so the half that ANSWERS was never built and the gate shipped inert while its tests passed — when a cell says one component must ask another, verify the answering side exists before writing the cell and put both halves in the same files or split them into two cells with an explicit dep; one check against HOOK_NAMES while drafting would have caught it."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

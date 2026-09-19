@@ -1,0 +1,107 @@
+{
+  "id": "pnsd-2",
+  "feature": "pi-native-stage-driver",
+  "title": "Add a no-pane runner to bee herding run",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pnsd-1"
+  ],
+  "decisions": [
+    "D2",
+    "D10",
+    "D11",
+    "cca2b21c-b932-44f4-ba22-1c483a558a0b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+    "docs/history/pi-native-stage-driver/evidence.md",
+    "docs/history/pi-native-stage-driver/hat-synthesis.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Give `bee herding run` a second way to start a worker: spawn it as a child process instead of splitting a tmux pane (per D11). Everything around the worker stays exactly as it is — same job id, same `--seat`, same ceiling handling, same mailbox report path, same result-inbox marker and drain. Only the launch changes. Build the child argv the way Pi's own example does (evidence.md section B1): `--mode json -p --no-session`, then `--model`, then `--tools`, then the task, spawned with shell false and an explicit cwd, stdout and stderr piped. Parse stdout as JSONL and SKIP every line that does not parse — evidence.md section A4 shows a non-JSON banner arrives first. Take the assistant text and the usage/cost from the child's own events (evidence.md section A5) and write the same report file a pane worker writes, so the leader reads it by the path it already reads. Two things the pane path already gets right and this path MUST get right the same way, both found by the hat wave: build the child environment EXPLICITLY the way the pane env is built near the `BEE_HERDING_WORKER` insertion — never let the child inherit the leader's session identity — and set `BEE_HERDING_WORKER=1` in it, because `hooks/mod.rs` reads that marker to mute every leader-only hook; without it the child registers its own acting session and can adopt the leader's handoff. Find the cwd the same way the pane path finds it, from the prepared `--cwd`, never from the process cwd. Do not add any new result carrier and do not change the report format. Do not touch `.pi/extensions/bee-guard.ts` (per D11).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+  "must_haves": {
+    "truths": [
+      "A worker starts as a child process with no tmux pane and its answer lands in the same report file a pane worker writes",
+      "The child environment carries BEE_HERDING_WORKER=1 and does not carry the leader's session identity",
+      "Unparseable stdout lines are skipped and the answer still returns",
+      "A non-zero child exit surfaces the child's stderr rather than reporting success",
+      "The job id, seat and ceiling behave exactly as on the pane path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "a no-pane launch path beside the pane launch; explicit child env; JSONL parse that tolerates noise. No TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/tests.rs",
+        "substantive": "tests for env construction, noise-tolerant parsing, and non-zero exit surfacing"
+      }
+    ],
+    "key_links": [
+      "the no-pane path writes the same mailbox report the drain already reads",
+      "the child env is built by the same explicit construction the pane env uses"
+    ],
+    "prohibitions": [
+      "No edit to .pi/extensions/bee-guard.ts",
+      "No new result carrier and no change to the report format",
+      "The child must not inherit BEE_SESSION_ID, CLAUDE_CODE_SESSION_ID or PI_SESSION_ID",
+      "No change to the pane launch path's behavior"
+    ]
+  },
+  "trace": {
+    "worker": "worker-runner",
+    "outcome": "Add a no-pane child runner to bee herding run, with an isolated child environment",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs"
+    ],
+    "deviations": [
+      "execute_no_pane is declared pub(super) while Options and ExecResult stay more private, so the build emits four private-interfaces warnings. Not an error and not worth widening the types for, but it is new warning noise this cell introduced — found a better route",
+      "The worker report listed prepare.rs among its changed paths. That was the working-tree state, not this commit: git show confirms the commit touches only herding/run.rs and herding/tests.rs. The prepare.rs edits belong to pnsd-3, which was running in parallel — the plan was wrong about a fact",
+      "sync-ack: No skill text changes. This cell adds a second LAUNCH path inside bee herding run and changes nothing a skill describes: the dispatch door vocabulary, the worker contract, the seat, the ceiling and the result drain are all untouched, which is the point of D11. The user-visible effect lands when pnsd-3 selects this path, and pnsd-4 records it in the verify-app feature file."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T00:07:52.747Z",
+    "behavior_change": true,
+    "verification_evidence": "576 passed, 0 failed; leader re-ran it and then confirmed the NEW tests actually executed rather than trusting the count (pattern 20260818). All eight ran: child_argv_construction_matches_pi_subagent_pattern, child_argv_construction_omits_absent_options, child_env_construction_excludes_leader_session_and_sets_worker_marker, no_pane_success_writes_report_and_result_files, noise_tolerant_parsing_skips_banners_and_extracts_assistant_text_and_cost, noise_tolerant_parsing_falls_back_to_text_deltas_when_no_message_end, parse_options_handles_no_pane_and_runner_flags, non_zero_exit_surfaces_stderr_and_fails. Leader also read build_child_env directly: it filters crate::session_identity::SESSION_ENV_VARS out of the ambient env, removes them again from passthrough and agent_env, then inserts BEE_HERDING_WORKER=1 and BEE_HERDING_JOB_ID — and SESSION_ENV_VARS is exactly [BEE_SESSION_ID, CLAUDE_CODE_SESSION_ID, PI_SESSION_ID], the three the contract names.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+    "claimed_at": "2026-09-18T23:51:20.705Z",
+    "sync_ack": "No skill text changes. This cell adds a second LAUNCH path inside bee herding run and changes nothing a skill describes: the dispatch door vocabulary, the worker contract, the seat, the ceiling and the result drain are all untouched, which is the point of D11. The user-visible effect lands when pnsd-3 selects this path, and pnsd-4 records it in the verify-app feature file.",
+    "mistakes": [
+      {
+        "wrong": "Same as pnsd-1: the worker committed and ran its tests but never ran bee cells finish, so the cell sat claimed with no proof line",
+        "better": "the leader capped it. Two for two now, so the cap step is treated as the leader job on this transport rather than the worker one."
+      }
+    ],
+    "report": {
+      "outcome": "bee herding run gained execute_no_pane: a child pi process launch beside the pane launch, with an explicitly built child environment, noise-tolerant JSONL parsing, and the same mailbox report and result files a pane worker writes.",
+      "commit": "d612e5b95d3a26af81aacd82bcfa18c54d6da898",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green:unit — 576 passed, 0 failed; leader re-ran it and then confirmed the NEW tests actually executed rather than trusting the count (pattern 20260818). All eight ran: child_argv_construction_matches_pi_subagent_pattern, child_argv_construction_omits_absent_options, child_env_construction_excludes_leader_session_and_sets_worker_marker, no_pane_success_writes_report_and_result_files, noise_tolerant_parsing_skips_banners_and_extracts_assistant_text_and_cost, noise_tolerant_parsing_falls_back_to_text_deltas_when_no_message_end, parse_options_handles_no_pane_and_runner_flags, non_zero_exit_surfaces_stderr_and_fails. Leader also read build_child_env directly: it filters crate::session_identity::SESSION_ENV_VARS out of the ambient env, removes them again from passthrough and agent_env, then inserts BEE_HERDING_WORKER=1 and BEE_HERDING_JOB_ID — and SESSION_ENV_VARS is exactly [BEE_SESSION_ID, CLAUDE_CODE_SESSION_ID, PI_SESSION_ID], the three the contract names.",
+      "deviations": [
+        "execute_no_pane is declared pub(super) while Options and ExecResult stay more private, so the build emits four private-interfaces warnings. Not an error and not worth widening the types for, but it is new warning noise this cell introduced — found a better route",
+        "The worker report listed prepare.rs among its changed paths. That was the working-tree state, not this commit: git show confirms the commit touches only herding/run.rs and herding/tests.rs. The prepare.rs edits belong to pnsd-3, which was running in parallel — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "Same as pnsd-1: the worker committed and ran its tests but never ran bee cells finish, so the cell sat claimed with no proof line — the leader capped it. Two for two now, so the cap step is treated as the leader job on this transport rather than the worker one."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
