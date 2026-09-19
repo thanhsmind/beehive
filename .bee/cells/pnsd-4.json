@@ -94,6 +94,45 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-4-c1",
+            "name": "doctor ready on the rebuilt and reinstalled binary",
+            "status": "PASS",
+            "evidence": "doctor --runtime pi: overall_status ready, all six rows ok, after installing the build at .bee/bin/bee"
+          },
+          {
+            "id": "pnsd-4-c2",
+            "name": "a real no-pane dispatch returns its full answer",
+            "status": "PASS",
+            "evidence": "leader drove it: outcome done, seat advisor, answer read from report_path"
+          },
+          {
+            "id": "pnsd-4-c3",
+            "name": "no pane is opened",
+            "status": "PASS",
+            "evidence": "pane count 26 before and 26 after, measured by the leader"
+          },
+          {
+            "id": "pnsd-4-c4",
+            "name": "the in-child guard question is closed",
+            "status": "PASS",
+            "evidence": "leader ran it separately: a bare child is refused by the write guard and the target file was untouched; scope recorded in evidence.md section D"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.150Z"
+      }
+    ]
   }
 }

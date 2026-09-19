@@ -13,11 +13,6 @@
   "summary": "Feature \"release-2-41-2\" started at phase \"swarming\" (lane).",
   "next_action": "bee close finished \"release-2-41-2\" — feature is closed.",
   "created_at": "2026-09-18T02:11:28.602Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "pick which of the 4 adopted rules from the ak-pi-workflow-roles distill to shape first",
-    "asked_at": "2026-09-18T11:10:22.821Z",
-    "session": "5a2a6f63-6aa3-4e56-9873-ac37dc35bfa9"
-  }
+  "run_state": "shaping",
+  "waiting_on": null
 }

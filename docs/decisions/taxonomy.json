@@ -524,6 +524,15 @@
     "statusline",
     "role",
     "abandoned",
-    "contract:pi-version-range"
+    "contract:pi-version-range",
+    "extension",
+    "stage-workflow",
+    "tool-gating",
+    "user-impact",
+    "contract:approved-plan-packet",
+    "contract:pi-no-pane-runner",
+    "contract:pi-native-door-selection",
+    "contract:pi-stage-tool-gate",
+    "contract:pi-close-guard"
   ]
 }

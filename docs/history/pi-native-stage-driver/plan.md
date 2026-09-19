@@ -170,6 +170,7 @@ implements it. Neither cell may invent a second carrier.
 }
 ```
 
+<!-- bee:not-a-deferral: This states the plan's slicing convention: a later slice carries a headline until its slice starts. It documents how the plan is structured, not future work. -->
 ## Shape
 
 **Slice 1 — unblock the door.** `pnsd-1`.
@@ -184,6 +185,8 @@ the 10-minute ceiling and that a late seat is dropped AND named (D10) — inheri
 machinery, so this slice is proof, not construction.
 Slice 4 headlines: hard per-stage tool gate with a named re-open command, a user
 notice and a model notice (D4, D12); close-guard warning in the transcript (D5, D13).
+
+<!-- /bee:not-a-deferral -->
 
 ## Cells — current slice (preview)
 
@@ -632,6 +635,7 @@ first and authors only the gap.
   tool, so the belt-hosted hazard is gone. `pnsd-2` should confirm the `--tools`
   allowlist closes it rather than assume it does.
 
+<!-- bee:not-a-deferral: An explicit out-of-scope list. Each entry is a locked decision, an already-filed backlog row, or a config change the owner may choose to make; none is work this feature deferred to itself. -->
 ## Out of scope
 
 - The pi-workflows engine, durable park/resume, and a typed human-decision gate (D6).
@@ -641,3 +645,5 @@ first and authors only the gap.
 - Removing panes from Pi (D1).
 - Giving execution roles a `pi` agent so they reach the native path — a config change the
   owner may want later; this feature does not make it.
+<!-- /bee:not-a-deferral -->
+

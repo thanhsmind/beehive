@@ -1,0 +1,143 @@
+{
+  "id": "pnsd-7",
+  "feature": "pi-native-stage-driver",
+  "title": "Warn into the transcript when a session settles with a cell still claimed",
+  "lane": "high-risk",
+  "role": "code",
+  "status": "capped",
+  "deps": [
+    "pnsd-6"
+  ],
+  "decisions": [
+    "D5",
+    "D7",
+    "D13",
+    "0dc6c43b-822d-428d-b8da-ea1808c742a0"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".pi/extensions/bee-guard.ts",
+    "docs/history/pi-native-stage-driver/CONTEXT.md",
+    "docs/history/pi-native-stage-driver/evidence.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "When a Pi session settles with a claimed cell that was never capped, say so by name (per D5 and D13). Hang it on agent_settled, which the belt already registers - pi 0.85.1 ships NO session_stop event, verified and recorded at docs/history/pi-native-stage-driver/evidence.md section B4, so do not look for one. This is WARN ONLY and that is a locked decision: the session still ends, the warning never blocks, and tool_call remains the only blocking surface (per D5). D13 fixes where the warning lands: ctx.ui.notify is an ephemeral toast and is a NO-OP when a session has no UI, which is exactly the print and JSON modes a worker runs in, so a notify-only warning is invisible in the case that matters most. Put the warning in the visible session transcript instead, and name the cell and the verb that would resolve it rather than saying something generic. Read how agent_settled already sequences its five existing steps before adding to it, and give the new work its own try so a failure there cannot disturb them. The belt holds zero rules of its own, so ask bee which cells are claimed-and-uncapped rather than deciding it in TypeScript. Add the contract fixture row if this introduces a new handler name; the suite derives that set from this source. Finally, .pi/extensions is a root the release manifest hashes, so this cell owes the regen chain: after the belt edit run bee dev regen — render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order — and commit the refreshed manifest with the change. The verify carries bee dev release-manifest --check for exactly that reason.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A session settling with a claimed uncapped cell produces a warning naming that cell and the verb to run",
+      "The warning is present in the visible transcript, not only as a UI toast",
+      "The warning appears even when the session has no UI",
+      "The session still settles: nothing blocks"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "a warn-only close guard on agent_settled writing into the transcript; no TODO stubs"
+      },
+      {
+        "path": "docs/history/codex-harness-hardening/release-manifest.json",
+        "substantive": "regenerated after the belt edit so the manifest hash matches the shipped extension"
+      }
+    ],
+    "key_links": [
+      "the claimed-cell answer comes from a bee hook, not from logic in the extension"
+    ],
+    "prohibitions": [
+      "Never block or delay the session settling",
+      "No use of session_stop: pi 0.85.1 does not have it",
+      "No edit to .opencode/plugins/bee-guard.ts",
+      "No disturbance to the existing agent_settled steps"
+    ]
+  },
+  "trace": {
+    "worker": "worker-close",
+    "outcome": "Warn into the transcript when a session settles with a cell still claimed",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan — and unlike pnsd-6 this cell reused an EXISTING hook (session-close, already in HOOK_NAMES) and in fact reuses the verdict the belt had already fetched, so there was no second half to build and no inert-hook repeat",
+      "sync-ack: No skill text changes. The close guard is a belt behaviour on an event bee already hooks, using a verdict bee already returns; it adds no step to any skill and changes no verb. A user meets it in the session transcript, not in a document."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-19T03:04:39.015Z",
+    "behavior_change": true,
+    "verification_evidence": "77 passed 0 failed (was 73 after pnsd-6), and release_manifest --check reports 376 files match stored manifest. The leader confirmed the NEW tests execute by name rather than trusting the count: close_guard_warns_into_transcript_when_session_settles_with_claimed_cell, close_guard_warns_even_when_session_has_no_ui, close_guard_silent_when_no_claimed_cells, and real_bee_hook_close_guard_end_to_end. The second of those is D13 crux — a toast is a no-op without a UI, which is exactly the mode a dispatched worker runs in. Leader also read the delivery itself: pi.sendMessage with customType bee-close-warning, display true, deliverAs nextTurn and triggerTurn false, so the warning lands in the transcript without opening a turn, with ctx.ui.notify kept only as an extra behind a hasUI check. Both paths sit inside their own try/catch, so the guard stays advisory.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "9cdec5eb-2d88-4223-af6c-35da0848c665",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-19T02:53:27.990Z",
+    "sync_ack": "No skill text changes. The close guard is a belt behaviour on an event bee already hooks, using a verdict bee already returns; it adds no step to any skill and changes no verb. A user meets it in the session transcript, not in a document.",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "A Pi session that settles with a claimed uncapped cell now writes a warning into the visible transcript naming the cell and the verb that resolves it, and still settles — nothing blocks.",
+      "commit": "44de6c20a",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — 77 passed 0 failed (was 73 after pnsd-6), and release_manifest --check reports 376 files match stored manifest. The leader confirmed the NEW tests execute by name rather than trusting the count: close_guard_warns_into_transcript_when_session_settles_with_claimed_cell, close_guard_warns_even_when_session_has_no_ui, close_guard_silent_when_no_claimed_cells, and real_bee_hook_close_guard_end_to_end. The second of those is D13 crux — a toast is a no-op without a UI, which is exactly the mode a dispatched worker runs in. Leader also read the delivery itself: pi.sendMessage with customType bee-close-warning, display true, deliverAs nextTurn and triggerTurn false, so the warning lands in the transcript without opening a turn, with ctx.ui.notify kept only as an extra behind a hasUI check. Both paths sit inside their own try/catch, so the guard stays advisory.",
+      "deviations": [
+        "followed the plan — and unlike pnsd-6 this cell reused an EXISTING hook (session-close, already in HOOK_NAMES) and in fact reuses the verdict the belt had already fetched, so there was no second half to build and no inert-hook repeat"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-7-c1",
+            "name": "the warning reaches the transcript, not only a toast",
+            "status": "PASS",
+            "evidence": "read the diff: pi.sendMessage with display true, deliverAs nextTurn, triggerTurn false; notify kept only as an extra behind a hasUI check"
+          },
+          {
+            "id": "pnsd-7-c2",
+            "name": "it works with no UI",
+            "status": "PASS",
+            "evidence": "close_guard_warns_even_when_session_has_no_ui executed"
+          },
+          {
+            "id": "pnsd-7-c3",
+            "name": "it names the cell and the verb",
+            "status": "PASS",
+            "evidence": "read the warning string: names the claimed cell ids and bee cells finish / bee cells release"
+          },
+          {
+            "id": "pnsd-7-c4",
+            "name": "it never blocks",
+            "status": "PASS",
+            "evidence": "both delivery paths sit inside their own try/catch; the session still settles"
+          },
+          {
+            "id": "pnsd-7-c5",
+            "name": "it reuses an existing hook",
+            "status": "PASS",
+            "evidence": "session-close is already in HOOK_NAMES and the verdict already fetched is reused — no repeat of the pnsd-6 inert-hook trap"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.187Z"
+      }
+    ]
+  }
+}

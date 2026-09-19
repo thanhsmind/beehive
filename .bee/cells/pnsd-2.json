@@ -102,6 +102,45 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-2-c1",
+            "name": "child env is built, not inherited",
+            "status": "PASS",
+            "evidence": "read build_child_env: filters SESSION_ENV_VARS, removes them again from passthrough, sets BEE_HERDING_WORKER=1"
+          },
+          {
+            "id": "pnsd-2-c2",
+            "name": "the three session vars are exactly the ones stripped",
+            "status": "PASS",
+            "evidence": "read session_identity::SESSION_ENV_VARS = [BEE_SESSION_ID, CLAUDE_CODE_SESSION_ID, PI_SESSION_ID]"
+          },
+          {
+            "id": "pnsd-2-c3",
+            "name": "noise-tolerant parsing and non-zero exit surfacing",
+            "status": "PASS",
+            "evidence": "noise_tolerant_parsing_skips_banners_and_extracts_assistant_text_and_cost and non_zero_exit_surfaces_stderr_and_fails both executed"
+          },
+          {
+            "id": "pnsd-2-c4",
+            "name": "proof re-run by the leader and new tests confirmed by name",
+            "status": "PASS",
+            "evidence": "cargo test -p bee herding: 576 passed, 0 failed; all eight tests_no_pane tests seen in the output"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.113Z"
+      }
+    ]
   }
 }
