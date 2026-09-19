@@ -3172,3 +3172,107 @@ use std::time::Instant;
         assert_eq!(lane["approved_gates"]["uat"], json!(true), "the approval itself still lands");
         assert!(lane.get("merge_ready").is_none(), "no fact was invented: {lane}");
     }
+
+    #[test]
+    fn plan_packets_lane_packet_with_foreign_feature_is_not_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let lanes = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        let lane_json = json!({
+            "feature": "feature-a",
+            "approved_cell_packet": {
+                "feature": "foreign-feature",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        std::fs::write(lanes.join("feature-a.json"), lane_json.to_string()).unwrap();
+
+        let packet = get_approved_preview_packet(root, "feature-a");
+        assert!(
+            packet.is_none(),
+            "expected lane packet with foreign feature to be refused, got: {:?}",
+            packet
+        );
+    }
+
+    #[test]
+    fn plan_packets_state_packet_with_foreign_feature_is_not_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-b",
+            "approved_cell_packet": {
+                "feature": "foreign-feature",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-b");
+        assert!(
+            packet.is_none(),
+            "expected state packet with foreign feature to be refused, got: {:?}",
+            packet
+        );
+    }
+
+    #[test]
+    fn plan_packets_packet_with_no_feature_field_is_still_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-c",
+            "approved_cell_packet": {
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-c");
+        assert!(
+            packet.is_some(),
+            "expected packet with no feature field to be returned for legacy stores"
+        );
+    }
+
+    #[test]
+    fn plan_packets_packet_with_matching_feature_is_returned() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "feature-d",
+            "approved_cell_packet": {
+                "feature": "feature-d",
+                "cells": [{"id": "c1", "role": "code"}]
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let packet = get_approved_preview_packet(root, "feature-d");
+        assert!(packet.is_some(), "expected matching packet to be returned");
+    }
+
+    #[test]
+    fn plan_packets_role_plan_scoped_to_feature_not_stale_across_features() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let state_json = json!({
+            "feature": "pi-native-stage-driver",
+            "approved_cell_packet": {
+                "feature": "release-2-41-2",
+                "role_plan": {
+                    "stages": [{"stage": "read-only-gather", "classification": "not-applicable"}]
+                }
+            }
+        });
+        write_state_file(root, &state_json.to_string());
+
+        let role_plan = get_approved_role_plan(root, "pi-native-stage-driver");
+        assert!(
+            role_plan.is_none(),
+            "expected role plan from foreign feature to be None, got: {:?}",
+            role_plan
+        );
+    }
+

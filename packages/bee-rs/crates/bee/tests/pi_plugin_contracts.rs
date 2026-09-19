@@ -597,6 +597,11 @@ const forks = [];
 const notifications = [];
 const statusCalls = [];
 const orderLog = [];
+const customMessages = [];
+let activeTools = Array.isArray(spec.initial_tools)
+  ? [...spec.initial_tools]
+  : ["read", "bash", "write", "edit", "grep", "find", "ls"];
+const activeToolsHistory = [[...activeTools]];
 const initialProcessCwd = process.cwd();
 
 let currentCallCwd = null;
@@ -662,8 +667,10 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
   const sm = new FakeSessionManager(ctxCwd, sessionFile, branchEntries);
   sm._sessionId = ctxSessionId;
   sm._isInMemory = Boolean(ctxCall?.is_in_memory);
+  const hasUI = ctxCall?.has_ui !== false && spec.has_ui !== false;
   return {
     cwd: ctxCwd,
+    hasUI,
     isIdle: () => ctxCall?.is_idle !== false,
     sessionManager: sm,
     ui: {
@@ -674,6 +681,7 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
         });
       },
       notify(msg, type) {
+        if (!hasUI) return;
         if ((spec.throw_notify_after_teardown || ctxCall?.throw_notify_after_teardown) && orderLog.includes("teardown_resume")) {
           throw new Error("simulated post-invalidation UI notification failure");
         }
@@ -738,6 +746,22 @@ const pi = {
   },
   registerCommand(name, options) {
     commands.set(name, options);
+  },
+  getActiveTools() {
+    return [...activeTools];
+  },
+  setActiveTools(tools) {
+    activeTools = Array.isArray(tools) ? [...tools] : [];
+    activeToolsHistory.push([...activeTools]);
+  },
+  getAllTools() {
+    const list = Array.isArray(spec.all_tools)
+      ? spec.all_tools
+      : ["read", "bash", "write", "edit", "grep", "find", "ls"];
+    return list.map((t) => (typeof t === "string" ? { name: t } : t));
+  },
+  async sendMessage(message, options) {
+    customMessages.push({ message, options: options ?? null });
   },
   async sendUserMessage(text, options) {
     messages.push({ text: String(text), options: options ?? null });
@@ -867,6 +891,9 @@ console.log(JSON.stringify({
   execCalls,
   orderLog,
   commands: Array.from(commands.keys()),
+  activeTools,
+  activeToolsHistory,
+  customMessages,
   process_cwd_unchanged: initialProcessCwd === finalProcessCwd,
 }));
 
@@ -928,6 +955,12 @@ struct HarnessRun {
     process_cwd_unchanged: bool,
     #[allow(dead_code)]
     exec_calls: Vec<Value>,
+    #[allow(dead_code)]
+    active_tools: Vec<String>,
+    #[allow(dead_code)]
+    active_tools_history: Vec<Vec<String>>,
+    #[allow(dead_code)]
+    custom_messages: Vec<Value>,
 }
 
 impl HarnessRun {
@@ -1112,6 +1145,25 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         .unwrap_or_default();
     let process_cwd_unchanged = v.get("process_cwd_unchanged").and_then(Value::as_bool).unwrap_or(true);
     let exec_calls = v.get("execCalls").and_then(Value::as_array).cloned().unwrap_or_default();
+    let active_tools = v
+        .get("activeTools")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(|s| s.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    let active_tools_history = v
+        .get("activeToolsHistory")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|sub| {
+                    sub.as_array().map(|s_arr| {
+                        s_arr.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let custom_messages = v.get("customMessages").and_then(Value::as_array).cloned().unwrap_or_default();
     HarnessRun {
         results,
         messages,
@@ -1124,6 +1176,9 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         commands,
         process_cwd_unchanged,
         exec_calls,
+        active_tools,
+        active_tools_history,
+        custom_messages,
     }
 }
 
@@ -1319,6 +1374,11 @@ enum StubBehavior {
     WorktreeFailure(String),
     /// pwsr-2: Worktree CLI success without sessionTransition (old bee version).
     WorktreeNoTransition,
+    /// pnsd-6: Stage tools hook response with allowed tools list and stage name.
+    StageToolsVerdict {
+        stage: String,
+        allowed_tools: Vec<String>,
+    },
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -1378,6 +1438,19 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
         StubBehavior::SessionCloseAdvisory(msg) => {
             let stdout = json!({"systemMessage": msg}).to_string();
             format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
+        StubBehavior::StageToolsVerdict {
+            stage,
+            allowed_tools,
+        } => {
+            let tools_json = json!({
+                "stage": stage,
+                "allowed_tools": allowed_tools,
+            })
+            .to_string();
+            format!(
+                "case \"$2\" in\n  stage-tools) printf '%s' '{tools_json}' ;;\n  session-init) printf '%s' '{PREAMBLE_MARK}' ;;\n  prompt-context) printf '%s' '{DELTA_MARK}' ;;\n  *) exit 0 ;;\nesac\nexit 0\n"
+            )
         }
         StubBehavior::WorktreeLifecycle {
             worktree_id,
@@ -1848,7 +1921,7 @@ fn the_unknown_tool_route_is_fail_safe_never_a_typescript_side_allow() {
 #[test]
 fn the_belt_wires_every_advisory_surface_the_event_map_promises() {
     let wired = pi_advisory_hooks();
-    for expected in ["session-init", "prompt-context", "state-sync", "session-close", "activity", "tools-logger"] {
+    for expected in ["session-init", "prompt-context", "state-sync", "session-close", "activity", "tools-logger", "stage-tools"] {
         assert!(
             wired.contains(expected),
             "expected .pi/extensions/bee-guard.ts to wire \"{expected}\" via runAdvisoryHook (D2's event map), \
@@ -2744,6 +2817,8 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("ui_prompt_start", json!({"reason": "ui_prompt", "kind": "select", "title": "Pick option"})),
         ("ui_prompt_start", json!({})),
         ("ui_prompt_end", json!({})),
+        ("turn_start", json!({"turnIndex": 1, "timestamp": 1234567890})),
+        ("turn_start", json!({})),
         ("turn_end", json!({})),
         ("session_tree", json!({})),
         ("agent_settled", json!({})),
@@ -4449,7 +4524,7 @@ fn public_and_private_commands_register() {
     node_or_skip!("public_and_private_commands_register");
 
     let registered = pi_registered_commands();
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate"] {
+    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate", "bee-tools-reopen"] {
         assert!(
             registered.contains(cmd),
             "expected .pi/extensions/bee-guard.ts to register command \"{cmd}\", but derived was: {registered:?}"
@@ -4462,7 +4537,7 @@ fn public_and_private_commands_register() {
     write_stub_bee(dir.path(), &StubBehavior::Allow);
 
     let run = run_harness(&harness, vec![]);
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate"] {
+    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate", "bee-tools-reopen"] {
         assert!(
             run.commands.iter().any(|c| c == cmd),
             "expected command \"{cmd}\" to be registered in harness run, found: {:?}",
@@ -4489,6 +4564,15 @@ fn user_command_refuses_when_agent_turn_active() {
                 "sess-busy",
                 "bee-worktree-new",
                 "--feature my-feature",
+                false, // is_idle = false
+                None,
+                false,
+            ),
+            command_call_with_options(
+                dir.path(),
+                "sess-busy-2",
+                "bee-tools-reopen",
+                "",
                 false, // is_idle = false
                 None,
                 false,
@@ -8171,6 +8255,381 @@ fn model_usage_status_tracks_active_branch_tokens_by_provider_and_model() {
 
     assert_eq!(status_calls[2].0, "model-usage");
     assert_eq!(status_calls[2].1, None);
+}
+
+#[cfg(unix)]
+#[test]
+fn stage_tools_narrowing_and_reopen_command() {
+    node_or_skip!("stage_tools_narrowing_and_reopen_command");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::StageToolsVerdict {
+            stage: "planning".to_string(),
+            allowed_tools: vec!["read".to_string(), "bash".to_string()],
+        },
+    );
+
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "turn_start",
+                "event_arg": { "turnIndex": 1 },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": "sess-stage-test",
+            }),
+            command_call(dir.path(), "sess-stage-test", "bee-tools-reopen", ""),
+        ],
+    );
+
+    // 1. Tool narrowing happened on turn_start: narrowed to ["read", "bash"]
+    assert_eq!(
+        run.active_tools_history.get(1),
+        Some(&vec!["read".to_string(), "bash".to_string()]),
+        "expected active tools to narrow to [read, bash] on turn_start, history: {:?}",
+        run.active_tools_history
+    );
+
+    // 2. User was notified with slash command name and removed tools
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("planning") && msg.contains("/bee-tools-reopen") && msg.contains("write")
+        }),
+        "expected user notification about narrowing and /bee-tools-reopen, got: {:?}",
+        run.notifications
+    );
+
+    // 3. Model was sent a message explaining stage policy
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-stage-tools"
+                && content.contains("planning")
+                && content.contains("write")
+        }),
+        "expected model notice via pi.sendMessage with customType bee-stage-tools, got: {:?}",
+        run.custom_messages
+    );
+
+    // 4. bee-tools-reopen restored the full tool set
+    assert_eq!(
+        run.active_tools,
+        vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
+        "expected active tools to be fully restored after reopen command"
+    );
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("Restored full tool set")
+        }),
+        "expected notification confirming restoration, got: {:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn real_bee_hook_stage_tools_end_to_end() {
+    node_or_skip!("real_bee_hook_stage_tools_end_to_end");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let bee_dir = dir.path().join(".bee");
+    std::fs::write(
+        bee_dir.join("onboarding.json"),
+        r#"{"completed": true}"#,
+    )
+    .expect("write onboarding.json");
+    std::fs::write(
+        bee_dir.join("state.json"),
+        r#"{"phase": "planning", "approved_gates": {"execution": false}}"#,
+    )
+    .expect("write state.json");
+
+    // 1. Direct real CLI execution test: prove bee hook stage-tools returns a verdict JSON
+    use std::io::Write;
+    let mut child = std::process::Command::new(bee_bin())
+        .args(["hook", "stage-tools"])
+        .env_remove("BEE_HERDING_WORKER")
+        .current_dir(dir.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn bee hook stage-tools");
+
+    let payload = json!({
+        "hook_event_name": "TurnStart",
+        "cwd": dir.path().to_string_lossy(),
+        "session_id": "sess-direct-cli",
+    })
+    .to_string();
+
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(payload.as_bytes())
+        .expect("write stdin");
+
+    let output = child.wait_with_output().expect("wait");
+    assert!(
+        output.status.success(),
+        "bee hook stage-tools failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("verdict must be valid JSON");
+    assert_eq!(parsed["stage"], "planning");
+    assert_eq!(
+        parsed["allowed_tools"],
+        json!(["read", "bash"])
+    );
+
+    // 2. Drive belt end-to-end through node harness with real binary
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "turn_start",
+                "event_arg": { "turnIndex": 1 },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": "sess-stage-real",
+            }),
+            command_call(dir.path(), "sess-stage-real", "bee-tools-reopen", ""),
+        ],
+    );
+
+    // Tool narrowing happened via real bee hook stage-tools
+    assert_eq!(
+        run.active_tools_history.get(1),
+        Some(&vec!["read".to_string(), "bash".to_string()]),
+        "expected active tools to narrow to [read, bash] on turn_start, history: {:?}",
+        run.active_tools_history
+    );
+
+    // User was notified
+    assert!(
+        run.notifications.iter().any(|n| {
+            let msg = n["message"].as_str().unwrap_or("");
+            msg.contains("planning") && msg.contains("/bee-tools-reopen") && msg.contains("write")
+        }),
+        "expected user notification from real hook narrowing: {:?}",
+        run.notifications
+    );
+
+    // Model was notified
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-stage-tools"
+                && content.contains("planning")
+                && content.contains("write")
+        }),
+        "expected model notice from real hook narrowing: {:?}",
+        run.custom_messages
+    );
+
+    // bee-tools-reopen restored tools
+    assert_eq!(
+        run.active_tools,
+        vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
+        "expected active tools restored"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_warns_into_transcript_when_session_settles_with_claimed_cell() {
+    node_or_skip!("close_guard_warns_into_transcript_when_session_settles_with_claimed_cell");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "bee session-close warning: session is ending mid-phase (phase: swarming) with no .bee/HANDOFF.json.\nClaimed-but-uncapped cells: pnsd-7 (worker-close).\nActive reservations: ...\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-claimed";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        run.messages.is_empty(),
+        "warning must NOT inject a turn via sendUserMessage (warn only): {:?}",
+        run.messages
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected warning in transcript naming claimed cell and finish verb, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_warns_even_when_session_has_no_ui() {
+    node_or_skip!("close_guard_warns_even_when_session_has_no_ui");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "Claimed-but-uncapped cells: pnsd-7.\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-no-ui";
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "agent_settled",
+                "event_arg": {},
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": SESSION_ID,
+                "has_ui": false,
+            }),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw when has_ui is false: {:?}",
+        run.results
+    );
+    assert!(
+        run.notifications.is_empty(),
+        "expected no UI notification when has_ui is false, got: {:?}",
+        run.notifications
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected transcript warning present even without UI, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_silent_when_no_claimed_cells() {
+    node_or_skip!("close_guard_silent_when_no_claimed_cells");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "bee session-close warning: session is ending mid-phase with no HANDOFF.json.\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-clean";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        !run.custom_messages.iter().any(|m| m["message"]["customType"] == "bee-close-warning"),
+        "expected no close warning when no cells are claimed, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn real_bee_hook_close_guard_end_to_end() {
+    node_or_skip!("real_bee_hook_close_guard_end_to_end");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let bee_dir = dir.path().join(".bee");
+    std::fs::write(
+        bee_dir.join("onboarding.json"),
+        r#"{"completed": true}"#,
+    )
+    .expect("write onboarding.json");
+    std::fs::write(
+        bee_dir.join("state.json"),
+        r#"{"phase": "swarming", "approved_gates": {"execution": true}}"#,
+    )
+    .expect("write state.json");
+    let cells_dir = bee_dir.join("cells");
+    std::fs::create_dir_all(&cells_dir).expect("create cells dir");
+    std::fs::write(
+        cells_dir.join("pnsd-7.json"),
+        r#"{"id": "pnsd-7", "status": "claimed", "trace": {"worker": "worker-close"}}"#,
+    )
+    .expect("write cell json");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    const SESSION_ID: &str = "sess-real-close-guard";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "real bee agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected real bee close guard warning in transcript naming pnsd-7 and bee cells finish: {:?}",
+        run.custom_messages
+    );
 }
 
 #[cfg(not(unix))]

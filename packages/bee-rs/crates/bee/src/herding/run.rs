@@ -200,6 +200,9 @@ struct Options {
     /// Read once at parse, so tests build it explicitly and never inherit
     /// the harness pane's env.
     caller_is_worker: bool,
+    /// `--no-pane` / `--runner no-pane`: run the worker as a direct child
+    /// process instead of splitting a tmux pane (pnsd-2, D11).
+    pub(crate) no_pane: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -299,6 +302,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut cell_id: Option<&str> = None;
     let mut seat: Option<&str> = None;
     let mut inbox_session: Option<&str> = None;
+    let mut no_pane = false;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -374,6 +378,18 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 inbox_session = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--no-pane" => {
+                no_pane = true;
+                i += 1;
+            }
+            "--runner" => {
+                if let Some(r) = flags.get(i + 1) {
+                    if *r == "no-pane" || *r == "child" || *r == "process" {
+                        no_pane = true;
+                    }
+                }
+                i += 2;
+            }
             _ => i += 1,
         }
     }
@@ -424,6 +440,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         seat: seat.map(str::to_string),
         inbox_session: inbox_session.map(str::to_string),
         pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
+        no_pane,
     })
 }
 
@@ -2234,6 +2251,9 @@ fn write_inbox_marker(bee_dir: &Path, opts: &Options) {
 }
 
 fn execute(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
+    if opts.no_pane {
+        return execute_no_pane(opts);
+    }
     // D6, structurally: the marker is written here — before `execute_new`
     // splits a pane, and before `execute_continue` prompts one — so no
     // finished result can exist before the marker that claims it. `--dry-run`
@@ -2661,6 +2681,405 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     };
 
     ExecResult { outcome, pane_id: Some(new_pane), closed_pane }
+}
+
+/// Builds the child process environment, explicitly stripping leader session
+/// identity and injecting the herding worker markers (D11).
+pub(crate) fn build_child_env(
+    ambient: impl IntoIterator<Item = (String, String)>,
+    agent_env: &BTreeMap<String, String>,
+    passthrough: &BTreeMap<String, String>,
+    job_id: &str,
+) -> BTreeMap<String, String> {
+    let mut env: BTreeMap<String, String> = ambient
+        .into_iter()
+        .filter(|(k, _)| !crate::session_identity::SESSION_ENV_VARS.contains(&k.as_str()))
+        .collect();
+
+    for (k, v) in agent_env {
+        env.insert(k.clone(), v.clone());
+    }
+    for (k, v) in passthrough {
+        env.insert(k.clone(), v.clone());
+    }
+
+    // Strip leader session IDs even if present in passthrough or agent_env
+    for &var in &crate::session_identity::SESSION_ENV_VARS {
+        env.remove(var);
+    }
+
+    env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
+    env.insert("BEE_HERDING_JOB_ID".to_string(), job_id.to_string());
+
+    env
+}
+
+/// Builds child argv for a pi process following the native subagent pattern:
+/// `--mode json -p --no-session`, followed by `--model`, `--thinking`, `--tools`
+/// when present in the agent's configuration, and finally the task text.
+pub(crate) fn build_child_argv(agent_args: &[String], task: &str) -> Vec<String> {
+    let mut argv = vec![
+        "--mode".to_string(),
+        "json".to_string(),
+        "-p".to_string(),
+        "--no-session".to_string(),
+    ];
+
+    let find_opt = |name: &str| -> Option<String> {
+        let mut it = agent_args.iter();
+        while let Some(arg) = it.next() {
+            if arg == name {
+                return it.next().cloned();
+            }
+        }
+        None
+    };
+
+    if let Some(m) = find_opt("--model") {
+        argv.push("--model".to_string());
+        argv.push(m);
+    }
+    if let Some(t) = find_opt("--thinking") {
+        argv.push("--thinking".to_string());
+        argv.push(t);
+    }
+    if let Some(tools) = find_opt("--tools") {
+        argv.push("--tools".to_string());
+        argv.push(tools);
+    }
+
+    argv.push(task.to_string());
+    argv
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ChildOutput {
+    pub(crate) assistant_text: String,
+    pub(crate) usage: Option<Value>,
+}
+
+/// Parses stdout lines from a child process as JSONL, skipping noise lines
+/// (e.g. mise banners), and extracting the assistant text and token usage.
+pub(crate) fn parse_child_jsonl(stdout: &str) -> ChildOutput {
+    let mut message_end_text = String::new();
+    let mut deltas_text = String::new();
+    let mut turn_end_text = String::new();
+    let mut usage: Option<Value> = None;
+
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        let Ok(val) = serde_json::from_str::<Value>(trimmed) else {
+            continue;
+        };
+        let Some(obj) = val.as_object() else {
+            continue;
+        };
+
+        let event_type = obj.get("type").and_then(Value::as_str).unwrap_or_default();
+
+        match event_type {
+            "message_end" => {
+                if let Some(msg) = obj.get("message") {
+                    if let Some(u) = msg.get("usage") {
+                        usage = Some(u.clone());
+                    }
+                    if let Some(content) = msg.get("content").and_then(Value::as_array) {
+                        let mut texts = Vec::new();
+                        for item in content {
+                            if item.get("type").and_then(Value::as_str) == Some("text") {
+                                if let Some(t) = item.get("text").and_then(Value::as_str) {
+                                    texts.push(t);
+                                }
+                            }
+                        }
+                        if !texts.is_empty() {
+                            message_end_text = texts.join("");
+                        }
+                    }
+                } else if let Some(u) = obj.get("usage") {
+                    usage = Some(u.clone());
+                }
+            }
+            "message_update" => {
+                if let Some(evt) = obj.get("assistantMessageEvent") {
+                    if evt.get("type").and_then(Value::as_str) == Some("text_delta") {
+                        if let Some(delta) = evt.get("delta").and_then(Value::as_str) {
+                            deltas_text.push_str(delta);
+                        }
+                    }
+                }
+            }
+            "turn_end" => {
+                if let Some(msg) = obj.get("message") {
+                    if let Some(content) = msg.get("content").and_then(Value::as_array) {
+                        let mut texts = Vec::new();
+                        for item in content {
+                            if item.get("type").and_then(Value::as_str) == Some("text") {
+                                if let Some(t) = item.get("text").and_then(Value::as_str) {
+                                    texts.push(t);
+                                }
+                            }
+                        }
+                        if !texts.is_empty() {
+                            turn_end_text = texts.join("");
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let assistant_text = if !message_end_text.is_empty() {
+        message_end_text
+    } else if !deltas_text.is_empty() {
+        deltas_text
+    } else if !turn_end_text.is_empty() {
+        turn_end_text
+    } else {
+        String::new()
+    };
+
+    ChildOutput {
+        assistant_text,
+        usage,
+    }
+}
+
+/// Executes a worker as a direct child process without creating a tmux pane (pnsd-2, D11).
+pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
+    let bee_dir = opts.main_root.join(".bee");
+    if !opts.dry_run {
+        write_inbox_marker(&bee_dir, opts);
+    }
+    let files: Vec<String> = Vec::new();
+    let spec = BriefSpec {
+        job_id: &opts.job_id,
+        task: &opts.task,
+        worktree_root: &opts.cwd,
+        files: &files,
+        bee_dir: &bee_dir,
+        round: 1,
+        expertise: &opts.expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
+    };
+    let brief = mailbox::render_brief(&spec);
+
+    let job_value = serde_json::json!({
+        "job_id": opts.job_id,
+        "task": opts.task,
+        "cwd": opts.cwd.display().to_string(),
+        "round": 1,
+        "idle_timeout_secs": opts.idle_timeout_secs,
+        "ceiling_secs": opts.ceiling_secs,
+        "close_always": opts.close_always,
+        "created_at": chrono::Utc::now().to_rfc3339(),
+        "expertise": opts.expertise,
+    });
+    let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", job_file_path.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    if opts.dry_run {
+        return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
+    }
+
+    let cfg = read_main_config(&opts.main_root);
+    let (kind, args, env, workspace_trust) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
+        Ok(quad) => quad,
+        Err(e) => {
+            return ExecResult { outcome: RunOutcome::SpawnFailed(e.to_string()), pane_id: None, closed_pane: false };
+        }
+    };
+
+    if let Some(trust) = &workspace_trust {
+        if let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
+            eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
+        }
+    }
+
+    let child_env = build_child_env(
+        std::env::vars(),
+        &env,
+        &opts.pane_env_passthrough,
+        &opts.job_id,
+    );
+
+    let is_pi = kind == "pi" || Path::new(&kind).file_name().and_then(|f| f.to_str()) == Some("pi");
+    let child_args = if is_pi {
+        build_child_argv(&args, &opts.task)
+    } else if args.iter().any(|a| a == "-c") {
+        args.clone()
+    } else {
+        let mut a = args.clone();
+        a.push(opts.task.clone());
+        a
+    };
+
+    let mut cmd = Command::new(&kind);
+    cmd.args(&child_args);
+    cmd.envs(&child_env);
+    cmd.current_dir(&opts.cwd);
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!("could not spawn {kind}: {e}")),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    };
+
+    use std::io::Read;
+    let mut stdout_handle = child.stdout.take().expect("stdout piped");
+    let stdout_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_handle.read_to_end(&mut buf);
+        buf
+    });
+
+    let mut stderr_handle = child.stderr.take().expect("stderr piped");
+    let stderr_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_handle.read_to_end(&mut buf);
+        buf
+    });
+
+    let start = std::time::Instant::now();
+    let ceiling = Duration::from_secs(opts.ceiling_secs);
+    let status_res = loop {
+        match child.try_wait() {
+            Ok(Some(st)) => break Ok(st),
+            Ok(None) => {
+                if start.elapsed() >= ceiling {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err("ceiling");
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break Err("wait_error");
+            }
+        }
+    };
+
+    let stdout_bytes = stdout_thread.join().unwrap_or_default();
+    let stderr_bytes = stderr_thread.join().unwrap_or_default();
+
+    let status = match status_res {
+        Ok(s) => s,
+        Err("ceiling") => {
+            return ExecResult {
+                outcome: RunOutcome::TimedOutCeiling,
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+        Err(e) => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!("wait failed: {e}")),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    };
+
+    if !status.success() {
+        let stderr_str = String::from_utf8_lossy(&stderr_bytes);
+        let stdout_str = String::from_utf8_lossy(&stdout_bytes);
+        let err_msg = if !stderr_str.trim().is_empty() {
+            stderr_str.trim().to_string()
+        } else {
+            format!("child process exited with status {status}: {}", stdout_str.trim())
+        };
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(err_msg),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    let stdout_str = String::from_utf8_lossy(&stdout_bytes);
+    let output = parse_child_jsonl(&stdout_str);
+
+    let report_path = mailbox::report_path(&bee_dir, &opts.job_id, 1);
+    if let Err(e) = crate::fsutil::write_text_atomic(&report_path, &output.assistant_text) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write report {}: {e}", report_path.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    let summary = output
+        .assistant_text
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or(&output.assistant_text)
+        .trim()
+        .to_string();
+
+    let proof = if let Some(u) = &output.usage {
+        let tokens = u.get("totalTokens").and_then(Value::as_u64).unwrap_or(0);
+        let cost_str = u
+            .get("cost")
+            .and_then(|c| c.get("total"))
+            .and_then(Value::as_f64)
+            .map(|c| format!(", cost: ${c:.6}"))
+            .unwrap_or_default();
+        format!("child process exited 0 (tokens: {tokens}{cost_str})")
+    } else {
+        "child process exited 0".to_string()
+    };
+
+    let res = MailboxResult {
+        round: 1,
+        status: MailboxStatus::Done,
+        summary: summary.clone(),
+        files_changed: Vec::new(),
+        proof: proof.clone(),
+        options: Vec::new(),
+        leaning: None,
+        dissent: None,
+        report_path: Some(report_path.display().to_string()),
+        report_note: None,
+    };
+
+    let res_value = serde_json::json!({
+        "status": "done",
+        "summary": summary,
+        "files_changed": res.files_changed,
+        "proof": proof,
+        "report_path": res.report_path,
+    });
+    let res_file_path = mailbox::result_path(&bee_dir, &opts.job_id, 1);
+    if let Err(e) = crate::fsutil::write_json_atomic(&res_file_path, &res_value) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write result {}: {e}", res_file_path.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    ExecResult {
+        outcome: RunOutcome::Result(res),
+        pane_id: None,
+        closed_pane: false,
+    }
 }
 
 fn parse_brief_filename(name: &str) -> Option<u32> {
@@ -3462,12 +3881,20 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     };
     // tmux-herding-transport D1: the transport is chosen from config here,
     // before ANY side effect — an illegal `herding.transport` refuses with no
-    // job file written and no pane split.
-    let transport = match transport_for_run(&opts.main_root) {
-        Ok(t) => t,
-        Err(msg) => {
-            eprintln!("bee herding run: {msg}");
-            return ExitCode::FAILURE;
+    // job file written and no pane split. When running in --no-pane mode (D11),
+    // no pane multiplexer is needed.
+    let (transport, transport_name) = if opts.no_pane {
+        (None, "no-pane")
+    } else {
+        match transport_for_run(&opts.main_root) {
+            Ok(t) => {
+                let name = t.name();
+                (Some(t), name)
+            }
+            Err(msg) => {
+                eprintln!("bee herding run: {msg}");
+                return ExitCode::FAILURE;
+            }
         }
     };
     let marker = std::env::var(DETACHED_RUNNER_ENV).ok();
@@ -3481,11 +3908,15 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             }
             Err(msg) => {
                 eprintln!("bee herding run: {msg}");
-                ExitCode::FAILURE
+                return ExitCode::FAILURE;
             }
         };
     }
-    let result = execute(&opts, transport.as_ref());
+    let result = if opts.no_pane {
+        execute_no_pane(&opts)
+    } else {
+        execute(&opts, transport.as_ref().unwrap().as_ref())
+    };
     // slp-followup-gaps D4: a dissent the worker handed back as DATA is
     // transcribed here, through the one writer `bee cells dissent` calls, so
     // the record shape, the closed severity set, the secret scan, the blocker
@@ -3500,7 +3931,7 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     // D5: the exit code is unchanged by the transcription — a blocked result
     // already exits non-zero, and a failed write is reported, never voted on.
     let exit = exit_code_for(&result.outcome);
-    emit_result(&opts, &result, transport.name(), transcript.as_ref());
+    emit_result(&opts, &result, transport_name, transcript.as_ref());
     exit
 }
 
@@ -4855,6 +5286,7 @@ mod tests {
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
             caller_is_worker: false,
+            no_pane: false,
         }
     }
 
@@ -4934,6 +5366,7 @@ mod tests {
             inbox_session: None,
             pane_env_passthrough: BTreeMap::new(),
             caller_is_worker: false,
+            no_pane: false,
         }
     }
 
@@ -8884,5 +9317,9 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests_no_pane;
 
 

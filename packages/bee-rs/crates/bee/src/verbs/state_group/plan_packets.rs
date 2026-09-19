@@ -629,11 +629,16 @@ pub(crate) fn gate_preview_refusal(
 }
 
 /// Helper to get the approved cell packet for a feature from its lane or state record.
-fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
+pub(crate) fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String, Value>> {
     let lane_file = root.join(".bee").join("lanes").join(format!("{feature}.json"));
     if let Ok(text) = std::fs::read_to_string(&lane_file) {
         if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
             if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                if let Some(v) = p.get("feature").filter(|v| truthy(v)) {
+                    if js_disp(v) != feature {
+                        return None;
+                    }
+                }
                 return Some(p.clone());
             }
         }
@@ -643,6 +648,11 @@ fn get_approved_preview_packet(root: &Path, feature: &str) -> Option<Map<String,
         if let Ok(Value::Object(m)) = serde_json::from_str(&text) {
             if m.get("feature").map(js_disp).as_deref() == Some(feature) {
                 if let Some(Value::Object(p)) = m.get("approved_cell_packet").or_else(|| m.get("gate_preview")) {
+                    if let Some(v) = p.get("feature").filter(|v| truthy(v)) {
+                        if js_disp(v) != feature {
+                            return None;
+                        }
+                    }
                     return Some(p.clone());
                 }
             }
