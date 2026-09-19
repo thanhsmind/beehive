@@ -35,13 +35,74 @@ leaves the workflow red and still unexplained. FAIL — both are in scope.
 
 ## Cells — current slice (preview)
 
-Slice 2. `win-1` is capped; its packet is kept below as a record.
+Slice 3. The branch run 35454713330 proved win-2: release-dirt passed on Windows. The worktree test then failed one assertion later (line 6535): the new-worktree instruction also carries the raw path. win-2 traced only the failing line, not the later ones that share its expected value.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| `win-2` | Run release-dirt under a real Windows bash, and match the merge path to what the product emits | two test files | — | Both Windows-only failures pass | full bin suite green on Linux; the Windows run on the branch |
+| `win-3` | Match the new-worktree instruction path to what the product emits | one test file | — | Windows workflow green | full bin suite green on Linux; the Windows run on the branch |
 
 ```json
+[
+  {
+    "id": "win-3",
+    "feature": "windows-ci-green",
+    "title": "Match the new-worktree instruction path to what the product emits",
+    "lane": "tiny",
+    "role": "test",
+    "status": "open",
+    "deps": [],
+    "decisions": [
+      "D1",
+      "D3",
+      "00967a93-511b-46bb-8b0e-f06e9bef8623"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "In packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`, section 3 (new_worktree_transition_result_and_text) expects `/move {target_str}`, where target_str is canonical. The product builds that instruction from `p(&created.worktree_root)` (handlers.rs, new_worktree_transition_result_and_text), the raw path, so Windows run 35454713330 failed at line 6535 with RUNNER~1 vs runneradmin. Build that one expectation from `p(&created.worktree_root)`. Leave section 1 and section 4 on target_str: both go through enter_worktree_core, which emits the canonical path. No product change.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+    "must_haves": {
+      "truths": [
+        "The new-worktree expectation matches the raw path the product emits",
+        "The enter expectations stay canonical",
+        "The full bin suite stays green on Linux"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "substantive": "section 3 expectation built from p(&created.worktree_root)"
+        }
+      ],
+      "key_links": [
+        "each expectation mirrors the path builder of the product function it asserts"
+      ],
+      "prohibitions": [
+        "No product source change",
+        "No weakening of an assertion condition"
+      ]
+    },
+    "trace": {
+      "worker": null,
+      "outcome": null,
+      "files_changed": [],
+      "deviations": [],
+      "friction": null,
+      "capped_at": null,
+      "behavior_change": false
+    }
+  }
+]
+```
+
+### Capped packet, slice 2 (record only)
+
+```text
 [
   {
     "id": "win-2",
