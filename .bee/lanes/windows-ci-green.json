@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "feature": "windows-ci-green",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"windows-ci-green\" started at phase \"exploring\" (lane).",
+  "next_action": "Run win-1, push the branch, read the release-dirt cause from Windows CI.",
+  "created_at": "2026-09-19T15:55:33.893Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "Two Windows-only test failures on main, both in test code, no product change planned. Small rather than tiny because the first failure has no known cause yet: its test reports an empty stderr and hides its own exit code and stdout, so the cause is read from Windows CI in this lane rather than guessed. The second failure has a verified cause: the test builds its expected path without the canonicalization the product applies.",
+    "updated_at": "2026-09-19T15:55:33.919Z",
+    "feature": "windows-ci-green"
+  },
+  "gate_preview": {
+    "feature": "windows-ci-green",
+    "plan_sha256": "b36fa9f471bdace2c61df16ae835c3c391e971f9ba9b59f1c11532cdf52c72eb",
+    "previewed_at": "2026-09-19T16:30:29.818Z",
+    "cells": [
+      {
+        "id": "win-3",
+        "feature": "windows-ci-green",
+        "title": "Match the new-worktree instruction path to what the product emits",
+        "lane": "tiny",
+        "role": "test",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D3",
+          "00967a93-511b-46bb-8b0e-f06e9bef8623"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`, section 3 (new_worktree_transition_result_and_text) expects `/move {target_str}`, where target_str is canonical. The product builds that instruction from `p(&created.worktree_root)` (handlers.rs, new_worktree_transition_result_and_text), the raw path, so Windows run 35454713330 failed at line 6535 with RUNNER~1 vs runneradmin. Build that one expectation from `p(&created.worktree_root)`. Leave section 1 and section 4 on target_str: both go through enter_worktree_core, which emits the canonical path. No product change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+        "must_haves": {
+          "truths": [
+            "The new-worktree expectation matches the raw path the product emits",
+            "The enter expectations stay canonical",
+            "The full bin suite stays green on Linux"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+              "substantive": "section 3 expectation built from p(&created.worktree_root)"
+            }
+          ],
+          "key_links": [
+            "each expectation mirrors the path builder of the product function it asserts"
+          ],
+          "prohibitions": [
+            "No product source change",
+            "No weakening of an assertion condition"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "windows-ci-green",
+    "plan_sha256": "b36fa9f471bdace2c61df16ae835c3c391e971f9ba9b59f1c11532cdf52c72eb",
+    "previewed_at": "2026-09-19T16:30:29.818Z",
+    "cells": [
+      {
+        "id": "win-3",
+        "feature": "windows-ci-green",
+        "title": "Match the new-worktree instruction path to what the product emits",
+        "lane": "tiny",
+        "role": "test",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D3",
+          "00967a93-511b-46bb-8b0e-f06e9bef8623"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs inside `fn enter_and_merge_and_new_carry_session_runtime_and_instruction_with_injected_caller`, section 3 (new_worktree_transition_result_and_text) expects `/move {target_str}`, where target_str is canonical. The product builds that instruction from `p(&created.worktree_root)` (handlers.rs, new_worktree_transition_result_and_text), the raw path, so Windows run 35454713330 failed at line 6535 with RUNNER~1 vs runneradmin. Build that one expectation from `p(&created.worktree_root)`. Leave section 1 and section 4 on target_str: both go through enter_worktree_core, which emits the canonical path. No product change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
+        "must_haves": {
+          "truths": [
+            "The new-worktree expectation matches the raw path the product emits",
+            "The enter expectations stay canonical",
+            "The full bin suite stays green on Linux"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+              "substantive": "section 3 expectation built from p(&created.worktree_root)"
+            }
+          ],
+          "key_links": [
+            "each expectation mirrors the path builder of the product function it asserts"
+          ],
+          "prohibitions": [
+            "No product source change",
+            "No weakening of an assertion condition"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-09-19T16:05:00.426Z",
+    "branch": "wt/windows-ci-green",
+    "worktree_id": "beehive--wt--windows-ci-green",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "gate_revoked_at": {
+    "execution": "2026-09-19T16:30:29.747Z"
+  }
+}
