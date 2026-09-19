@@ -660,3 +660,5 @@
 {"ts":"2026-09-19T13:13:16.263Z","event":"complete","id":"9d269f4a-474c-46df-ade1-0c8c88295aac"}
 {"ts":"2026-09-19T13:13:16.557Z","event":"complete","id":"5b955c2b-29e0-4eeb-9569-6b6bfa0196c6"}
 {"ts":"2026-09-19T13:13:16.842Z","event":"complete","id":"2c9cd37d-eab8-4aaa-90fb-72b088cda78a"}
+{"ts":"2026-09-19T16:41:49.021Z","event":"add","id":"1c066c0c-3412-4cbe-b643-e0a97c55db06","kind":"worktree-cleanup","feature":"windows-ci-green","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--windows-ci-green"],"reason":"Worktree beehive--wt--windows-ci-green (branch wt/windows-ci-green) merged into main at 1708d320bd8d6b165e45ac023fc801db4e769399 and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-09-19T22:44:25.560Z","event":"add","id":"82c0ffe9-8f36-4f71-9c8d-1a01b7af93f2","kind":"promote","feature":"windows-ci-green","cells":[],"areas":[],"files":["docs/history/windows-ci-green/promote-proposals.md"],"reason":"Promote proposal for \"windows-ci-green\" awaiting apply — docs/history/windows-ci-green/promote-proposals.md."}

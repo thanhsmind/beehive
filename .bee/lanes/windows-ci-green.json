@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-green\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 1708d32; capture what settled, then bee close --feature windows-ci-green.",
+  "next_action": "Run win-1, push the branch, read the release-dirt cause from Windows CI.",
   "created_at": "2026-09-19T15:55:33.893Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: push main and close windows-ci-green",
+    "asked_at": "2026-09-19T16:41:56.054Z",
+    "session": "9cdec5eb-2d88-4223-af6c-35da0848c665"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",

@@ -1293,5 +1293,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-09-19T05:44:28.906Z"
+  },
+  "windows-ci-green": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-19T22:44:25.559Z"
   }
 }
