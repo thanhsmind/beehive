@@ -11273,7 +11273,16 @@ advance_on — falling to another model there hides the defect (D11)"
         std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{\"dirty\":true}\n").unwrap();
         std::fs::write(td.join("b.txt"), "b untracked\n").unwrap();
 
-        let out = Command::new("bash")
+        // On Windows use crate::shell::command() to reach a real Win32 bash (see shell.rs); elsewhere use Command::new("bash") because shell::command() returns /bin/sh.
+        let bash_cmd = || -> Command {
+            if cfg!(windows) {
+                crate::shell::command().expect("real Win32 bash must be present on Windows (see shell.rs)")
+            } else {
+                Command::new("bash")
+            }
+        };
+
+        let out = bash_cmd()
             .arg(&script)
             .current_dir(td)
             .output()
@@ -11294,7 +11303,7 @@ advance_on — falling to another model there hides the defect (D11)"
         run_git(&["checkout", "--", "a.txt"]);
         std::fs::remove_file(td.join("b.txt")).unwrap();
 
-        let out_clean = Command::new("bash")
+        let out_clean = bash_cmd()
             .arg(&script)
             .current_dir(td)
             .output()

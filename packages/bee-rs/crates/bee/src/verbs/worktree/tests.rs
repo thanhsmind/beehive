@@ -6512,7 +6512,7 @@ use std::time::Instant;
             Some(&codex_caller),
         ).expect("linked_worktree_merge_core succeeds");
         assert_eq!(merge_res["sessionRuntime"], json!("codex"));
-        let main_str = canonical_path_str(&main).unwrap();
+        let main_str = p(&main);
         let expected_merge_inst = format!("Ask the user to type /cd {main_str}, then send any message to continue.");
         assert_eq!(merge_res["instruction"], json!(expected_merge_inst));
         assert!(merge_text.contains(&expected_merge_inst));
