@@ -2079,3 +2079,60 @@ fn every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_
         gaps.join("\n")
     );
 }
+
+/// Every hook name the OpenCode belt asks bee for must be a hook bee actually serves.
+///
+/// The executable owner for decision 06fea069. Cell pnsd-6 shipped a belt calling
+/// `runAdvisoryHook(directory, "stage-tools", ...)` before bee had that hook: the real
+/// `bee hook stage-tools` answered `unknown hook "stage-tools"` and exited 1, the belt's
+/// advisory wrapper swallowed it exactly as designed, and the whole per-stage tool gate
+/// silently did nothing. The suite stayed green throughout, because it only asserted that
+/// the belt SOURCE contained the call — the shape the "instruction text is an untested code
+/// path" pattern warns about. Source-shape assertions cannot catch this; only running the
+/// binary can, so this test runs it.
+///
+/// `bee hook <name>` decides an unknown name from argv alone, before it reads stdin, so this
+/// stays cheap and cannot hang.
+#[test]
+fn every_advisory_hook_the_opencode_belt_calls_is_a_hook_bee_serves() {
+    use std::io::Write;
+
+    let names = opencode_advisory_hooks();
+    assert!(
+        !names.is_empty(),
+        "OpenCode belt: derived zero advisory hook names — the derivation broke, and this \
+         test would then pass vacuously"
+    );
+
+    let mut unknown: Vec<String> = Vec::new();
+    for name in &names {
+        let mut child = std::process::Command::new(bee_bin())
+            .args(["hook", name.as_str()])
+            .env_remove("BEE_HERDING_WORKER")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("failed to spawn bee hook");
+        child
+            .stdin
+            .as_mut()
+            .expect("bee hook stdin")
+            .write_all(b"{}\n")
+            .expect("failed to write bee hook stdin");
+        let out = child.wait_with_output().expect("failed to wait for bee hook");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if stderr.contains("unknown hook") {
+            unknown.push(name.clone());
+        }
+    }
+
+    assert!(
+        unknown.is_empty(),
+        "OpenCode belt calls hook name(s) bee does not serve: {unknown:?} — every one of \
+         these reaches `bee hook <name>`, gets `unknown hook`, and is swallowed by the \
+         advisory wrapper, so the behaviour they were wired for silently does nothing. \
+         Add the hook to HOOK_NAMES (and a module beside the others), or stop calling it. \
+         Derived names: {names:?}"
+    );
+}
