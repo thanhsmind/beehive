@@ -537,6 +537,7 @@
     "contract:herding-caps-on-clean-report",
     "contract:worker-cap-instruction",
     "one-fact-one-home",
-    "contract:test-path-expectations"
+    "contract:test-path-expectations",
+    "windows-ci-green"
   ]
 }

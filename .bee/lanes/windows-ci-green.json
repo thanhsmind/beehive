@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-ci-green",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-green\" started at phase \"exploring\" (lane).",
-  "next_action": "Run win-1, push the branch, read the release-dirt cause from Windows CI.",
+  "next_action": "bee close finished \"windows-ci-green\" — feature is closed.",
   "created_at": "2026-09-19T15:55:33.893Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: push main and close windows-ci-green",
-    "asked_at": "2026-09-19T16:41:56.054Z",
-    "session": "9cdec5eb-2d88-4223-af6c-35da0848c665"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "small",
