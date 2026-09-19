@@ -2069,6 +2069,10 @@ function refreshModelUsageStatus(ctx: any): void {
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
+  let fullToolSet: string[] | null = null
+  let lastStage: string | null = null
+  let toolsReopened = false
+
   // ── BLOCKING: write-guard on every tool call. Fail CLOSED. ───────────────
   pi.on("tool_call", (async (event: any, ctx: any) => {
     const directory = directoryOf(ctx)
@@ -2399,6 +2403,118 @@ export default function (pi: ExtensionAPI) {
     }
   }) as any)
 
+  // ── ADVISORY: per-stage active tool narrowing (D4, D12). ──────────────────
+  pi.on("turn_start", (async (event: any, ctx: any) => {
+    try {
+      const directory = directoryOf(ctx)
+      if (!beeStorePresent(directory)) return undefined
+
+      // Capture all known/registered tools before any narrowing occurs so the
+      // full set can be restored by the re-open command.
+      if (!fullToolSet && typeof (pi as any).getAllTools === "function") {
+        try {
+          const all = (pi as any).getAllTools()
+          if (Array.isArray(all) && all.length > 0) {
+            fullToolSet = all
+              .map((t: any) => (typeof t === "string" ? t : t?.name))
+              .filter(Boolean)
+          }
+        } catch {}
+      }
+      if (!fullToolSet && typeof (pi as any).getActiveTools === "function") {
+        try {
+          const active = (pi as any).getActiveTools()
+          if (Array.isArray(active) && active.length > 0) {
+            fullToolSet = [...active]
+          }
+        } catch {}
+      }
+
+      const raw = runAdvisoryHook(directory, "stage-tools", {
+        hook_event_name: "TurnStart",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        turn_index: typeof event?.turnIndex === "number" ? event.turnIndex : undefined,
+      })
+      if (!raw) return undefined
+
+      let parsed: any
+      try {
+        parsed = JSON.parse(raw.trim())
+      } catch {
+        return undefined
+      }
+
+      if (!parsed || typeof parsed !== "object") return undefined
+      const allowed = Array.isArray(parsed.allowed_tools)
+        ? parsed.allowed_tools
+        : Array.isArray(parsed.allowedTools)
+          ? parsed.allowedTools
+          : Array.isArray(parsed.tools)
+            ? parsed.tools
+            : null
+
+      if (!allowed) return undefined
+
+      const stage =
+        typeof parsed.stage === "string"
+          ? parsed.stage
+          : typeof parsed.stage_name === "string"
+            ? parsed.stage_name
+            : ""
+
+      if (lastStage !== null && stage !== lastStage) {
+        toolsReopened = false
+      }
+      lastStage = stage
+
+      if (toolsReopened) return undefined
+
+      let currentActive: string[] = []
+      if (typeof (pi as any).getActiveTools === "function") {
+        currentActive = (pi as any).getActiveTools()
+      } else if (fullToolSet) {
+        currentActive = [...fullToolSet]
+      }
+
+      const allowedSet = new Set(allowed)
+      const basePool = fullToolSet && fullToolSet.length > 0 ? fullToolSet : currentActive
+      const targetActive = basePool.filter((t) => allowedSet.has(t))
+      const removedTools = currentActive.filter((t) => !allowedSet.has(t))
+
+      if (removedTools.length > 0 && typeof (pi as any).setActiveTools === "function") {
+        (pi as any).setActiveTools(targetActive)
+
+        // D12 Obligation 2: announce narrowing to user where it happens
+        const stageMsg = stage ? `stage "${stage}"` : "current stage policy"
+        const userNotice = `bee stage gate: active tools narrowed for ${stageMsg} (removed: ${removedTools.join(", ")}). Use /bee-tools-reopen to restore all tools.`
+        if (typeof ctx?.ui?.notify === "function") {
+          ctx.ui.notify(userNotice, "info")
+        }
+
+        // D12 Obligation 3: tell model that tools were removed by stage policy
+        if (typeof (pi as any).sendMessage === "function") {
+          try {
+            await (pi as any).sendMessage({
+              customType: "bee-stage-tools",
+              content: `Notice: The following tool(s) were removed by bee ${stageMsg}: ${removedTools.join(", ")}. Do not attempt to use them or fall back to bash redirection. If you require these tools, ask the user to run /bee-tools-reopen.`,
+              display: true,
+              details: {
+                stage: stage || null,
+                removedTools,
+                allowedTools: targetActive,
+              },
+            })
+          } catch (err: any) {
+            console.error(`bee stage-tools model notice (advisory): ${err?.message ?? err}`)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error(`bee stage-tools (advisory): ${err?.message ?? err}`)
+    }
+  }) as any)
+
   // ── ADVISORY: active-branch model usage statusline refresh ─────────────────
   pi.on("turn_end", (async (_event: any, ctx: any) => {
     refreshModelUsageStatus(ctx)
@@ -2684,6 +2800,48 @@ export default function (pi: ExtensionAPI) {
       }
 
       await performSessionTransition(ctx, verifiedTransition)
+    },
+  })
+
+  pi.registerCommand("bee-tools-reopen", {
+    description: "Restore the full tool set after stage narrowing",
+    handler: async (_args: string, ctx: any) => {
+      if (typeof ctx?.isIdle === "function" && !ctx.isIdle()) {
+        ctx.ui?.notify?.("Command refused: agent turn is currently active", "error")
+        return
+      }
+      try {
+        toolsReopened = true
+        let toolsToRestore = fullToolSet
+        if ((!toolsToRestore || toolsToRestore.length === 0) && typeof (pi as any).getAllTools === "function") {
+          try {
+            const all = (pi as any).getAllTools()
+            if (Array.isArray(all) && all.length > 0) {
+              toolsToRestore = all
+                .map((t: any) => (typeof t === "string" ? t : t?.name))
+                .filter(Boolean)
+            }
+          } catch {}
+        }
+        if (toolsToRestore && toolsToRestore.length > 0 && typeof (pi as any).setActiveTools === "function") {
+          (pi as any).setActiveTools(toolsToRestore)
+          ctx.ui?.notify?.(`Restored full tool set (${toolsToRestore.join(", ")})`, "info")
+          if (typeof (pi as any).sendMessage === "function") {
+            try {
+              await (pi as any).sendMessage({
+                customType: "bee-stage-tools",
+                content: `Notice: Full tool set restored (${toolsToRestore.join(", ")}).`,
+                display: true,
+                details: { restoredTools: toolsToRestore },
+              })
+            } catch {}
+          }
+        } else {
+          ctx.ui?.notify?.("No stored tool set to restore", "info")
+        }
+      } catch (err: any) {
+        ctx.ui?.notify?.(`Failed to restore tools: ${err?.message ?? err}`, "error")
+      }
     },
   })
 }
