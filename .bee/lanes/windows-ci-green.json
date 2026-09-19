@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-green\" started at phase \"exploring\" (lane).",
-  "next_action": "Run win-1, push the branch, read the release-dirt cause from Windows CI.",
+  "next_action": "Merged into main at 1708d32; capture what settled, then bee close --feature windows-ci-green.",
   "created_at": "2026-09-19T15:55:33.893Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -145,13 +145,6 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-19T16:05:00.426Z",
-    "branch": "wt/windows-ci-green",
-    "worktree_id": "beehive--wt--windows-ci-green",
-    "uat": "pending",
-    "blocked_by": []
   },
   "gate_revoked_at": {
     "execution": "2026-09-19T16:30:29.747Z"
