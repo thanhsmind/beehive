@@ -11278,7 +11278,13 @@ advance_on — falling to another model there hides the defect (D11)"
             .current_dir(td)
             .output()
             .unwrap();
-        assert!(out.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(stdout.contains("a.txt"), "output should contain a.txt: {stdout:?}");
         assert!(stdout.contains("b.txt"), "output should contain b.txt: {stdout:?}");
@@ -11293,7 +11299,13 @@ advance_on — falling to another model there hides the defect (D11)"
             .current_dir(td)
             .output()
             .unwrap();
-        assert!(out_clean.status.success(), "release-dirt.sh failed: {}", String::from_utf8_lossy(&out_clean.stderr));
+        assert!(
+            out_clean.status.success(),
+            "release-dirt.sh failed: status={:?}, stdout={}, stderr={}",
+            out_clean.status,
+            String::from_utf8_lossy(&out_clean.stdout),
+            String::from_utf8_lossy(&out_clean.stderr)
+        );
         let stdout_clean = String::from_utf8_lossy(&out_clean.stdout);
         assert!(stdout_clean.is_empty(), "expected empty output when only bee paths dirty, got: {stdout_clean:?}");
     }

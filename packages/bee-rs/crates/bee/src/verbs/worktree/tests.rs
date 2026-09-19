@@ -6491,7 +6491,7 @@ use std::time::Instant;
         let (enter_res, enter_text) = enter_worktree_core(&main, &main, &created.id, Some(&claude_caller))
             .expect("enter_worktree_core succeeds");
         assert_eq!(enter_res["sessionRuntime"], json!("claude"));
-        let target_str = p(&created.worktree_root);
+        let target_str = canonical_path_str(&created.worktree_root).unwrap();
         let expected_enter_inst = format!("Call EnterWorktree with path={target_str}.");
         assert_eq!(enter_res["instruction"], json!(expected_enter_inst));
         assert!(enter_text.contains(&expected_enter_inst));
@@ -6512,7 +6512,7 @@ use std::time::Instant;
             Some(&codex_caller),
         ).expect("linked_worktree_merge_core succeeds");
         assert_eq!(merge_res["sessionRuntime"], json!("codex"));
-        let main_str = p(&main);
+        let main_str = canonical_path_str(&main).unwrap();
         let expected_merge_inst = format!("Ask the user to type /cd {main_str}, then send any message to continue.");
         assert_eq!(merge_res["instruction"], json!(expected_merge_inst));
         assert!(merge_text.contains(&expected_merge_inst));
