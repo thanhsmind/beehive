@@ -187,6 +187,7 @@ From `hat-value`:
 - `pnsd-2` alone changes nothing a user can see; value needs `pnsd-3` with it.
   The plan already groups them, so this confirms the slice rather than changing it.
 
+<!-- bee:not-a-deferral: The flagged phrase is "deferred loading", the name of a Pi runtime feature, quoted verbatim from the installed host's docs/extensions.md. A technical term, not a deferral of work. -->
 From `hat-user-impact`, on D4's hard tool gate:
 - Removing tools is not purely additive, so Pi drops deferred loading and the
   provider's cached prompt prefix **may** be invalidated. Leader verification at
@@ -203,6 +204,8 @@ From `hat-user-impact`, on D4's hard tool gate:
   land in the visible transcript instead.
 - Remedy accepted into the rework: name the re-open command explicitly, announce
   it where the narrowing happens, and put D5's warning in the transcript.
+<!-- /bee:not-a-deferral -->
+
 
 ---
 

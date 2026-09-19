@@ -55,7 +55,9 @@ is stale from `0d11a415` forward and must be read with it.
 | D9 | Existing Claude, Codex and OpenCode behavior does not change. No shared payload, prompt or hook route changes shape for them. | Three belts share `bee hook <name>`; a regression there is a harness-wide outage. |
 | D10 | The hat wave contract holds unchanged on the native path: 3 seats default and 5 on high-risk, one wave, a 10-minute wall-clock ceiling, each result named by its seat, and a seat that misses the ceiling DROPPED and named — never silently lost. | `skills/bee-hive/references/gates-and-delegation.md` ("Hat wave"); already proven on the herding path by `pi-hat-wave` in the verification map. Under D11 this is inherited, not rebuilt: `--seat`, the 600 s clamp and the drain already live on that path. |
 | D11 | The child `pi` process is spawned in Rust, inside `bee herding run`, as a no-pane runner that keeps the same job id, `--seat`, ceiling, mailbox report and result drain. The dispatch door payload shape does not change. `.pi/extensions/bee-guard.ts` gains NO dispatch tool and NO spawner, so the belt keeps its recorded premise that Pi has no native subagent surface and model-guard stays a named exclusion on it. The belt is still edited for D4 and D5, which are session-surface behavior, not dispatch. | Decision `31fb9e15`, from the plan-step hat wave. The belt-hosted shape owed six blockers; this one removes five of them by inheriting machinery that already ships. `bee-guard.ts:52-59` records why: a `bee herding run` call is a bash CLI call, already covered by write-guard. |
+<!-- bee:not-a-deferral: The flagged phrase in this row is "deferred loading", the name of a Pi runtime feature, quoted from the installed host's docs/extensions.md section "Fallback behavior". It is a technical term describing why the hard gate costs cache, not a deferral of work: D12's three obligations all shipped in cell pnsd-6. -->
 | D12 | The hard tool gate carries three obligations: the re-open slash command is named outright in the plan, the narrowing is announced to the USER where it happens, and the MODEL is told a tool was removed by stage policy. | Decision `2131829f`. Verified in the host's `docs/extensions.md` § "Fallback behavior": a non-additive active-tool change drops deferred loading and may invalidate the provider's cached prompt prefix. The owner kept the hard gate with that cost stated, on the condition the failure becomes legible — today the model apologizes, hallucinates, or falls back to `bash` redirection that trips write-guard, and the user reads that as the model being broken. |
+<!-- /bee:not-a-deferral -->
 | D13 | The close-guard warning is written into the visible session transcript, never raised only as an ephemeral UI toast. | Decision `2131829f`. `ctx.ui.notify` is a no-op when a session has no UI (`-p` and JSON modes), and a toast is not where a user looks. |
 
 ### Agent's Discretion
@@ -151,6 +153,7 @@ From the quick scout only. Downstream agents read these before planning.
   installed host's own API reference. The `refs/oh-my-pi` mirror is a FORK: it documents
   `session_stop` and `ctx.setInterval`, which pi 0.85.1 does not have.
 
+<!-- bee:not-a-deferral: These sections are CONTEXT.md's own record of what was resolved and what was consciously left out of scope. Every open item is answered inline, carried by a cell, or filed as a backlog row; none is an unregistered promise to act later. -->
 ## Outstanding Questions
 
 ### Resolve Before Planning
@@ -189,8 +192,13 @@ None. Every product decision is locked above.
   so the Antigravity usage limits are silently dead. Filed as a P3 finding in
   `.bee/backlog.jsonl`; needs its own red-first test.
 
+<!-- /bee:not-a-deferral -->
+
+<!-- bee:not-a-deferral: The handoff note names the Deferred To Planning section as an input for the reader. It says where to look; it defers nothing itself. -->
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
+

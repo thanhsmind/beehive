@@ -95,6 +95,45 @@
     "warnings": [
       "advisory: this cap's commit changes 241 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-3-c1",
+            "name": "both herding.agents config shapes classified",
+            "status": "PASS",
+            "evidence": "agent_argv_first_normalizes_both_config_shapes executed; read agent_first_argv handling Value::Array and Value::Object"
+          },
+          {
+            "id": "pnsd-3-c2",
+            "name": "other runtimes unchanged",
+            "status": "PASS",
+            "evidence": "claude_and_codex_payloads_are_byte_identical_to_main executed"
+          },
+          {
+            "id": "pnsd-3-c3",
+            "name": "seat, ceiling and detached delivery survive on the native path",
+            "status": "PASS",
+            "evidence": "pi_hat_dispatch_on_native_path_retains_seat_ceiling_and_detached_delivery executed — this is the review blocker B2"
+          },
+          {
+            "id": "pnsd-3-c4",
+            "name": "proof re-run by the leader",
+            "status": "PASS",
+            "evidence": "cargo test -p bee prepare: 59 passed, 0 failed, 8 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.132Z"
+      }
+    ]
   }
 }

@@ -93,6 +93,51 @@
       "mistakes": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-7-c1",
+            "name": "the warning reaches the transcript, not only a toast",
+            "status": "PASS",
+            "evidence": "read the diff: pi.sendMessage with display true, deliverAs nextTurn, triggerTurn false; notify kept only as an extra behind a hasUI check"
+          },
+          {
+            "id": "pnsd-7-c2",
+            "name": "it works with no UI",
+            "status": "PASS",
+            "evidence": "close_guard_warns_even_when_session_has_no_ui executed"
+          },
+          {
+            "id": "pnsd-7-c3",
+            "name": "it names the cell and the verb",
+            "status": "PASS",
+            "evidence": "read the warning string: names the claimed cell ids and bee cells finish / bee cells release"
+          },
+          {
+            "id": "pnsd-7-c4",
+            "name": "it never blocks",
+            "status": "PASS",
+            "evidence": "both delivery paths sit inside their own try/catch; the session still settles"
+          },
+          {
+            "id": "pnsd-7-c5",
+            "name": "it reuses an existing hook",
+            "status": "PASS",
+            "evidence": "session-close is already in HOOK_NAMES and the verdict already fetched is reused — no repeat of the pnsd-6 inert-hook trap"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.187Z"
+      }
+    ]
   }
 }

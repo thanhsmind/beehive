@@ -92,6 +92,45 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-1-c1",
+            "name": "both packet return sites compare the packet's own feature",
+            "status": "PASS",
+            "evidence": "read the diff: lane-file branch and state branch both guard on the stored feature"
+          },
+          {
+            "id": "pnsd-1-c2",
+            "name": "legacy stores unaffected",
+            "status": "PASS",
+            "evidence": "a packet with no feature field still returns, covered by plan_packets_packet_with_no_feature_field_is_still_returned"
+          },
+          {
+            "id": "pnsd-1-c3",
+            "name": "proof re-run by the leader",
+            "status": "PASS",
+            "evidence": "cargo test -p bee plan_packets: 20 passed, 0 failed"
+          },
+          {
+            "id": "pnsd-1-c4",
+            "name": "the original bug is reproduced in a test",
+            "status": "PASS",
+            "evidence": "plan_packets_role_plan_scoped_to_feature_not_stale_across_features recreates state.feature=pi-native-stage-driver with packet.feature=release-2-41-2"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.095Z"
+      }
+    ]
   }
 }

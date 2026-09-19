@@ -113,6 +113,51 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pnsd-6-c1",
+            "name": "the belt asks bee rather than holding its own table",
+            "status": "PASS",
+            "evidence": "read the diff: runAdvisoryHook(directory, 'stage-tools', ...), no stage literal in the extension"
+          },
+          {
+            "id": "pnsd-6-c2",
+            "name": "the hook bee answers with actually exists",
+            "status": "PASS",
+            "evidence": "leader ran it: bee hook stage-tools returns a verdict; before the second dispatch it returned 'unknown hook' exit 1 and the gate was inert"
+          },
+          {
+            "id": "pnsd-6-c3",
+            "name": "narrowing really narrows",
+            "status": "PASS",
+            "evidence": "READ_ONLY_TOOLS = [read, bash] before the execution gate; stage_tools_returns_read_only_in_planning_phase_without_gate executed"
+          },
+          {
+            "id": "pnsd-6-c4",
+            "name": "user and model are both told",
+            "status": "PASS",
+            "evidence": "the verdict carries user_message and model_message; /bee-tools-reopen is named in the user sentence"
+          },
+          {
+            "id": "pnsd-6-c5",
+            "name": "proof re-run by the leader plus the manifest",
+            "status": "PASS",
+            "evidence": "pi_plugin_contracts 73 passed 0 failed; release-manifest --check 376 files match"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-19T03:28:51.169Z"
+      }
+    ]
   }
 }
