@@ -2342,6 +2342,7 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee relocation (advisory): ${err?.message ?? err}`)
     }
+    let sessionCloseVerdict: string | null = null
     try {
       const directory = directoryOf(ctx)
       try {
@@ -2358,6 +2359,7 @@ export default function (pi: ExtensionAPI) {
         session_id: sessionIdOf(ctx),
         cwd: directory,
       })
+      sessionCloseVerdict = rawVerdict
       // Gated continuation nudge (Epic C / pib-3): session-close emits a block
       // verdict {"decision":"block","reason":"..."} when maybe_bypass_block in
       // hooks/session_close/nudges.rs triggers (e.g., gate_bypass in planning mode).
@@ -2400,6 +2402,69 @@ export default function (pi: ExtensionAPI) {
       }
     } catch (err: any) {
       console.error(`bee session-close (advisory): ${err?.message ?? err}`)
+    }
+
+    // ── ADVISORY: close guard (D5, D13).
+    // When a session settles with a claimed cell that was never capped, warn into
+    // the visible session transcript naming that cell and the verb to run (D5, D13).
+    // This is warn-only: the session still ends, nothing blocks or delays settling.
+    try {
+      const directory = directoryOf(ctx)
+      const raw = sessionCloseVerdict ?? runAdvisoryHook(directory, "session-close", {
+        hook_event_name: "Stop",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+      })
+      if (typeof raw === "string" && raw.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(raw.trim())
+          const msg = typeof parsed?.systemMessage === "string" ? parsed.systemMessage : ""
+          let cells = ""
+          if (Array.isArray(parsed?.claimed_cells) && parsed.claimed_cells.length > 0) {
+            cells = parsed.claimed_cells.join(", ")
+          } else if (msg) {
+            const match = /Claimed-but-uncapped cells:\s*([^\n]+)/.exec(msg)
+            if (match && match[1]) {
+              cells = match[1].replace(/\.$/, "").trim()
+            }
+          }
+          if (cells) {
+            const warningNotice = `Warning: session settled with claimed uncapped cell(s): ${cells}. Run \`bee cells finish\` (or \`bee cells release\`) to resolve.`
+            if (typeof (pi as any).sendMessage === "function") {
+              try {
+                await (pi as any).sendMessage(
+                  {
+                    customType: "bee-close-warning",
+                    content: warningNotice,
+                    display: true,
+                    details: {
+                      cells,
+                      verb: "bee cells finish",
+                    },
+                  },
+                  {
+                    deliverAs: "nextTurn",
+                    triggerTurn: false,
+                  },
+                )
+              } catch (sendErr: any) {
+                console.error(`bee close-guard transcript warning (advisory): ${sendErr?.message ?? sendErr}`)
+              }
+            }
+            if (ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+              try {
+                ctx.ui.notify(warningNotice, "warning")
+              } catch (notifyErr: any) {
+                console.error(`bee close-guard notify (advisory): ${notifyErr?.message ?? notifyErr}`)
+              }
+            }
+          }
+        } catch {
+          // Non-JSON or unparseable output on advisory hook is ignored
+        }
+      }
+    } catch (err: any) {
+      console.error(`bee close-guard (advisory): ${err?.message ?? err}`)
     }
   }) as any)
 

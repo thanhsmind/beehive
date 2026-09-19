@@ -667,8 +667,10 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
   const sm = new FakeSessionManager(ctxCwd, sessionFile, branchEntries);
   sm._sessionId = ctxSessionId;
   sm._isInMemory = Boolean(ctxCall?.is_in_memory);
+  const hasUI = ctxCall?.has_ui !== false && spec.has_ui !== false;
   return {
     cwd: ctxCwd,
+    hasUI,
     isIdle: () => ctxCall?.is_idle !== false,
     sessionManager: sm,
     ui: {
@@ -679,6 +681,7 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
         });
       },
       notify(msg, type) {
+        if (!hasUI) return;
         if ((spec.throw_notify_after_teardown || ctxCall?.throw_notify_after_teardown) && orderLog.includes("teardown_resume")) {
           throw new Error("simulated post-invalidation UI notification failure");
         }
@@ -8441,6 +8444,191 @@ fn real_bee_hook_stage_tools_end_to_end() {
         run.active_tools,
         vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
         "expected active tools restored"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_warns_into_transcript_when_session_settles_with_claimed_cell() {
+    node_or_skip!("close_guard_warns_into_transcript_when_session_settles_with_claimed_cell");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "bee session-close warning: session is ending mid-phase (phase: swarming) with no .bee/HANDOFF.json.\nClaimed-but-uncapped cells: pnsd-7 (worker-close).\nActive reservations: ...\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-claimed";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        run.messages.is_empty(),
+        "warning must NOT inject a turn via sendUserMessage (warn only): {:?}",
+        run.messages
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected warning in transcript naming claimed cell and finish verb, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_warns_even_when_session_has_no_ui() {
+    node_or_skip!("close_guard_warns_even_when_session_has_no_ui");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "Claimed-but-uncapped cells: pnsd-7.\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-no-ui";
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "agent_settled",
+                "event_arg": {},
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": SESSION_ID,
+                "has_ui": false,
+            }),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw when has_ui is false: {:?}",
+        run.results
+    );
+    assert!(
+        run.notifications.is_empty(),
+        "expected no UI notification when has_ui is false, got: {:?}",
+        run.notifications
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected transcript warning present even without UI, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn close_guard_silent_when_no_claimed_cells() {
+    node_or_skip!("close_guard_silent_when_no_claimed_cells");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseAdvisory(
+            "bee session-close warning: session is ending mid-phase with no HANDOFF.json.\nEither finish and cap the work...".to_string(),
+        ),
+    );
+
+    const SESSION_ID: &str = "sess-close-guard-clean";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        !run.custom_messages.iter().any(|m| m["message"]["customType"] == "bee-close-warning"),
+        "expected no close warning when no cells are claimed, got: {:?}",
+        run.custom_messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn real_bee_hook_close_guard_end_to_end() {
+    node_or_skip!("real_bee_hook_close_guard_end_to_end");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let bee_dir = dir.path().join(".bee");
+    std::fs::write(
+        bee_dir.join("onboarding.json"),
+        r#"{"completed": true}"#,
+    )
+    .expect("write onboarding.json");
+    std::fs::write(
+        bee_dir.join("state.json"),
+        r#"{"phase": "swarming", "approved_gates": {"execution": true}}"#,
+    )
+    .expect("write state.json");
+    let cells_dir = bee_dir.join("cells");
+    std::fs::create_dir_all(&cells_dir).expect("create cells dir");
+    std::fs::write(
+        cells_dir.join("pnsd-7.json"),
+        r#"{"id": "pnsd-7", "status": "claimed", "trace": {"worker": "worker-close"}}"#,
+    )
+    .expect("write cell json");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    const SESSION_ID: &str = "sess-real-close-guard";
+    let run = run_harness(
+        &harness,
+        vec![
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(
+        run.results.iter().all(|r| !r.threw),
+        "real bee agent_settled must not throw: {:?}",
+        run.results
+    );
+    assert!(
+        run.custom_messages.iter().any(|m| {
+            let content = m["message"]["content"].as_str().unwrap_or("");
+            m["message"]["customType"] == "bee-close-warning"
+                && content.contains("pnsd-7")
+                && content.contains("bee cells finish")
+        }),
+        "expected real bee close guard warning in transcript naming pnsd-7 and bee cells finish: {:?}",
+        run.custom_messages
     );
 }
 
