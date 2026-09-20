@@ -546,6 +546,9 @@
     "retention",
     "contract:pi-result-injection-header",
     "contract:herding-run-replay",
-    "contract:herding-preflight-action"
+    "contract:herding-preflight-action",
+    "pi-worker-surface",
+    "ui",
+    "prose-guidance-baseline"
   ]
 }

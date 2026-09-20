@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-worker-surface",
+  "mode": "standard",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Pi worker surface: live in-flight worker widget + structured worker verdict tool",
+  "next_action": "Run bee-planning over docs/history/pi-worker-surface/CONTEXT.md",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "A2 premise disproved: result-N.json already carries a validated verdict. Re-shape A2 smaller, or ship A1 alone?",
+    "asked_at": "2026-09-20T08:08:02.019Z",
+    "session": "044a7c9a-a928-4ed5-bee9-4718396ee427"
+  },
+  "created_at": "2026-09-20T08:03:53.974Z"
+}
