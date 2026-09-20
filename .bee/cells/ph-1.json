@@ -1,0 +1,79 @@
+{
+  "id": "ph-1",
+  "feature": "proof-honesty",
+  "lane": "small",
+  "title": "Gate release.sh --no-test behind a printed checklist",
+  "role": "code",
+  "action": "In scripts/release.sh, add a --confirm flag to the option-parse loop (the `case` at lines 70-84) and, immediately after that loop, gate --no-test behind it per CONTEXT D3. When RUN_TESTS=0 and --confirm was not passed: print a four-item release checklist to stderr. On an interactive run (stderr is a TTY) exit 1 without running anything; with no TTY, print the same checklist lines plus one line saying the skip is proceeding unconfirmed, and continue. Replace the lone `log \"warn: --no-test …\"` at the old line 269 with a reference to the checklist already printed, so the skip is not announced twice. Update the usage comment at lines 33-36 with the --no-test --confirm spelling. Then add scripts/tests/release-confirm-gate.sh: a kept regression test that drives the real script on all three paths with BEE_DISPATCH_ID unset (so every path refuses at the authorization check at line 101-102 with 'nothing was changed' and no tag, commit or push can occur), using `script -qec` to allocate a pty for the two interactive paths, and asserts: (1) `--no-test` alone on a TTY prints all four checklist items and exits 1 before the authorization check is reached; (2) `--no-test --confirm` on a TTY prints no checklist refusal and reaches the authorization failure; (3) `--no-test` with no TTY prints the checklist and reaches the authorization failure. The test must exit 0 only when all three hold. Finally sync the two places that document the flag: CLAUDE.md's Release section and docs/knowledge/areas/onboarding/release-identity-and-version-parity.md.",
+  "files": [
+    "scripts/release.sh",
+    "scripts/tests/release-confirm-gate.sh",
+    "CLAUDE.md",
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+  ],
+  "read_first": [
+    "docs/history/proof-honesty/CONTEXT.md",
+    "scripts/release.sh",
+    "docs/history/research/openjev-verdict-2-xia.md"
+  ],
+  "must_haves": [
+    "scripts/release.sh accepts --confirm; the usage comment at lines 33-36 gains the --no-test --confirm spelling",
+    "On a TTY, `--no-test` without `--confirm` prints a four-item checklist and exits 1 at option-parse time, before the gh and BEE_DISPATCH_ID checks run",
+    "With no TTY, `--no-test` prints the same four items and proceeds — the unattended herding release path is not broken (CONTEXT D3)",
+    "The old duplicate warn line at the test step no longer announces the skip a second time",
+    "scripts/tests/release-confirm-gate.sh exists, is executable, drives the real scripts/release.sh, and exits non-zero if any of the three paths regresses",
+    "No path the test drives can tag, commit, push or bump: every one is asserted to stop at or before the authorization refusal",
+    "CLAUDE.md and the release-identity knowledge doc both state the new spelling — neither still describes --no-test as warn-only"
+  ],
+  "verify": "bash scripts/tests/release-confirm-gate.sh",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+  ],
+  "decisions": [
+    "b4b806c4",
+    "4e3e6761-4485-457a-81d0-ddce79bb88e4"
+  ],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "ph-1-worker",
+    "outcome": "Gate release.sh --no-test behind printed checklist and add regression test",
+    "files_changed": [
+      "scripts/release.sh",
+      "scripts/tests/release-confirm-gate.sh",
+      "CLAUDE.md",
+      "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T15:46:07.386Z",
+    "behavior_change": false,
+    "verification_evidence": "regression test for --no-test gate across interactive and non-interactive paths",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ebf62723-3a4f-4554-8743-4a53fb9df78e",
+    "verify_command": "bash scripts/tests/release-confirm-gate.sh",
+    "claimed_at": "2026-09-20T15:40:02.046Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Gate release.sh --no-test behind printed checklist and add regression test",
+      "commit": "5d5d07ba81b8770012365a295257828951dd1985",
+      "files": [
+        "scripts/release.sh",
+        "scripts/tests/release-confirm-gate.sh",
+        "CLAUDE.md",
+        "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+      ],
+      "tests": "bash scripts/tests/release-confirm-gate.sh — green:unit — regression test for --no-test gate across interactive and non-interactive paths",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

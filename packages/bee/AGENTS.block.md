@@ -128,6 +128,16 @@ context before planning or executing.
 <!-- /rule -->
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
+- Report the whole proof, never the flattering half: name what was
+  skipped, filtered, or narrowed beside what passed. Freshness is not
+  completeness — a scoped-green cap that quotes the suite it ran and
+  omits the one it never ran satisfies the rule above and is still a
+  misleading report.
+- Cheapest proof first. Before an expensive wave or a long run, run the
+  short check that would catch a broken environment, and stop on its
+  red rather than paying for the long one. A run narrowed by a flag or
+  a filter says so wherever its result is reported — a narrowed check
+  is never quoted as the whole one.
 - Evidence is what the build already emits — red test output, a diff,
   a stack trace. Never author an artifact whose only purpose is to be
   deleted as proof.

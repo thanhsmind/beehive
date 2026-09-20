@@ -1,0 +1,120 @@
+{
+  "id": "cbf-1",
+  "feature": "cap-baseline-floor",
+  "title": "Record an optional baseline floor on the cap trace",
+  "lane": "small",
+  "role": "code",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [
+    "e4ad60dd",
+    "bccfb923"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+    "docs/history/cap-baseline-floor/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Let a cap record an OPTIONAL baseline floor: what the SAME verify command did on the base commit (D5). Two touch points, both mirroring shapes that already exist. (1) finish_support.rs: REPORT_OPTIONAL_KEYS is today [\"mistakes\"] — add the floor as a SECOND optional report key, validated the same way mistakes is: present-but-malformed refuses by name, absent records nothing and is never read as a negative. Its value carries at least the base commit it was measured on and the result the command produced there; keep the shape minimal and structured, not prose. (2) trace.rs: add the field to default_trace() beside verification_evidence / verify_output / verify_passed / verify_command, and ALSO add it to the key list in release_trace(), because it is verify evidence and must not survive a release into a re-claimed cell — that list is exactly where the other four are cleared. STRICT PROHIBITIONS, each load-bearing: do NOT touch parse_tests_proof (finish_support.rs:91-123) — not its signature, not its two-separator split, not its blindness to the result vocabulary; its own comment records that tightening there retroactively refuses ~200 historical caps carrying a bare green, and D3 forbids it. Do NOT add a fourth proof-string segment. Do NOT add a refusal anywhere for a MISSING floor — not in the cap, not in feature_proof_check, not in any close or merge door (D2, D4); absent is legal and silent. Author tests covering: a cap with a well-formed floor records it on the trace; a cap with NO floor succeeds unchanged and leaves the field null; a malformed floor refuses by name; release_trace clears the field; and a pre-existing cap whose report has no such key still parses.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells",
+  "must_haves": {
+    "truths": [
+      "A cap may carry a baseline floor and it lands on the trace as structured data",
+      "A cap with no floor succeeds exactly as before",
+      "No door refuses a cap for lacking a floor",
+      "Releasing a cell clears the floor along with the other verify evidence"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "the floor accepted as a second optional report key with its own validation; parse_tests_proof untouched"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+        "substantive": "the field in default_trace and in release_trace's cleared list"
+      }
+    ],
+    "key_links": [
+      "the floor sits with verify_command, verify_output, verify_passed and verification_evidence in both trace functions"
+    ],
+    "prohibitions": [
+      "No change to parse_tests_proof's signature, split rule or vocabulary blindness",
+      "No fourth segment on the proof string",
+      "No refusal anywhere for a missing floor",
+      "No change to feature_proof_check's verdict for any existing cap"
+    ]
+  },
+  "trace": {
+    "worker": "cbf-worker-2",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": null,
+    "claimed_at": "2026-09-20T16:06:28.544Z",
+    "verified_at": null,
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "D1-own-trace-field",
+            "status": "PASS",
+            "evidence": "trace.rs gains `m.insert(\"baseline_floor\".into(), Value::Null)` in default_trace, beside the other verify-evidence fields. Structured, not a proof-string segment."
+          },
+          {
+            "id": "D1-not-a-fourth-segment",
+            "status": "PASS",
+            "evidence": "Zero +/- lines touch fn parse_tests_proof and zero touch PROOF_SEPARATOR, so the proof string's shape and its two-separator split are exactly as before."
+          },
+          {
+            "id": "D2-optional",
+            "status": "PASS",
+            "evidence": "REPORT_OPTIONAL_KEYS grew from [\"mistakes\"] to [\"mistakes\", \"baseline_floor\"] — the existing optional-key mechanism, which treats absence as silent. Test cap_with_no_baseline_floor_succeeds_unchanged_and_leaves_field_null pins it."
+          },
+          {
+            "id": "D3-parser-untouched",
+            "status": "PASS",
+            "evidence": "The ~200 historical caps carrying a bare `green` are unaffected: the read path's parser is byte-identical, and test pre_existing_cap_report_without_baseline_floor_still_parses pins the old report shape."
+          },
+          {
+            "id": "D4-no-refusal-for-absence",
+            "status": "PASS",
+            "evidence": "The only refusal added is for a MALFORMED floor, named by key (cap_with_malformed_baseline_floor_refuses_by_name) — the same posture `mistakes` already has. Nothing refuses a cap for lacking a floor, in the cap or in feature_proof_check."
+          },
+          {
+            "id": "R1-cleared-on-release",
+            "status": "PASS",
+            "evidence": "\"baseline_floor\" was added to release_trace's key array, so a released cell does not carry stale verify evidence into a re-claim. Test release_trace_clears_baseline_floor pins it. This was the half most likely to be missed."
+          },
+          {
+            "id": "T-suite-green",
+            "status": "PASS",
+            "evidence": "Leader re-ran the cell's declared verify independently after the commit: cargo test --release -p bee --bin bee cells -> 'test result: ok. 378 passed; 0 failed'."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-20T16:16:29.398Z"
+      }
+    ],
+    "dropped_reason": "Swallowed by proof-honesty ph-2, capped 2026-09-20T15:58:41Z with 24 tests and the release-manifest check green. Both sessions built the optional cap baseline within three minutes of each other; the user chose ph-2. cbf-1's own work survives uncommitted-to-main on branch wt/cap-baseline-floor at c8160b69b if it is ever wanted."
+  }
+}

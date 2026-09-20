@@ -1,0 +1,91 @@
+{
+  "id": "ph-2",
+  "feature": "proof-honesty",
+  "lane": "small",
+  "title": "Carry a baseline on the cap report",
+  "role": "code",
+  "action": "Per CONTEXT D4 (decision f4261145), add \"baseline\" as a SECOND optional key on the cap report. In packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs: extend REPORT_OPTIONAL_KEYS from [\"mistakes\"] to [\"mistakes\", \"baseline\"], and validate it the way the neighbouring keys are validated — when present it must be a non-empty string, refused by name with a fix line when it is any other JSON type or an empty/whitespace string. Absent is legal and must stay legal: a cap with no baseline is not refused, and an absent baseline must not read the same as an empty one. Store the value on the cell trace beside the existing structured proof fields (verify_command, verify_output, verify_passed, verification_evidence) so `bee cells show` returns it. Do NOT touch parse_proof, REPORT_KEYS, the proof line's three segments, or any door's behaviour — proof-strength-and-expiry D6 fences that shape and this cell stays outside it. Add crate tests in the file the neighbouring finish/report cases already live in, following their existing shape: a cap carrying a valid baseline stores it and is readable; a cap with no baseline still caps; a non-string baseline is refused by name; an empty-string baseline is refused by name. Then teach the contract in the two places a worker actually reads it: packages/bee/prompts/worker-cell.md (the Result form JSON block and its prose) and skills/bee-swarming/references/worker-details.md — say what a baseline is (what the SAME proof command produced on the base commit) and that it is optional but expected whenever the proof command could have passed before the change. Finally record the shape in its knowledge home, docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md, next to R16c-a, which already documents the proof line and its vocabulary. Because this cell touches packages/bee/prompts/worker-cell.md, a root the release manifest hashes, run the full regen chain INSIDE this cell before capping — `.bee/bin/bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the regenerated docs/history/codex-harness-hardening/release-manifest.json with the rest.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/proof-honesty/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "must_haves": [
+    "REPORT_OPTIONAL_KEYS carries \"baseline\" beside \"mistakes\"; REPORT_KEYS is unchanged at its five required keys",
+    "A present baseline must be a non-empty string; any other JSON type and an empty or whitespace-only string are refused by name with a fix line",
+    "An ABSENT baseline still caps — absent and empty must not read alike, matching how `mistakes` already distinguishes them",
+    "The value is stored on the cell trace and comes back from `bee cells show --id <id> --json`",
+    "parse_proof, REPORT_KEYS, the three-segment proof line and every door's behaviour are untouched — proof-strength-and-expiry D6 is respected, not superseded",
+    "Crate tests cover all four cases: valid baseline stored and readable, absent baseline still caps, non-string refused, empty string refused",
+    "packages/bee/prompts/worker-cell.md and skills/bee-swarming/references/worker-details.md both state what a baseline is and when to fill it",
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md records the new key beside R16c-a",
+    "The regen chain ran inside this cell and `bee dev release-manifest --check` is green — the hashed manifest matches the edited prompt"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish && .bee/bin/bee dev release-manifest --check",
+  "affects_skills": [
+    "skills/bee-swarming/references/worker-details.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md"
+  ],
+  "decisions": [
+    "f4261145-7913-4ade-ae16-6f9fe99dff2c"
+  ],
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "ph-2-worker",
+    "outcome": "Carry an optional baseline on the cap report",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T15:58:41.520Z",
+    "behavior_change": false,
+    "verification_evidence": "finish crate tests and release-manifest check green",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "ebf62723-3a4f-4554-8743-4a53fb9df78e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-20T15:50:10.512Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Carry an optional baseline on the cap report",
+      "commit": "f95f6f5ea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/references/worker-details.md",
+        "docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish && .bee/bin/bee dev release-manifest --check — green:unit — finish crate tests and release-manifest check green",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [],
+      "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish && .bee/bin/bee dev release-manifest --check — green:unit — 18 finish tests green and manifest matched on base"
+    },
+    "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish && .bee/bin/bee dev release-manifest --check — green:unit — 18 finish tests green and manifest matched on base",
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
