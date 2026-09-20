@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"baseline-release-clear\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"baseline-release-clear\" (lane).",
+  "next_action": "Merged into main at a624e5a; capture what settled, then bee close --feature baseline-release-clear.",
   "created_at": "2026-09-20T18:51:53.003Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-09-20T18:51:53.031Z",
     "feature": "baseline-release-clear"
-  },
-  "merge_ready": {
-    "since": "2026-09-20T18:55:43.828Z",
-    "branch": "wt/baseline-release-clear",
-    "worktree_id": "beehive--wt--baseline-release-clear",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
