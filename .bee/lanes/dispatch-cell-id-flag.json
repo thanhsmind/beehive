@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"dispatch-cell-id-flag\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"dispatch-cell-id-flag\" (lane).",
+  "next_action": "Merged into main at b533f7b; capture what settled, then bee close --feature dispatch-cell-id-flag.",
   "created_at": "2026-09-20T23:04:31.675Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-09-20T23:04:34.821Z",
     "feature": "dispatch-cell-id-flag"
-  },
-  "merge_ready": {
-    "since": "2026-09-20T23:17:15.481Z",
-    "branch": "wt/dispatch-cell-id-flag",
-    "worktree_id": "beehive--wt--dispatch-cell-id-flag",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
