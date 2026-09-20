@@ -13,8 +13,13 @@
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"worker-ledger-and-empty-fleet\" — feature is closed.",
   "created_at": "2026-09-20T01:12:24.967Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The only sanctioned escape is an `impact-deferral` decision. Logging it with the honest reason.",
+    "asked_at": "2026-09-20T02:24:46.343Z",
+    "session": "216eecd1-df88-4449-9865-5310500ae2ba"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
