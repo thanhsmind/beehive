@@ -32,8 +32,8 @@ leaking a billed session every run.
 **Evidence (2026-09-20):** 12 leaked sessions, 3.4 MB of transcripts, under
 `~/.claude/projects/*crates-bee/` — 5 from the main checkout, 7 from the
 `idempotent-herding-receipts` worktree. Every transcript's first user message
-names a `/tmp/…` job brief. One leaked pane (`w1:pCJ`) was still idle hours
-later and was closed by hand.
+names a `/tmp/…` job brief. One leaked pane (`w1:pCJ`) sat idle for hours
+until it was closed by hand.
 
 This also broke a contract the file already states at `run.rs:480`: *"tests
 inject a fake instead of a real `herdr` on PATH (D7's seam, no process anywhere
