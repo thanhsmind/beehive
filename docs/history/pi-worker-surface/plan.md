@@ -253,6 +253,80 @@ seat of the three.** All three seats resolved; none was dropped.
 | pws-1 | Register the terminating verdict tool and route it explicitly | `.pi/extensions/bee-guard.ts`, `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`, `.bee/verify/verify-app/features/pi-runtime.md` | — | A Pi worker ends its run by calling one tool; the host rejects a bad field before the call runs, and the orchestrator reads the same result file as before | (1) `node --check .pi/extensions/bee-guard.ts`; (2) `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts` green; (3) rebuild, then `bee doctor --runtime pi --json` reports `wiring_matches_binary: "ok"`; (4) the claim-5 probe re-run against the NEW row — `printf '{"hook_event_name":"PreToolUse","session_id":"p","cwd":"<repo>","tool_name":"<verdict-tool>","tool_input":{"status":"done","summary":"s","files_changed":[],"proof":"p"}}' \| .bee/bin/bee hook write-guard` exits 0, where the same payload with no row exits 2 |
 | pws-2 | Draw in-flight workers in a widget below the editor | `.pi/extensions/bee-guard.ts`, `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs`, `.bee/verify/verify-app/features/pi-runtime.md` | pws-1 | While workers run in the background, a list under the input names them; each row clears as its worker finishes, and the list disappears when none are left | (1) `node --check .pi/extensions/bee-guard.ts`; (2) `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts` green; (3) rebuild, then `bee doctor --runtime pi --json` reports `wiring_matches_binary: "ok"`; (4) `green:live` — in a real Pi session, dispatch one worker with `bee herding run … --inbox-session "$PI_SESSION_ID"`, capture the widget showing a `<seat>` row while `.bee/result-inbox/<token>/<job>.json` exists, and capture it gone once the drain clears that marker |
 
+```json
+[
+  {
+    "id": "pws-1",
+    "feature": "pi-worker-surface",
+    "title": "Register the terminating verdict tool and route it explicitly",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": ["6b7e8f49", "dae51a75", "e29aa9cd"],
+    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md"],
+    "read_first": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/herding/mailbox.rs"],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "must_haves": {
+      "truths": [
+        "A worker calling the verdict tool ends its run without a follow-up assistant turn",
+        "A verdict missing a required field is rejected by the host before execute() runs",
+        "A worker that never calls the tool still resolves through its report file, unchanged"
+      ],
+      "artifacts": [
+        {"path": ".pi/extensions/bee-guard.ts", "substantive": "one registered terminating tool plus its explicit mapToolCall row; no TODO stubs"},
+        {"path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", "substantive": "fixtures pinning the tool's write-guard route and the model-guard exclusion"}
+      ],
+      "key_links": ["the tool's schema fields match MailboxResult's parsed fields in herding/mailbox.rs"],
+      "prohibitions": [
+        "No new verdict schema defined in the belt",
+        "No dispatch tool and no process spawner added to the belt",
+        "No change to transport outcome classification in herding/wave.rs",
+        "No edit to the Claude, Codex or OpenCode belts"
+      ]
+    },
+    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+  },
+  {
+    "id": "pws-2",
+    "feature": "pi-worker-surface",
+    "title": "Draw in-flight workers in a widget below the editor",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": ["pws-1"],
+    "decisions": ["7dfd593d"],
+    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md"],
+    "read_first": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/herding/run.rs"],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "must_haves": {
+      "truths": [
+        "A dispatched detached worker appears as a row naming its seat",
+        "The row disappears once that worker's marker clears",
+        "No widget is drawn when no workers are in flight"
+      ],
+      "artifacts": [
+        {"path": ".pi/extensions/bee-guard.ts", "substantive": "a setWidget factory reading the result-inbox markers; no TODO stubs, no second timer"}
+      ],
+      "key_links": ["the widget reads the same inbox directory the drain polls"],
+      "prohibitions": [
+        "No second timer or polling loop",
+        "No widget input handling",
+        "No row kept after its worker finishes",
+        "No raw job_id shown as a row's label"
+      ]
+    },
+    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
+  }
+]
+```
+
 ## Test matrix
 
 Triad, at its smallest demonstrating size. Each writer judges existing coverage
