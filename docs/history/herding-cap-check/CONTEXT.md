@@ -89,6 +89,7 @@ From the quick scout only.
 - `docs/knowledge/patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md`
   — the promoted pattern this feature gives a durable owner.
 
+<!-- bee:not-a-deferral: These sections are this file's own record of what was resolved. "Deferred To Planning" is a fixed heading in the CONTEXT template and both of its items are ANSWERED and checked off below, each with a file:line behind it; "Deferred Ideas" is empty; the Handoff Note is template boilerplate naming what a planning agent reads. Nothing here promises later action. -->
 ## Outstanding Questions
 
 ### Resolve Before Planning
@@ -97,11 +98,20 @@ None.
 
 ### Deferred To Planning
 
-- [ ] Does the pane path and the no-pane path share one completion seam, or does
-  D5 need the check in two places? Reading `execute` / `execute_no_pane`
-  answers it.
-- [ ] Which `RunOutcome` variants count as "claimed success" for D3 — the
-  enum's own shape decides this, not prose.
+Both were answered by reading the source during planning, before the gate.
+
+- [x] **Do the pane and no-pane paths share one completion seam?** **No.**
+  `record_outcome` — which the scout above called "the natural seam" — runs only
+  in `execute_new` (`run.rs:2737`) and `execute_continue` (`:3497`), both
+  pane-only. The seam that covers both is `fn run` (`:4111-4131`), where the two
+  launch paths converge and where the existing dissent transcription already
+  matches on the same outcome and reads the same `opts.cell_id`. D5 is satisfied
+  there and nowhere else.
+- [x] **Which `RunOutcome` variants count as "claimed success"?**
+  `RunOutcome::Result(r)` with `r.status == MailboxStatus::Done`, and only that.
+  It is the single SUCCESS arm `exit_code_for` already uses (`run.rs:3524`), so
+  D3's definition was already written in the file. `blocked` is a well-formed
+  completion but not a claimed success, exactly as D3 requires.
 
 ## Deferred Ideas
 
@@ -111,3 +121,4 @@ None.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->

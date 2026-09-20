@@ -4035,6 +4035,65 @@ fn preflight_receipt(bee_dir: &Path, opts: &Options) -> PreflightAction {
     }
 }
 
+/// What the post-flight cell cap check DECIDED.
+/// Pure over the filesystem — reads, decides, spawns nothing (D1, D3, D4, D6).
+#[derive(Debug, PartialEq, Eq)]
+enum PostflightCapAction {
+    Refuse { cell_id: String },
+    Proceed,
+}
+
+/// The post-flight cap check's DECISION, pure over the filesystem: it reads,
+/// it decides, and it spawns nothing.
+///
+/// Refuses a herding run whose worker claimed success (MailboxStatus::Done) but
+/// left its cell claimed without capping it (no capped_at stamp) (D1).
+///
+/// The decision fires ONLY when:
+/// - opts.cell_id is Some (D4)
+/// - the worker claimed success: RunOutcome::Result(r) with r.status == MailboxStatus::Done (D3)
+///
+/// When it fires, read that cell's record from `.bee/cells/<cell_id>.json`:
+/// - If the cell file is missing or unparseable, falls open (Proceed) (D6)
+/// - If the cell parses and is NOT capped (status != "capped" or no trace.capped_at), Refuses (D1)
+/// - If the cell is capped (status == "capped" and non-empty trace.capped_at), Proceed
+fn postflight_cap_check(
+    main_root: &Path,
+    cell_id: Option<&str>,
+    outcome: &RunOutcome,
+) -> PostflightCapAction {
+    let Some(cell_id) = cell_id else {
+        return PostflightCapAction::Proceed;
+    };
+    match outcome {
+        RunOutcome::Result(r) if r.status == MailboxStatus::Done => {}
+        _ => return PostflightCapAction::Proceed,
+    }
+
+    let cell_path = main_root.join(".bee").join("cells").join(format!("{cell_id}.json"));
+    let Ok(raw) = std::fs::read_to_string(&cell_path) else {
+        return PostflightCapAction::Proceed;
+    };
+    let Ok(cell) = serde_json::from_str::<Value>(&raw) else {
+        return PostflightCapAction::Proceed;
+    };
+
+    let is_capped = cell.get("status").and_then(Value::as_str) == Some("capped")
+        && cell
+            .get("trace")
+            .and_then(|t| t.get("capped_at"))
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty());
+
+    if !is_capped {
+        PostflightCapAction::Refuse {
+            cell_id: cell_id.to_string(),
+        }
+    } else {
+        PostflightCapAction::Proceed
+    }
+}
+
 pub(super) fn run(flags: &[&str]) -> ExitCode {
     let opts = match parse_options(flags) {
         Ok(o) => o,
@@ -4126,7 +4185,19 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     };
     // D5: the exit code is unchanged by the transcription — a blocked result
     // already exits non-zero, and a failed write is reported, never voted on.
-    let exit = exit_code_for(&result.outcome);
+    //
+    // herding-cap-check D1, D3, D4, D5, D6: post-flight cap check refuses a run
+    // whose worker claimed success but left its cell uncapped.
+    let cap_action = postflight_cap_check(&opts.main_root, opts.cell_id.as_deref(), &result.outcome);
+    let exit = match cap_action {
+        PostflightCapAction::Refuse { ref cell_id } => {
+            eprintln!(
+                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish`"
+            );
+            ExitCode::FAILURE
+        }
+        PostflightCapAction::Proceed => exit_code_for(&result.outcome),
+    };
     emit_result(&opts, &result, transport_name, transcript.as_ref());
     exit
 }
@@ -9853,6 +9924,158 @@ mod tests {
         assert_eq!(
             preflight_receipt(&bee_dir, &opts),
             PreflightAction::ReturnReceipt { round: 1 },
+        );
+    }
+
+    // ─── Post-flight Cap Check (herding-cap-check, hcapc-1) ──────────────
+
+    fn seed_capped_cell(main_root: &Path, id: &str) {
+        let dir = main_root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({
+                "id": id,
+                "feature": "demo",
+                "role": "code",
+                "title": "t",
+                "status": "capped",
+                "trace": {
+                    "worker": "w-job-1",
+                    "capped_at": "2026-09-20T14:00:00.000Z"
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    fn done_outcome() -> RunOutcome {
+        RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Done,
+            summary: "did work".to_string(),
+            files_changed: vec!["file.rs".to_string()],
+            proof: "cargo test — green:unit — test".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            report_path: None,
+            report_note: None,
+        })
+    }
+
+    #[test]
+    fn postflight_cap_check_refuses_claimed_success_with_uncapped_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "cell-1"); // status: claimed, no capped_at
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &outcome),
+            PostflightCapAction::Refuse {
+                cell_id: "cell-1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn postflight_cap_check_proceeds_when_cell_is_capped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_capped_cell(main_root, "cell-1");
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &outcome),
+            PostflightCapAction::Proceed
+        );
+    }
+
+    #[test]
+    fn postflight_cap_check_proceeds_on_blocked_result_with_uncapped_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "cell-1"); // uncapped
+        let outcome = RunOutcome::Result(MailboxResult {
+            round: 1,
+            status: MailboxStatus::Blocked,
+            summary: "blocked on something".to_string(),
+            files_changed: vec![],
+            proof: "n/a".to_string(),
+            options: vec![],
+            leaning: None,
+            dissent: None,
+            report_path: None,
+            report_note: None,
+        });
+
+        // Cap check proceeds (does not refuse); exit_code_for handles the blocked outcome
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &outcome),
+            PostflightCapAction::Proceed
+        );
+        assert_eq!(exit_code_for(&outcome), ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn postflight_cap_check_proceeds_when_no_cell_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "cell-1"); // uncapped cell on disk, but no cell_id
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, None, &outcome),
+            PostflightCapAction::Proceed
+        );
+    }
+
+    #[test]
+    fn postflight_cap_check_falls_open_on_missing_cell_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("missing-cell"), &outcome),
+            PostflightCapAction::Proceed
+        );
+    }
+
+    #[test]
+    fn postflight_cap_check_falls_open_on_unparseable_cell_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let dir = main_root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("corrupt-cell.json"), "{ broken json").unwrap();
+        let outcome = done_outcome();
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("corrupt-cell"), &outcome),
+            PostflightCapAction::Proceed
+        );
+    }
+
+    #[test]
+    fn postflight_cap_check_proceeds_on_non_done_outcomes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "cell-1");
+
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &RunOutcome::TimedOutCeiling),
+            PostflightCapAction::Proceed
+        );
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &RunOutcome::Died { pid: Some(123) }),
+            PostflightCapAction::Proceed
+        );
+        assert_eq!(
+            postflight_cap_check(main_root, Some("cell-1"), &RunOutcome::DryRun("brief".to_string())),
+            PostflightCapAction::Proceed
         );
     }
 }
