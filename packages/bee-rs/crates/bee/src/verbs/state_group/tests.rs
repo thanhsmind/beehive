@@ -1074,6 +1074,26 @@ use std::time::Instant;
     }
 
     #[test]
+    fn prune_keep_set_does_not_protect_capped_cell_with_worker_row() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w1","cell":"c1"},{"nickname":"w2","cell":"c2"},{"nickname":"w3","cell":"c3"},{"nickname":"w4","cell":"c4"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        std::fs::write(cells.join("c3.json"), "{nope").unwrap();
+        // c4.json is missing
+        let keep = ok(read_prune_keep_set(tmp.path()));
+        assert!(!keep.contains(&"c1".to_string()));
+        assert!(keep.contains(&"c2".to_string()));
+        assert!(keep.contains(&"c3".to_string()));
+        assert!(keep.contains(&"c4".to_string()));
+    }
+
+    #[test]
     fn prune_refuses_malformed_workers() {
         let tmp = tmp_root();
         write_state_file(tmp.path(), r#"{"workers":"not-an-array"}"#);
