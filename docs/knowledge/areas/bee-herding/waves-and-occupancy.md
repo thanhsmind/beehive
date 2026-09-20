@@ -134,6 +134,50 @@ The classifier has no `Done` state and must never gain one. It answers
 (tmux-herding-transport D4) — it never becomes evidence that a worker
 finished. Everything this page says about unverifiable outcomes therefore
 reads identically on tmux.
+## A wave's record is closed by a second append, never a rewrite
+
+A wave is recorded twice. The first record is written when its workers are
+dispatched, with each worker's outcome left blank so that occupancy can see the
+wave while it is still running. The second is written when the run ends and
+carries each worker's outcome plus the evidence that backs it — the worker's own
+report when it produced one, otherwise its log. Both records are appended; no
+line is ever rewritten or removed, and the read side prefers the later record
+for a given wave, so the closing append is what the reader sees.
+
+Before this, the single-worker dispatch path wrote only the opening record. It
+knew its worker's outcome and reported it to its caller, but never wrote it
+back, so in practice almost every worker ever dispatched stayed unreported
+forever. That is what made the occupancy read fall through to its weakest
+answer, a fixed staleness timer, whenever a live pane list was unavailable.
+
+Writing the closing record is best effort: a failure is reported on its own line
+and never changes the run's own outcome or its exit code (cell wlf-3).
+
+## An empty fleet is a closed wave that produced nothing
+
+A wave is an EMPTY FLEET when every one of its workers has reported, it had at
+least one worker, and not one of them succeeded. It is the case where the work
+looks finished and nothing was actually produced, which otherwise reads as an
+ordinary completion.
+
+Three neighbouring cases are deliberately NOT an empty fleet, because each means
+something different to whoever is reading:
+
+- a wave with no workers launched nothing, so there was nothing to come back;
+- a wave in which any worker has not yet reported is still running;
+- a wave whose workers all only rehearsed, without doing real work, did nothing
+  real by intent.
+
+The verdict names the wave and its workers with their outcomes, capped so a very
+large wave cannot produce an unbounded report. It is a read over the recorded
+waves and changes nothing (cell wlf-4).
+
+**Open Gap** — the verdict is computed but is not yet shown anywhere: no command
+or report surfaces it. Choosing that surface needs a reader who wants it.
+
+**Open Gap** — workers dispatched as host-native subagents leave no wave record
+at all, so neither the closing record nor the empty-fleet verdict reaches them.
+
 
 ## Edge Cases Settled
 

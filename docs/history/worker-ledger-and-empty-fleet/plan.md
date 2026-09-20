@@ -59,18 +59,20 @@ Labels: `read` = the file was opened at that line and the bytes copied; `ran` =
 the command was run in this session and its output copied; `guessed` = neither.
 No `guessed` row survives the gate.
 
+<!-- bee:not-a-deferral: the Verbatim evidence column quotes wave_ledger.rs byte for byte, and the source uses the words "later" and "LATER" for which of two appended rows the read-time fold prefers; nothing in this table promises to act at a later time -->
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | The ledger's own design expects a second, outcome-carrying append — this slice is finishing a design, not inventing one | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:26-31` | <!-- bee:not-a-deferral: verbatim quoted evidence from wave_ledger.rs; "later" is the source's own word for the second append, not a promise by this plan to act at a later time --> `A caller MAY append more than once for the same wave_id — once at dispatch time with outcome: None per worker (so occupancy is visible while the wave is still running), then again later once every outcome is known` <!-- /bee:not-a-deferral --> |
+| 1 | The ledger's own design expects a second, outcome-carrying append — this slice is finishing a design, not inventing one | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:26-31` | `A caller MAY append more than once for the same wave_id — once at dispatch time with outcome: None per worker (so occupancy is visible while the wave is still running), then again later once every outcome is known` |
 | 2 | `bee herding run` writes its row with a blank outcome and never appends again | read | `packages/bee-rs/crates/bee/src/herding/run.rs:2178-2194` | `outcome: None, evidence: None, retryable: None,` … `if let Err(e) = wave_ledger::append_wave(main_root, &row)` |
 | 3 | Only `bee herding wave` fills outcomes in, and bee's dispatch door returns `herding run`, not `herding wave` | read | `packages/bee-rs/crates/bee/src/herding/wave.rs:527` | `let outcome = classify_outcome(&result, &pane_id).map(str::to_string);` |
 | 4 | The gap's real scale in this repo | ran | `python3` over `.bee/wave-ledger.jsonl` | `rows 432` / `outcomes: [(None, 431), ('resolution_failed', 4), ('unverifiable_after_send', 2)]` / `wave sizes: [(1, 429), (3, 2), (2, 1)]` |
 | 5 | `bee herding run` already computes the outcome it fails to record, as a stable string | read | `packages/bee-rs/crates/bee/src/herding/run.rs:3435-3449, 3682` | `fn outcome_label(o: &RunOutcome) -> &'static str` … `MailboxStatus::Done => "done", MailboxStatus::Blocked => "blocked"` … `m.insert("outcome".into(), Value::String(outcome_label(&result.outcome).to_string()));` |
 | 6 | A blank outcome degrades occupancy to a fallback the code itself calls worse, which is why R4 is worth doing on its own | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:54-58` | `The one-hour DEFAULT_STALE_AFTER_MS timer is FALLBACK ONLY, used when the caller could not obtain a live pane list at all … It is a strictly worse answer than the pane-list cross-check` |
-| 7 | The read side already folds repeated `wave_id` rows so a later row supersedes an earlier one — the append-only rule survives R4 | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:30-33, 227` | <!-- bee:not-a-deferral: verbatim quoted evidence from wave_ledger.rs; "LATER" names which row the fold prefers, not a promise by this plan to act at a later time --> `When a wave_id appears more than once, the LATER row supersedes the earlier one; the fold happens entirely at read time (fold_waves_by_wave_id below)` <!-- /bee:not-a-deferral --> |
+| 7 | The read side already folds repeated `wave_id` rows so a later row supersedes an earlier one — the append-only rule survives R4 | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:30-33, 227` | `When a wave_id appears more than once, the LATER row supersedes the earlier one; the fold happens entirely at read time (fold_waves_by_wave_id below)` |
 | 8 | "Every worker reported" already has a predicate, so R6 reuses it rather than writing a second one | read | `packages/bee-rs/crates/bee/src/herding/wave_ledger.rs:196-201` | `A wave whose workers have ALL reported an outcome is closed` … `row.workers.iter().all(\|w\| w.outcome.is_some())` |
 | 9 | The ledger write is already best-effort in `herding run`, so R7's contract exists to copy | read | `packages/bee-rs/crates/bee/src/herding/run.rs:2192-2194` | `eprintln!("bee herding run: could not append the wave ledger row: {e}");` |
 | 10 | *(slice 2, landed)* the receipt reconcile is in main and its tests are green | ran | `cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile` | `test result: ok. 4 passed; 0 failed` |
+<!-- /bee:not-a-deferral -->
 
 ## Discovery
 
@@ -91,12 +93,14 @@ header already describes (claims 1, 7, 8) rather than adding a new one.
 disjoint, and the verdict is testable against synthetic ledger rows, so it needs
 no real outcome data to be written first.
 
+<!-- bee:not-a-deferral: "later row" here names which of two ledger rows the fold prefers, restating the quoted evidence in claim 7; it is not a promise to act at a later time -->
 *wlf-3 — close the row.* When `bee herding run` finishes, append a second row
 for the same `wave_id` carrying `outcome: outcome_label(...)` (claim 5) and the
 evidence path it already knows. Appending is the whole mechanism: the read-time
-fold makes the <!-- bee:not-a-deferral: "later" names which of two ledger rows the read-time fold prefers; it is not a promise to act at a later time --> later <!-- /bee:not-a-deferral --> row win (claim 7), so R5 holds with no rewrite. The write
+fold makes the later row win (claim 7), so R5 holds with no rewrite. The write
 copies the existing best-effort contract (claim 9) — a failure warns and the run
 keeps its exit code, satisfying R7.
+<!-- /bee:not-a-deferral -->
 
 *wlf-4 — the verdict.* A pure function over the folded waves. A wave is an empty
 fleet when it is closed (claim 8), has at least one worker, and no worker's

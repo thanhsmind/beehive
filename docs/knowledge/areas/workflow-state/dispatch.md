@@ -281,6 +281,28 @@ decision 80b64c20).
   was bypassable in one line of JSON. Scoped to authoring: the
   claim/verify/cap/block/drop transitions keep their own guards
   (slp-contract-original-request D3; decision 9c0104e0).
+- R19 — A worker receipt records that a cell was dispatched, and is
+  retired by marking, never by deletion. A receipt is written when a cell is
+  claimed for a worker, carrying the worker's nickname, the cell, the role and
+  a status of running. When that cell reaches a capped state, the receipt's
+  status becomes capped; the row itself stays, because the cap door reads the
+  row's EXISTENCE to prove a dispatched worker did the work, and deleting it
+  would make re-capping that cell impossible. The marking happens in the main
+  checkout after a feature's branch lands, never at cap time: the cap runs
+  inside the feature's own worktree, where writes to the shared control plane
+  are refused. A marking failure is reported and never turns a successful land
+  into a failure (decision 6d752b0e; cells wlf-2).
+- R20 — Protection from worker-file cleanup follows the cell's own status,
+  never the presence of a receipt. Cleanup of a worker's transient files keeps
+  a cell's files when that cell is not known to be finished. Known-finished
+  means the cell's own record parses and reads capped; a record that is
+  missing or unreadable keeps the files, because unknown state falls open. A
+  receipt contributes its cell to that protected set only while the cell is
+  not known-finished. Before this rule, every receipt protected its cell
+  unconditionally, and because receipts were never retired, every cell ever
+  dispatched stayed protected forever and the cleanup could never run
+  (decisions 602e80ae, 6d752b0e; cell wlf-1).
+
 
 ## Edge Cases Settled
 
