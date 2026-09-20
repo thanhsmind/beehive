@@ -2491,3 +2491,10 @@
 {"kind":"flush","id":"489cad9b-626e-4f6a-9a24-ea19562b0102","at":"2026-09-20T10:58:33.518Z","into":"docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"}
 {"kind":"flush","id":"a0fae2a6-08de-49fb-a0c2-57d55bab050c","at":"2026-09-20T10:58:33.532Z","into":"docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"}
 {"kind":"flush","id":"761e7a1b-c9b6-4c46-b3a7-40fc5657d0f7","at":"2026-09-20T10:59:06.479Z","into":"docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"}
+{"kind":"flush","id":"8d7d6179-bbf9-46b6-b80a-a39bd1c2c9ef","at":"2026-09-20T12:59:12.044Z","into":"docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md"}
+{"kind":"flush","id":"c3060c09-afeb-4688-95ce-587443f7ce06","at":"2026-09-20T12:59:12.059Z","into":"docs/knowledge/areas/hook-runtime/the-command-surface-a-session-starts-with.md"}
+{"kind":"flush","id":"f9a85ebd-5d5d-402e-ac87-56bb7cea517b","at":"2026-09-20T12:59:12.073Z","into":"docs/knowledge/areas/workflow-state/dispatch.md"}
+{"kind":"flush","id":"38567d27-d3fe-45f7-ab07-b386334ac6c9","at":"2026-09-20T12:59:12.086Z","into":"docs/knowledge/areas/workflow-state/sessions-lanes-and-identity.md"}
+{"kind":"flush","id":"0e9b84b6-3f19-4227-90fb-f93ab7c770e5","at":"2026-09-20T12:59:12.100Z","into":"docs/knowledge/areas/workflow-state/worktree-isolation.md"}
+{"kind":"flush","id":"e880eced-aa82-4c4f-9439-f9031179a8aa","at":"2026-09-20T12:59:12.115Z","into":"docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"}
+{"kind":"flush","id":"15c83b4c-0dc2-4544-bb02-4bf34d544e96","at":"2026-09-20T12:59:12.129Z","into":"docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"}

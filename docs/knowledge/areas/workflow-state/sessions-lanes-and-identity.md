@@ -102,6 +102,18 @@ blocks a new feature from starting; a live *other* session holding a claim
 still blocks exactly as before; a solo starter's own heartbeat never
 self-blocks.
 
+**Pruning a worker's transient files protects a cell only while that cell is
+not known-capped.** The keep-set the prune consults asks one question per
+cell — does `.bee/cells/<id>.json` parse and carry status `capped`? — and both
+of its passes, the `workers[]` receipt pass and the cell-file pass, consult
+that same predicate, so the two cannot drift into disagreeing about the same
+cell. Unknown state protects: a missing or unparseable cell file keeps the
+cell, because the prune falls open rather than deleting on a file it could not
+read. Before this, the receipt pass protected unconditionally every cell it
+named, and since nothing retires a receipt row on an ordinary cap, every cell
+ever dispatched stayed protected forever — the prune could never clean a
+finished cell's transient files, which is the whole reason it exists.
+
 **A quiet heartbeat is not a dead session, and a reader must not treat it as
 one.** The renewal fires while a session works, so a session inside one long
 operation emits nothing for as long as that operation runs — the same fact R97

@@ -160,6 +160,24 @@ checkout at all, nothing about this behavior changes today's write.
   physical checkout regardless: only the "is anyone else live" question reads
   the coordination root, never the "what is on disk" question.
 
+- **A test builds its path expectation from the same helper the asserted
+  function uses.** Three worktree instructions are asserted together, and they
+  do not all spell a path the same way: the enter path emits the CANONICAL
+  location, while the merge and transition paths emit the raw root. On Linux
+  those two spellings are identical, so one shared expectation passed and hid
+  the difference; on Windows canonicalization rewrites the short name
+  (`RUNNER~1` becomes `runneradmin`) and each assertion failed in turn, one CI
+  round each. Two rules fell out. Write each expectation through the helper the
+  product function itself calls, never a hand-spelled literal that happens to
+  match on one platform. And when one assertion fails, trace every LATER
+  assertion that shares its expected value before planning the fix — otherwise
+  the same defect is paid for once per assertion.
+
+- **A shell invoked by name is not the shell you meant.** A bare
+  `Command::new("bash")` on Windows resolves to the WSL launcher in `System32`.
+  The suite goes through the crate's own shell helper, which pins a real Win32
+  bash on Windows and returns `/bin/sh` elsewhere.
+
 ## Pointers (implementation)
 
 - Worktree isolation (B20/R32-R35): root resolution in

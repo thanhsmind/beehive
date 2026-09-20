@@ -340,6 +340,15 @@ kind, exactly as before. The label is what a human reads in a pane list or an
 agent-tool row, so it names the job that was requested rather than the door it
 came through.
 
+**A template branch with no supplier renders nothing, forever.** All three
+dispatch templates carried a `{{#if paths}}` block that no caller ever
+populated. It entered as a cosmetic swap for placeholder prose and was never
+wired to a supplier, so every brief since rendered the empty arm — a block that
+looked like a feature in the template and was dead on every read. Removed by
+`three-findings`. When a template grows a conditional, the cell that adds it
+owns wiring its supplier in the same change, or the branch is a comment
+pretending to be behaviour.
+
 ## Pointers (implementation)
 
 - Unified dispatcher and catalog: `the bee binary`,

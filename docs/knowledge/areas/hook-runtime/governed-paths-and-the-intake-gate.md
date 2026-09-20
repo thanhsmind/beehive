@@ -514,6 +514,19 @@ permitted write is the commoner one.
   explicit-off, non-git, and corrupt-grant exemptions remain preserved
   (pi-harness-workflow-parity D2, cell pihp-5, 2026-09-11).
 
+- R41 — Which model a role runs is enforced as the user's choice, not left to
+  doctrine, and the arm that enforces it carries three properties the first
+  attempt lacked. **It covers its own off-switch**: `hooks.write-guard: false`
+  sits in the very file the arm guards, so an arm that left that key writable
+  would have guarded nothing — a self-governance guard that cannot protect the
+  switch that disables it is decorative. **It compares the MERGED view**, the
+  one `read_config_raw` builds, never a single file: `.bee/config.local.json`
+  deep-merges over `.bee/config.json`, and a per-file projection cannot tell a
+  masked change from a removal. **It compares the dispatcher's own normalized
+  projection** rather than a hand-picked key list, which is what picks up
+  `kind: cli` slots whose model rides inside `command`, and drops
+  `description` for free.
+
 ## Pointers (implementation)
 
 - Always-writable set (B33/R33): `GATE_ALLOWED_PREFIXES_GATED` and

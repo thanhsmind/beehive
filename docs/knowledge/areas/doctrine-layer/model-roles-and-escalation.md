@@ -316,9 +316,36 @@ can ever travel under — is warned by name instead of dying silently.
 
 **B20 — Structured cell rerouting requires a tagged decision and claim lock** (semantic-role-routing D4, decision `68bc3484`). `bee cells reroute --id <id> --role <role> --decision <id>` acquires the cell claim lock, validates that the cited decision belongs to the feature and carries tag `role-reroute`, ensures the target role is configured for the plan's runtime, and records an audited entry in `role_reroutes[]`. This provides the verified revision door for cell role changes while leaving the approved plan packet immutable.
 
+**B20a — Per-role toolset narrowing was built elsewhere and then abolished;
+bee does not build it.** A distill of `ak-pi-workflow-roles` at commit
+`e401f195` found bee already owning 14 of that source's 20 role-architecture
+rows. Four were genuinely new and worth having: a per-Pi-version capability
+audit table, the role's own description reaching the worker's prompt, a
+measured note per herding agent, and the reviewer reading the retained
+artifact. The finding that saved the most work is negative: the source BUILT
+per-role toolset narrowing and later abolished it (ADR 0008 amended by ADR
+0064). A source that tried a thing and retired it is stronger evidence than one
+that never tried it, so this stays unbuilt here by decision, not by omission.
+Brief: `docs/history/research/ak-pi-workflow-roles-xia.md`.
+
 **B21 — Release execution requires deploy authorization** (semantic-role-routing D6, decision `c0a4d406`). Publishing a release version through `scripts/release.sh` requires an authorized dispatch permit (`bee dispatch authorize`) issued for stage `deployment` and role `deploy`. The permit binds version, plan hash, main commit, and issuer session with a two-hour lifetime; direct script calls and replayed permits are refused. `bee dispatch prepare` stamps `issuer_session` through the same resolver `bee dispatch authorize` uses for the acting session — the `--session-id` flag, then `BEE_SESSION_ID` / `CLAUDE_CODE_SESSION_ID` / `PI_SESSION_ID`, then the one live session — so a flagless prepare on pi no longer writes a record that authorize can never accept (deploy-issuer-session, cell `dis-1`).
 
 **B22 — Deployment-stage dispatch permits authorized release mutation rooted at main** (deploy-stage-execution D1, decision `38edea83`). The shared delegation contract permits mutation only for an authorized deployment stage; ordinary gather remains explicitly read-only. Preparing a deployment-stage dispatch (`--stage deployment` with role `deploy`) produces an explicit mutating execution brief naming the authorized version and the positional `scripts/release.sh <version>` command. The herding command sets `--cwd` to the main control root unconditionally, even when the feature has a granted worktree. Deployment requests require an approved v2 role plan and refuse on non-main branches before payload creation; authorization checks and one-use permit consumption (B21) remain unchanged. The herding command exports `BEE_DISPATCH_ID`, `BEE_RELEASE_VERSION` and the resolved issuer `BEE_SESSION_ID`, and `bee herding run` forwards those three into the worker pane, so `release.sh` there authorizes as the issuer session (deploy-pane-authorization, cell `dpa-1`).
+
+**B23 — A release is a lane, not a command.** B21 and B22 compose into an
+ordering: `scripts/release.sh` refuses without a permit, the permit needs a
+dispatch at stage `deployment` under role `deploy`, and that dispatch needs an
+approved `bee-plan/v2` plan carrying a role plan — so a release needs its own
+feature lane opened before the script can run at all. Three ordering rules fell
+out of doing one. `--release-version` is refused on `--kind cell`, because the
+deploy dispatch is a NON-cell kind plus `--stage deployment`. The permit pins
+`main_commit`, so every piece of bookkeeping must be committed BEFORE the
+permit is minted, not after. And the cell packet must pass `cells add
+--dry-run` before the gate, because `.claude-plugin/plugin.json` is a
+release-manifest root and the regen obligation would otherwise force a
+plan-rev bump after approval — which retires the gate you just took. The
+previous release's `docs/history/release-<version>/` is the template to copy;
+reading it first is what avoids rediscovering all three.
 
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
