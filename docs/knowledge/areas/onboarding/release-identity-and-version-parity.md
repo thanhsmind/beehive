@@ -41,7 +41,7 @@ never tagged, leaving installers serving an older version indefinitely.
 |---|---|
 | Test gate | The declared suite runs **before** the tag is created. A red suite tags nothing and pushes nothing. |
 | Where the suite comes from | Read from the project's declared test command — the same field the pipeline reads — never a second copy that can drift from it. |
-| Skipping the gate | Possible, explicit, and loud. Never the default, never silent. |
+| Skipping the gate | Possible, explicit, and gated behind a confirmed checklist (`--no-test --confirm`). Never the default, never silent. |
 | No version given | The old tail-only behaviour: take the committed version and resume from tagging. |
 | Version already committed | Idempotent. It says so and resumes, so a run that died waiting on the pipeline is re-run, not repaired. |
 | Refusals | Wrong branch, malformed version, a version not strictly newer, a tag that already exists anywhere, or any dirty file — each refuses by name **before** a byte is written. The one exemption from "any dirty file" is exactly `.bee/wave-ledger.jsonl` and `.bee/lanes/*.json`: bee itself writes them on main while a deploy dispatch runs (the herding wave row, the session wait mark), so `scripts/release-dirt.sh` leaves them out of the dirt check, out of the release commit, and out of the abort-time reset. The permit marker under `.bee/authorizations/` is git-ignored runtime state (release-clean-tree, cell `rct-1`). |
@@ -258,8 +258,8 @@ the cause was found.
 ## Pointers (implementation)
 
 - The release chain: `scripts/release.sh` — `scripts/release.sh <VERSION>` runs
-  the whole thing, `--no-test` skips the gate loudly, `-m <subject>` overrides the
-  default commit subject. The regen step calls `bee dev regen`
+  the whole thing, `--no-test --confirm` skips the gate behind a confirmed
+  release checklist, `-m <subject>` overrides the default commit subject. The regen step calls `bee dev regen`
   (`packages/bee-rs/crates/bee/src/devtools/mod.rs`), and the test gate reads
   `commands.test` from `.bee/config.json`, the same field
   `.github/workflows/ci.yml` runs. The version tuple it writes is
