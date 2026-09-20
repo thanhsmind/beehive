@@ -361,6 +361,42 @@ pub(crate) fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
     Ok(keep)
 }
 
+pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2> {
+    let mut changed = 0;
+    let cells_dir = root.join(".bee").join("cells");
+    worker_mutate(root, |workers| {
+        let mut updates: Vec<(String, String, Option<String>)> = Vec::new();
+        for w in workers.iter() {
+            if !truthy(w) {
+                continue;
+            }
+            let Some(nickname) = jget(w, "nickname").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some(cell) = jget(w, "cell").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if matches!(jget(w, "status"), Some(Value::String(s)) if s == "capped") {
+                continue;
+            }
+            let cell_file = cells_dir.join(format!("{cell}.json"));
+            if is_cell_file_capped(&cell_file)? {
+                let tier = jget(w, "tier")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(ToString::to_string);
+                updates.push((nickname.to_string(), cell.to_string(), tier));
+            }
+        }
+        for (nickname, cell, tier) in updates {
+            push_worker_record(workers, &nickname, &cell, tier.as_deref(), Some("capped"))?;
+            changed += 1;
+        }
+        Ok(format!("Reconciled {changed} worker(s)."))
+    })?;
+    Ok(changed)
+}
+
 pub(crate) fn run_worker_prune(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["dry-run"]) {
         return None;
