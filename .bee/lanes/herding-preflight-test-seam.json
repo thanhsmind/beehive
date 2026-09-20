@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-preflight-test-seam\" started at phase \"exploring\" (lane).",
   "next_action": "Execute hpts-1.",
   "created_at": "2026-09-20T06:13:45.621Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -29,7 +29,7 @@
   "gate_preview": {
     "feature": "herding-preflight-test-seam",
     "plan_sha256": "6975a98b64e90b212147e3cd4ca272c7f93c569503fbcf129fdee1f839600c9d",
-    "previewed_at": "2026-09-20T06:16:33.719Z",
+    "previewed_at": "2026-09-20T06:26:28.792Z",
     "cells": [
       {
         "id": "hpts-1",
@@ -219,7 +219,7 @@
   "approved_cell_packet": {
     "feature": "herding-preflight-test-seam",
     "plan_sha256": "6975a98b64e90b212147e3cd4ca272c7f93c569503fbcf129fdee1f839600c9d",
-    "previewed_at": "2026-09-20T06:16:33.719Z",
+    "previewed_at": "2026-09-20T06:26:28.792Z",
     "cells": [
       {
         "id": "hpts-1",
@@ -410,7 +410,7 @@
     "since": "2026-09-20T06:25:31.108Z",
     "branch": "wt/herding-preflight-test-seam",
     "worktree_id": "beehive--wt--herding-preflight-test-seam",
-    "uat": "pending",
+    "uat": "approved",
     "blocked_by": []
   }
 }
