@@ -12,12 +12,12 @@
   },
   "summary": "Feature \"pi-native-stage-driver\" started at phase \"exploring\".",
   "next_action": "Close the feature; the two generalizable lessons are already promoted as decisions 06fea069 and 31fb9e15, and the three bee defects are backlog rows.",
+  "created_at": "2026-09-18T15:13:56.794Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-09-19T04:48:04.113Z",
-    "session": "9cdec5eb-2d88-4223-af6c-35da0848c665"
-  },
-  "created_at": "2026-09-18T15:13:56.794Z"
+    "kind": "turn-end",
+    "subject": "The recon changed the picture. Let me verify the last piece and correct the record.",
+    "asked_at": "2026-09-20T01:09:10.963Z",
+    "session": "216eecd1-df88-4449-9865-5310500ae2ba"
+  }
 }

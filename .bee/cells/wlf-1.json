@@ -1,0 +1,93 @@
+{
+  "id": "wlf-1",
+  "feature": "worker-ledger-and-empty-fleet",
+  "title": "Stop protecting a capped cell that still has a worker receipt",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "602e80ae-6431-4da7-8fc3-d7a2828c9778",
+    "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Red first. In packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, beside prune_keep_set_protects_non_capped_and_corrupt_cells (around line 1058), add a new test that pins the defect: a worker row naming cell c1 PLUS a .bee/cells/c1.json whose status is \"capped\" must NOT appear in read_prune_keep_set's result. Run it and watch it fail because c1 IS currently kept — that is the reported reason. Then, in read_prune_keep_set (state_group/workers.rs:299-350), change the worker-row pass at lines 318-324 so a row contributes its cell to the keep set only when that cell is not capped, reusing the same capped predicate the cell-file pass already applies at lines 337-344 (per decision 602e80ae). Factor the predicate into one helper rather than duplicating the matches! expression, so the two passes can never disagree. A missing or unparseable cell file still protects: the function falls open on unknown state, and the existing corrupt assertion must stay green. Do not touch the receipt book itself, do not add or remove a worker row, and do not change any existing assertion — the existing keep-set tests must pass untouched.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+  "must_haves": {
+    "truths": [
+      "A worker row whose cell file reads capped does not keep that cell",
+      "A worker row whose cell file is missing still keeps that cell",
+      "A worker row whose cell file is unparseable still keeps that cell",
+      "The typed refusal for a non-array state.workers still fires unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "substantive": "read_prune_keep_set's worker-row pass consults one shared capped predicate; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "a new test pinning a capped cell that carries a worker row; existing keep-set assertions unedited"
+      }
+    ],
+    "key_links": [
+      "the worker-row pass and the cell-file pass call the same capped predicate"
+    ],
+    "prohibitions": [
+      "No edit to any existing assertion in prune_keep_set_protects_non_capped_and_corrupt_cells or prune_refuses_malformed_workers",
+      "No write to state.json workers[] — retiring rows is slice 2",
+      "No change to registered_worker_for_cell or the SubagentStop nudge"
+    ]
+  },
+  "trace": {
+    "worker": "w-wlf-1",
+    "outcome": "read_prune_keep_set now consults one shared is_cell_file_capped predicate in both passes, so a capped cell with a worker receipt is no longer protected from worker pruning",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: No owned skill states the keep-set rule. bee-planning, bee-swarming, bee-reviewing and bee-capturing never mention bee state worker prune or what protects a cell's transient files; the rule's home is decision 6d752b0e (contract:worker-prune-keep-set), and the knowledge-area write is queued as a capture stub for the docs lane."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T01:25:40.463Z",
+    "behavior_change": true,
+    "verification_evidence": "the keep-set behaviour is the whole change and those tests are its full surface; 8 passed 0 failed, and the new test was confirmed red on HEAD~1 with assertion failed: !keep.contains(c1)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "216eecd1-df88-4449-9865-5310500ae2ba",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+    "claimed_at": "2026-09-20T01:19:08.539Z",
+    "sync_ack": "No owned skill states the keep-set rule. bee-planning, bee-swarming, bee-reviewing and bee-capturing never mention bee state worker prune or what protects a cell's transient files; the rule's home is decision 6d752b0e (contract:worker-prune-keep-set), and the knowledge-area write is queued as a capture stub for the docs lane.",
+    "mistakes": [
+      {
+        "wrong": "plan.md was written but never committed before the shape gate was approved",
+        "better": "the plan-freeze guard then refused the commit of the approved plan — commit plan.md in the worktree before running bee gate --name shape --approved true"
+      }
+    ],
+    "report": {
+      "outcome": "read_prune_keep_set now consults one shared is_cell_file_capped predicate in both passes, so a capped cell with a worker receipt is no longer protected from worker pruning; missing and unparseable cell files still fall open to keep",
+      "commit": "a6eb5fc5e72af3e571202da5582986ef416215fa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_ — green:unit — the keep-set behaviour is the whole change and those tests are its full surface; 8 passed 0 failed, and the new test was confirmed red on HEAD~1 with assertion failed: !keep.contains(c1)",
+      "deviations": [],
+      "mistakes": [
+        "plan.md was written but never committed before the shape gate was approved — the plan-freeze guard then refused the commit of the approved plan — commit plan.md in the worktree before running bee gate --name shape --approved true"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
