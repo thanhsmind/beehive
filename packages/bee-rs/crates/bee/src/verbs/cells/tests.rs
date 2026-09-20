@@ -6100,6 +6100,36 @@ use std::time::Instant;
 
     // ══ proof-honesty D4 (decision f4261145) — optional baseline on cap report ══
 
+    /// Decision 7bd47edd: the baseline is verify evidence, so releasing a cell
+    /// clears it with the rest. Without this, a released and re-claimed cell
+    /// carries the PREVIOUS run's floor into its next claim, where it reads as
+    /// a measurement of work that has not happened yet — the one failure a
+    /// floor is supposed to prevent, produced by the floor itself.
+    #[test]
+    fn release_trace_clears_the_baseline_with_the_other_verify_evidence() {
+        let merged = merge_trace(Some(&json!({
+            "worker": "w1",
+            "verify_passed": true,
+            "baseline": "echo ok — green:unit — base commit before change"
+        })))
+        .unwrap();
+        assert_eq!(
+            merged.get("baseline"),
+            Some(&json!("echo ok — green:unit — base commit before change")),
+            "precondition: the baseline is on the trace before release"
+        );
+
+        let released = release_trace(merged);
+        assert_eq!(
+            released.get("baseline"),
+            Some(&Value::Null),
+            "a released cell must not carry the previous run's baseline"
+        );
+        // and it is cleared for the same reason as its neighbours, not instead of them
+        assert_eq!(released.get("verify_passed"), Some(&Value::Null));
+        assert_eq!(released.get("worker"), Some(&Value::Null));
+    }
+
     /// D4: a cap carrying a valid baseline stores it on the cell trace and is
     /// readable via `bee cells show`.
     #[test]

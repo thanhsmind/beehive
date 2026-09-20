@@ -79,6 +79,12 @@ pub(crate) fn release_trace(mut trace: Map<String, Value>) -> Map<String, Value>
         "verify_passed",
         "verification_evidence",
         "verified_at",
+        // Decision 7bd47edd: the baseline is verify evidence like its
+        // neighbours above — what the same proof command produced on the BASE
+        // commit. A released cell that kept it would carry the previous run's
+        // floor into its next claim, where it reads as a measurement of work
+        // that has not happened yet.
+        "baseline",
     ] {
         trace.insert(key.into(), Value::Null);
     }
