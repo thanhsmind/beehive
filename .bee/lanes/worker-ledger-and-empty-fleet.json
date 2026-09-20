@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 67b52d5; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-20T01:12:24.967Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: worker-ledger-and-empty-fleet",
-    "asked_at": "2026-09-20T01:28:24.681Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -33,56 +28,70 @@
   },
   "gate_preview": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "f2bc0d36faa7e1072f81c9fe023ba5f11aa98a14ee068c3d38ff0348a8c5b4c5",
-    "previewed_at": "2026-09-20T01:26:09.459Z",
+    "plan_sha256": "94bfa895672b89386f37bcfb4fb584a2caefc9047907ccef332616642e31c62d",
+    "previewed_at": "2026-09-20T01:44:40.575Z",
     "cells": [
       {
-        "id": "wlf-1",
+        "id": "wlf-2",
         "feature": "worker-ledger-and-empty-fleet",
-        "title": "Stop protecting a capped cell that still has a worker receipt",
+        "title": "Mark a receipt capped when its cell is capped, from the post-merge block",
         "lane": "standard",
         "role": "code",
         "status": "open",
         "deps": [],
         "decisions": [
-          "602e80ae-6431-4da7-8fc3-d7a2828c9778"
+          "602e80ae-6431-4da7-8fc3-d7a2828c9778",
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
         ],
         "files": [
           "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
         ],
         "read_first": [
           "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Red first. In packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, beside prune_keep_set_protects_non_capped_and_corrupt_cells (around line 1058), add a new test that pins the defect: a worker row naming cell c1 PLUS a .bee/cells/c1.json whose status is \"capped\" must NOT appear in read_prune_keep_set's result. Run it and watch it fail because c1 IS currently kept — that is the reported reason. Then, in read_prune_keep_set (state_group/workers.rs:299-350), change the worker-row pass at lines 318-324 so a row contributes its cell to the keep set only when that cell is not capped, reusing the same capped predicate the cell-file pass already applies at lines 337-344 (per decision 602e80ae). Factor the predicate into one helper rather than duplicating the matches! expression, so the two passes can never disagree. A missing or unparseable cell file still protects: the function falls open on unknown state, and the existing corrupt assertion must stay green. Do not touch the receipt book itself, do not add or remove a worker row, and do not change any existing assertion — the existing keep-set tests must pass untouched.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+        "action": "Red first, and name EVERY new test with `reconcile` in it so one filter covers the slice. Step 1, in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs: add tests that pin the wanted behaviour and watch them fail. A receipt row {nickname, cell, status: \"running\"} whose .bee/cells/<cell>.json reads status \"capped\" must end up with status \"capped\"; a receipt whose cell reads \"open\", whose cell file is missing, or whose cell file is unparseable must be left exactly as it was; the array length must be unchanged; and a row that is already \"capped\" must stay \"capped\" without being counted as changed. Step 2, in state_group/workers.rs: add `pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2>` beside read_prune_keep_set. It runs inside ONE worker_mutate frame, walks the rows, and for each row whose cell is capped per the existing is_cell_file_capped predicate (added in slice 1 — reuse it, do not write a second one) upserts that row through push_worker_record with status \"capped\", preserving the row's existing nickname, cell and tier. It returns the number of rows it actually changed. It must add no row and remove no row. Step 3, in verbs/worktree/phases.rs: call it once from the post-merge block, inside the same best-effort arm that already writes and commits the lane file around lines 964-1000. Follow that arm's existing contract exactly — a failure warns on its own line and NEVER turns a green merge red, the same way the lane write and the bookkeeping commit already behave. Do not invent a new error path and do not add a new refusal. Step 4, in verbs/worktree/tests.rs: add a test proving a merge stays green when the reconcile fails, driven the same way the existing lane-write tests drive that arm. Do not change any existing assertion, do not touch registered_worker_for_cell, and do not delete any receipt row.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
         "must_haves": {
           "truths": [
-            "A worker row whose cell file reads capped does not keep that cell",
-            "A worker row whose cell file is missing still keeps that cell",
-            "A worker row whose cell file is unparseable still keeps that cell",
-            "The typed refusal for a non-array state.workers still fires unchanged"
+            "A running receipt whose cell is capped ends up capped",
+            "A receipt whose cell is open, missing or unparseable is left untouched",
+            "The receipt array's length is unchanged across a reconcile",
+            "A failing reconcile leaves bee worktree merge green"
           ],
           "artifacts": [
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-              "substantive": "read_prune_keep_set's worker-row pass consults one shared capped predicate; no TODO stubs"
+              "substantive": "reconcile_capped_workers, one worker_mutate frame, reusing is_cell_file_capped and push_worker_record; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+              "substantive": "one call inside the existing best-effort post-merge arm, warn-never-block"
             },
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-              "substantive": "a new test pinning a capped cell that carries a worker row; existing keep-set assertions unedited"
+              "substantive": "reconcile tests covering capped, open, missing, unparseable, already-capped and array length"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+              "substantive": "a test that a failing reconcile keeps the merge green"
             }
           ],
           "key_links": [
-            "the worker-row pass and the cell-file pass call the same capped predicate"
+            "reconcile_capped_workers calls the same is_cell_file_capped the keep set uses",
+            "the post-merge arm calls reconcile_capped_workers and swallows its failure into a warning"
           ],
           "prohibitions": [
-            "No edit to any existing assertion in prune_keep_set_protects_non_capped_and_corrupt_cells or prune_refuses_malformed_workers",
-            "No write to state.json workers[] — retiring rows is slice 2",
-            "No change to registered_worker_for_cell or the SubagentStop nudge"
+            "No new CLI verb and no registry change",
+            "No row added and no row removed by the reconcile",
+            "No change to registered_worker_for_cell, the cap guard, or the SubagentStop nudge",
+            "No edit to any existing assertion",
+            "No new refusal or error path in bee worktree merge"
           ]
         },
         "trace": {
@@ -105,19 +114,19 @@
           "stage": "implement",
           "classification": "required",
           "role": "code",
-          "reason": "one Rust predicate plus its red-first test in one crate"
+          "reason": "one Rust function plus one call site and their tests, in one crate"
         },
         {
           "stage": "tests",
           "classification": "required",
           "role": "test",
-          "reason": "the red-first keep-set test is the whole proof of this slice"
+          "reason": "the red-first reconcile tests and the merge-stays-green test are the whole proof of this slice"
         },
         {
           "stage": "research",
           "classification": "not-applicable",
           "role": "read",
-          "reason": "the two reality touches are already recorded in the claims table"
+          "reason": "slice 2's open question was closed by the orchestrator's own reads; the evidence is in claims 2, 3, 5, 7 and 9 and the deviation is named in Approach"
         },
         {
           "stage": "extraction",
@@ -148,13 +157,13 @@
           "stage": "advisor",
           "classification": "not-applicable",
           "role": "advisor",
-          "reason": "a one-predicate fix with nine recorded claims needs no second opinion"
+          "reason": "one function, one call site, eleven recorded claims"
         },
         {
           "stage": "docs",
           "classification": "conditional",
           "role": "docs",
-          "condition": "the knowledge area for the state store needs the keep-set rule recorded",
+          "condition": "the knowledge area for the state store needs the receipt lifecycle recorded",
           "reason": "capture runs at close"
         },
         {
@@ -173,7 +182,7 @@
           "stage": "hat-facts-gaps",
           "classification": "not-applicable",
           "role": "hat-facts-gaps",
-          "reason": "no hat wave: one cell, one file, nine recorded claims"
+          "reason": "no hat wave: one cell, eleven recorded claims"
         },
         {
           "stage": "hat-risks",
@@ -222,56 +231,70 @@
   },
   "approved_cell_packet": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "f2bc0d36faa7e1072f81c9fe023ba5f11aa98a14ee068c3d38ff0348a8c5b4c5",
-    "previewed_at": "2026-09-20T01:26:09.459Z",
+    "plan_sha256": "94bfa895672b89386f37bcfb4fb584a2caefc9047907ccef332616642e31c62d",
+    "previewed_at": "2026-09-20T01:44:40.575Z",
     "cells": [
       {
-        "id": "wlf-1",
+        "id": "wlf-2",
         "feature": "worker-ledger-and-empty-fleet",
-        "title": "Stop protecting a capped cell that still has a worker receipt",
+        "title": "Mark a receipt capped when its cell is capped, from the post-merge block",
         "lane": "standard",
         "role": "code",
         "status": "open",
         "deps": [],
         "decisions": [
-          "602e80ae-6431-4da7-8fc3-d7a2828c9778"
+          "602e80ae-6431-4da7-8fc3-d7a2828c9778",
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
         ],
         "files": [
           "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
         ],
         "read_first": [
           "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Red first. In packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, beside prune_keep_set_protects_non_capped_and_corrupt_cells (around line 1058), add a new test that pins the defect: a worker row naming cell c1 PLUS a .bee/cells/c1.json whose status is \"capped\" must NOT appear in read_prune_keep_set's result. Run it and watch it fail because c1 IS currently kept — that is the reported reason. Then, in read_prune_keep_set (state_group/workers.rs:299-350), change the worker-row pass at lines 318-324 so a row contributes its cell to the keep set only when that cell is not capped, reusing the same capped predicate the cell-file pass already applies at lines 337-344 (per decision 602e80ae). Factor the predicate into one helper rather than duplicating the matches! expression, so the two passes can never disagree. A missing or unparseable cell file still protects: the function falls open on unknown state, and the existing corrupt assertion must stay green. Do not touch the receipt book itself, do not add or remove a worker row, and do not change any existing assertion — the existing keep-set tests must pass untouched.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+        "action": "Red first, and name EVERY new test with `reconcile` in it so one filter covers the slice. Step 1, in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs: add tests that pin the wanted behaviour and watch them fail. A receipt row {nickname, cell, status: \"running\"} whose .bee/cells/<cell>.json reads status \"capped\" must end up with status \"capped\"; a receipt whose cell reads \"open\", whose cell file is missing, or whose cell file is unparseable must be left exactly as it was; the array length must be unchanged; and a row that is already \"capped\" must stay \"capped\" without being counted as changed. Step 2, in state_group/workers.rs: add `pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2>` beside read_prune_keep_set. It runs inside ONE worker_mutate frame, walks the rows, and for each row whose cell is capped per the existing is_cell_file_capped predicate (added in slice 1 — reuse it, do not write a second one) upserts that row through push_worker_record with status \"capped\", preserving the row's existing nickname, cell and tier. It returns the number of rows it actually changed. It must add no row and remove no row. Step 3, in verbs/worktree/phases.rs: call it once from the post-merge block, inside the same best-effort arm that already writes and commits the lane file around lines 964-1000. Follow that arm's existing contract exactly — a failure warns on its own line and NEVER turns a green merge red, the same way the lane write and the bookkeeping commit already behave. Do not invent a new error path and do not add a new refusal. Step 4, in verbs/worktree/tests.rs: add a test proving a merge stays green when the reconcile fails, driven the same way the existing lane-write tests drive that arm. Do not change any existing assertion, do not touch registered_worker_for_cell, and do not delete any receipt row.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
         "must_haves": {
           "truths": [
-            "A worker row whose cell file reads capped does not keep that cell",
-            "A worker row whose cell file is missing still keeps that cell",
-            "A worker row whose cell file is unparseable still keeps that cell",
-            "The typed refusal for a non-array state.workers still fires unchanged"
+            "A running receipt whose cell is capped ends up capped",
+            "A receipt whose cell is open, missing or unparseable is left untouched",
+            "The receipt array's length is unchanged across a reconcile",
+            "A failing reconcile leaves bee worktree merge green"
           ],
           "artifacts": [
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-              "substantive": "read_prune_keep_set's worker-row pass consults one shared capped predicate; no TODO stubs"
+              "substantive": "reconcile_capped_workers, one worker_mutate frame, reusing is_cell_file_capped and push_worker_record; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+              "substantive": "one call inside the existing best-effort post-merge arm, warn-never-block"
             },
             {
               "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-              "substantive": "a new test pinning a capped cell that carries a worker row; existing keep-set assertions unedited"
+              "substantive": "reconcile tests covering capped, open, missing, unparseable, already-capped and array length"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+              "substantive": "a test that a failing reconcile keeps the merge green"
             }
           ],
           "key_links": [
-            "the worker-row pass and the cell-file pass call the same capped predicate"
+            "reconcile_capped_workers calls the same is_cell_file_capped the keep set uses",
+            "the post-merge arm calls reconcile_capped_workers and swallows its failure into a warning"
           ],
           "prohibitions": [
-            "No edit to any existing assertion in prune_keep_set_protects_non_capped_and_corrupt_cells or prune_refuses_malformed_workers",
-            "No write to state.json workers[] — retiring rows is slice 2",
-            "No change to registered_worker_for_cell or the SubagentStop nudge"
+            "No new CLI verb and no registry change",
+            "No row added and no row removed by the reconcile",
+            "No change to registered_worker_for_cell, the cap guard, or the SubagentStop nudge",
+            "No edit to any existing assertion",
+            "No new refusal or error path in bee worktree merge"
           ]
         },
         "trace": {
@@ -294,19 +317,19 @@
           "stage": "implement",
           "classification": "required",
           "role": "code",
-          "reason": "one Rust predicate plus its red-first test in one crate"
+          "reason": "one Rust function plus one call site and their tests, in one crate"
         },
         {
           "stage": "tests",
           "classification": "required",
           "role": "test",
-          "reason": "the red-first keep-set test is the whole proof of this slice"
+          "reason": "the red-first reconcile tests and the merge-stays-green test are the whole proof of this slice"
         },
         {
           "stage": "research",
           "classification": "not-applicable",
           "role": "read",
-          "reason": "the two reality touches are already recorded in the claims table"
+          "reason": "slice 2's open question was closed by the orchestrator's own reads; the evidence is in claims 2, 3, 5, 7 and 9 and the deviation is named in Approach"
         },
         {
           "stage": "extraction",
@@ -337,13 +360,13 @@
           "stage": "advisor",
           "classification": "not-applicable",
           "role": "advisor",
-          "reason": "a one-predicate fix with nine recorded claims needs no second opinion"
+          "reason": "one function, one call site, eleven recorded claims"
         },
         {
           "stage": "docs",
           "classification": "conditional",
           "role": "docs",
-          "condition": "the knowledge area for the state store needs the keep-set rule recorded",
+          "condition": "the knowledge area for the state store needs the receipt lifecycle recorded",
           "reason": "capture runs at close"
         },
         {
@@ -362,7 +385,7 @@
           "stage": "hat-facts-gaps",
           "classification": "not-applicable",
           "role": "hat-facts-gaps",
-          "reason": "no hat wave: one cell, one file, nine recorded claims"
+          "reason": "no hat wave: one cell, eleven recorded claims"
         },
         {
           "stage": "hat-risks",
@@ -408,5 +431,15 @@
         }
       ]
     }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-09-20T01:42:29.880Z"
+  },
+  "merge_ready": {
+    "since": "2026-09-20T01:54:02.601Z",
+    "branch": "wt/worker-ledger-and-empty-fleet",
+    "worktree_id": "beehive--wt--worker-ledger-and-empty-fleet",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

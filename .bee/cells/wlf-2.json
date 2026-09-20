@@ -1,0 +1,113 @@
+{
+  "id": "wlf-2",
+  "feature": "worker-ledger-and-empty-fleet",
+  "title": "Mark a receipt capped when its cell is capped, from the post-merge block",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "602e80ae-6431-4da7-8fc3-d7a2828c9778",
+    "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Red first, and name EVERY new test with `reconcile` in it so one filter covers the slice. Step 1, in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs: add tests that pin the wanted behaviour and watch them fail. A receipt row {nickname, cell, status: \"running\"} whose .bee/cells/<cell>.json reads status \"capped\" must end up with status \"capped\"; a receipt whose cell reads \"open\", whose cell file is missing, or whose cell file is unparseable must be left exactly as it was; the array length must be unchanged; and a row that is already \"capped\" must stay \"capped\" without being counted as changed. Step 2, in state_group/workers.rs: add `pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2>` beside read_prune_keep_set. It runs inside ONE worker_mutate frame, walks the rows, and for each row whose cell is capped per the existing is_cell_file_capped predicate (added in slice 1 — reuse it, do not write a second one) upserts that row through push_worker_record with status \"capped\", preserving the row's existing nickname, cell and tier. It returns the number of rows it actually changed. It must add no row and remove no row. Step 3, in verbs/worktree/phases.rs: call it once from the post-merge block, inside the same best-effort arm that already writes and commits the lane file around lines 964-1000. Follow that arm's existing contract exactly — a failure warns on its own line and NEVER turns a green merge red, the same way the lane write and the bookkeeping commit already behave. Do not invent a new error path and do not add a new refusal. Step 4, in verbs/worktree/tests.rs: add a test proving a merge stays green when the reconcile fails, driven the same way the existing lane-write tests drive that arm. Do not change any existing assertion, do not touch registered_worker_for_cell, and do not delete any receipt row.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
+  "must_haves": {
+    "truths": [
+      "A running receipt whose cell is capped ends up capped",
+      "A receipt whose cell is open, missing or unparseable is left untouched",
+      "The receipt array's length is unchanged across a reconcile",
+      "A failing reconcile leaves bee worktree merge green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "substantive": "reconcile_capped_workers, one worker_mutate frame, reusing is_cell_file_capped and push_worker_record; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "substantive": "one call inside the existing best-effort post-merge arm, warn-never-block"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "reconcile tests covering capped, open, missing, unparseable, already-capped and array length"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "a test that a failing reconcile keeps the merge green"
+      }
+    ],
+    "key_links": [
+      "reconcile_capped_workers calls the same is_cell_file_capped the keep set uses",
+      "the post-merge arm calls reconcile_capped_workers and swallows its failure into a warning"
+    ],
+    "prohibitions": [
+      "No new CLI verb and no registry change",
+      "No row added and no row removed by the reconcile",
+      "No change to registered_worker_for_cell, the cap guard, or the SubagentStop nudge",
+      "No edit to any existing assertion",
+      "No new refusal or error path in bee worktree merge"
+    ]
+  },
+  "trace": {
+    "worker": "w-wlf-2",
+    "outcome": "reconcile_capped_workers marks every receipt whose cell is capped, called from the post-merge block in main as a warn-never-block step",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "The approved role plan classifies the research stage as not-applicable, so the dispatch door refused a gather for slice 2 open question; the orchestrator did the reads itself at decide-altitude and recorded the evidence in plan claims 2, 3, 5, 7 and 9",
+      "sync-ack: No owned skill of the workflow-state area states the receipt lifecycle; bee-planning, bee-swarming, bee-reviewing and bee-capturing never say what a worker receipt status means or when it is retired. The rule home is decision 6d752b0e and a capture stub is queued."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T01:54:02.593Z",
+    "behavior_change": true,
+    "verification_evidence": "4 passed 0 failed covering capped, open, missing, unparseable, already-capped, array length, and a failing reconcile leaving the merge green; reverting workers.rs and phases.rs to the parent commit makes the tests fail to compile on the missing function, which is the red-first check",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "216eecd1-df88-4449-9865-5310500ae2ba",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
+    "claimed_at": "2026-09-20T01:45:12.549Z",
+    "sync_ack": "No owned skill of the workflow-state area states the receipt lifecycle; bee-planning, bee-swarming, bee-reviewing and bee-capturing never say what a worker receipt status means or when it is retired. The rule home is decision 6d752b0e and a capture stub is queued.",
+    "mistakes": [
+      {
+        "wrong": "I judged that the reconcile might leave .bee/state.json as uncommitted dirt in main, echoing the recorded mct-1 incident, before checking whether that path is tracked at all",
+        "better": "the ignore file line 2 excludes it, so there is no dirt — check whether a path is tracked before reasoning about the dirt it could cause"
+      }
+    ],
+    "report": {
+      "outcome": "reconcile_capped_workers walks the receipt book in one worker_mutate frame, reuses slice 1 is_cell_file_capped, and upserts status capped through push_worker_record; it adds and removes no row. The post-merge block in worktree/phases.rs calls it and swallows a failure into a warning line plus a reconcile_warning field, so a merge never goes red.",
+      "commit": "91a1f2cc1dc5b5829e048f8511b8942f06ab5f4b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile — green:unit — 4 passed 0 failed covering capped, open, missing, unparseable, already-capped, array length, and a failing reconcile leaving the merge green; reverting workers.rs and phases.rs to the parent commit makes the tests fail to compile on the missing function, which is the red-first check",
+      "deviations": [
+        "The approved role plan classifies the research stage as not-applicable, so the dispatch door refused a gather for slice 2 open question; the orchestrator did the reads itself at decide-altitude and recorded the evidence in plan claims 2, 3, 5, 7 and 9"
+      ],
+      "mistakes": [
+        "I judged that the reconcile might leave .bee/state.json as uncommitted dirt in main, echoing the recorded mct-1 incident, before checking whether that path is tracked at all — the ignore file line 2 excludes it, so there is no dirt — check whether a path is tracked before reasoning about the dirt it could cause"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
