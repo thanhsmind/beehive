@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-ledger-and-empty-fleet",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "bee close --feature worker-ledger-and-empty-fleet",
+  "next_action": "bee close finished \"worker-ledger-and-empty-fleet\" — feature is closed.",
   "created_at": "2026-09-20T01:12:24.967Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
