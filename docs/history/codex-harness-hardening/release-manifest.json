@@ -1648,7 +1648,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard.ts",
-      "sha256": "bc9e9fd752f9e1e3c8d4c3224cca549ea54f72b0262d59e80ec72d6abe821858",
+      "sha256": "4a236b6b1f5d1eeb5ab3db1562c56938709e4c8d75663175b1c081973d78c530",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard.ts"

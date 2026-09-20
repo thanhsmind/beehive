@@ -592,6 +592,7 @@ process.on("unhandledRejection", (err) => { crashes.push(String((err && err.stac
 
 const messages = [];
 const commands = new Map();
+const tools = new Map();
 const switches = [];
 const forks = [];
 const notifications = [];
@@ -744,6 +745,11 @@ const pi = {
     if (!handlers.has(event)) handlers.set(event, []);
     handlers.get(event).push(handler);
   },
+  registerTool(tool) {
+    if (tool && tool.name) {
+      tools.set(tool.name, tool);
+    }
+  },
   registerCommand(name, options) {
     commands.set(name, options);
   },
@@ -849,6 +855,32 @@ for (const call of spec.calls) {
       results.push(entry);
       continue;
     }
+    case "tool": {
+      orderLog.push(`tool:${call.name}`);
+      const t = tools.get(call.name);
+      if (!t || typeof t.execute !== "function") {
+        results.push({ threw: false, message: null, result: null, event_after: null, registered: false });
+        continue;
+      }
+      const ctx = createCommandContext(call.cwd, call.session_id, call);
+      let entry;
+      try {
+        if (t.parameters && Array.isArray(t.parameters.required)) {
+          const args = call.args ?? {};
+          for (const req of t.parameters.required) {
+            if (args[req] === undefined || args[req] === null) {
+              throw new Error(`Missing required parameter: ${req}`);
+            }
+          }
+        }
+        const r = await t.execute("call-1", call.args ?? {}, null, null, ctx);
+        entry = { threw: false, message: null, result: r ?? null, event_after: null, registered: true };
+      } catch (err) {
+        entry = { threw: true, message: String(err && err.message ? err.message : err), result: null, event_after: null, registered: true };
+      }
+      results.push(entry);
+      continue;
+    }
     default:
       break;
   }
@@ -891,6 +923,7 @@ console.log(JSON.stringify({
   execCalls,
   orderLog,
   commands: Array.from(commands.keys()),
+  tools: Array.from(tools.keys()),
   activeTools,
   activeToolsHistory,
   customMessages,
@@ -952,6 +985,8 @@ struct HarnessRun {
     status_calls: Vec<Value>,
     order_log: Vec<String>,
     commands: Vec<String>,
+    #[allow(dead_code)]
+    tools: Vec<String>,
     process_cwd_unchanged: bool,
     #[allow(dead_code)]
     exec_calls: Vec<Value>,
@@ -1143,6 +1178,11 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         .and_then(Value::as_array)
         .map(|arr| arr.iter().filter_map(|s| s.as_str().map(str::to_string)).collect())
         .unwrap_or_default();
+    let tools = v
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(|s| s.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
     let process_cwd_unchanged = v.get("process_cwd_unchanged").and_then(Value::as_bool).unwrap_or(true);
     let exec_calls = v.get("execCalls").and_then(Value::as_array).cloned().unwrap_or_default();
     let active_tools = v
@@ -1174,12 +1214,23 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         status_calls,
         order_log,
         commands,
+        tools,
         process_cwd_unchanged,
         exec_calls,
         active_tools,
         active_tools_history,
         custom_messages,
     }
+}
+
+fn execute_tool_call(cwd: &Path, session_id: &str, name: &str, args: Value) -> Value {
+    json!({
+        "kind": "tool",
+        "cwd": cwd.to_string_lossy(),
+        "session_id": session_id,
+        "name": name,
+        "args": args,
+    })
 }
 
 fn tool_call(cwd: &Path, session_id: &str, tool: &str, input: &Value) -> Value {
@@ -1780,6 +1831,23 @@ fn pi_call_fixtures() -> Vec<PiCallFixture> {
             input: json!({"path": "/tmp/pi-fixture", "limit": 20}),
             expected_tool_name: "Glob",
             expected_tool_input: json!({"path": "/tmp/pi-fixture"}),
+        },
+        PiCallFixture {
+            name: "verdict (terminating worker outcome -> write-guard)",
+            tool: "verdict",
+            input: json!({
+                "status": "done",
+                "summary": "completed cell pws-1",
+                "files_changed": [".pi/extensions/bee-guard.ts"],
+                "proof": "cargo test -p bee — green:unit — touched bee-guard.ts",
+            }),
+            expected_tool_name: "verdict",
+            expected_tool_input: json!({
+                "status": "done",
+                "summary": "completed cell pws-1",
+                "files_changed": [".pi/extensions/bee-guard.ts"],
+                "proof": "cargo test -p bee — green:unit — touched bee-guard.ts",
+            }),
         },
         // ── the FAIL-SAFE rows: names outside PI_BUILTIN_TOOLS ──────────────
         PiCallFixture {
@@ -8807,3 +8875,124 @@ fn every_advisory_hook_the_pi_belt_calls_is_a_hook_bee_serves() {
          Derived names: {names:?}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn verdict_terminating_tool_registers_routes_to_write_guard_and_terminates() {
+    node_or_skip!("verdict_terminating_tool_registers_routes_to_write_guard_and_terminates");
+
+    // D8: mapToolCall explicitly routes "verdict" to "write-guard"
+    let pairs = pi_tool_hook_pairs();
+    assert!(
+        pairs.iter().any(|(tool, hook)| tool == "verdict" && hook == "write-guard"),
+        "expected mapToolCall to route 'verdict' to 'write-guard', found: {pairs:?}"
+    );
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-test-verdict-exec-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief content").expect("write brief");
+    std::fs::write(mailbox.join("ack-1.json"), "{}").expect("write ack");
+
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell cleanly",
+        "files_changed": [".pi/extensions/bee-guard.ts"],
+        "proof": "cargo test -p bee — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                tool_call(
+                    dir.path(),
+                    "sess-1",
+                    "verdict",
+                    &verdict_args,
+                ),
+                execute_tool_call(
+                    dir.path(),
+                    "sess-1",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    assert!(
+        run.tools.iter().any(|t| t == "verdict"),
+        "expected tool 'verdict' to be registered, found: {:?}",
+        run.tools
+    );
+
+    // tool_call PreToolUse was allowed
+    assert!(!run.results[0].blocked(), "verdict tool_call was blocked: {:?}", run.results[0]);
+
+    // execute returns terminate: true
+    let exec_res = &run.results[1];
+    assert!(!exec_res.threw, "verdict execute threw: {:?}", exec_res.message);
+    let res_obj = exec_res.result.as_ref().expect("verdict execution returned result");
+    assert_eq!(
+        res_obj.get("terminate").and_then(Value::as_bool),
+        Some(true),
+        "verdict result must return terminate: true, got: {res_obj:?}"
+    );
+
+    // result-1.json was written to mailbox
+    let result_file = mailbox.join("result-1.json");
+    assert!(result_file.is_file(), "result-1.json was not created at {}", result_file.display());
+    let result_content = std::fs::read_to_string(&result_file).expect("read result-1.json");
+    let parsed: Value = serde_json::from_str(&result_content).expect("parse result-1.json");
+    assert_eq!(parsed["status"], "done");
+    assert_eq!(parsed["summary"], "completed cell cleanly");
+    assert_eq!(parsed["proof"], "cargo test -p bee — green:unit — test");
+    assert_eq!(parsed["files_changed"], json!([".pi/extensions/bee-guard.ts"]));
+}
+
+#[cfg(unix)]
+#[test]
+fn verdict_tool_rejects_missing_required_fields() {
+    node_or_skip!("verdict_tool_rejects_missing_required_fields");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-test-verdict-missing-field";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-1",
+                    "verdict",
+                    json!({
+                        "status": "done",
+                        "summary": "missing proof and files_changed",
+                    }),
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    assert!(run.results[0].threw, "execution with missing required fields must throw");
+    assert!(
+        !mailbox.join("result-1.json").exists(),
+        "result-1.json must not be written when validation fails"
+    );
+}
+
