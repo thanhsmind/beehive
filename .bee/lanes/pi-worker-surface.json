@@ -13,7 +13,7 @@
   "summary": "Pi worker surface: live in-flight worker widget + structured worker verdict tool",
   "next_action": "Flush the three queued pi-worker-surface capture stubs into the hook-runtime bundle at the next bee-capturing compound pass.",
   "created_at": "2026-09-20T08:03:53.974Z",
-  "run_state": "running",
+  "run_state": "done",
   "waiting_on": null,
   "gate_revoked_at": {
     "execution": "2026-09-20T10:43:46.184Z"
@@ -539,10 +539,17 @@
   "last_scribing_run": {
     "feature": "pi-worker-surface",
     "date": "2026-09-20",
-    "at": "2026-09-20T10:45:59.020Z",
+    "at": "2026-09-20T10:47:33.994Z",
     "areas_synced": [
       "hook-runtime"
     ],
     "next_action": "Flush the three queued pi-worker-surface capture stubs into the hook-runtime bundle at the next bee-capturing compound pass."
+  },
+  "merge_ready": {
+    "since": "2026-09-20T10:47:06.734Z",
+    "branch": "wt/pi-worker-surface",
+    "worktree_id": "beehive--wt--pi-worker-surface",
+    "uat": "approved",
+    "blocked_by": []
   }
 }

@@ -4,7 +4,7 @@
   "title": "Draw in-flight workers in a widget below the editor",
   "lane": "standard",
   "role": "code",
-  "status": "claimed",
+  "status": "capped",
   "deps": [
     "pws-1"
   ],
@@ -50,17 +50,24 @@
   },
   "trace": {
     "worker": "pws2-widget",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Draw in-flight workers in a widget below the editor with seat-named rows, D3 clearing, and no second timer",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/verify/verify-app/features/pi-runtime.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-20T10:47:06.709Z",
     "behavior_change": true,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "leader re-ran it independently after the merge: 87 passed, 0 failed (81 before this cell); node --check on the belt and release-manifest --check both exit 0",
+    "verify_output": "green:unit",
+    "verify_passed": true,
     "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
-    "verify_command": null,
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
     "claimed_at": "2026-09-20T10:18:49.273Z",
     "verified_at": null,
     "escalation_reason": "The role's configured agent agy-flash hit its provider quota mid-cell (Individual quota reached, resets in ~37m) with zero edits written. Escalating onto the session model is rescue-ladder rung 2, not a model preference; the alternative is idling the slice for the quota window.",
@@ -123,7 +130,32 @@
         "model_independence": "unverified",
         "recorded_at": "2026-09-20T10:32:45.928Z"
       }
-    ]
+    ],
+    "mistakes": [
+      {
+        "wrong": "The worker returned outcome=done but never capped the cell, leaving pws-2 claimed with an empty trace",
+        "better": "the orchestrator should check cell status after every herding run instead of trusting the returned outcome, and cap from main when the worker did not"
+      }
+    ],
+    "report": {
+      "outcome": "Draw in-flight workers in a widget below the editor, sourced from the existing result-inbox markers",
+      "commit": "0d32a4a6e",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/verify/verify-app/features/pi-runtime.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — leader re-ran it independently after the merge: 87 passed, 0 failed (81 before this cell); node --check on the belt and release-manifest --check both exit 0",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "The worker returned outcome=done but never capped the cell, leaving pws-2 claimed with an empty trace — the orchestrator should check cell status after every herding run instead of trusting the returned outcome, and cap from main when the worker did not"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "escalate": true
 }
