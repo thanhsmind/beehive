@@ -221,6 +221,18 @@ govern the working residue of a cell rather than its content.
     deliberately legal: a docs cell has nothing stronger to offer honestly
     (D3).
 
+  **A baseline rides the cap report, not the proof line (proof-honesty D4,
+  decision `f4261145`, 2026-09-20; cell ph-2).** The cap report (`--report`)
+  gains `"baseline"` as a second optional key beside `"mistakes"`. It names
+  what the same proof command produced on the base commit, before this change —
+  the floor a result is read against. It is validated as a non-empty string
+  when present, and stored on the cell trace beside `verify_command`,
+  `verify_output`, `verify_passed`, and `verification_evidence` so `bee cells
+  show` returns it. An absent baseline is legal and caps cleanly, distinguishing
+  absent from empty. `REPORT_KEYS` keeps its five required keys, and the proof
+  line keeps its three segments untouched (respecting proof-strength-and-expiry
+  D6).
+
   **A user-facing surface is DRIVEN, not merely compiled
   (verification-in-the-flow D4/D5, decisions `c93a6948` and `036e8a79`,
   2026-09-02).** The proof-by-change-type list carries one more row: a change to

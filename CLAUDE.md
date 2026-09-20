@@ -46,7 +46,8 @@ release-binaries and verifies the published assets. Never walk those
 steps by hand — the script exists because a hand-walked checklist is a
 step that gets skipped.
 
-Two flags: `--no-test` skips the suite and says so loudly (own the
+Flags: `--no-test --confirm` skips the suite behind a confirmed release
+checklist (interactive `--no-test` requires `--confirm`; own the
 risk), and `-m <subject>` overrides the default `Release <VERSION>`
 commit subject. Re-running at a version that is already committed is
 idempotent — it picks the release back up, so a run that died waiting

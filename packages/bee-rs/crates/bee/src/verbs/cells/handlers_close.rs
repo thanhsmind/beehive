@@ -613,6 +613,11 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         trace.insert("verify_output".into(), Value::String(proof_result.clone()));
         trace.insert("verify_passed".into(), Value::Bool(true));
         trace.insert("verification_evidence".into(), Value::String(proof_reason.clone()));
+        // proof-honesty D4 (decision f4261145): store the optional baseline
+        // on the cell trace beside the structured proof fields.
+        if let Some(Value::String(b)) = report_value.get("baseline") {
+            trace.insert("baseline".into(), Value::String(js_trim(b).to_string()));
+        }
         // fa-1: diff-vs-test advisory — the ONLY producer for this slot
         // since the E1 impact-registry check retired. Scoped to `cells
         // finish` alone (D6's own "finish only" posture): `cells cap`

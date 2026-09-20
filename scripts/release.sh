@@ -30,9 +30,9 @@
 # Anything that aborts between step 2 and step 5 puts the tree back the way it
 # found it, so a failed release leaves nothing half-bumped behind.
 #
-# Usage: scripts/release.sh                  (no bump — version from plugin.json)
-#        scripts/release.sh 2.23.0           (bump → regen → test → commit → tail)
-#        scripts/release.sh 2.23.0 --no-test (skips step 4, loudly; own the risk)
+# Usage: scripts/release.sh                            (no bump — version from plugin.json)
+#        scripts/release.sh 2.23.0                     (bump → regen → test → commit → tail)
+#        scripts/release.sh 2.23.0 --no-test --confirm (skips step 4, checklist confirmed; own the risk)
 #        scripts/release.sh 2.23.0 -m "Release 2.23.0: one-command release"
 #
 # Re-running with a version that is ALREADY committed is safe and idempotent:
@@ -66,22 +66,37 @@ BEE_BIN=".bee/bin/bee"
 # block above is the documentation.
 ARG_VERSION=""
 RUN_TESTS=1
+CONFIRM=0
 COMMIT_SUBJECT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-test)
       RUN_TESTS=0; shift ;;
+    --confirm)
+      CONFIRM=1; shift ;;
     -m|--message)
       [ $# -ge 2 ] || fail "$1 needs a commit subject — e.g. -m \"Release 2.23.0\""
       COMMIT_SUBJECT="$2"; shift 2 ;;
     -*)
-      fail "unknown option $1 — usage: scripts/release.sh [VERSION] [--no-test] [-m SUBJECT]" ;;
+      fail "unknown option $1 — usage: scripts/release.sh [VERSION] [--no-test] [--confirm] [-m SUBJECT]" ;;
     *)
       [ -z "$ARG_VERSION" ] \
         || fail "two versions given ($ARG_VERSION and $1) — one release at a time"
       ARG_VERSION="$1"; shift ;;
   esac
 done
+
+if [ "$RUN_TESTS" -eq 0 ] && [ "$CONFIRM" -eq 0 ]; then
+  log "release checklist (--no-test):"
+  log "  1. The declared test suite was run and passed on the base commit."
+  log "  2. No unverified code changes exist in the release commit or working tree."
+  log "  3. The published release tag and GitHub binaries cannot be retracted once pushed."
+  log "  4. The operator accepts full responsibility for releasing unverified code."
+  if [ -t 2 ]; then
+    fail "--no-test requires --confirm on interactive runs; confirm each item and re-run with --confirm"
+  fi
+  log "warn: non-interactive run (no TTY) — proceeding unconfirmed"
+fi
 
 command -v gh >/dev/null 2>&1 || fail "gh CLI not found — install it, then \`gh auth login\`"
 gh auth status >/dev/null 2>&1 || fail "gh not authenticated — run \`gh auth login\`"
@@ -93,11 +108,6 @@ VERSION="$(read_version "$PLUGIN_JSON")"
 [ -n "$VERSION" ] || fail "cannot read version from $PLUGIN_JSON"
 
 # ---------- 2. preconditions ----------
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-[ "$BRANCH" = "main" ] || fail "on branch $BRANCH — releases cut from main only"
-
-HEAD_VERSION="$(git show "HEAD:$PLUGIN_JSON" 2>/dev/null | read_version /dev/stdin || true)"
-
 AUTH_VERSION="${ARG_VERSION:-$VERSION}"
 [ -n "${BEE_DISPATCH_ID:-}" ] \
   || fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"
@@ -105,6 +115,11 @@ AUTH_VERSION="${ARG_VERSION:-$VERSION}"
   || fail "$BEE_BIN not found or not executable — cannot verify release authorization; nothing was changed"
 "$BEE_BIN" dispatch authorize --id "$BEE_DISPATCH_ID" --release-version "$AUTH_VERSION" \
   || fail "release authorization denied for version $AUTH_VERSION; nothing was changed"
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+[ "$BRANCH" = "main" ] || fail "on branch $BRANCH — releases cut from main only"
+
+HEAD_VERSION="$(git show "HEAD:$PLUGIN_JSON" 2>/dev/null | read_version /dev/stdin || true)"
 
 # ---------- 3. bump + regen + test + commit (only with a VERSION argument) ----------
 if [ -n "$ARG_VERSION" ] && [ "$ARG_VERSION" = "$HEAD_VERSION" ]; then
@@ -258,15 +273,15 @@ elif [ -n "$ARG_VERSION" ]; then
     elif command -v python3 >/dev/null 2>&1; then
       TEST_CMD="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commands",{}).get("test",""))' "$BEE_CONFIG")"
     else
-      fail "need jq or python3 to read \`commands.test\` from $BEE_CONFIG — install one, or re-run with --no-test"
+      fail "need jq or python3 to read \`commands.test\` from $BEE_CONFIG — install one, or re-run with --no-test --confirm"
     fi
     [ -n "$TEST_CMD" ] \
-      || fail "no \`commands.test\` in $BEE_CONFIG — record it there, or re-run with --no-test"
+      || fail "no \`commands.test\` in $BEE_CONFIG — record it there, or re-run with --no-test --confirm"
     log "test     $TEST_CMD"
     bash -c "$TEST_CMD" >&2 \
       || fail "the declared test suite went RED — nothing tagged, nothing pushed; a published tag is the one thing a release can never take back"
   else
-    log "warn: --no-test — the declared suite did NOT run; you are about to tag code that nothing proved"
+    log "test     skipped per release checklist (--no-test)"
   fi
 
   # ----- the release commit, path-scoped -----
