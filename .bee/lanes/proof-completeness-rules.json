@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"proof-completeness-rules\" — feature is closed.",
   "created_at": "2026-09-20T15:32:27.461Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-20T15:51:46.758Z",
+    "session": "044a7c9a-a928-4ed5-bee9-4718396ee427"
+  },
   "route": {
     "class": "feature",
     "lane": "docs",
