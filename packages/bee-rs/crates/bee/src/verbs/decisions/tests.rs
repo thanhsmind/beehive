@@ -1926,7 +1926,7 @@ use std::time::Instant;
         // this asserted `event["feature"] == "docfeat"`, which is precisely
         // the borrow that mis-filed 23 real decisions.
         assert!(event.get("feature").is_none());
-        let new_id = event["id"].as_str().unwrap().to_string();
+        let _new_id = event["id"].as_str().unwrap().to_string();
 
         // With no feature resolved there is no own-history exclusion, so only
         // the generated index is excluded and docfeat's own CONTEXT.md is an
@@ -1935,27 +1935,10 @@ use std::time::Instant;
         // `touches_sweep_excluded_matches_generated_index_and_bound_own_history_only`, and
         // the lane arm of the stamp by
         // `feature_for_stamp_takes_a_lane_and_never_the_default_record`.
+        // touches-sweep-active-gate D1: touched_id is still in the active set,
+        // so the touches-sweep is skipped and queues no stubs.
         let queue = read_jsonl(&capture_queue_path(root));
-        assert_eq!(queue.len(), 3, "only the generated index is excluded: {queue:?}");
-        let mut stub_files: Vec<String> =
-            queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
-        stub_files.sort();
-        assert_eq!(
-            stub_files,
-            vec![
-                "docs/area.md".to_string(),
-                "docs/history/docfeat/CONTEXT.md".to_string(),
-                "docs/history/otherfeat/CONTEXT.md".to_string(),
-            ]
-        );
-        for stub in &queue {
-            assert_eq!(stub["kind"], "stub");
-            assert_eq!(stub["source"], "touches-sweep");
-            assert_eq!(stub["dids"], json!([touched_id, new_id]));
-            let outcome = stub["outcome"].as_str().unwrap();
-            assert!(outcome.contains(touched_id), "{outcome}");
-            assert!(outcome.contains(&new_id), "{outcome}");
-        }
+        assert_eq!(queue.len(), 0, "touches on active decision queues no stubs: {queue:?}");
     }
 
     #[test]
@@ -1993,8 +1976,9 @@ use std::time::Instant;
         };
         // No bound feature — `feature` is absent from the event entirely.
         assert!(event.get("feature").is_none());
+        // touches-sweep-active-gate D1: touched_id is active, so touches-sweep queues nothing.
         let queue = read_jsonl(&capture_queue_path(tmp.path()));
-        assert_eq!(queue.len(), 1, "unbound history dir is a real citation: {queue:?}");
+        assert_eq!(queue.len(), 0, "touches on active decision queues no stubs: {queue:?}");
     }
 
     /// decision-attribution D1/D4: the shape the old fallback got wrong.
