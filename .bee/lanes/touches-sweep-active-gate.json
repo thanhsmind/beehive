@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "feature": "touches-sweep-active-gate",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"touches-sweep-active-gate\" started at phase \"exploring\" (lane).",
+  "next_action": "Flush the touches-sweep-active-gate stub at the next compound pass.",
+  "created_at": "2026-09-20T14:57:30.675Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-09-20T14:57:30.705Z",
+    "feature": "touches-sweep-active-gate"
+  },
+  "merge_ready": {
+    "since": "2026-09-20T15:09:32.350Z",
+    "branch": "wt/touches-sweep-active-gate",
+    "worktree_id": "beehive--wt--touches-sweep-active-gate",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "touches-sweep-active-gate",
+    "date": "2026-09-20",
+    "at": "2026-09-20T15:11:01.075Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Flush the touches-sweep-active-gate stub at the next compound pass."
+  }
+}

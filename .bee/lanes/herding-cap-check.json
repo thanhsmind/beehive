@@ -14,7 +14,12 @@
   "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-20T13:56:19.152Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-20T14:48:59.359Z",
+    "session": "044a7c9a-a928-4ed5-bee9-4718396ee427"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
