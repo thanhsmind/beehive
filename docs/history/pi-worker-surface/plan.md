@@ -1,7 +1,6 @@
 ---
 artifact_contract: bee-plan/v2
 mode: standard
-# approved_gate2: <unset until approval>
 ---
 
 # Plan: Pi Worker Surface
