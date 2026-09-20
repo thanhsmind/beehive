@@ -597,6 +597,7 @@ const switches = [];
 const forks = [];
 const notifications = [];
 const statusCalls = [];
+const widgetCalls = [];
 const orderLog = [];
 const customMessages = [];
 let activeTools = Array.isArray(spec.initial_tools)
@@ -690,6 +691,25 @@ function createCommandContext(ctxCwd, ctxSessionId, ctxCall) {
       },
       confirm: async () => true,
       select: async () => null,
+      setWidget(key, content, options) {
+        let lines = null;
+        if (typeof content === "function") {
+          const comp = content(null, { fg: (_c, s) => s });
+          if (comp && typeof comp.render === "function") {
+            lines = comp.render(80);
+          } else if (Array.isArray(content.lines)) {
+            lines = content.lines;
+          }
+        } else if (Array.isArray(content)) {
+          lines = content;
+        }
+        widgetCalls.push({
+          key: String(key),
+          content: content === undefined ? null : (Array.isArray(content) ? content : (lines || "factory")),
+          lines: lines,
+          options: options ?? null,
+        });
+      },
     },
     async switchSession(targetPath, options) {
       orderLog.push(`switchSession:${targetPath}`);
@@ -920,6 +940,7 @@ console.log(JSON.stringify({
   forks,
   notifications,
   statusCalls,
+  widgetCalls,
   execCalls,
   orderLog,
   commands: Array.from(commands.keys()),
@@ -983,6 +1004,8 @@ struct HarnessRun {
     forks: Vec<Value>,
     notifications: Vec<Value>,
     status_calls: Vec<Value>,
+    #[allow(dead_code)]
+    widget_calls: Vec<Value>,
     order_log: Vec<String>,
     commands: Vec<String>,
     #[allow(dead_code)]
@@ -1168,6 +1191,12 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let widget_calls = v
+        .get("widgetCalls")
+        .or_else(|| v.get("widget_calls"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let order_log = v
         .get("orderLog")
         .and_then(Value::as_array)
@@ -1212,6 +1241,7 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         forks,
         notifications,
         status_calls,
+        widget_calls,
         order_log,
         commands,
         tools,
@@ -8995,4 +9025,249 @@ fn verdict_tool_rejects_missing_required_fields() {
         "result-1.json must not be written when validation fails"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_appears_below_editor_and_clears_on_completion() {
+    node_or_skip!("in_flight_worker_widget_appears_below_editor_and_clears_on_completion");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-widget-1";
+    let mailbox = job_mailbox(dir.path(), "job-100");
+    let marker_path = write_marker(dir.path(), TOKEN, "job-100", &mailbox, Some("pws-2"));
+    let mut marker_val: Value = serde_json::from_str(&std::fs::read_to_string(&marker_path).unwrap()).unwrap();
+    marker_val["seat"] = json!("hat-facts-gaps");
+    std::fs::write(&marker_path, serde_json::to_string(&marker_val).unwrap()).unwrap();
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+        ],
+    );
+
+    let active_calls: Vec<&Value> = run
+        .widget_calls
+        .iter()
+        .filter(|c| c["lines"].is_array() && !c["lines"].as_array().unwrap().is_empty())
+        .collect();
+    assert!(!active_calls.is_empty(), "expected widget call setting in-flight workers");
+    let call = active_calls[0];
+    assert_eq!(call["key"], "bee-workers");
+    assert_eq!(call["options"]["placement"], "belowEditor");
+    let lines = call["lines"].as_array().unwrap();
+    assert_eq!(lines, json!(["▸ hat-facts-gaps · pws-2"]).as_array().unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_row_clears_when_worker_completes() {
+    node_or_skip!("in_flight_worker_widget_row_clears_when_worker_completes");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-widget-clear";
+    let mailbox = job_mailbox(dir.path(), "job-100");
+    write_result(&mailbox, 1, &result_envelope("ok", "finished", "cargo test — green"));
+    write_marker(dir.path(), TOKEN, "job-100", &mailbox, Some("pws-2"));
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections(1),
+        ],
+    );
+
+    let last_call = run.widget_calls.last().expect("expected widget calls during session");
+    assert_eq!(last_call["key"], "bee-workers");
+    assert!(
+        last_call["content"].is_null() && last_call["lines"].is_null(),
+        "widget must be cleared once all workers finish, got: {last_call:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_does_not_draw_when_zero_workers_in_flight() {
+    node_or_skip!("in_flight_worker_widget_does_not_draw_when_zero_workers_in_flight");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-widget-zero";
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+        ],
+    );
+
+    let active_calls: Vec<&Value> = run
+        .widget_calls
+        .iter()
+        .filter(|c| c["lines"].is_array() && !c["lines"].as_array().unwrap().is_empty())
+        .collect();
+    assert!(
+        active_calls.is_empty(),
+        "widget must not be drawn when zero workers in flight, got: {active_calls:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_never_throws_on_unreadable_or_absent_inbox() {
+    node_or_skip!("in_flight_worker_widget_never_throws_on_unreadable_or_absent_inbox");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-widget-unreadable";
+    let inbox = inbox_dir(dir.path(), TOKEN);
+    std::fs::create_dir_all(&inbox).expect("create inbox");
+    std::fs::write(inbox.join("corrupt.json"), "{ invalid json").expect("write corrupt marker");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+        ],
+    );
+
+    assert!(
+        !run.results.iter().any(|r| r.threw),
+        "session must not crash on unreadable inbox: {:?}",
+        run.results
+    );
+    let active_calls: Vec<&Value> = run
+        .widget_calls
+        .iter()
+        .filter(|c| c["lines"].is_array() && !c["lines"].as_array().unwrap().is_empty())
+        .collect();
+    assert!(active_calls.is_empty(), "no widget should be drawn for unreadable markers");
+}
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_sparse_marker_vocabulary_and_no_input_contracts() {
+    node_or_skip!("in_flight_worker_widget_sparse_marker_vocabulary_and_no_input_contracts");
+
+    let ext_path = pi_extension_path();
+
+    let script = r#"
+import { pathToFileURL } from "node:url";
+const extPath = process.argv[1];
+const mod = await import(pathToFileURL(extPath).href);
+
+const { formatWorkerRow, shortJobSuffix, createInFlightWorkersWidget } = mod;
+
+// 1. Sparse marker: no seat, no cell_id -> short suffix of job id
+const sparseRow = formatWorkerRow({ job_id: "job-1789892858126-4153108-1" });
+if (sparseRow !== "▸ 4153108-1") {
+  throw new Error(`expected sparse row "▸ 4153108-1", got "${sparseRow}"`);
+}
+if (sparseRow.includes("job-1789892858126-4153108-1")) {
+  throw new Error("raw job_id must never appear in widget row");
+}
+
+// 2. Short suffix helper
+if (shortJobSuffix("job-100") !== "100") {
+  throw new Error(`expected short suffix "100", got "${shortJobSuffix("job-100")}"`);
+}
+
+// 3. Seat only
+const seatOnlyRow = formatWorkerRow({ seat: "extraction" });
+if (seatOnlyRow !== "▸ extraction") {
+  throw new Error(`expected "▸ extraction", got "${seatOnlyRow}"`);
+}
+
+// 4. Seat and cell_id
+const fullRow = formatWorkerRow({ seat: "code", cell_id: "pws-2" });
+if (fullRow !== "▸ code · pws-2") {
+  throw new Error(`expected "▸ code · pws-2", got "${fullRow}"`);
+}
+
+// 5. Vocabulary contract (D5): rows carry ONLY "▸", never "✓", "✗", or "⚡"
+for (const row of [sparseRow, seatOnlyRow, fullRow]) {
+  if (!row.startsWith("▸ ")) {
+    throw new Error(`row must start with "▸ ", got "${row}"`);
+  }
+  if (row.includes("✓") || row.includes("✗") || row.includes("⚡")) {
+    throw new Error(`row must carry only in-flight tick glyph "▸", got "${row}"`);
+  }
+}
+
+// 6. No input contract (D4): widget component takes no input
+const widgetFactory = createInFlightWorkersWidget([fullRow]);
+const component = widgetFactory();
+if (typeof component.render !== "function") {
+  throw new Error("widget component must have render()");
+}
+if (component.handleInput !== undefined) {
+  throw new Error("widget component must not handle input (D4)");
+}
+if (component.focus !== undefined && component.focus !== false) {
+  throw new Error("widget component must not accept focus (D4)");
+}
+
+console.log("OK");
+"#;
+
+    let output = std::process::Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg(script)
+        .arg(&ext_path)
+        .output()
+        .expect("run node assertion script");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "node script failed: {stderr}\nstdout: {stdout}");
+    assert!(stdout.contains("OK"), "expected script output OK: {stdout}");
+}
+
+#[cfg(unix)]
+#[test]
+fn in_flight_worker_widget_detached_only_limit() {
+    node_or_skip!("in_flight_worker_widget_detached_only_limit");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    // Foreground execution leaves no inbox marker
+    const TOKEN: &str = "sess-widget-foreground";
+    let inbox = inbox_dir(dir.path(), TOKEN);
+    assert!(!inbox.exists(), "foreground dispatch writes no marker to result-inbox");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+        ],
+    );
+    let active_calls: Vec<&Value> = run
+        .widget_calls
+        .iter()
+        .filter(|c| c["lines"].is_array() && !c["lines"].as_array().unwrap().is_empty())
+        .collect();
+    assert!(
+        active_calls.is_empty(),
+        "foreground dispatch leaves no marker and draws no widget (claim 16)"
+    );
+}
+
 
