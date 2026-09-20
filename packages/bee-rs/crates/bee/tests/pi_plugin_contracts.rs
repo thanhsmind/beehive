@@ -1939,7 +1939,7 @@ fn the_belt_wires_every_advisory_surface_the_event_map_promises() {
 #[test]
 fn the_injected_header_carries_exactly_the_one_line_rows_the_contract_names() {
     let derived = injection_row_keys();
-    let expected = ["job_id", "seat", "cell_id", "status", "summary", "proof", "report_path"];
+    let expected = ["job_id", "round", "seat", "cell_id", "status", "summary", "proof", "report_path"];
     assert_eq!(
         derived, expected,
         "the injected fence's row set (or its order) changed. Every row here is a ONE-LINE field \
@@ -3273,6 +3273,7 @@ fn the_injected_fence_carries_header_rows_only_never_the_report_body() {
         fenced_rows(text),
         vec![
             "job_id: job-100".to_string(),
+            "round: 1".to_string(),
             "cell_id: cell-7".to_string(),
             "status: ok".to_string(),
             "summary: landed across two lines with a backtick".to_string(),
@@ -3295,6 +3296,87 @@ fn the_injected_fence_carries_header_rows_only_never_the_report_body() {
 }
 
 #[cfg(unix)]
+#[test]
+fn a_round_2_result_injected_under_an_already_seen_job_id_carries_round_2() {
+    node_or_skip!("a_round_2_result_injected_under_an_already_seen_job_id_carries_round_2");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-drain-round-2";
+    let mailbox = job_mailbox(dir.path(), "job-100");
+    let envelope = result_envelope("ok", "the task landed", "cargo test — green");
+    write_result(&mailbox, 1, &envelope);
+    let marker_path = write_marker(dir.path(), TOKEN, "job-100", &mailbox, Some("cell-1"));
+
+    let marker_content = json!({
+        "job_id": "job-100",
+        "mailbox": mailbox.to_string_lossy(),
+        "created_at": "2026-08-30T09:05:00Z",
+        "cell_id": "cell-1",
+    })
+    .to_string();
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections(1),
+            turn_starts(dir.path(), TOKEN),
+            advisory_call("agent_settled", dir.path(), TOKEN, json!({})),
+            json!({
+                "kind": "write_file",
+                "path": mailbox.join("result-2.json").to_string_lossy(),
+                "content": envelope.to_string(),
+            }),
+            json!({
+                "kind": "write_file",
+                "path": marker_path.to_string_lossy(),
+                "content": marker_content,
+            }),
+            await_injections(2),
+        ],
+    );
+
+    assert_eq!(
+        run.messages.len(),
+        2,
+        "expected two injections (round 1 then round 2), got {:?} (stderr={})",
+        run.messages,
+        run.stderr.trim()
+    );
+
+    let rows_1 = fenced_rows(&run.messages[0].text);
+    let rows_2 = fenced_rows(&run.messages[1].text);
+
+    assert!(
+        rows_2.contains(&"round: 2".to_string()),
+        "the second injection must carry `round: 2`, but got rows: {rows_2:?}\nFull text:\n{}",
+        run.messages[1].text
+    );
+    assert!(
+        !rows_2.contains(&"round: 1".to_string()),
+        "the second injection must NOT carry `round: 1`: {rows_2:?}"
+    );
+
+    // The two injections use identical result payloads and markers, so they must be
+    // distinguishable by the round row alone.
+    let stripped_1: Vec<&String> = rows_1.iter().filter(|r| !r.starts_with("round:")).collect();
+    let stripped_2: Vec<&String> = rows_2.iter().filter(|r| !r.starts_with("round:")).collect();
+    assert_eq!(
+        stripped_1, stripped_2,
+        "the two injections must be distinguishable by the round row alone"
+    );
+    assert_ne!(
+        rows_1, rows_2,
+        "the two injections must not be identical (round 1 vs round 2)"
+    );
+}
+
+#[cfg(unix)]
+
 #[test]
 fn the_drain_never_throws_on_a_missing_inbox_or_a_malformed_marker_or_result() {
     node_or_skip!("the_drain_never_throws_on_a_missing_inbox_or_a_malformed_marker_or_result");
