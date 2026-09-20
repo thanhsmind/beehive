@@ -56,7 +56,9 @@ Decision log: `00595ba4`.
 | Term | Meaning in this feature |
 |------|-------------------------|
 | Active set | The non-retired, non-redacted decisions, as every other reader of that set sees them. |
+<!-- bee:not-a-deferral: The flagged word in this row is "later", inside a DEFINITION of what makes a citation stale — it describes decisions that arrive after the cited one, which is the whole distinction this feature turns on. It promises no future work. -->
 | Stale citation | A document citing a decision that has left the active set. A document citing a live decision is not stale, however many later decisions relate to it. |
+<!-- /bee:not-a-deferral -->
 
 ## Existing Code Context
 
@@ -83,6 +85,7 @@ Decision log: `00595ba4`.
   created this sweep and recorded why: "Extends the proven supersede
   citation-sweep (found 3 stale citations same-day) to `touches` + close."
 
+<!-- bee:not-a-deferral: These sections are this file's own record of what was resolved. "Deferred To Planning" is a fixed heading in the CONTEXT template and its one item is ANSWERED and checked off below, with a file:line behind it; "Deferred Ideas" is empty; the Handoff Note is template boilerplate naming what a planning agent reads. Nothing here promises later action. -->
 ## Outstanding Questions
 
 ### Resolve Before Planning
@@ -91,9 +94,15 @@ None.
 
 ### Deferred To Planning
 
-- [ ] Is the existing `active_decisions` call at `:845` reachable before the
-  sweep without reordering, or does the sweep need its own read? Reading the
-  surrounding function answers it.
+Answered by reading the function during planning, before the gate.
+
+- [x] **Is the existing `active_decisions` read reachable before the sweep?**
+  **Yes, by hoisting.** The sweep and that read both sit after the
+  `append_jsonl` at `verbs_read.rs:802`, and the read was below the sweep only
+  by accident of ordering. Moving it above the sweep keeps the property its own
+  comment at `:805-806` names — it reads the same active-set shape every other
+  `active_decisions()` caller sees — so the sweep reuses it and no second read
+  is added. The shipped cell prohibits a second read for exactly this reason.
 
 ## Deferred Ideas
 
@@ -103,3 +112,4 @@ None.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->
