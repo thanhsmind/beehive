@@ -545,6 +545,7 @@
     "contract:worker-prune-keep-set",
     "retention",
     "contract:pi-result-injection-header",
-    "contract:herding-run-replay"
+    "contract:herding-run-replay",
+    "contract:herding-preflight-action"
   ]
 }

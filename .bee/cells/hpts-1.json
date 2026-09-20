@@ -1,0 +1,105 @@
+{
+  "id": "hpts-1",
+  "feature": "herding-preflight-test-seam",
+  "title": "Make the receipt pre-flight a pure decision so no test spawns a real agent",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "10e20c92",
+    "2eb61b7b",
+    "42a59eea",
+    "5d0692b5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-preflight-test-seam/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Lift the receipt pre-flight's DECISION out of `fn run` (currently inline at run.rs:3948-4030) into a new module-scope function, leaving `fn run` as the only place that ACTS on it.\n\n(1) Move `enum PreflightAction` to module scope beside the function. Give its variants what the caller needs to print, so the caller reads nothing from disk itself: `ReturnReceipt { round: u32 }`, `Refuse { round: u32, result_path: PathBuf, stored_digest: String, incoming_digest: String }`, `Proceed`.\n\n(2) Add `fn preflight_receipt(bee_dir: &Path, opts: &Options) -> PreflightAction`, pure over the filesystem — it reads, it decides, it spawns nothing and touches no transport. Move the round resolution into it unchanged (1 for a fresh run; `mailbox::latest_result_round(entries) + 1` when `opts.is_continue`, and the `None => 0` sentinel meaning 'no prior result, nothing to replay'). Keep all five outcomes byte-identical in behavior, including the stderr note on an unreadable digest.\n\n(3) In `fn run`, replace the inline block with a single `match preflight_receipt(&bee_dir, &opts)`. The Refuse arm prints the SAME message it prints today, character for character, and returns FAILURE. The ReturnReceipt arm still calls `write_inbox_marker`, still reads the stored result, still prints the same envelope, and returns SUCCESS. Proceed falls through. The call site stays exactly where it is — above the transport choice and above the `spawn_detached_runner` branch (D7); do NOT move it into `execute` or `execute_no_pane`.\n\n(4) Rewrite the three leaking tests to call `preflight_receipt` and assert the returned variant, never `run`: `replay_with_unreadable_digest_proceeds_to_spawn` (:9670) and `job_with_brief_but_no_result_proceeds_to_spawn` (:9692) assert `PreflightAction::Proceed`; `continue_at_round_2_with_same_task_proceeds_and_is_not_refused` (:9714) builds its Options with `is_continue` true and asserts `Proceed`. Each test needs an `Options` value — build one with a small local helper rather than through `parse_options`, so the test names its own inputs. Rename the two `_proceeds_to_spawn` tests to say what they now assert (they no longer spawn).\n\nLeave `replay_with_matching_digest_returns_stored_receipt_and_spawns_nothing`, `replay_with_differing_digest_refuses_loudly_and_spawns_nothing` and `replay_with_missing_digest_returns_stored_receipt_legacy` calling `run` if they already pass without spawning — they short-circuit before the transport — but if any of them reaches transport, move it to `preflight_receipt` too.\n\nDo NOT change the five outcomes, the refusal wording, the envelope shape, or D5's marker write. Do NOT touch mailbox.rs or the Pi belt.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a full cargo test run creates ZERO new session files under ~/.claude/projects/*crates-bee/ — counted before and after",
+      "a full cargo test run leaves the agent-pane count unchanged, checked with herdr pane list before and after",
+      "no test in packages/bee-rs/crates/bee/src/herding/run.rs calls run() on a path that reaches transport_for_run",
+      "the five pre-flight outcomes behave exactly as before: no result proceeds, absent digest returns the receipt, matching digest returns the receipt, differing digest refuses, unreadable digest proceeds with a stderr note",
+      "the refusal message is unchanged character for character",
+      "the receipt path still calls write_inbox_marker before printing the envelope",
+      "the pre-flight call site is still in fn run above the transport choice and above spawn_detached_runner",
+      "the whole suite is green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "module-scope PreflightAction, the pure preflight_receipt function, fn run reduced to a match on it, and the three tests rewritten against the new seam"
+      }
+    ],
+    "key_links": [
+      "preflight_receipt performs no spawn and references no transport",
+      "fn run is the only caller that acts on a PreflightAction",
+      "the three rewritten tests never call run()"
+    ],
+    "prohibitions": [
+      "Do not move the pre-flight into execute or execute_no_pane",
+      "Do not change the five outcomes, the refusal wording, or the envelope",
+      "Do not drop write_inbox_marker from the receipt path",
+      "Do not touch mailbox.rs or .pi/extensions/bee-guard.ts"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "hpts-worker-1",
+    "outcome": "The pre-flight decision is a pure function; no test in this crate spawns a real agent",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "plan.md committed from main, not with the cell: the plan-freeze guard refuses intent-to-add while the concurrent-worker guard requires it. Filed P3.",
+      "plan.md is not in this cell's commit. The plan-freeze guard refuses intent-to-add on a gated plan.md, while the concurrent-worker guard requires intent-to-add to get an untracked file into a path-scoped commit — the two contradict. plan.md lands in the close commit from main instead. Filed P3.",
+      "sync-ack: No bee-herding skill text is stale: this cell changes no user-visible behavior. The skill's replay-rule section (written at the idempotent-herding-receipts close) states the placement 'in the PARENT process, immediately after options parse, above the transport choice and above the detached re-launch' and the five outcomes — both still true character for character. Only the internal seam moved: deciding split from acting so tests stop spawning."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T06:25:31.107Z",
+    "behavior_change": true,
+    "verification_evidence": "36 suites 0 failed, twice; and the leak proof the suite itself cannot assert: session files under ~/.claude/projects/*crates-bee/ stayed at 12 and agent panes stayed at 3 across two full runs, against one new session per run before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "76a0509c-84a5-445c-86ac-2b892433feb9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-09-20T06:16:45.988Z",
+    "sync_ack": "No bee-herding skill text is stale: this cell changes no user-visible behavior. The skill's replay-rule section (written at the idempotent-herding-receipts close) states the placement 'in the PARENT process, immediately after options parse, above the transport choice and above the detached re-launch' and the five outcomes — both still true character for character. Only the internal seam moved: deciding split from acting so tests stop spawning.",
+    "mistakes": [
+      {
+        "wrong": "I introduced this defect myself in cell ihr-2 earlier the same session and shipped it green. The three tests asserted only ExitCode::FAILURE, which the leaking path also returns, so the assertion could never tell a refusal apart from a real spawn that later failed.",
+        "better": "When a test's subject is that something must NOT happen, assert the absence directly — the returned decision, or a counted side effect — never an exit code several paths can produce. Here the honest proof was a before/after count of session files under ~/.claude/projects/, which lives outside the suite entirely."
+      }
+    ],
+    "inline_reason": "Executed inline by the orchestrator, not a dispatched worker — a named deviation from the small-lane worker rule. The cell fixes a live resource leak whose root cause the orchestrator had just diagnosed in full (12 leaked billed sessions, one idle pane), the change is one file, and every dispatched worker would itself have run the leaking suite while the defect was still live.",
+    "report": {
+      "outcome": "The receipt pre-flight's decision is now a pure function, so the three tests that were spawning a real claude-sonnet per cargo test run assert the decision instead of calling run(). The leak is gone and the three sibling tests carry an illegal-transport belt against regression.",
+      "commit": "94c1b62bf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "docs/history/herding-preflight-test-seam/CONTEXT.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 36 suites 0 failed, twice; and the leak proof the suite itself cannot assert: session files under ~/.claude/projects/*crates-bee/ stayed at 12 and agent panes stayed at 3 across two full runs, against one new session per run before the fix",
+      "deviations": [
+        "plan.md is not in this cell's commit. The plan-freeze guard refuses intent-to-add on a gated plan.md, while the concurrent-worker guard requires intent-to-add to get an untracked file into a path-scoped commit — the two contradict. plan.md lands in the close commit from main instead. Filed P3."
+      ],
+      "mistakes": [
+        {
+          "wrong": "I introduced this defect myself in cell ihr-2 earlier the same session and shipped it green. The three tests asserted only ExitCode::FAILURE, which the leaking path also returns, so the assertion could never tell a refusal apart from a real spawn that later failed.",
+          "better": "When a test's subject is that something must NOT happen, assert the absence directly — the returned decision, or a counted side effect — never an exit code several paths can produce. Here the honest proof was a before/after count of session files under ~/.claude/projects/, which lives outside the suite entirely."
+        }
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
