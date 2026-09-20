@@ -560,6 +560,7 @@
     "contract:release-confirm-gate",
     "contract:cap-baseline",
     "contract:cap-baseline-floor",
-    "cap-baseline-floor"
+    "cap-baseline-floor",
+    "baseline-release-clear"
   ]
 }

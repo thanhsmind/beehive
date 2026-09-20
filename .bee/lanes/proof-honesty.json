@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-09-20T18:45:45.261Z",
+    "subject": "One new capture decision plus the lane record. Another session holds reservations, so committing path-scoped without touching the shared ind",
+    "asked_at": "2026-09-20T18:49:12.054Z",
     "session": "ebf62723-3a4f-4554-8743-4a53fb9df78e"
   },
   "route": {
