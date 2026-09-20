@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-preflight-test-seam",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-preflight-test-seam\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 7d8e11d; capture what settled, then bee close --feature herding-preflight-test-seam.",
+  "next_action": "Close the fix.",
   "created_at": "2026-09-20T06:13:45.621Z",
   "run_state": "done",
   "waiting_on": null,
@@ -405,5 +405,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "herding-preflight-test-seam",
+    "date": "2026-09-20",
+    "at": "2026-09-20T06:30:27.354Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Close the fix."
   }
 }
