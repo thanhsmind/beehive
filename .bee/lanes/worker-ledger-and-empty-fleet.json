@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 1bab946; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at 90683ab; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-20T01:12:24.967Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: worker-ledger-and-empty-fleet",
-    "asked_at": "2026-09-20T02:07:46.150Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -34,7 +29,7 @@
   "gate_preview": {
     "feature": "worker-ledger-and-empty-fleet",
     "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
-    "previewed_at": "2026-09-20T01:57:20.145Z",
+    "previewed_at": "2026-09-20T02:18:24.842Z",
     "cells": [
       {
         "id": "wlf-3",
@@ -274,7 +269,7 @@
   "approved_cell_packet": {
     "feature": "worker-ledger-and-empty-fleet",
     "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
-    "previewed_at": "2026-09-20T01:57:20.145Z",
+    "previewed_at": "2026-09-20T02:18:24.842Z",
     "cells": [
       {
         "id": "wlf-3",
