@@ -808,6 +808,8 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // — `append_jsonl` already wrote the event above without this field.
     let new_id = js_disp_opt(jget(&event, "id"));
 
+    let active = active_decisions(root, false)?;
+
     // doc-impact-synthesis D1a: log-time touches-sweep. Each resolved
     // `touches:` id walks its own declared citations under docs/**
     // (`sweep_decision_citations`, the exact scan `decisions supersede`
@@ -815,35 +817,13 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // index and the logging feature's own live history excluded — enqueues
     // a must-fix capture stub. Supersede's own sweep (`do_supersede`
     // above) is untouched by this addition.
+    //
+    // touches-sweep-active-gate D1: skip the per-id sweep when the touched
+    // decision is still active. A touches: relation relates without retiring,
+    // so a live citation is not stale and enqueues nothing.
     if let Some(ids) = &touches {
-        for touched_id in ids {
-            let short8 = truncate_chars_head(touched_id, 8);
-            let sweep = sweep_decision_citations(root, touched_id, &short8);
-            let hits: Vec<Value> = match jget(&sweep, "files") {
-                Some(Value::Array(a)) => a.clone(),
-                _ => Vec::new(),
-            };
-            for hit in &hits {
-                let file = js_disp_opt(jget(hit, "file"));
-                if touches_sweep_excluded(&file, bound_feature.as_deref()) {
-                    continue;
-                }
-                let line = js_disp_opt(jget(hit, "line"));
-                let outcome = format!(
-                    "{file}:{line} cites decision {touched_id}, now touched by {new_id} — reconcile the citing doc against the touching decision."
-                );
-                add_capture_stub(
-                    root,
-                    &outcome,
-                    &[touched_id.clone(), new_id.clone()],
-                    &[file],
-                    "touches-sweep",
-                )?;
-            }
-        }
+        sweep_touches_citations(root, ids, &active, &new_id, bound_feature.as_deref())?;
     }
-
-    let active = active_decisions(root, false)?;
     let candidate_tags = normalized.clone().unwrap_or_default();
     let candidates =
         conflict_candidates(&active, js_trim(&p.decision), &candidate_tags, Some(&new_id));
@@ -888,4 +868,267 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         m.insert("update_obligations".into(), Value::Array(update_obligations));
     }
     Ok(Out::Emit(event, text, 0))
+}
+
+/// doc-impact-synthesis D1a / touches-sweep-active-gate D1: log-time touches-sweep.
+/// Walks each resolved `touches:` id against its declared citations under docs/**
+/// ONLY when that id is absent from the active set. When active, a touches: relation
+/// relates without retiring, so citations are not stale and queue nothing.
+pub(crate) fn sweep_touches_citations(
+    root: &Path,
+    touches: &[String],
+    active: &[Value],
+    new_id: &str,
+    bound_feature: Option<&str>,
+) -> R2<()> {
+    for touched_id in touches {
+        let is_active = active.iter().any(|e| match jget(e, "id") {
+            Some(Value::String(id)) => {
+                id == touched_id
+                    || (touched_id.len() == 8 && id.starts_with(touched_id.as_str()))
+            }
+            _ => false,
+        });
+        if is_active {
+            continue;
+        }
+        let short8 = truncate_chars_head(touched_id, 8);
+        let sweep = sweep_decision_citations(root, touched_id, &short8);
+        let hits: Vec<Value> = match jget(&sweep, "files") {
+            Some(Value::Array(a)) => a.clone(),
+            _ => Vec::new(),
+        };
+        for hit in &hits {
+            let file = js_disp_opt(jget(hit, "file"));
+            if touches_sweep_excluded(&file, bound_feature) {
+                continue;
+            }
+            let line = js_disp_opt(jget(hit, "line"));
+            let outcome = format!(
+                "{file}:{line} cites decision {touched_id}, now touched by {new_id} — reconcile the citing doc against the touching decision."
+            );
+            add_capture_stub(
+                root,
+                &outcome,
+                &[touched_id.clone(), new_id.to_string()],
+                &[file],
+                "touches-sweep",
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::verbs::decisions::supersede::{capture_queue_path, do_supersede, SupersedeParams};
+    use serde_json::json;
+    use std::path::Path;
+
+    fn fixture_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        tmp
+    }
+
+    fn write_events(root: &Path, lines: &[&str]) {
+        std::fs::write(decisions_path(root), format!("{}\n", lines.join("\n"))).unwrap();
+    }
+
+    #[test]
+    fn touches_on_live_decision_queues_nothing() {
+        let tmp = fixture_root();
+        let live_id = "11111111-2222-3333-4444-555555555555";
+        write_events(
+            tmp.path(),
+            &[&format!(
+                r#"{{"id":"{live_id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"live decision","rationale":"r"}}"#
+            )],
+        );
+        std::fs::create_dir_all(tmp.path().join("docs")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("guide.md"),
+            format!("cites {live_id}\n"),
+        )
+        .unwrap();
+
+        let p = LogParams {
+            decision: "touching live decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some(format!("touches:{live_id}")),
+            trigger: None,
+            feature: None,
+            rejected: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["relation"], "touches");
+        assert_eq!(event["touches"], json!([live_id]));
+
+        let queue = read_jsonl(&capture_queue_path(tmp.path()));
+        assert_eq!(queue.len(), 0, "touches on live decision must queue nothing");
+    }
+
+    #[test]
+    fn touches_on_retired_decision_queues_stubs() {
+        let tmp = fixture_root();
+        let retired_id = "22222222-3333-4444-5555-666666666666";
+        std::fs::create_dir_all(tmp.path().join("docs")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("guide.md"),
+            format!("cites {retired_id}\n"),
+        )
+        .unwrap();
+
+        // Active set does not contain retired_id.
+        let active = vec![];
+        sweep_touches_citations(
+            tmp.path(),
+            &[retired_id.to_string()],
+            &active,
+            "new-id",
+            None,
+        )
+        .unwrap();
+
+        let queue = read_jsonl(&capture_queue_path(tmp.path()));
+        assert_eq!(queue.len(), 1, "touches on retired decision queues a stub");
+        assert_eq!(queue[0]["kind"], "stub");
+        assert_eq!(queue[0]["source"], "touches-sweep");
+        assert_eq!(queue[0]["dids"], json!([retired_id, "new-id"]));
+        assert_eq!(queue[0]["files"], json!(["docs/guide.md"]));
+    }
+
+    #[test]
+    fn touches_on_retired_decision_respects_file_exclusions() {
+        let tmp = fixture_root();
+        let retired_id = "33333333-4444-5555-6666-777777777777";
+        // Generated index — excluded
+        std::fs::create_dir_all(tmp.path().join("docs").join("decisions")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("decisions").join("index.md"),
+            format!("cites {retired_id}\n"),
+        )
+        .unwrap();
+        // Own feature live history — excluded
+        std::fs::create_dir_all(tmp.path().join("docs").join("history").join("myfeat")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("history").join("myfeat").join("CONTEXT.md"),
+            format!("cites {retired_id}\n"),
+        )
+        .unwrap();
+        // Other feature history — citing doc
+        std::fs::create_dir_all(tmp.path().join("docs").join("history").join("otherfeat")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("history").join("otherfeat").join("CONTEXT.md"),
+            format!("cites {retired_id}\n"),
+        )
+        .unwrap();
+        // Area doc — citing doc
+        std::fs::write(
+            tmp.path().join("docs").join("area.md"),
+            format!("cites {retired_id}\n"),
+        )
+        .unwrap();
+
+        let active = vec![];
+        sweep_touches_citations(
+            tmp.path(),
+            &[retired_id.to_string()],
+            &active,
+            "new-id",
+            Some("myfeat"),
+        )
+        .unwrap();
+
+        let queue = read_jsonl(&capture_queue_path(tmp.path()));
+        assert_eq!(queue.len(), 2, "index and own history excluded, 2 stubs queued");
+        let mut files: Vec<String> = queue
+            .iter()
+            .map(|s| s["files"][0].as_str().unwrap().to_string())
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            vec![
+                "docs/area.md".to_string(),
+                "docs/history/otherfeat/CONTEXT.md".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn decision_carrying_both_relations_keeps_retiring_path_behavior() {
+        let tmp = fixture_root();
+        let target_id = "44444444-5555-6666-7777-888888888888";
+        let live_id = "55555555-6666-7777-8888-999999999999";
+        write_events(
+            tmp.path(),
+            &[
+                &format!(
+                    r#"{{"id":"{target_id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"retiring target","rationale":"r"}}"#
+                ),
+                &format!(
+                    r#"{{"id":"{live_id}","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"live target","rationale":"r"}}"#
+                ),
+            ],
+        );
+        std::fs::create_dir_all(tmp.path().join("docs")).unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("cite_target.md"),
+            format!("cites {target_id}\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("docs").join("cite_live.md"),
+            format!("cites {live_id}\n"),
+        )
+        .unwrap();
+
+        // 1. When touches contains both a live decision and a retired decision:
+        // the live decision queues nothing, while the retired decision queues its stub.
+        let active = vec![json!({"id": live_id})];
+        sweep_touches_citations(
+            tmp.path(),
+            &[live_id.to_string(), target_id.to_string()],
+            &active,
+            "new-id",
+            None,
+        )
+        .unwrap();
+
+        let queue = read_jsonl(&capture_queue_path(tmp.path()));
+        assert_eq!(queue.len(), 1, "only retired decision generates stub, live decision skipped");
+        assert_eq!(queue[0]["source"], "touches-sweep");
+        assert_eq!(queue[0]["files"], json!(["docs/cite_target.md"]));
+
+        // 2. The retiring relation (decisions supersede / do_supersede) keeps its own sweep behavior unchanged.
+        let out = do_supersede(
+            tmp.path(),
+            SupersedeParams {
+                id: target_id.into(),
+                decision: "superseding decision".into(),
+                rationale: "because".into(),
+                tags: None,
+                scope: None,
+            },
+            0,
+        );
+        let Ok(Out::Emit(event, _, 0)) = out else {
+            panic!("expected supersede success");
+        };
+        assert_eq!(event["type"], "supersede");
+        // Check that supersede-sweep ran and queued stubs for target_id.
+        let queue_after = read_jsonl(&capture_queue_path(tmp.path()));
+        assert!(queue_after.iter().any(|s| s["source"] == "supersede-sweep"));
+    }
 }
