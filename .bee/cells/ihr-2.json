@@ -1,0 +1,119 @@
+{
+  "id": "ihr-2",
+  "feature": "idempotent-herding-receipts",
+  "title": "Return the stored receipt on a replay and refuse a reused job id carrying different work",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "2eb61b7b",
+    "42a59eea",
+    "5d0692b5",
+    "10e20c92",
+    "11b68a1b",
+    "035a2ee5-28e7-48b3-a119-d96f7e0d81a1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/idempotent-herding-receipts/plan.md",
+    "docs/history/idempotent-herding-receipts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST, inside this cell: write the failing tests before the code exists and watch each fail for its reported reason. Cover, at minimum, the replay-returns-receipt case and the differing-digest-refuses case.\n\n(1) DIGEST HELPER, in mailbox.rs. Add `digest_path(bee_dir, job_id, round)` beside `brief_path` (:76) and `result_path` (:92), following that family exactly. The filename MUST fall outside both existing parser families — `parse_brief_filename` strips `brief-`/`.txt` (run.rs:3127-3133) and the Pi drain matches /^result-(\\d+)\\.json$/ (.pi/extensions/bee-guard.ts:729) — so use a name like `digest-N.sha256`. Add a `dispatch_digest(task, files)` function whose input is the dispatch's TASK TEXT and FILE LIST and NOTHING ELSE (D6): never the rendered brief, because render_brief embeds the absolute worktree root (mailbox.rs:277, :294) and the configured proof command (:312), so the same work in a moved worktree would hash differently. Write the digest atomically (crate::fsutil::write_json_atomic or the same temp+rename discipline) wherever the brief for that round is written — run.rs:2635 for a fresh run, :3374 for a --continue round.\n\nWhile you are in mailbox.rs, fix the wrong doc comment at :75: it describes `brief_path` as \"`.bee/mailbox/<job-id>/result-N.json` for a given round\". It returns brief-N.txt.\n\n(2) PRE-FLIGHT, in run.rs. Add it inside `fn run` (:3918) IMMEDIATELY after `parse_options` returns (:3924) — before the transport choice and before the `spawn_detached_runner` branch (:3944). D7 fixes this placement and claims 2 and 3 are why: `run()` branches on `no_pane` itself (:3959) and the detached path returns a SUCCESS envelope and exits (:3948-3951), so a check inside `fn execute` is reached only by direct callers and would leave a detached refusal invisible. Do NOT put it in `execute` or `execute_no_pane`.\n\nResolve the round exactly as the callee does — 1 for a fresh run (brief-1 is written at :2635), `mailbox::latest_result_round(...) + 1` for `--continue` (:3323-3327). A pre-flight that assumes round 1 for a --continue would refuse EVERY continue on every runtime.\n\nThen apply these five outcomes, in this order, and FAIL OPEN on I/O:\n  - no `result-N.json` for the resolved round -> PROCEED (fresh job, or a worker that crashed after its brief and before its result; it must stay re-runnable under its own id).\n  - result present, digest file ABSENT -> RETURN THE RECEIPT. Do not refuse: 344 legacy mailboxes carry no digest (claim 12).\n  - result present, digest MATCHES -> RETURN THE RECEIPT (D1).\n  - result present, digest DIFFERS -> REFUSE. The message names the stored receipt path and BOTH digests, and says the caller must pass a fresh --job-id. Follow the house refusal shape: `bee herding run: <what> FIX: <remedy>`.\n  - digest present but UNREADABLE -> PROCEED, with one note on stderr. An ENOSPC or permission fault must never refuse every dispatch.\n\nRETURNING THE RECEIPT means all three of: print the ordinary run JSON envelope carrying the STORED result (the same shape a real run prints), exit 0, AND call `write_inbox_marker` (D5). The marker is not optional — both transports write it inside their own callee (:2296-2302, :2892-2896), so a replay returning early from `run()` skips it, and a detached Pi session would then see a success envelope and wait forever for an injection that never comes.\n\nDo NOT add any prune verb or delete anything (D8). Do NOT weaken the at-least-once guarantee or add an exactly-once claim anywhere (D1). Do NOT touch .pi/extensions/bee-guard.ts — slice 1 is shipped and this cell must not re-open it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "each new test fails first, for its own reported reason, before the code exists",
+      "a second run with the same job_id, same round and same task+files prints the stored result, exits 0, and spawns nothing",
+      "that replay ALSO writes the result-inbox marker, so a detached Pi session still receives an injection",
+      "a second run with the same job_id and round but a different task refuses, names the stored receipt path and both digests, and spawns nothing",
+      "a mailbox holding a result but NO digest file returns the receipt and never refuses",
+      "an unreadable digest proceeds to spawn and notes it on stderr",
+      "a job with a brief but no result for the round proceeds, so a worker that crashed early stays re-runnable",
+      "a --continue at round 2 carrying the same task proceeds and is never refused as a round-1 conflict",
+      "the digest input is the task and files only: the same task dispatched from a different worktree path produces the same digest",
+      "the digest filename is ignored by latest_result_round and by the Pi drain's result regex",
+      "the pre-flight lives in fn run after parse_options, not in execute or execute_no_pane",
+      "the brief_path doc comment at mailbox.rs:75 no longer says result-N.json"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "digest_path joining the brief_path/result_path family, dispatch_digest over task+files, atomic write, and the corrected brief_path doc comment"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "the pre-flight in fn run after parse_options with all five outcomes, the receipt return including write_inbox_marker, and the digest write beside each brief write"
+      }
+    ],
+    "key_links": [
+      "the pre-flight sits above the spawn_detached_runner branch, so a refusal prints on the caller's own terminal",
+      "the replay path calls write_inbox_marker explicitly, because both callees that normally write it are skipped",
+      "dispatch_digest takes task and files, never a rendered brief"
+    ],
+    "prohibitions": [
+      "Do not place the check in fn execute or fn execute_no_pane",
+      "Do not digest the rendered brief-N.txt",
+      "Do not refuse when the digest file is absent or unreadable",
+      "Do not add a prune verb or delete any mailbox directory",
+      "Do not touch .pi/extensions/bee-guard.ts or the release manifest",
+      "Do not add an exactly-once claim anywhere in code, tests or docs"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "ihr-worker-2",
+    "outcome": "bee herding run returns the stored receipt on a replay and refuses a reused job id carrying different work",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "skills/bee-herding/references/operational-invariants.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "D6's files half is a no-op for bee herding run: the verb carries no file list, so the digest is task-only; write and read sites pass the same empty vec, so it is symmetric and correct today.",
+      "D6's files half is a no-op for bee herding run: the verb carries no file list (run.rs:2466, :2910, :3359 all build BriefSpec with an empty vec, all predating this cell), so the digest is task-only. Write sites (:2648, :3396) and the read site (:3971) pass the same empty vec, so it is symmetric and correct today. Logged as its own decision rather than left silent.",
+      "sync-ack: affects_skills was predicted [] at plan time and that prediction was wrong: the change made skills/bee-herding/references/operational-invariants.md stale (it said the verb always starts an agent). The skill WAS updated and regenerated in commit 94991b963 rather than acked past — this ack covers only the wrong prediction, not a skipped sync."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T04:41:46.954Z",
+    "behavior_change": true,
+    "verification_evidence": "36 suites 0 failed; the six new pre-flight cases pass by name (replay_with_matching_digest_returns_stored_receipt_and_spawns_nothing, replay_with_differing_digest_refuses_loudly_and_spawns_nothing, replay_with_missing_digest_returns_stored_receipt_legacy, replay_with_unreadable_digest_proceeds_to_spawn, job_with_brief_but_no_result_proceeds_to_spawn, continue_at_round_2_with_same_task_proceeds_and_is_not_refused)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "76a0509c-84a5-445c-86ac-2b892433feb9",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-09-20T04:25:37.582Z",
+    "sync_ack": "affects_skills was predicted [] at plan time and that prediction was wrong: the change made skills/bee-herding/references/operational-invariants.md stale (it said the verb always starts an agent). The skill WAS updated and regenerated in commit 94991b963 rather than acked past — this ack covers only the wrong prediction, not a skipped sync.",
+    "mistakes": [
+      {
+        "wrong": "The cell cited decision 7b3a93d4, which the leader had already superseded with 11b68a1b earlier in the same session",
+        "better": "cells claim-next refused with CONTRACT_RETIRED. The plan was written citing the pre-supersession id and nobody re-checked it against the active set before the cell was added."
+      }
+    ],
+    "report": {
+      "outcome": "bee herding run now returns the stored receipt on a replay and refuses loudly when a reused job id carries different work, checked in the parent before any transport choice or detached re-launch.",
+      "commit": "1355bbde8acead68f2153702c8604e3878455206",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — 36 suites 0 failed; the six new pre-flight cases pass by name (replay_with_matching_digest_returns_stored_receipt_and_spawns_nothing, replay_with_differing_digest_refuses_loudly_and_spawns_nothing, replay_with_missing_digest_returns_stored_receipt_legacy, replay_with_unreadable_digest_proceeds_to_spawn, job_with_brief_but_no_result_proceeds_to_spawn, continue_at_round_2_with_same_task_proceeds_and_is_not_refused)",
+      "deviations": [
+        "D6's files half is a no-op for bee herding run: the verb carries no file list (run.rs:2466, :2910, :3359 all build BriefSpec with an empty vec, all predating this cell), so the digest is task-only. Write sites (:2648, :3396) and the read site (:3971) pass the same empty vec, so it is symmetric and correct today. Logged as its own decision rather than left silent."
+      ],
+      "mistakes": [
+        "The cell cited decision 7b3a93d4, which the leader had already superseded with 11b68a1b earlier in the same session — cells claim-next refused with CONTRACT_RETIRED. The plan was written citing the pre-supersession id and nobody re-checked it against the active set before the cell was added."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

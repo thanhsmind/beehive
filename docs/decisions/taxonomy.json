@@ -544,6 +544,7 @@
     "worker-ledger",
     "contract:worker-prune-keep-set",
     "retention",
-    "contract:pi-result-injection-header"
+    "contract:pi-result-injection-header",
+    "contract:herding-run-replay"
   ]
 }
