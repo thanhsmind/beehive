@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 67b52d5; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-20T01:12:24.967Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: worker-ledger-and-empty-fleet",
+    "asked_at": "2026-09-20T01:28:24.681Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -403,12 +408,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-09-20T01:25:40.469Z",
-    "branch": "wt/worker-ledger-and-empty-fleet",
-    "worktree_id": "beehive--wt--worker-ledger-and-empty-fleet",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
