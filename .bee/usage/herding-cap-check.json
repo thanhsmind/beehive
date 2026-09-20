@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "herding-cap-check",
+  "closed_at": "2026-09-20T14:17:30.117Z",
+  "sessions": [
+    {
+      "session_id": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+      "models": {
+        "claude-opus-5": {
+          "input": 1382,
+          "output": 370363,
+          "cache_write": 1234022,
+          "cache_read": 288296548,
+          "new": 1605767,
+          "cached": 288296548,
+          "total": 289902315
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1789888468545,
+      "ended_ms": 1789913844294,
+      "totals": {
+        "new": 1605767,
+        "cached": 288296548,
+        "total": 289902315
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1605767,
+      "cached": 288296548,
+      "total": 289902315
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 1605767,
+      "cached": 288296548,
+      "total": 289902315
+    }
+  }
+}

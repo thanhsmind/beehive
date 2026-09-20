@@ -1323,5 +1323,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-09-20T10:47:41.133Z"
+  },
+  "herding-cap-check": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T14:17:30.037Z"
   }
 }
