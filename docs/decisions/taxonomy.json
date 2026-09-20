@@ -542,6 +542,8 @@
     "tool-gate",
     "single-source-of-truth",
     "worker-ledger",
-    "contract:worker-prune-keep-set"
+    "contract:worker-prune-keep-set",
+    "retention",
+    "contract:pi-result-injection-header"
   ]
 }

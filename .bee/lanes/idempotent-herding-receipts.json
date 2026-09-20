@@ -1,0 +1,466 @@
+{
+  "schema_version": "1.0",
+  "feature": "idempotent-herding-receipts",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"idempotent-herding-receipts\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming for ihr-1.",
+  "created_at": "2026-09-20T03:35:00.363Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "SPLIT RECOMMENDED: do D1/D3/D4 (the receipt, its refusal, and bee herding prune) get a second shaping pass, or wait? The hat wave found 4 spec gaps and rated prune 14 MB / not material.",
+    "asked_at": "2026-09-20T03:54:22.253Z",
+    "session": "76a0509c-84a5-445c-86ac-2b892433feb9"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "data-model",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-09-20T03:37:32.827Z",
+    "feature": "idempotent-herding-receipts"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-20T03:52:46.547Z",
+    "feature": "idempotent-herding-receipts",
+    "newest_decision_id": "3bca331c-af26-4d42-baa8-44f45a62c916",
+    "plan_sha256": "a94d5892acc097a463b4b8fc03fbd3f5a6aa456a03edcfafc2ada14297ba046f",
+    "advisor": "plan-step hat wave: hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact",
+    "digest_head": "# Hat wave synthesis — idempotent-herding-receipts, plan step\n\nDate: 2026-09-20. Five seats, dispatched through `bee dispatch prepare\n--kind advisor --role <seat>`: three as Agent workers, two as herding panes.\nThis synthesis is the plan check AND the high-risk gate's advisor consult.\n\n## Verdict\n\nThe wave rejected two of the plan's three slices and corrected four of its\nfourteen load-bearing claims. The plan was rewritten to slice 1 only.\n\n## What each seat changed\n\n**hat-facts-gaps** — audited"
+  },
+  "gate_preview": {
+    "feature": "idempotent-herding-receipts",
+    "plan_sha256": "a94d5892acc097a463b4b8fc03fbd3f5a6aa456a03edcfafc2ada14297ba046f",
+    "previewed_at": "2026-09-20T03:52:51.550Z",
+    "cells": [
+      {
+        "id": "ihr-1",
+        "feature": "idempotent-herding-receipts",
+        "title": "Name the round in the result injection so a later round is not read as a replay",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "2f189c37",
+          "a05636f8-d308-466c-95a6-80ca3490c585"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/idempotent-herding-receipts/plan.md",
+          "docs/history/idempotent-herding-receipts/CONTEXT.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "RED FIRST, inside this cell: write the failing test before the fix exists, run it, and watch it fail for the REPORTED reason — a round-2 result reaching a session under an already-seen job id with no round on the header. Only then change the belt.\n\nIn packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs add one test to the existing result-inbox drain family (the siblings are at :3079, :3112 and :3231; match their stub-under-node harness exactly — same node subprocess, same stub `pi` object, same stub `.bee/bin/bee`, same named-skip posture via `node_or_skip`). The test drives the sequence the plan's claim 6 and claim 12 describe: a job mailbox holding `result-1.json`, one marker, one injection; then `result-2.json` written and the marker re-created (a `--continue` round, per claim 12 — `write_inbox_marker` runs again on every non-dry-run invocation); then a second drain tick. Assert the second injection carries `round: 2`, NOT `round: 1`, and that the two injections are distinguishable by that row alone.\n\nIn .pi/extensions/bee-guard.ts make exactly two changes. (1) `renderResultInjection` (:781) gains a `round` row. Take the round from the result FILE NAME the drain already parsed — `latestResultFile` (:720) matches `/^result-(\\d+)\\.json$/` and already computes `best.round`, so thread that number through rather than re-deriving it, and never read it from the marker (the marker has no round, claim 12, and adding one was rejected). Place the row directly after `job_id` so job and round read as one key. A result whose round cannot be parsed omits the row and still injects — `headerValue` already drops empty values, so nothing throws (test matrix dimension 2). (2) The data-posture sentence at :802 changes its dedupe key from `job_id` to `job_id + round`: a repeat of the SAME job id AND the SAME round is the replay; a same job id at a HIGHER round is a new result and must not be dropped. Keep the literal substrings \"at-least-once\" and \"dedupe key\" in that sentence — claim 9 shows two existing assertions pin them, and D1 keeps the at-least-once guarantee unchanged.\n\nThen update the ONE exact-row assertion claim 13 names: `fenced_rows(text)` compared with `assert_eq!` on a full vec at :3273, inside the_injected_fence_carries_header_rows_only_never_the_report_body. Add the new row in its new position. Do NOT touch the other `fenced_rows` call site at :2786-2794 — it asserts by containment (`rows.contains(&format!(\"seat: {seat}\"))`), so an added row is already safe there, and editing it would be churn. The plan-step hat wave corrected an earlier draft that claimed two sites; there is one.\n\nDo NOT add a round field to the result-inbox marker, do NOT change `write_inbox_marker` in run.rs, do NOT touch the report body path, and do NOT weaken the at-least-once guarantee or add any exactly-once claim anywhere in code, tests or docs (D1, a05636f8).\n\nREGEN, inside this cell, after the belt edit and before the cap: `.pi/extensions` is a root the release manifest hashes, so run the full chain in order — `.bee/bin/bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write) — and commit the regenerated docs/history/codex-harness-hardening/release-manifest.json with the rest. The cell's verify ends in `bee dev release-manifest --check`, which is what proves the manifest matches the shipped extension.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the new test fails first, for the reported reason: the second injection carries no round and is indistinguishable from the first",
+            "after the fix, a round-2 result injected under an already-seen job id carries the row `round: 2`",
+            "the round is taken from the result filename the drain already parsed, never from the marker",
+            "a result whose round cannot be parsed omits the row, injects anyway, and throws nothing",
+            "a_restart_before_the_turn_settled_redelivers_the_same_job_id_at_least_once still passes: two messages, and the text still contains both `at-least-once` and `dedupe key`",
+            "the_injected_fence_carries_header_rows_only_never_the_report_body passes with the new row set, and still counts exactly two fences",
+            "the containment-style fenced_rows site at :2786-2794 is left unedited and still green",
+            "bee dev regen ran after the belt edit and the regenerated release manifest is committed with the change",
+            "bee dev release-manifest --check passes, so the manifest matches the shipped extension",
+            "the dedupe sentence names job_id AND round together as the key",
+            "no string anywhere in the diff claims exactly-once delivery"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "renderResultInjection gains the round row threaded from latestResultFile's parsed round; the dedupe sentence names job_id + round"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "the new round-2 drain test, plus the ONE exact-row assertion at :3273 updated to the new row set"
+            },
+            {
+              "path": "docs/history/codex-harness-hardening/release-manifest.json",
+              "substantive": "regenerated by bee dev regen so the manifest hash matches the edited belt"
+            }
+          ],
+          "key_links": [
+            "the round value flows from latestResultFile's existing regex capture into renderResultInjection, with no second parse",
+            "the round row sits directly after job_id so the two read as one key",
+            "the at-least-once and dedupe key substrings survive in the reworded sentence"
+          ],
+          "prohibitions": [
+            "Do not add a round field to the result-inbox marker or change write_inbox_marker",
+            "Do not change the at-least-once guarantee or add an exactly-once claim",
+            "Do not let the report body ride the injection",
+            "Do not touch fn execute, mailbox.rs, or anything belonging to slice 2 or 3"
+          ]
+        },
+        "behavior_change": true
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "plan-hat-wave",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk lane: the plan-step hat wave is both the plan check and the gate's advisor consult."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Fixed hat-wave seat; this feature deletes files, which is this seat's subject."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Fixed hat-wave seat; cites the inline SMALLER PATH check above."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Every load-bearing claim was read directly in this repo; no unfamiliar territory and no external source."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A later slice needs a narrow fact from a known file.",
+          "reason": "Cheap narrow lookups during execution."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A slice needs a multi-file hunt the leader does not already hold.",
+          "reason": "Mechanical multi-file reads delegate down-tier."
+        },
+        {
+          "stage": "cell-execution",
+          "classification": "required",
+          "role": "code",
+          "reason": "Every cell in slice 1 writes Rust or TypeScript and its tests."
+        },
+        {
+          "stage": "test-authoring",
+          "classification": "required",
+          "role": "test",
+          "reason": "Slice 1 is red-first; the failing contract test is authored before the fix."
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "Slice 2 or 3 changes a documented CLI contract.",
+          "reason": "config-reference and the herding knowledge area carry the verb table."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The user invokes an independent review.",
+          "reason": "Independent review is user-invoked only, never an automatic stage."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session; no cold observer tick needed."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every writing stage resolves to a named role above; the fall-through tail is unused."
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "Slice 2 and 3 cells are drafted after slice 1 caps."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No open design shape — the repo's own mailbox pattern is the precedent to copy."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "See blind-lane-1."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "See blind-lane-1."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "idempotent-herding-receipts",
+    "plan_sha256": "a94d5892acc097a463b4b8fc03fbd3f5a6aa456a03edcfafc2ada14297ba046f",
+    "previewed_at": "2026-09-20T03:52:51.550Z",
+    "cells": [
+      {
+        "id": "ihr-1",
+        "feature": "idempotent-herding-receipts",
+        "title": "Name the round in the result injection so a later round is not read as a replay",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "2f189c37",
+          "a05636f8-d308-466c-95a6-80ca3490c585"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/idempotent-herding-receipts/plan.md",
+          "docs/history/idempotent-herding-receipts/CONTEXT.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "RED FIRST, inside this cell: write the failing test before the fix exists, run it, and watch it fail for the REPORTED reason — a round-2 result reaching a session under an already-seen job id with no round on the header. Only then change the belt.\n\nIn packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs add one test to the existing result-inbox drain family (the siblings are at :3079, :3112 and :3231; match their stub-under-node harness exactly — same node subprocess, same stub `pi` object, same stub `.bee/bin/bee`, same named-skip posture via `node_or_skip`). The test drives the sequence the plan's claim 6 and claim 12 describe: a job mailbox holding `result-1.json`, one marker, one injection; then `result-2.json` written and the marker re-created (a `--continue` round, per claim 12 — `write_inbox_marker` runs again on every non-dry-run invocation); then a second drain tick. Assert the second injection carries `round: 2`, NOT `round: 1`, and that the two injections are distinguishable by that row alone.\n\nIn .pi/extensions/bee-guard.ts make exactly two changes. (1) `renderResultInjection` (:781) gains a `round` row. Take the round from the result FILE NAME the drain already parsed — `latestResultFile` (:720) matches `/^result-(\\d+)\\.json$/` and already computes `best.round`, so thread that number through rather than re-deriving it, and never read it from the marker (the marker has no round, claim 12, and adding one was rejected). Place the row directly after `job_id` so job and round read as one key. A result whose round cannot be parsed omits the row and still injects — `headerValue` already drops empty values, so nothing throws (test matrix dimension 2). (2) The data-posture sentence at :802 changes its dedupe key from `job_id` to `job_id + round`: a repeat of the SAME job id AND the SAME round is the replay; a same job id at a HIGHER round is a new result and must not be dropped. Keep the literal substrings \"at-least-once\" and \"dedupe key\" in that sentence — claim 9 shows two existing assertions pin them, and D1 keeps the at-least-once guarantee unchanged.\n\nThen update the ONE exact-row assertion claim 13 names: `fenced_rows(text)` compared with `assert_eq!` on a full vec at :3273, inside the_injected_fence_carries_header_rows_only_never_the_report_body. Add the new row in its new position. Do NOT touch the other `fenced_rows` call site at :2786-2794 — it asserts by containment (`rows.contains(&format!(\"seat: {seat}\"))`), so an added row is already safe there, and editing it would be churn. The plan-step hat wave corrected an earlier draft that claimed two sites; there is one.\n\nDo NOT add a round field to the result-inbox marker, do NOT change `write_inbox_marker` in run.rs, do NOT touch the report body path, and do NOT weaken the at-least-once guarantee or add any exactly-once claim anywhere in code, tests or docs (D1, a05636f8).\n\nREGEN, inside this cell, after the belt edit and before the cap: `.pi/extensions` is a root the release manifest hashes, so run the full chain in order — `.bee/bin/bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write) — and commit the regenerated docs/history/codex-harness-hardening/release-manifest.json with the rest. The cell's verify ends in `bee dev release-manifest --check`, which is what proves the manifest matches the shipped extension.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the new test fails first, for the reported reason: the second injection carries no round and is indistinguishable from the first",
+            "after the fix, a round-2 result injected under an already-seen job id carries the row `round: 2`",
+            "the round is taken from the result filename the drain already parsed, never from the marker",
+            "a result whose round cannot be parsed omits the row, injects anyway, and throws nothing",
+            "a_restart_before_the_turn_settled_redelivers_the_same_job_id_at_least_once still passes: two messages, and the text still contains both `at-least-once` and `dedupe key`",
+            "the_injected_fence_carries_header_rows_only_never_the_report_body passes with the new row set, and still counts exactly two fences",
+            "the containment-style fenced_rows site at :2786-2794 is left unedited and still green",
+            "bee dev regen ran after the belt edit and the regenerated release manifest is committed with the change",
+            "bee dev release-manifest --check passes, so the manifest matches the shipped extension",
+            "the dedupe sentence names job_id AND round together as the key",
+            "no string anywhere in the diff claims exactly-once delivery"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "renderResultInjection gains the round row threaded from latestResultFile's parsed round; the dedupe sentence names job_id + round"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "the new round-2 drain test, plus the ONE exact-row assertion at :3273 updated to the new row set"
+            },
+            {
+              "path": "docs/history/codex-harness-hardening/release-manifest.json",
+              "substantive": "regenerated by bee dev regen so the manifest hash matches the edited belt"
+            }
+          ],
+          "key_links": [
+            "the round value flows from latestResultFile's existing regex capture into renderResultInjection, with no second parse",
+            "the round row sits directly after job_id so the two read as one key",
+            "the at-least-once and dedupe key substrings survive in the reworded sentence"
+          ],
+          "prohibitions": [
+            "Do not add a round field to the result-inbox marker or change write_inbox_marker",
+            "Do not change the at-least-once guarantee or add an exactly-once claim",
+            "Do not let the report body ride the injection",
+            "Do not touch fn execute, mailbox.rs, or anything belonging to slice 2 or 3"
+          ]
+        },
+        "behavior_change": true
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "plan-hat-wave",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk lane: the plan-step hat wave is both the plan check and the gate's advisor consult."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Fixed hat-wave seat; this feature deletes files, which is this seat's subject."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Fixed hat-wave seat; cites the inline SMALLER PATH check above."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Fixed hat-wave seat."
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Every load-bearing claim was read directly in this repo; no unfamiliar territory and no external source."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A later slice needs a narrow fact from a known file.",
+          "reason": "Cheap narrow lookups during execution."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A slice needs a multi-file hunt the leader does not already hold.",
+          "reason": "Mechanical multi-file reads delegate down-tier."
+        },
+        {
+          "stage": "cell-execution",
+          "classification": "required",
+          "role": "code",
+          "reason": "Every cell in slice 1 writes Rust or TypeScript and its tests."
+        },
+        {
+          "stage": "test-authoring",
+          "classification": "required",
+          "role": "test",
+          "reason": "Slice 1 is red-first; the failing contract test is authored before the fix."
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "Slice 2 or 3 changes a documented CLI contract.",
+          "reason": "config-reference and the herding knowledge area carry the verb table."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The user invokes an independent review.",
+          "reason": "Independent review is user-invoked only, never an automatic stage."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session; no cold observer tick needed."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every writing stage resolves to a named role above; the fall-through tail is unused."
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "Slice 2 and 3 cells are drafted after slice 1 caps."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No open design shape — the repo's own mailbox pattern is the precedent to copy."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "See blind-lane-1."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "See blind-lane-1."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-09-20T04:05:36.601Z",
+    "branch": "wt/idempotent-herding-receipts",
+    "worktree_id": "beehive--wt--idempotent-herding-receipts",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

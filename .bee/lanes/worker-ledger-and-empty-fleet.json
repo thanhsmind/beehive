@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The only sanctioned escape is an `impact-deferral` decision. Logging it with the honest reason.",
-    "asked_at": "2026-09-20T02:24:46.343Z",
+    "subject": "main is in sync. Checking the local worktree branches for anything not already in main.",
+    "asked_at": "2026-09-20T02:30:56.583Z",
     "session": "216eecd1-df88-4449-9865-5310500ae2ba"
   },
   "route": {
