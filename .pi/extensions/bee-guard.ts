@@ -94,7 +94,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { execFile, execFileSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 const BINARY_NAMES = ["bee", "bee.exe"]
@@ -490,6 +490,14 @@ function mapToolCall(tool: string, input: any): MappedCall {
         passthrough: false,
       }
 
+    case "verdict":
+      return {
+        hook: "write-guard",
+        tool_name: "verdict",
+        tool_input: args,
+        passthrough: false,
+      }
+
     default: {
       // FAIL-SAFE. Never a silent allow: bee decides, on the write-capable
       // shape (or read-only web fetch) that best fits the unknown arguments.
@@ -630,11 +638,14 @@ const RESULT_FENCE_TAG = "bee-result"
  * session. */
 const HEADER_VALUE_MAX = 400
 
+const IN_FLIGHT_WORKERS_WIDGET_KEY = "bee-workers"
+
 /** The timer, its session token and its directory. Module-lifetime only — the
  * inbox on disk is the state that survives, never these. */
 let drainTimer: ReturnType<typeof setInterval> | null = null
 let drainToken: string | null = null
 let drainDirectory: string | null = null
+let activeDrainCtx: any = null
 /** Re-entrancy guard: a tick that is still awaiting an injection never starts a
  * second one. */
 let drainInFlight = false
@@ -680,6 +691,12 @@ function stopDrainTimer(): void {
   }
   drainTimer = null
   scope[DRAIN_SLOT] = null
+  if (activeDrainCtx?.ui && typeof activeDrainCtx.ui.setWidget === "function") {
+    try {
+      activeDrainCtx.ui.setWidget(IN_FLIGHT_WORKERS_WIDGET_KEY, undefined)
+    } catch {}
+  }
+  activeDrainCtx = null
 }
 
 /** The same guard `herding/run.rs::inbox_dir` applies on the writing side: a
@@ -932,12 +949,159 @@ async function drainResultInbox(pi: any, directory: string, token: string): Prom
   }
 }
 
+// ─── in-flight workers widget (D2–D5) ───────────────────────────────────────
+
+/**
+ * Derives the short suffix of a job id (e.g. "4153108-1" from "job-1789892858126-4153108-1",
+ * or "100" from "job-100"). Used as fallback when marker carries neither seat nor cell_id.
+ */
+function shortJobSuffix(jobId: string): string {
+  const parts = jobId.split("-")
+  if (parts.length > 2 && /^\d{10,}$/.test(parts[1])) {
+    return parts.slice(2).join("-")
+  }
+  if (parts.length > 1) {
+    return parts.slice(1).join("-")
+  }
+  return jobId.length > 8 ? jobId.slice(-8) : jobId
+}
+
+/**
+ * Renders a row for one in-flight worker marker.
+ * Rules:
+ * - When marker carries seat and cell_id: "<seat> · <cell_id>"
+ * - When marker carries seat only: "<seat>"
+ * - When marker carries cell_id only: "<cell_id>"
+ * - When neither field is present: fall back to the job id's short suffix
+ * - Always prefixed with the progress tick glyph for in-flight work: "▸ " (D5)
+ */
+function formatWorkerRow(marker: { seat?: string; cell_id?: string; job_id?: string }): string {
+  const seat = typeof marker.seat === "string" ? marker.seat.trim() : ""
+  const cellId = typeof marker.cell_id === "string" ? marker.cell_id.trim() : ""
+  const jobId = typeof marker.job_id === "string" ? marker.job_id.trim() : ""
+
+  let label = ""
+  if (seat && cellId) {
+    label = `${seat} · ${cellId}`
+  } else if (seat) {
+    label = seat
+  } else if (cellId) {
+    label = cellId
+  } else if (jobId) {
+    label = shortJobSuffix(jobId)
+  } else {
+    label = "worker"
+  }
+
+  return `▸ ${label}`
+}
+
+/**
+ * Reads pending in-flight worker markers from .bee/result-inbox/<token>/ and carried tokens.
+ * Advisory posture: an absent or unreadable inbox returns an empty list and never throws.
+ */
+function getInFlightMarkers(
+  directory: string,
+  token: string,
+): Array<{ job_id?: string; seat?: string; cell_id?: string }> {
+  try {
+    const mainRoot = mainCheckoutRoot(directory)
+    loadRelocationCarry(mainRoot)
+
+    const carried = carriedInboxTokens.get(token) ?? []
+    const tokens = [token, ...carried.filter((t) => t !== token)]
+
+    const candidates: Array<{ dir: string; name: string }> = []
+    for (const tok of tokens) {
+      const dir = path.join(mainRoot, ".bee", "result-inbox", tok)
+      if (!isDirectory(dir)) continue
+      let names: string[]
+      try {
+        names = readdirSync(dir)
+      } catch {
+        continue
+      }
+      for (const name of names) {
+        if (name.endsWith(".json")) {
+          candidates.push({ dir, name })
+        }
+      }
+    }
+
+    if (candidates.length === 0) return []
+
+    candidates.sort((a, b) => a.name.localeCompare(b.name))
+
+    const list: Array<{ job_id?: string; seat?: string; cell_id?: string }> = []
+    for (const { dir, name } of candidates) {
+      const markerPath = path.join(dir, name)
+      const marker = readJsonObject(markerPath)
+      if (!marker || typeof marker !== "object") continue
+      const job_id = typeof marker.job_id === "string" ? marker.job_id : name.replace(/\.json$/, "")
+      const seat = typeof marker.seat === "string" ? marker.seat : undefined
+      const cell_id = typeof marker.cell_id === "string" ? marker.cell_id : undefined
+      list.push({ job_id, seat, cell_id })
+    }
+    return list
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Factory for Pi's ui.setWidget(<key>, factory, { placement: "belowEditor" }).
+ * Returns a component with render(width) returning rows and invalidate().
+ * Takes no input (D4).
+ */
+function createInFlightWorkersWidget(rows: string[]) {
+  const component = {
+    render: (_width?: number) => rows,
+    invalidate: () => {},
+  }
+  const factory = (_tui?: any, _theme?: any) => component
+  ;(factory as any).lines = rows
+  ;(factory as any).component = component
+  return factory
+}
+
+/**
+ * Updates the in-flight workers widget:
+ * - If in-flight markers exist: sets widget with placement "belowEditor".
+ * - If no in-flight markers exist: clears widget via setWidget(key, undefined) (D3).
+ * - Advisory posture: never throws.
+ */
+function refreshInFlightWorkersWidget(
+  ctx: any,
+  directory: string | null,
+  token: string | null,
+): void {
+  try {
+    if (!ctx?.ui || typeof ctx.ui.setWidget !== "function") return
+    if (!directory || !token) {
+      ctx.ui.setWidget(IN_FLIGHT_WORKERS_WIDGET_KEY, undefined)
+      return
+    }
+
+    const markers = getInFlightMarkers(directory, token)
+    if (markers.length === 0) {
+      ctx.ui.setWidget(IN_FLIGHT_WORKERS_WIDGET_KEY, undefined)
+      return
+    }
+
+    const rows = markers.map(formatWorkerRow)
+    const factory = createInFlightWorkersWidget(rows)
+    ctx.ui.setWidget(IN_FLIGHT_WORKERS_WIDGET_KEY, factory, { placement: "belowEditor" })
+  } catch (err: any) {
+    console.error(`bee in-flight-workers widget (advisory): ${err?.message ?? err}`)
+  }
+}
+
 /** Arms the drain for THIS session. Called from `session_start` and nowhere
  * else — the "no load-time timer" rule is enforced by where this is called.
  * Silent and timer-less in every case that cannot deliver: a repo with no bee
  * store (passivity), a host with no `sendUserMessage`, or a session whose id
  * cannot name a directory. */
-function startResultDrain(pi: any, directory: string, sessionId: string | undefined): void {
+function startResultDrain(pi: any, directory: string, sessionId: string | undefined, ctx?: any): void {
   stopDrainTimer()
   // A session boundary resets every latch, so a missed `agent_settled` from a
   // previous runtime can never wedge delivery (pi-peer service.ts:472-483).
@@ -946,6 +1110,7 @@ function startResultDrain(pi: any, directory: string, sessionId: string | undefi
   inFlightClaims.clear()
   drainToken = null
   drainDirectory = null
+  activeDrainCtx = ctx ?? null
 
   if (!beeStorePresent(directory)) return
   if (typeof pi?.sendUserMessage !== "function") return
@@ -962,6 +1127,10 @@ function startResultDrain(pi: any, directory: string, sessionId: string | undefi
 
   drainToken = token
   drainDirectory = directory
+
+  // Immediately render current in-flight workers (if any) on session start
+  refreshInFlightWorkersWidget(activeDrainCtx, directory, token)
+
   const timer = setInterval(() => {
     if (drainInFlight) return
     const activeDirectory = drainDirectory
@@ -969,7 +1138,13 @@ function startResultDrain(pi: any, directory: string, sessionId: string | undefi
     if (!activeDirectory || !activeToken) return
     drainInFlight = true
     void Promise.resolve()
-      .then(() => drainResultInbox(pi, activeDirectory, activeToken))
+      .then(async () => {
+        try {
+          await drainResultInbox(pi, activeDirectory, activeToken)
+        } finally {
+          refreshInFlightWorkersWidget(activeDrainCtx, activeDirectory, activeToken)
+        }
+      })
       .catch((err: any) => {
         console.error(`bee result-inbox (advisory) tick did not complete: ${err?.message ?? err}`)
       })
@@ -2069,6 +2244,193 @@ function refreshModelUsageStatus(ctx: any): void {
   }
 }
 
+// ─── verdict terminating tool (D6 amended by 6b7e8f49) ──────────────────────
+
+/** Resolves the bee store directory (.bee) across candidateRoots. */
+function resolveBeeStore(directory: string): string | null {
+  for (const root of candidateRoots(directory)) {
+    const candidate = path.join(root, ".bee")
+    if (isDirectory(candidate)) return candidate
+  }
+  return null
+}
+
+const VERDICT_TOOL_NAME = "verdict"
+
+const VERDICT_TOOL_PARAMETERS = {
+  type: "object",
+  properties: {
+    status: {
+      type: "string",
+      enum: ["done", "blocked"],
+      description: "Final status of the work: done or blocked",
+    },
+    summary: {
+      type: "string",
+      description: "One-line summary of what happened or why the worker blocked",
+    },
+    files_changed: {
+      type: "array",
+      items: { type: "string" },
+      description: "Paths of files changed or created",
+    },
+    proof: {
+      type: "string",
+      description: "Command or evidence backing the outcome",
+    },
+    options: {
+      type: "array",
+      items: { type: "string" },
+      description: "Optional ways forward when blocked with a choice",
+    },
+    leaning: {
+      type: "string",
+      description: "Optional preferred option, repeated word for word",
+    },
+    report_path: {
+      type: "string",
+      description: "Optional path to the full report markdown file",
+    },
+    dissent: {
+      type: "object",
+      properties: {
+        claim: { type: "string" },
+        alternative: { type: "string" },
+        severity: { type: "string", enum: ["blocker", "consider"] },
+      },
+      required: ["claim", "alternative", "severity"],
+      description: "Optional structured disagreement with the task",
+    },
+  },
+  required: ["status", "summary", "files_changed", "proof"],
+}
+
+async function executeVerdictTool(
+  _toolCallId: string,
+  params: any,
+  _signal?: any,
+  _onUpdate?: any,
+  ctx?: any,
+) {
+  if (!params || typeof params !== "object") {
+    throw new Error("Verdict parameters must be an object")
+  }
+  const required = ["status", "summary", "files_changed", "proof"]
+  for (const field of required) {
+    if (params[field] === undefined || params[field] === null) {
+      throw new Error(`Missing required field: ${field}`)
+    }
+  }
+  if (params.status !== "done" && params.status !== "blocked") {
+    throw new Error(`Invalid status: ${params.status} (expected 'done' or 'blocked')`)
+  }
+  if (typeof params.summary !== "string") {
+    throw new Error("Field 'summary' must be a string")
+  }
+  if (!Array.isArray(params.files_changed)) {
+    throw new Error("Field 'files_changed' must be an array of strings")
+  }
+  if (typeof params.proof !== "string") {
+    throw new Error("Field 'proof' must be a string")
+  }
+
+  const directory = directoryOf(ctx)
+  const store = resolveBeeStore(directory)
+  if (!store) {
+    throw new Error("No .bee store found to record verdict")
+  }
+
+  let jobId = typeof process.env.BEE_HERDING_JOB_ID === "string" ? process.env.BEE_HERDING_JOB_ID.trim() : ""
+  let mailboxDir: string | null = null
+  if (jobId) {
+    const candidate = path.join(store, "mailbox", jobId)
+    if (isDirectory(candidate)) {
+      mailboxDir = candidate
+    }
+  }
+  if (!mailboxDir) {
+    const mailboxRoot = path.join(store, "mailbox")
+    if (isDirectory(mailboxRoot)) {
+      try {
+        const entries = readdirSync(mailboxRoot, { withFileTypes: true })
+        const dirs = entries
+          .filter((e) => e.isDirectory())
+          .map((e) => path.join(mailboxRoot, e.name))
+        if (dirs.length > 0) {
+          dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+          mailboxDir = dirs[0]
+          jobId = path.basename(mailboxDir)
+        }
+      } catch {}
+    }
+  }
+  if (!mailboxDir) {
+    throw new Error("No job mailbox directory found under .bee/mailbox to record verdict")
+  }
+
+  let round = 1
+  try {
+    const names = readdirSync(mailboxDir)
+    let maxRound = 0
+    for (const name of names) {
+      const m = /^(?:result|brief|ack)-(\d+)\.(?:json|txt)$/.exec(name)
+      if (m) {
+        const r = Number.parseInt(m[1], 10)
+        if (Number.isFinite(r) && r > maxRound) maxRound = r
+      }
+    }
+    if (maxRound > 0) round = maxRound
+  } catch {}
+
+  const resultPayload: Record<string, unknown> = {
+    status: params.status,
+    summary: params.summary,
+    files_changed: params.files_changed,
+    proof: params.proof,
+  }
+  if (Array.isArray(params.options)) {
+    resultPayload.options = params.options
+  }
+  if (typeof params.leaning === "string" && params.leaning.length > 0) {
+    resultPayload.leaning = params.leaning
+  }
+  if (typeof params.report_path === "string" && params.report_path.length > 0) {
+    resultPayload.report_path = params.report_path
+  }
+  if (params.dissent && typeof params.dissent === "object") {
+    resultPayload.dissent = params.dissent
+  }
+
+  const tmpFile = path.join(mailboxDir, `result-${round}.json.tmp`)
+  const finalFile = path.join(mailboxDir, `result-${round}.json`)
+  try {
+    writeFileSync(tmpFile, JSON.stringify(resultPayload, null, 2) + "\n", "utf8")
+    renameSync(tmpFile, finalFile)
+  } catch (err: any) {
+    throw new Error(`Failed to write verdict result-${round}.json: ${err?.message ?? err}`)
+  }
+
+  return {
+    content: [{ type: "text", text: `Verdict recorded: ${params.status} (${params.summary})` }],
+    details: resultPayload,
+    terminate: true,
+  }
+}
+
+const verdictTool = {
+  name: VERDICT_TOOL_NAME,
+  label: VERDICT_TOOL_NAME,
+  description:
+    "Record the structured worker verdict (status, summary, files_changed, proof) and conclude execution.",
+  promptSnippet: "Emit a final structured verdict to conclude execution",
+  promptGuidelines: [
+    "Use verdict as your final action when finishing or blocking on assigned work.",
+    "After calling verdict, do not emit another assistant response in the same turn.",
+  ],
+  parameters: VERDICT_TOOL_PARAMETERS,
+  execute: executeVerdictTool,
+}
+
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
@@ -2119,7 +2481,7 @@ export default function (pi: ExtensionAPI) {
       // load. Its own try, so a drain that cannot start never costs the
       // session its preamble.
       try {
-        startResultDrain(pi, directory, sessionIdOf(ctx))
+        startResultDrain(pi, directory, sessionIdOf(ctx), ctx)
       } catch (err: any) {
         console.error(`bee result-inbox (advisory) could not start: ${err?.message ?? err}`)
       }
@@ -2148,6 +2510,7 @@ export default function (pi: ExtensionAPI) {
     // and the busy fact must never depend on the hook call below.
     turnStartPending = false
     selfBusy = true
+    if (ctx) activeDrainCtx = ctx
     try {
       const directory = directoryOf(ctx)
       const parts: string[] = []
@@ -2585,6 +2948,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── ADVISORY: active-branch model usage statusline refresh ─────────────────
   pi.on("turn_end", (async (_event: any, ctx: any) => {
+    if (ctx) activeDrainCtx = ctx
     refreshModelUsageStatus(ctx)
   }) as any)
 
@@ -2912,6 +3276,10 @@ export default function (pi: ExtensionAPI) {
       }
     },
   })
+
+  if (typeof (pi as any).registerTool === "function") {
+    ;(pi as any).registerTool(verdictTool)
+  }
 }
 
 // Exported for the belt parity/contract suite (pi_plugin_contracts.rs), which
@@ -2924,4 +3292,14 @@ export {
   POST_EXIT_MERGE_MARGIN_MS,
   NODE_MAX_TIMER_TIMEOUT_MS,
   validateTransitionIntent,
+  VERDICT_TOOL_NAME,
+  VERDICT_TOOL_PARAMETERS,
+  executeVerdictTool,
+  verdictTool,
+  IN_FLIGHT_WORKERS_WIDGET_KEY,
+  shortJobSuffix,
+  formatWorkerRow,
+  createInFlightWorkersWidget,
+  getInFlightMarkers,
+  refreshInFlightWorkersWidget,
 }

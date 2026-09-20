@@ -132,8 +132,9 @@ From the quick scout only. Downstream agents read these before planning.
 ## Canonical References
 
 - `~/.local/share/mise/installs/pi/0.85.1/pi/docs/extensions.md` — the
-  version-matched host contract. `:2019` (`terminate`), `:2613-2619`
-  (`setWidget`), `:1677` (active-tool APIs), `:1529` (duplicate command names).
+  version-matched host contract. `:2019` (`terminate`), `:2616` (the
+  `belowEditor` widget call), `:2033` (schema validation runs before
+  `execute()`), `:1677` (active-tool APIs), `:1529` (duplicate command names).
 - `docs/history/pi-native-stage-driver/CONTEXT.md` — D6, D7, D9, D11 are
   inherited premises, cited above and never reinterpreted here.
 - `docs/history/research/pi-harness-session-surface-xia.md` — evidence pack.
