@@ -402,7 +402,8 @@ name a herd. The two config routes stay disjoint: `herd = pane`, always.
 
 ## `bee herding run` — one foreign agent as a cell-execution worker
 
-`bee herding run` is a native verb, not a script: give it one task, and it
+`bee herding run` is a native verb, not a script: give it one task, and —
+unless that job id and round already answered, see the replay rule below — it
 starts ONE external CLI agent (any herdr-supported kind — token 0 of
 `herding.agent_command` passes straight through, same seam as above) in a
 fresh pane, hands it a fully self-contained brief, and waits for a written
@@ -412,6 +413,28 @@ the way an in-family subagent is today (herding-executor D1). Flags:
 `--close-always`, `--main-root`, `--json`, `--expertise`, `--dry-run` — the last renders
 `job.json` and the brief and spawns nothing, the seam this verb's own tests
 drive instead of a real `herdr`.
+
+**A job id that already answered is not run twice (idempotent-herding-receipts
+D1/D3/D5/D7).** Before the transport is chosen and before any detached
+re-launch, `run` resolves the round the callee would use — 1 for a fresh run,
+`latest_result_round + 1` for `--continue` — and looks for a stored
+`result-N.json`. If one exists, it compares the incoming dispatch digest
+against `digest-N.sha256` beside it:
+
+- digest **matches**, or no digest file at all (every mailbox written before
+  this feature): the stored result is printed as an ordinary run envelope, the
+  result-inbox marker is still written so a detached session still receives its
+  injection, and **nothing is spawned**;
+- digest **differs**: the run refuses, naming the stored receipt path and both
+  digests, and spawns nothing — pass a fresh `--job-id`;
+- digest unreadable, or no result for that round: the run proceeds normally, so
+  an I/O fault never refuses a dispatch and a worker that died after its brief
+  stays re-runnable under its own id.
+
+The digest covers the dispatch's task and files, never the rendered brief —
+`render_brief` embeds the absolute worktree root and the configured proof
+command, so hashing it would refuse the same work in a moved worktree. Today
+`herding run` carries no file list, so the digest is task-only.
 
 **Completion travels through a file mailbox, never a screen (D3).**
 `.bee/mailbox/<job-id>/` holds `job.json`, round-numbered `result-N.json`,

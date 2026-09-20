@@ -11,6 +11,7 @@ bee integrates with the Pi runtime using an extension file, fail-closed health i
 - `pi-turn-tracking` tracks session turn completion and records idle and turn-end state without cross-session contamination.
 - `pi-herding-transport` validates agent pane transport for Pi worker execution.
 - `pi-model-usage-status` aggregates active-branch assistant token totals by provider and model and renders compact new and cached token counts in Pi's statusline.
+- `pi-no-pane-dispatch` drives child-process worker execution directly without tmux panes for pi binary agents, returning full output through standard mailbox reports.
 
 ## How to get to it (user POV)
 
@@ -18,6 +19,7 @@ bee integrates with the Pi runtime using an extension file, fail-closed health i
 - Run `bash .bee/verify/verify-app/control-bee cli -- doctor attest --runtime pi --json`.
 - Execute Pi integration contracts via `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts`.
 - Execute Pi model usage status contract via `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts model_usage_status`.
+- Dispatch native worker with `HERDR_ENV=1 HERDR_PANE_ID=1 bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime pi --kind advisor --role advisor --purpose "<purpose>" --json` and run the returned command with `--no-pane`.
 
 ## Driving it with control-bee
 
@@ -142,6 +144,22 @@ Preconditions:
   - Compact format displays thousands (`k`) and millions (`m`).
   - Turn completion refreshes totals and empty branch clears status.
 
+- **No-pane dispatch runs worker as child process and returns report (native-dispatch outcome).**
+  Configure `team.pi` with an advisor role mapped to an agent whose argv starts with `pi` in `herding.agents`.
+  Run dispatch prepare to obtain the no-pane command:
+  `HERDR_ENV=1 HERDR_PANE_ID=1 bash .bee/verify/verify-app/control-bee cli -- dispatch prepare --runtime pi --kind advisor --role advisor --purpose "test no-pane" --json`
+  Assert the command output:
+  - Exit code is 0.
+  - Returned command carries `--no-pane`.
+  - Field `transport_ready` is `true`.
+  Drive execution through the returned command:
+  `printf "Briefly summarize the purpose of this repository in under 20 words." | bash .bee/verify/verify-app/control-bee cli -- herding run --task-file - --json --agent "pi-gpt-5.6-luna" --no-pane --seat "advisor"`
+  Assert the command output:
+  - Exit code is 0.
+  - Payload field `outcome` is `"done"`.
+  - `pane_id` is `null` and `closed_pane` is `false`.
+  - Full report file is written at `report_path` in `.bee/mailbox/<job-id>/report-1.md`.
+
 ## Gotchas
 
 - Pi has no structurally unprovable trust rows. Do not expect attestation to succeed; `doctor attest --runtime pi` always refuses.
@@ -149,3 +167,4 @@ Preconditions:
 - Herding transport defaults to herdr. When `HERDR_ENV` or `HERDR_PANE_ID` is unset, doctor reports `herding_transport` as not ok and exits 1. When `herding.transport` is configured as tmux, `$TMUX` must be set.
 - Every missing or unreadable required artifact returns `not_ok` or `unknown` and fails closed to `blocked` (exit 1).
 - Direct write-guard pipes with synthetic diffs do not reproduce installed hook context; use `cargo test -p bee --test pi_plugin_contracts` to drive real installed commands.
+- In-child workers execute with `BEE_HERDING_WORKER=1`. Under `packages/bee-rs/crates/bee/src/hooks/mod.rs`, that marker causes every hook except `activity` to exit 0 immediately, muting `write-guard` enforcement inside herded child subprocesses.

@@ -72,9 +72,33 @@ pub(crate) fn log_path(bee_dir: &Path, job_id: &str) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join("log.txt")
 }
 
-/// `.bee/mailbox/<job-id>/result-N.json` for a given round.
+/// `.bee/mailbox/<job-id>/brief-N.txt` for a given round.
 pub(crate) fn brief_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join(format!("brief-{round}.txt"))
+}
+
+use sha2::{Digest, Sha256};
+
+/// The bare filename for a round's digest — `digest-N.sha256`.
+fn digest_filename(round: u32) -> String {
+    format!("digest-{round}.sha256")
+}
+
+/// `.bee/mailbox/<job-id>/digest-N.sha256` for a given round.
+pub(crate) fn digest_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(digest_filename(round))
+}
+
+/// A fixed-length fingerprint of the dispatch's task and files (D6).
+pub(crate) fn dispatch_digest<S: AsRef<str>>(task: &str, files: &[S]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(task.as_bytes());
+    hasher.update(b"\0");
+    for f in files {
+        hasher.update(f.as_ref().as_bytes());
+        hasher.update(b"\0");
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 /// herding-brief-file D1: the ONE-LINE prompt actually delivered to the
@@ -1418,6 +1442,38 @@ the report file's exact final name"),
     fn latest_result_round_is_none_for_an_empty_mailbox() {
         let entries: Vec<String> = Vec::new();
         assert_eq!(latest_result_round(&entries), None);
+    }
+
+    #[test]
+    fn latest_result_round_ignores_digest_files() {
+        let entries = vec![
+            "digest-1.sha256".to_string(),
+            "digest-2.sha256".to_string(),
+            "result-1.json".to_string(),
+        ];
+        assert_eq!(latest_result_round(&entries), Some(1));
+    }
+
+    #[test]
+    fn digest_path_joins_brief_path_and_result_path_family() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let path = digest_path(&bee_dir, "job-test", 2);
+        assert_eq!(path, bee_dir.join("mailbox").join("job-test").join("digest-2.sha256"));
+    }
+
+    #[test]
+    fn dispatch_digest_covers_task_and_files_only() {
+        let d1 = dispatch_digest("implement feature", &["crates/bee/src/main.rs".to_string()]);
+        let d2 = dispatch_digest("implement feature", &["crates/bee/src/main.rs".to_string()]);
+        assert_eq!(d1, d2, "same task and files must produce the same digest");
+        assert_eq!(d1.len(), 64, "digest must be 64-char sha256 hex");
+
+        let d_diff_task = dispatch_digest("different task", &["crates/bee/src/main.rs".to_string()]);
+        assert_ne!(d1, d_diff_task, "differing task must produce different digest");
+
+        let d_diff_files = dispatch_digest("implement feature", &["crates/bee/src/other.rs".to_string()]);
+        assert_ne!(d1, d_diff_files, "differing files must produce different digest");
     }
 
     #[test]

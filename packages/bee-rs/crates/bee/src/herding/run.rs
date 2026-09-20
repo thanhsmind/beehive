@@ -2116,21 +2116,7 @@ fn resolve_report(bee_dir: &Path, job_id: &str, result: &mut MailboxResult) {
     result.report_note = note;
 }
 
-fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
-    let dir = mailbox::mailbox_dir(bee_dir, job_id);
-    let entries: Vec<String> = match std::fs::read_dir(&dir) {
-        Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
-        Err(e) => {
-            return RunOutcome::Malformed {
-                error: format!("could not list {}: {e}", dir.display()),
-                report_path: None,
-            }
-        }
-    };
-    let round = match mailbox::select_latest_round(&entries) {
-        Ok(r) => r,
-        Err(e) => return RunOutcome::Malformed { error: e.to_string(), report_path: None },
-    };
+fn read_result_for_round(bee_dir: &Path, job_id: &str, round: u32) -> RunOutcome {
     let path = mailbox::result_path(bee_dir, job_id, round);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
@@ -2153,6 +2139,24 @@ fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
             report_path: probe_report(bee_dir, job_id, round).0,
         },
     }
+}
+
+fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
+    let dir = mailbox::mailbox_dir(bee_dir, job_id);
+    let entries: Vec<String> = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
+        Err(e) => {
+            return RunOutcome::Malformed {
+                error: format!("could not list {}: {e}", dir.display()),
+                report_path: None,
+            }
+        }
+    };
+    let round = match mailbox::select_latest_round(&entries) {
+        Ok(r) => r,
+        Err(e) => return RunOutcome::Malformed { error: e.to_string(), report_path: None },
+    };
+    read_result_for_round(bee_dir, job_id, round)
 }
 
 /// Appends the D9 dispatch.jsonl row and a wave-ledger row (the same
@@ -2636,6 +2640,15 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     if let Err(e) = crate::fsutil::write_text_atomic(&brief_file, &brief) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", brief_file.display())),
+            pane_id: Some(new_pane),
+            closed_pane: false,
+        };
+    }
+    let digest_file = mailbox::digest_path(&bee_dir, &opts.job_id, 1);
+    let digest = mailbox::dispatch_digest(&opts.task, &files);
+    if let Err(e) = crate::fsutil::write_text_atomic(&digest_file, &digest) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", digest_file.display())),
             pane_id: Some(new_pane),
             closed_pane: false,
         };
@@ -3379,6 +3392,15 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             closed_pane: false,
         };
     }
+    let digest_file = mailbox::digest_path(&bee_dir, job_id, next_round);
+    let digest = mailbox::dispatch_digest(&opts.task, &files);
+    if let Err(e) = crate::fsutil::write_text_atomic(&digest_file, &digest) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", digest_file.display())),
+            pane_id: Some(pane_id),
+            closed_pane: false,
+        };
+    }
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round_result = mailbox::result_path(&bee_dir, job_id, next_round);
     let round_ack = mailbox::ack_path(&bee_dir, job_id, next_round);
@@ -3923,6 +3945,91 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    // Idempotent Herding Receipts (ihr-2, D1, D3, D5, D6, D7):
+    // Pre-flight runs in parent before any transport choice or detached re-launch.
+    let bee_dir = opts.main_root.join(".bee");
+    let round = if opts.is_continue {
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        let entries: Vec<String> = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
+            Err(_) => Vec::new(),
+        };
+        match mailbox::latest_result_round(&entries) {
+            Some(r) => r + 1,
+            None => 0,
+        }
+    } else {
+        1
+    };
+
+    if round > 0 {
+        let result_path = mailbox::result_path(&bee_dir, &opts.job_id, round);
+        if result_path.exists() {
+            let digest_path = mailbox::digest_path(&bee_dir, &opts.job_id, round);
+            let files: Vec<String> = Vec::new();
+            let incoming_digest = mailbox::dispatch_digest(&opts.task, &files);
+
+            enum PreflightAction {
+                ReturnReceipt,
+                Refuse { stored_digest: String },
+                Proceed,
+            }
+
+            let action = if !digest_path.exists() {
+                // Outcome 2: result present, digest file ABSENT -> RETURN THE RECEIPT (legacy mailboxes, claim 12)
+                PreflightAction::ReturnReceipt
+            } else {
+                match std::fs::read_to_string(&digest_path) {
+                    Ok(content) => {
+                        let stored_digest = content.trim();
+                        if stored_digest == incoming_digest {
+                            // Outcome 3: result present, digest MATCHES -> RETURN THE RECEIPT (D1)
+                            PreflightAction::ReturnReceipt
+                        } else {
+                            // Outcome 4: result present, digest DIFFERS -> REFUSE (D3)
+                            PreflightAction::Refuse { stored_digest: stored_digest.to_string() }
+                        }
+                    }
+                    Err(e) => {
+                        // Outcome 5: digest present but UNREADABLE -> PROCEED, with one note on stderr
+                        eprintln!(
+                            "bee herding run: could not read digest file {}: {e} — proceeding anyway",
+                            digest_path.display()
+                        );
+                        PreflightAction::Proceed
+                    }
+                }
+            };
+
+            match action {
+                PreflightAction::Refuse { stored_digest } => {
+                    eprintln!(
+                        "bee herding run: job \"{}\" round {} already has a stored receipt at {} with digest \"{}\" (incoming task digest is \"{}\") FIX: pass a fresh --job-id",
+                        opts.job_id,
+                        round,
+                        result_path.display(),
+                        stored_digest,
+                        incoming_digest,
+                    );
+                    return ExitCode::FAILURE;
+                }
+                PreflightAction::ReturnReceipt => {
+                    write_inbox_marker(&bee_dir, &opts);
+                    let outcome = read_result_for_round(&bee_dir, &opts.job_id, round);
+                    let result = ExecResult { outcome, pane_id: None, closed_pane: false };
+                    if opts.json || opts.inbox_session.is_some() {
+                        println!("{}", result_envelope(&opts, &result, "replay", None));
+                    } else {
+                        emit_result(&opts, &result, "replay", None);
+                    }
+                    return ExitCode::SUCCESS;
+                }
+                PreflightAction::Proceed => {}
+            }
+        }
+    }
+
     // tmux-herding-transport D1: the transport is chosen from config here,
     // before ANY side effect — an illegal `herding.transport` refuses with no
     // job file written and no pane split. When running in --no-pane mode (D11),
@@ -9468,6 +9575,169 @@ mod tests {
         }
         let exit = exit_code_for(&result.outcome);
         assert_eq!(exit, std::process::ExitCode::SUCCESS);
+    }
+
+    // ─── Idempotent Herding Receipts (ihr-2) Pre-flight Tests ────────────
+
+    #[test]
+    fn replay_with_matching_digest_returns_stored_receipt_and_spawns_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-replay-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        let result_content = r#"{"status":"done","summary":"stored result summary","files_changed":["src/lib.rs"],"proof":"cargo test — green:unit — lib"}"#;
+        std::fs::write(mbox.join("result-1.json"), result_content).unwrap();
+
+        // Write matching digest for task "same task" and empty files
+        let digest = mailbox::dispatch_digest("same task", &Vec::<String>::new());
+        std::fs::write(mbox.join("digest-1.sha256"), &digest).unwrap();
+
+        let session_inbox = bee_dir.join("result-inbox").join("sess-test");
+        std::fs::create_dir_all(&session_inbox).unwrap();
+
+        // When run() is called for this dispatch, it must return SUCCESS, write inbox marker, and spawn nothing.
+        // If it attempted to spawn, it would fail because no transport / agent is configured in this temp root.
+        let exit = run(&[
+            "--task", "same task",
+            "--job-id", "job-replay-1",
+            "--main-root", &root,
+            "--inbox-session", "sess-test",
+            "--json",
+        ]);
+
+        assert_eq!(exit, ExitCode::SUCCESS, "replay with matching digest must exit SUCCESS");
+        assert!(session_inbox.join("job-replay-1.json").exists(), "replay must write inbox marker");
+        assert!(!mbox.join("job.json").exists(), "replay must spawn nothing (no job.json)");
+    }
+
+    #[test]
+    fn replay_with_differing_digest_refuses_loudly_and_spawns_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-diff-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        std::fs::write(
+            mbox.join("result-1.json"),
+            r#"{"status":"done","summary":"orig","files_changed":[],"proof":"p"}"#,
+        ).unwrap();
+        std::fs::write(mbox.join("digest-1.sha256"), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").unwrap();
+
+        let exit = run(&[
+            "--task", "different task",
+            "--job-id", "job-diff-1",
+            "--main-root", &root,
+            "--json",
+        ]);
+
+        assert_eq!(exit, ExitCode::FAILURE, "differing digest must refuse with FAILURE");
+        assert!(!mbox.join("job.json").exists(), "refusal must spawn nothing");
+    }
+
+    #[test]
+    fn replay_with_missing_digest_returns_stored_receipt_legacy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-legacy-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        std::fs::write(
+            mbox.join("result-1.json"),
+            r#"{"status":"done","summary":"legacy result","files_changed":[],"proof":"p"}"#,
+        ).unwrap();
+        // No digest file is present (344 legacy mailboxes case)
+
+        let exit = run(&[
+            "--task", "any task",
+            "--job-id", "job-legacy-1",
+            "--main-root", &root,
+            "--json",
+        ]);
+
+        assert_eq!(exit, ExitCode::SUCCESS, "legacy mailbox with no digest must return receipt");
+        assert!(!mbox.join("job.json").exists(), "must spawn nothing");
+    }
+
+    #[test]
+    fn replay_with_unreadable_digest_proceeds_to_spawn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-unreadable-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        std::fs::write(
+            mbox.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"p"}"#,
+        ).unwrap();
+        // Make digest-1.sha256 a directory so read_to_string fails
+        std::fs::create_dir_all(mbox.join("digest-1.sha256")).unwrap();
+
+        // Since it proceeds past pre-flight in a bare temp dir without tmux/pane config,
+        // it fails at transport setup rather than returning early receipt.
+        let exit = run(&[
+            "--task", "any task",
+            "--job-id", "job-unreadable-1",
+            "--main-root", &root,
+            "--json",
+        ]);
+
+        assert_eq!(exit, ExitCode::FAILURE, "proceeding to spawn fails transport in empty tempdir");
+    }
+
+    #[test]
+    fn job_with_brief_but_no_result_proceeds_to_spawn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-crashed-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        // Brief exists, but worker crashed before result
+        std::fs::write(mbox.join("brief-1.txt"), "some brief").unwrap();
+
+        let exit = run(&[
+            "--task", "same task",
+            "--job-id", "job-crashed-1",
+            "--main-root", &root,
+            "--json",
+        ]);
+
+        // Must proceed past pre-flight (not treated as replay because no result-1.json)
+        assert_eq!(exit, ExitCode::FAILURE, "crashed job proceeds to spawn");
+    }
+
+    #[test]
+    fn continue_at_round_2_with_same_task_proceeds_and_is_not_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-cont-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+
+        // Round 1 has result and digest
+        std::fs::write(
+            mbox.join("result-1.json"),
+            r#"{"status":"done","summary":"r1","files_changed":[],"proof":"p"}"#,
+        ).unwrap();
+        let digest = mailbox::dispatch_digest("same task", &Vec::<String>::new());
+        std::fs::write(mbox.join("digest-1.sha256"), &digest).unwrap();
+
+        // Running with --continue job-cont-1 resolves to round 2, which has no result-2.json,
+        // so it proceeds and is NEVER refused as a round 1 conflict.
+        let exit = run(&[
+            "--task", "same task",
+            "--continue", "job-cont-1",
+            "--main-root", &root,
+            "--json",
+        ]);
+
+        // It proceeds to execute_continue (which fails due to missing pane/job in empty tempdir, NOT preflight refusal)
+        assert_eq!(exit, ExitCode::FAILURE);
     }
 }
 
