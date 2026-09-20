@@ -108,6 +108,15 @@ rebuild the binary so `doctor` agrees (D9, claim 10).
 
 **Risk map.**
 
+**Regen obligation (caught by the `cells add` dry-run, not by the draft).**
+`.pi/extensions` is a root the release manifest hashes, so each cell also lists
+`docs/history/codex-harness-hardening/release-manifest.json`, runs the full
+`bee dev regen` chain before capping, and carries
+`bee dev release-manifest --check` in its verify. This was added after Gate 2
+was first taken: the dry-run refused both cells, the gate was unapproved, the
+packet corrected, and the gate re-taken. Recorded here because a plan whose
+cells were corrected after approval must say so.
+
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
 | `mapToolCall` routing row | MEDIUM — a wrong row either blocks every verdict call or opens a hole in a shared belt | `pws-1` | `pi_plugin_contracts` green, plus the claim-5 command re-run against the new row |
@@ -263,12 +272,12 @@ seat of the three.** All three seats resolved; none was dropped.
     "status": "open",
     "deps": [],
     "decisions": ["6b7e8f49", "dae51a75", "e29aa9cd"],
-    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md"],
+    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md", "docs/history/codex-harness-hardening/release-manifest.json"],
     "read_first": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/herding/mailbox.rs"],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10).",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "A worker calling the verdict tool ends its run without a follow-up assistant turn",
@@ -298,12 +307,12 @@ seat of the three.** All three seats resolved; none was dropped.
     "status": "open",
     "deps": ["pws-1"],
     "decisions": ["7dfd593d"],
-    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md"],
+    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs", ".bee/verify/verify-app/features/pi-runtime.md", "docs/history/codex-harness-hardening/release-manifest.json"],
     "read_first": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/herding/run.rs"],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9).",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "A dispatched detached worker appears as a row naming its seat",
