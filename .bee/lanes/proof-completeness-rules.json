@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "proof-completeness-rules",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": false,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"proof-completeness-rules\" started at phase \"exploring\" (lane).",
-  "next_action": "Flush the proof-completeness-rules stub at the next compound pass.",
+  "next_action": "bee close finished \"proof-completeness-rules\" — feature is closed.",
   "created_at": "2026-09-20T15:32:27.461Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
