@@ -561,6 +561,8 @@
     "contract:cap-baseline",
     "contract:cap-baseline-floor",
     "cap-baseline-floor",
-    "baseline-release-clear"
+    "baseline-release-clear",
+    "contract:dispatch-cell-id",
+    "dispatch-cell-id-flag"
   ]
 }
