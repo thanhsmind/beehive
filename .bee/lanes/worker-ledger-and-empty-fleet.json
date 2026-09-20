@@ -14,12 +14,7 @@
   "next_action": "Merged into main at 90683ab; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-20T01:12:24.967Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: worker-ledger-and-empty-fleet",
-    "asked_at": "2026-09-20T01:54:19.542Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -33,70 +28,52 @@
   },
   "gate_preview": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "94bfa895672b89386f37bcfb4fb584a2caefc9047907ccef332616642e31c62d",
-    "previewed_at": "2026-09-20T01:44:40.575Z",
+    "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
+    "previewed_at": "2026-09-20T01:57:20.145Z",
     "cells": [
       {
-        "id": "wlf-2",
+        "id": "wlf-3",
         "feature": "worker-ledger-and-empty-fleet",
-        "title": "Mark a receipt capped when its cell is capped, from the post-merge block",
+        "title": "Append the run's outcome to its wave-ledger row when the run ends",
         "lane": "standard",
         "role": "code",
         "status": "open",
         "deps": [],
         "decisions": [
-          "602e80ae-6431-4da7-8fc3-d7a2828c9778",
           "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
         ],
         "files": [
-          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
         ],
         "read_first": [
-          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Red first, and name EVERY new test with `reconcile` in it so one filter covers the slice. Step 1, in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs: add tests that pin the wanted behaviour and watch them fail. A receipt row {nickname, cell, status: \"running\"} whose .bee/cells/<cell>.json reads status \"capped\" must end up with status \"capped\"; a receipt whose cell reads \"open\", whose cell file is missing, or whose cell file is unparseable must be left exactly as it was; the array length must be unchanged; and a row that is already \"capped\" must stay \"capped\" without being counted as changed. Step 2, in state_group/workers.rs: add `pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2>` beside read_prune_keep_set. It runs inside ONE worker_mutate frame, walks the rows, and for each row whose cell is capped per the existing is_cell_file_capped predicate (added in slice 1 — reuse it, do not write a second one) upserts that row through push_worker_record with status \"capped\", preserving the row's existing nickname, cell and tier. It returns the number of rows it actually changed. It must add no row and remove no row. Step 3, in verbs/worktree/phases.rs: call it once from the post-merge block, inside the same best-effort arm that already writes and commits the lane file around lines 964-1000. Follow that arm's existing contract exactly — a failure warns on its own line and NEVER turns a green merge red, the same way the lane write and the bookkeeping commit already behave. Do not invent a new error path and do not add a new refusal. Step 4, in verbs/worktree/tests.rs: add a test proving a merge stays green when the reconcile fails, driven the same way the existing lane-write tests drive that arm. Do not change any existing assertion, do not touch registered_worker_for_cell, and do not delete any receipt row.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
+        "action": "Red first, and name EVERY new test with `ledger_outcome` in it so one filter covers the cell. Today herding/run.rs appends a wave-ledger row at dispatch time with `outcome: None` (around line 2178-2194) and never appends again, so 431 of 437 worker rows in the live ledger are still blank. The ledger's own header (wave_ledger.rs:26-31) says a caller MAY append a second time for the same wave_id once the outcome is known, and the read-time fold (fold_waves_by_wave_id) makes the later row supersede the earlier one — so this is an APPEND, never a rewrite. Step 1, add tests that fail: a run that finishes appends a SECOND wave-ledger row for the same wave_id whose worker outcome equals the same string the result envelope reports (outcome_label, run.rs:3435-3449); the first row's bytes are still present and unchanged on disk; and an append failure leaves the run's own outcome and exit code exactly as they were. Step 2, make them pass: where the run's outcome becomes known, build a WaveRow with the same wave_id, started_at and worker identity as the dispatch-time row, set the worker's outcome to outcome_label(&result.outcome), fill evidence with the report or log path the run already knows (or None when it has none), and append it through wave_ledger::append_wave. Copy the existing best-effort contract at run.rs:2192-2194 exactly — a failure prints its own warning line and NEVER changes the run's outcome or exit code. Do not rewrite or delete any ledger line, do not change outcome_label's vocabulary, do not touch herding/wave.rs, and do not change any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
         "must_haves": {
           "truths": [
-            "A running receipt whose cell is capped ends up capped",
-            "A receipt whose cell is open, missing or unparseable is left untouched",
-            "The receipt array's length is unchanged across a reconcile",
-            "A failing reconcile leaves bee worktree merge green"
+            "A finished run appends a second ledger row for its wave_id carrying the same outcome string the envelope reports",
+            "The dispatch-time row's bytes are still on disk unchanged after the second append",
+            "A failing ledger append leaves the run's outcome and exit code unchanged"
           ],
           "artifacts": [
             {
-              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-              "substantive": "reconcile_capped_workers, one worker_mutate frame, reusing is_cell_file_capped and push_worker_record; no TODO stubs"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
-              "substantive": "one call inside the existing best-effort post-merge arm, warn-never-block"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-              "substantive": "reconcile tests covering capped, open, missing, unparseable, already-capped and array length"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
-              "substantive": "a test that a failing reconcile keeps the merge green"
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "a second append_wave call carrying outcome_label's value, under the existing best-effort contract; no TODO stubs"
             }
           ],
           "key_links": [
-            "reconcile_capped_workers calls the same is_cell_file_capped the keep set uses",
-            "the post-merge arm calls reconcile_capped_workers and swallows its failure into a warning"
+            "the appended outcome string is the same one outcome_label produces for the result envelope"
           ],
           "prohibitions": [
-            "No new CLI verb and no registry change",
-            "No row added and no row removed by the reconcile",
-            "No change to registered_worker_for_cell, the cap guard, or the SubagentStop nudge",
-            "No edit to any existing assertion",
-            "No new refusal or error path in bee worktree merge"
+            "No rewrite or deletion of any ledger line",
+            "No change to outcome_label's vocabulary",
+            "No change to herding/wave.rs or wave_ledger.rs",
+            "No new failure path in bee herding run",
+            "No edit to any existing assertion"
           ]
         },
         "trace": {
@@ -107,6 +84,61 @@
           "friction": null,
           "capped_at": null,
           "behavior_change": true
+        }
+      },
+      {
+        "id": "wlf-4",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Name a closed wave in which no worker succeeded an empty fleet",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `empty_fleet` in it so one filter covers the cell. Add a pure verdict over the folded waves in wave_ledger.rs, beside the existing is_closed and live_worker_count. A wave is an EMPTY FLEET when all three hold: it is closed by the existing is_closed predicate (every worker reported an outcome — reuse it, do not write a second one), it has at least one worker, and no worker's outcome is \"done\". Three cases are explicitly NOT an empty fleet and each needs its own test: a wave with zero workers launched nothing; a wave with any worker still carrying a null outcome is still running; and a wave whose workers all carry \"dry_run\" did nothing real. A wave with at least one \"done\" is not an empty fleet however many others failed. Return enough for a caller to report it — the wave_id and the worker names with their outcomes — and cap the number of names returned so a huge wave cannot produce an unbounded string. This cell adds a function and its tests only: do not wire it into any command, any output or any hook, and do not change is_closed, fold_waves_by_wave_id, live_worker_count or any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+        "must_haves": {
+          "truths": [
+            "A closed wave whose workers all failed is an empty fleet",
+            "A closed wave with at least one done outcome is not an empty fleet",
+            "A wave with no workers is not an empty fleet",
+            "A wave with any unreported worker is not an empty fleet",
+            "A closed wave whose workers are all dry_run is not an empty fleet"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+              "substantive": "an empty-fleet verdict reusing is_closed, with a cap on the number of worker names returned; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the verdict calls the existing is_closed rather than re-deriving closedness"
+          ],
+          "prohibitions": [
+            "No wiring into any command, output or hook in this cell",
+            "No change to is_closed, fold_waves_by_wave_id or live_worker_count",
+            "No change to herding/run.rs or herding/wave.rs",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
         }
       }
     ],
@@ -119,19 +151,19 @@
           "stage": "implement",
           "classification": "required",
           "role": "code",
-          "reason": "one Rust function plus one call site and their tests, in one crate"
+          "reason": "two small Rust changes, one file each, in one crate"
         },
         {
           "stage": "tests",
           "classification": "required",
           "role": "test",
-          "reason": "the red-first reconcile tests and the merge-stays-green test are the whole proof of this slice"
+          "reason": "red-first tests are the whole proof of both cells"
         },
         {
           "stage": "research",
           "classification": "not-applicable",
           "role": "read",
-          "reason": "slice 2's open question was closed by the orchestrator's own reads; the evidence is in claims 2, 3, 5, 7 and 9 and the deviation is named in Approach"
+          "reason": "the ledger reads that reordered this slice were done by the orchestrator; the evidence is claims 1 through 9 and the deviation is named in Approach"
         },
         {
           "stage": "extraction",
@@ -162,13 +194,13 @@
           "stage": "advisor",
           "classification": "not-applicable",
           "role": "advisor",
-          "reason": "one function, one call site, eleven recorded claims"
+          "reason": "two small cells with ten recorded claims"
         },
         {
           "stage": "docs",
           "classification": "conditional",
           "role": "docs",
-          "condition": "the knowledge area for the state store needs the receipt lifecycle recorded",
+          "condition": "the bee-herding knowledge area needs the closed-row rule recorded",
           "reason": "capture runs at close"
         },
         {
@@ -181,13 +213,13 @@
           "stage": "supervisor",
           "classification": "not-applicable",
           "role": "supervisor",
-          "reason": "single-cell slice, no swarm to supervise"
+          "reason": "two cells, no swarm to supervise"
         },
         {
           "stage": "hat-facts-gaps",
           "classification": "not-applicable",
           "role": "hat-facts-gaps",
-          "reason": "no hat wave: one cell, eleven recorded claims"
+          "reason": "no hat wave: ten recorded claims and two small cells"
         },
         {
           "stage": "hat-risks",
@@ -236,70 +268,52 @@
   },
   "approved_cell_packet": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "94bfa895672b89386f37bcfb4fb584a2caefc9047907ccef332616642e31c62d",
-    "previewed_at": "2026-09-20T01:44:40.575Z",
+    "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
+    "previewed_at": "2026-09-20T01:57:20.145Z",
     "cells": [
       {
-        "id": "wlf-2",
+        "id": "wlf-3",
         "feature": "worker-ledger-and-empty-fleet",
-        "title": "Mark a receipt capped when its cell is capped, from the post-merge block",
+        "title": "Append the run's outcome to its wave-ledger row when the run ends",
         "lane": "standard",
         "role": "code",
         "status": "open",
         "deps": [],
         "decisions": [
-          "602e80ae-6431-4da7-8fc3-d7a2828c9778",
           "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
         ],
         "files": [
-          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
         ],
         "read_first": [
-          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-          "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
         ],
         "affects_skills": [],
         "affects_specs": [],
-        "action": "Red first, and name EVERY new test with `reconcile` in it so one filter covers the slice. Step 1, in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs: add tests that pin the wanted behaviour and watch them fail. A receipt row {nickname, cell, status: \"running\"} whose .bee/cells/<cell>.json reads status \"capped\" must end up with status \"capped\"; a receipt whose cell reads \"open\", whose cell file is missing, or whose cell file is unparseable must be left exactly as it was; the array length must be unchanged; and a row that is already \"capped\" must stay \"capped\" without being counted as changed. Step 2, in state_group/workers.rs: add `pub(crate) fn reconcile_capped_workers(root: &Path) -> Result<usize, Err2>` beside read_prune_keep_set. It runs inside ONE worker_mutate frame, walks the rows, and for each row whose cell is capped per the existing is_cell_file_capped predicate (added in slice 1 — reuse it, do not write a second one) upserts that row through push_worker_record with status \"capped\", preserving the row's existing nickname, cell and tier. It returns the number of rows it actually changed. It must add no row and remove no row. Step 3, in verbs/worktree/phases.rs: call it once from the post-merge block, inside the same best-effort arm that already writes and commits the lane file around lines 964-1000. Follow that arm's existing contract exactly — a failure warns on its own line and NEVER turns a green merge red, the same way the lane write and the bookkeeping commit already behave. Do not invent a new error path and do not add a new refusal. Step 4, in verbs/worktree/tests.rs: add a test proving a merge stays green when the reconcile fails, driven the same way the existing lane-write tests drive that arm. Do not change any existing assertion, do not touch registered_worker_for_cell, and do not delete any receipt row.",
-        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml reconcile",
+        "action": "Red first, and name EVERY new test with `ledger_outcome` in it so one filter covers the cell. Today herding/run.rs appends a wave-ledger row at dispatch time with `outcome: None` (around line 2178-2194) and never appends again, so 431 of 437 worker rows in the live ledger are still blank. The ledger's own header (wave_ledger.rs:26-31) says a caller MAY append a second time for the same wave_id once the outcome is known, and the read-time fold (fold_waves_by_wave_id) makes the later row supersede the earlier one — so this is an APPEND, never a rewrite. Step 1, add tests that fail: a run that finishes appends a SECOND wave-ledger row for the same wave_id whose worker outcome equals the same string the result envelope reports (outcome_label, run.rs:3435-3449); the first row's bytes are still present and unchanged on disk; and an append failure leaves the run's own outcome and exit code exactly as they were. Step 2, make them pass: where the run's outcome becomes known, build a WaveRow with the same wave_id, started_at and worker identity as the dispatch-time row, set the worker's outcome to outcome_label(&result.outcome), fill evidence with the report or log path the run already knows (or None when it has none), and append it through wave_ledger::append_wave. Copy the existing best-effort contract at run.rs:2192-2194 exactly — a failure prints its own warning line and NEVER changes the run's outcome or exit code. Do not rewrite or delete any ledger line, do not change outcome_label's vocabulary, do not touch herding/wave.rs, and do not change any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
         "must_haves": {
           "truths": [
-            "A running receipt whose cell is capped ends up capped",
-            "A receipt whose cell is open, missing or unparseable is left untouched",
-            "The receipt array's length is unchanged across a reconcile",
-            "A failing reconcile leaves bee worktree merge green"
+            "A finished run appends a second ledger row for its wave_id carrying the same outcome string the envelope reports",
+            "The dispatch-time row's bytes are still on disk unchanged after the second append",
+            "A failing ledger append leaves the run's outcome and exit code unchanged"
           ],
           "artifacts": [
             {
-              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
-              "substantive": "reconcile_capped_workers, one worker_mutate frame, reusing is_cell_file_capped and push_worker_record; no TODO stubs"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
-              "substantive": "one call inside the existing best-effort post-merge arm, warn-never-block"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
-              "substantive": "reconcile tests covering capped, open, missing, unparseable, already-capped and array length"
-            },
-            {
-              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
-              "substantive": "a test that a failing reconcile keeps the merge green"
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "a second append_wave call carrying outcome_label's value, under the existing best-effort contract; no TODO stubs"
             }
           ],
           "key_links": [
-            "reconcile_capped_workers calls the same is_cell_file_capped the keep set uses",
-            "the post-merge arm calls reconcile_capped_workers and swallows its failure into a warning"
+            "the appended outcome string is the same one outcome_label produces for the result envelope"
           ],
           "prohibitions": [
-            "No new CLI verb and no registry change",
-            "No row added and no row removed by the reconcile",
-            "No change to registered_worker_for_cell, the cap guard, or the SubagentStop nudge",
-            "No edit to any existing assertion",
-            "No new refusal or error path in bee worktree merge"
+            "No rewrite or deletion of any ledger line",
+            "No change to outcome_label's vocabulary",
+            "No change to herding/wave.rs or wave_ledger.rs",
+            "No new failure path in bee herding run",
+            "No edit to any existing assertion"
           ]
         },
         "trace": {
@@ -310,6 +324,61 @@
           "friction": null,
           "capped_at": null,
           "behavior_change": true
+        }
+      },
+      {
+        "id": "wlf-4",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Name a closed wave in which no worker succeeded an empty fleet",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `empty_fleet` in it so one filter covers the cell. Add a pure verdict over the folded waves in wave_ledger.rs, beside the existing is_closed and live_worker_count. A wave is an EMPTY FLEET when all three hold: it is closed by the existing is_closed predicate (every worker reported an outcome — reuse it, do not write a second one), it has at least one worker, and no worker's outcome is \"done\". Three cases are explicitly NOT an empty fleet and each needs its own test: a wave with zero workers launched nothing; a wave with any worker still carrying a null outcome is still running; and a wave whose workers all carry \"dry_run\" did nothing real. A wave with at least one \"done\" is not an empty fleet however many others failed. Return enough for a caller to report it — the wave_id and the worker names with their outcomes — and cap the number of names returned so a huge wave cannot produce an unbounded string. This cell adds a function and its tests only: do not wire it into any command, any output or any hook, and do not change is_closed, fold_waves_by_wave_id, live_worker_count or any existing assertion.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+        "must_haves": {
+          "truths": [
+            "A closed wave whose workers all failed is an empty fleet",
+            "A closed wave with at least one done outcome is not an empty fleet",
+            "A wave with no workers is not an empty fleet",
+            "A wave with any unreported worker is not an empty fleet",
+            "A closed wave whose workers are all dry_run is not an empty fleet"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+              "substantive": "an empty-fleet verdict reusing is_closed, with a cap on the number of worker names returned; no TODO stubs"
+            }
+          ],
+          "key_links": [
+            "the verdict calls the existing is_closed rather than re-deriving closedness"
+          ],
+          "prohibitions": [
+            "No wiring into any command, output or hook in this cell",
+            "No change to is_closed, fold_waves_by_wave_id or live_worker_count",
+            "No change to herding/run.rs or herding/wave.rs",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
         }
       }
     ],
@@ -322,19 +391,19 @@
           "stage": "implement",
           "classification": "required",
           "role": "code",
-          "reason": "one Rust function plus one call site and their tests, in one crate"
+          "reason": "two small Rust changes, one file each, in one crate"
         },
         {
           "stage": "tests",
           "classification": "required",
           "role": "test",
-          "reason": "the red-first reconcile tests and the merge-stays-green test are the whole proof of this slice"
+          "reason": "red-first tests are the whole proof of both cells"
         },
         {
           "stage": "research",
           "classification": "not-applicable",
           "role": "read",
-          "reason": "slice 2's open question was closed by the orchestrator's own reads; the evidence is in claims 2, 3, 5, 7 and 9 and the deviation is named in Approach"
+          "reason": "the ledger reads that reordered this slice were done by the orchestrator; the evidence is claims 1 through 9 and the deviation is named in Approach"
         },
         {
           "stage": "extraction",
@@ -365,13 +434,13 @@
           "stage": "advisor",
           "classification": "not-applicable",
           "role": "advisor",
-          "reason": "one function, one call site, eleven recorded claims"
+          "reason": "two small cells with ten recorded claims"
         },
         {
           "stage": "docs",
           "classification": "conditional",
           "role": "docs",
-          "condition": "the knowledge area for the state store needs the receipt lifecycle recorded",
+          "condition": "the bee-herding knowledge area needs the closed-row rule recorded",
           "reason": "capture runs at close"
         },
         {
@@ -384,13 +453,13 @@
           "stage": "supervisor",
           "classification": "not-applicable",
           "role": "supervisor",
-          "reason": "single-cell slice, no swarm to supervise"
+          "reason": "two cells, no swarm to supervise"
         },
         {
           "stage": "hat-facts-gaps",
           "classification": "not-applicable",
           "role": "hat-facts-gaps",
-          "reason": "no hat wave: one cell, eleven recorded claims"
+          "reason": "no hat wave: ten recorded claims and two small cells"
         },
         {
           "stage": "hat-risks",
@@ -438,6 +507,13 @@
     }
   },
   "gate_revoked_at": {
-    "execution": "2026-09-20T01:42:29.880Z"
+    "execution": "2026-09-20T01:55:26.455Z"
+  },
+  "merge_ready": {
+    "since": "2026-09-20T02:06:25.928Z",
+    "branch": "wt/worker-ledger-and-empty-fleet",
+    "worktree_id": "beehive--wt--worker-ledger-and-empty-fleet",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

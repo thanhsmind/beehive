@@ -1,0 +1,88 @@
+{
+  "id": "wlf-4",
+  "feature": "worker-ledger-and-empty-fleet",
+  "title": "Name a closed wave in which no worker succeeded an empty fleet",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Red first, and name EVERY new test with `empty_fleet` in it so one filter covers the cell. Add a pure verdict over the folded waves in wave_ledger.rs, beside the existing is_closed and live_worker_count. A wave is an EMPTY FLEET when all three hold: it is closed by the existing is_closed predicate (every worker reported an outcome — reuse it, do not write a second one), it has at least one worker, and no worker's outcome is \"done\". Three cases are explicitly NOT an empty fleet and each needs its own test: a wave with zero workers launched nothing; a wave with any worker still carrying a null outcome is still running; and a wave whose workers all carry \"dry_run\" did nothing real. A wave with at least one \"done\" is not an empty fleet however many others failed. Return enough for a caller to report it — the wave_id and the worker names with their outcomes — and cap the number of names returned so a huge wave cannot produce an unbounded string. This cell adds a function and its tests only: do not wire it into any command, any output or any hook, and do not change is_closed, fold_waves_by_wave_id, live_worker_count or any existing assertion.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+  "must_haves": {
+    "truths": [
+      "A closed wave whose workers all failed is an empty fleet",
+      "A closed wave with at least one done outcome is not an empty fleet",
+      "A wave with no workers is not an empty fleet",
+      "A wave with any unreported worker is not an empty fleet",
+      "A closed wave whose workers are all dry_run is not an empty fleet"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "substantive": "an empty-fleet verdict reusing is_closed, with a cap on the number of worker names returned; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the verdict calls the existing is_closed rather than re-deriving closedness"
+    ],
+    "prohibitions": [
+      "No wiring into any command, output or hook in this cell",
+      "No change to is_closed, fold_waves_by_wave_id or live_worker_count",
+      "No change to herding/run.rs or herding/wave.rs",
+      "No edit to any existing assertion"
+    ]
+  },
+  "trace": {
+    "worker": "w-wlf-4",
+    "outcome": "An empty-fleet verdict over the folded wave ledger: a closed wave with at least one worker and no done outcome, excluding zero-worker, still-running and all-dry-run waves",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+    ],
+    "deviations": [
+      "sync-ack: No owned skill of the bee-herding area states the empty-fleet rule; the cell adds a function and its tests and wires it into no command, output or hook, so no skill text describes behaviour that changed. A capture stub is queued for the knowledge area."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T02:06:15.794Z",
+    "behavior_change": false,
+    "verification_evidence": "7 passed 0 failed, one per test-matrix row: all-failed, at-least-one-done, zero workers, unreported worker, all dry_run, the name cap, and a fold read straight from a ledger file",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "216eecd1-df88-4449-9865-5310500ae2ba",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet",
+    "claimed_at": "2026-09-20T01:58:55.370Z",
+    "sync_ack": "No owned skill of the bee-herding area states the empty-fleet rule; the cell adds a function and its tests and wires it into no command, output or hook, so no skill text describes behaviour that changed. A capture stub is queued for the knowledge area.",
+    "mistakes": [
+      {
+        "wrong": "I planned to verify red-first by reverting the source and re-running, but the concurrent-worker guard refuses a checkout while two workers hold reservations, so the revert had to wait until after the cap released them",
+        "better": "sequence the independent red-check before the cap, or cap the siblings first, rather than discovering the guard mid-verification"
+      }
+    ],
+    "report": {
+      "outcome": "A pure verdict over the folded waves, reusing the existing is_closed predicate. An empty fleet is a closed wave with at least one worker and no worker outcome of done. Three exclusions each carry their own test: zero workers launched nothing, any unreported worker is still running, and all-dry_run did nothing real. The returned worker names are capped. Wired into no command, output or hook, as the cell required.",
+      "commit": "72f1c37d57edab1d295a9c8465ac30548de8a717",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml empty_fleet — green:unit — 7 passed 0 failed, one per test-matrix row: all-failed, at-least-one-done, zero workers, unreported worker, all dry_run, the name cap, and a fold read straight from a ledger file",
+      "deviations": [],
+      "mistakes": [
+        "I planned to verify red-first by reverting the source and re-running, but the concurrent-worker guard refuses a checkout while two workers hold reservations, so the revert had to wait until after the cap released them — sequence the independent red-check before the cap, or cap the siblings first, rather than discovering the guard mid-verification"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 269 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

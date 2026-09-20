@@ -1,0 +1,89 @@
+{
+  "id": "wlf-3",
+  "feature": "worker-ledger-and-empty-fleet",
+  "title": "Append the run's outcome to its wave-ledger row when the run ends",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "6d752b0e-9de7-4cf7-a90e-12d36ac2d0d7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Red first, and name EVERY new test with `ledger_outcome` in it so one filter covers the cell. Today herding/run.rs appends a wave-ledger row at dispatch time with `outcome: None` (around line 2178-2194) and never appends again, so 431 of 437 worker rows in the live ledger are still blank. The ledger's own header (wave_ledger.rs:26-31) says a caller MAY append a second time for the same wave_id once the outcome is known, and the read-time fold (fold_waves_by_wave_id) makes the later row supersede the earlier one — so this is an APPEND, never a rewrite. Step 1, add tests that fail: a run that finishes appends a SECOND wave-ledger row for the same wave_id whose worker outcome equals the same string the result envelope reports (outcome_label, run.rs:3435-3449); the first row's bytes are still present and unchanged on disk; and an append failure leaves the run's own outcome and exit code exactly as they were. Step 2, make them pass: where the run's outcome becomes known, build a WaveRow with the same wave_id, started_at and worker identity as the dispatch-time row, set the worker's outcome to outcome_label(&result.outcome), fill evidence with the report or log path the run already knows (or None when it has none), and append it through wave_ledger::append_wave. Copy the existing best-effort contract at run.rs:2192-2194 exactly — a failure prints its own warning line and NEVER changes the run's outcome or exit code. Do not rewrite or delete any ledger line, do not change outcome_label's vocabulary, do not touch herding/wave.rs, and do not change any existing assertion.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
+  "must_haves": {
+    "truths": [
+      "A finished run appends a second ledger row for its wave_id carrying the same outcome string the envelope reports",
+      "The dispatch-time row's bytes are still on disk unchanged after the second append",
+      "A failing ledger append leaves the run's outcome and exit code unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "a second append_wave call carrying outcome_label's value, under the existing best-effort contract; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the appended outcome string is the same one outcome_label produces for the result envelope"
+    ],
+    "prohibitions": [
+      "No rewrite or deletion of any ledger line",
+      "No change to outcome_label's vocabulary",
+      "No change to herding/wave.rs or wave_ledger.rs",
+      "No new failure path in bee herding run",
+      "No edit to any existing assertion"
+    ]
+  },
+  "trace": {
+    "worker": "w-wlf-3",
+    "outcome": "bee herding run appends a second wave-ledger row carrying its outcome and evidence when the run ends, so the ledger stops showing every dispatched worker as unreported",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "The closing row carries retryable: None, matching the dispatch-time row. bee herding wave computes a retryable flag from its own fleet-level classification; the plan did not require it here and it is left for a later slice rather than guessed at",
+      "sync-ack: No owned skill of the bee-herding area states the wave-ledger row lifecycle; bee-herding and bee-herdr describe roles and transport, not when a ledger row is closed. A capture stub is queued for the knowledge area."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T02:06:25.926Z",
+    "behavior_change": true,
+    "verification_evidence": "3 passed 0 failed: the second row matches the envelope outcome and the first row bytes survive, a blocked run fills evidence from its report path, and an append failure leaves the run outcome and exit code unchanged",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "216eecd1-df88-4449-9865-5310500ae2ba",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome",
+    "claimed_at": "2026-09-20T01:58:55.205Z",
+    "sync_ack": "No owned skill of the bee-herding area states the wave-ledger row lifecycle; bee-herding and bee-herdr describe roles and transport, not when a ledger row is closed. A capture stub is queued for the knowledge area.",
+    "mistakes": [
+      {
+        "wrong": "I read only the last line of bee gate --name execution --approved true and reported the gate approved; it had silently refused on an unverdicted conflict candidate, and the claim refusal is what told me",
+        "better": "read a gate approval full output before reporting it"
+      }
+    ],
+    "report": {
+      "outcome": "record_dispatch now returns its timestamp so the closing row reuses the same started_at, and a new record_outcome appends a second row for the same wave_id carrying outcome_label of the result plus evidence resolved from the report path or the job log. Both execute_new and execute_continue call it. The append copies the existing best-effort contract: a failure warns and leaves the run outcome and exit code untouched.",
+      "commit": "90d2310089c6bbabe9a652f0594528350e594883",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml ledger_outcome — green:unit — 3 passed 0 failed: the second row matches the envelope outcome and the first row bytes survive, a blocked run fills evidence from its report path, and an append failure leaves the run outcome and exit code unchanged",
+      "deviations": [
+        "The closing row carries retryable: None, matching the dispatch-time row. bee herding wave computes a retryable flag from its own fleet-level classification; the plan did not require it here and it is left for a later slice rather than guessed at"
+      ],
+      "mistakes": [
+        "I read only the last line of bee gate --name execution --approved true and reported the gate approved; it had silently refused on an unverdicted conflict candidate, and the claim refusal is what told me — read a gate approval full output before reporting it"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
