@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-worker-surface",
   "mode": "standard",
-  "phase": "planning",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,13 +11,534 @@
     "uat": false
   },
   "summary": "Pi worker surface: live in-flight worker widget + structured worker verdict tool",
-  "next_action": "Run bee-planning over docs/history/pi-worker-surface/CONTEXT.md",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-20T08:03:53.974Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "question",
-    "subject": "A2 premise disproved: result-N.json already carries a validated verdict. Re-shape A2 smaller, or ship A1 alone?",
-    "asked_at": "2026-09-20T08:08:02.019Z",
+    "subject": "pws-2 blocked by agy-flash provider quota (~30m): wait for reset, or reroute the role?",
+    "asked_at": "2026-09-20T09:38:39.308Z",
     "session": "044a7c9a-a928-4ed5-bee9-4718396ee427"
   },
-  "created_at": "2026-09-20T08:03:53.974Z"
+  "gate_revoked_at": {
+    "execution": "2026-09-20T08:39:02.460Z"
+  },
+  "gate_preview": {
+    "feature": "pi-worker-surface",
+    "plan_sha256": "fb805ee904beb066c31c1e780db8a324ed73ad12e9b574fc7f2b0f4d52b20de0",
+    "previewed_at": "2026-09-20T08:39:51.479Z",
+    "cells": [
+      {
+        "id": "pws-1",
+        "feature": "pi-worker-surface",
+        "title": "Register the terminating verdict tool and route it explicitly",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6b7e8f49",
+          "dae51a75",
+          "e29aa9cd"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "A worker calling the verdict tool ends its run without a follow-up assistant turn",
+            "A verdict missing a required field is rejected by the host before execute() runs",
+            "A worker that never calls the tool still resolves through its report file, unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "one registered terminating tool plus its explicit mapToolCall row; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "fixtures pinning the tool's write-guard route and the model-guard exclusion"
+            }
+          ],
+          "key_links": [
+            "the tool's schema fields match MailboxResult's parsed fields in herding/mailbox.rs"
+          ],
+          "prohibitions": [
+            "No new verdict schema defined in the belt",
+            "No dispatch tool and no process spawner added to the belt",
+            "No change to transport outcome classification in herding/wave.rs",
+            "No edit to the Claude, Codex or OpenCode belts"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "pws-2",
+        "feature": "pi-worker-surface",
+        "title": "Draw in-flight workers in a widget below the editor",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "pws-1"
+        ],
+        "decisions": [
+          "7dfd593d"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "A dispatched detached worker appears as a row naming its seat",
+            "The row disappears once that worker's marker clears",
+            "No widget is drawn when no workers are in flight"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "a setWidget factory reading the result-inbox markers; no TODO stubs, no second timer"
+            }
+          ],
+          "key_links": [
+            "the widget reads the same inbox directory the drain polls"
+          ],
+          "prohibitions": [
+            "No second timer or polling loop",
+            "No widget input handling",
+            "No row kept after its worker finishes",
+            "No raw job_id shown as a row's label"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "pi",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "execute-cell",
+          "classification": "required",
+          "role": "code",
+          "reason": "Both cells write TypeScript in the belt and Rust in the contract suite."
+        },
+        {
+          "stage": "author-tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "Contract fixtures for the routing row and the widget's marker read."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a cell needs a lookup outside the files its brief names",
+          "reason": "Known-location reads only; the plan already carries the anchors."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a single fact is needed from a known file",
+          "reason": "Cheapest tier for a narrow lookup."
+        },
+        {
+          "stage": "plan-check",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "The plan-step hat wave is this plan's check."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Default plan-step seat: audits the claims table against its anchors."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default plan-step seat: the SMALLER PATH check at plan altitude."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default plan-step seat: what the user sees in the planned behavior."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five-seat wave is high-risk only; this lane is standard."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five-seat wave is high-risk only; this lane is standard."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "Review is user-invoked, never an automatic stage."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "Each cell updates its sub-feature rows in the verification map."
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "This plan."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "No generated content in this feature."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Two serial cells need no supervisor."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No deployment; release is a separate flow."
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind-lane convergence in this feature."
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind-lane convergence in this feature."
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind-lane convergence in this feature."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "pi-worker-surface",
+    "plan_sha256": "fb805ee904beb066c31c1e780db8a324ed73ad12e9b574fc7f2b0f4d52b20de0",
+    "previewed_at": "2026-09-20T08:39:51.479Z",
+    "cells": [
+      {
+        "id": "pws-1",
+        "feature": "pi-worker-surface",
+        "title": "Register the terminating verdict tool and route it explicitly",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "6b7e8f49",
+          "dae51a75",
+          "e29aa9cd"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Register ONE terminating tool on the Pi belt whose parameter schema MIRRORS MailboxResult (herding/mailbox.rs:490 — status done|blocked, summary, files_changed, proof; optional options, leaning, report_path). It writes .bee/mailbox/<job-id>/result-N.json tmp-then-rename and returns terminate: true. Define no new schema (D6 as amended by 6b7e8f49). Add an explicit mapToolCall row for the tool name routing to write-guard — without it the fail-safe default arm produces a Write with an empty file_path and every call is denied with exit 2 (claim 5, claim 6). Leave model-guard a named exclusion: this tool spawns nothing (D8). Add contract fixtures pinning the route and the terminate flag, and add a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). Do not touch the Claude, Codex or OpenCode belts (D10). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "A worker calling the verdict tool ends its run without a follow-up assistant turn",
+            "A verdict missing a required field is rejected by the host before execute() runs",
+            "A worker that never calls the tool still resolves through its report file, unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "one registered terminating tool plus its explicit mapToolCall row; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "fixtures pinning the tool's write-guard route and the model-guard exclusion"
+            }
+          ],
+          "key_links": [
+            "the tool's schema fields match MailboxResult's parsed fields in herding/mailbox.rs"
+          ],
+          "prohibitions": [
+            "No new verdict schema defined in the belt",
+            "No dispatch tool and no process spawner added to the belt",
+            "No change to transport outcome classification in herding/wave.rs",
+            "No edit to the Claude, Codex or OpenCode belts"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "pws-2",
+        "feature": "pi-worker-surface",
+        "title": "Draw in-flight workers in a widget below the editor",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "pws-1"
+        ],
+        "decisions": [
+          "7dfd593d"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "A dispatched detached worker appears as a row naming its seat",
+            "The row disappears once that worker's marker clears",
+            "No widget is drawn when no workers are in flight"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "a setWidget factory reading the result-inbox markers; no TODO stubs, no second timer"
+            }
+          ],
+          "key_links": [
+            "the widget reads the same inbox directory the drain polls"
+          ],
+          "prohibitions": [
+            "No second timer or polling loop",
+            "No widget input handling",
+            "No row kept after its worker finishes",
+            "No raw job_id shown as a row's label"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "pi",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "execute-cell",
+          "classification": "required",
+          "role": "code",
+          "reason": "Both cells write TypeScript in the belt and Rust in the contract suite."
+        },
+        {
+          "stage": "author-tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "Contract fixtures for the routing row and the widget's marker read."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a cell needs a lookup outside the files its brief names",
+          "reason": "Known-location reads only; the plan already carries the anchors."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a single fact is needed from a known file",
+          "reason": "Cheapest tier for a narrow lookup."
+        },
+        {
+          "stage": "plan-check",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "The plan-step hat wave is this plan's check."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Default plan-step seat: audits the claims table against its anchors."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default plan-step seat: the SMALLER PATH check at plan altitude."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default plan-step seat: what the user sees in the planned behavior."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Five-seat wave is high-risk only; this lane is standard."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Five-seat wave is high-risk only; this lane is standard."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "Review is user-invoked, never an automatic stage."
+        },
+        {
+          "stage": "docs",
+          "classification": "required",
+          "role": "docs",
+          "reason": "Each cell updates its sub-feature rows in the verification map."
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "This plan."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "No generated content in this feature."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Two serial cells need no supervisor."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No deployment; release is a separate flow."
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No blind-lane convergence in this feature."
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No blind-lane convergence in this feature."
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No blind-lane convergence in this feature."
+        }
+      ]
+    }
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 5,
+    "rationale": null,
+    "updated_at": "2026-09-20T09:25:22.178Z",
+    "feature": "pi-worker-surface"
+  }
 }

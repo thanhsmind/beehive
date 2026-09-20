@@ -549,6 +549,7 @@
     "contract:herding-preflight-action",
     "pi-worker-surface",
     "ui",
-    "prose-guidance-baseline"
+    "prose-guidance-baseline",
+    "contract:pi-verdict-tool"
   ]
 }

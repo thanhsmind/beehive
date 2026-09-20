@@ -8,11 +8,16 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": true
+    "uat": false
   },
   "summary": "Feature \"pi-native-stage-driver\" started at phase \"exploring\".",
   "next_action": "Close the feature; the two generalizable lessons are already promoted as decisions 06fea069 and 31fb9e15, and the three bee defects are backlog rows.",
   "created_at": "2026-09-18T15:13:56.794Z",
-  "run_state": "shaping",
-  "waiting_on": null
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-09-20T08:00:57.079Z",
+    "session": "044a7c9a-a928-4ed5-bee9-4718396ee427"
+  }
 }

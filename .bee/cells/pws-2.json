@@ -1,0 +1,129 @@
+{
+  "id": "pws-2",
+  "feature": "pi-worker-surface",
+  "title": "Draw in-flight workers in a widget below the editor",
+  "lane": "standard",
+  "role": "code",
+  "status": "claimed",
+  "deps": [
+    "pws-1"
+  ],
+  "decisions": [
+    "172cb2af-34d1-497c-82ae-cd8c1a0906bb",
+    "7dfd593d"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    ".bee/verify/verify-app/features/pi-runtime.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Draw a widget with ui.setWidget(<key>, factory, { placement: \"belowEditor\" }) listing in-flight workers, sourced from the pending markers already in .bee/result-inbox/<token>/ (D2). Re-render on the drain's existing setInterval tick at bee-guard.ts:965 — add no second timer (claim 15). One row per marker, rendering its seat, or '<seat> · <cell_id>' when the marker carries cell_id, never the raw job_id; fall back to the job id's short suffix when neither field is present. Rows carry only the tick glyph for in-flight work (D5). Remove a row the moment its marker clears, and do not draw the widget at all when no markers exist (D3). Take no input (D4). Advisory posture: an absent or unreadable inbox draws nothing and never throws. Add contract fixtures and a pi-runtime.md sub-feature row. Rebuild the binary so doctor's byte-compare agrees (D9). REGEN OBLIGATION: .pi/extensions is a release-manifest-hashed root, so run the full chain inside THIS cell before capping — bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) — and commit the refreshed release-manifest.json with the change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A dispatched detached worker appears as a row naming its seat",
+      "The row disappears once that worker's marker clears",
+      "No widget is drawn when no workers are in flight"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "a setWidget factory reading the result-inbox markers; no TODO stubs, no second timer"
+      }
+    ],
+    "key_links": [
+      "the widget reads the same inbox directory the drain polls"
+    ],
+    "prohibitions": [
+      "No second timer or polling loop",
+      "No widget input handling",
+      "No row kept after its worker finishes",
+      "No raw job_id shown as a row's label"
+    ]
+  },
+  "trace": {
+    "worker": "pws2-widget",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": null,
+    "claimed_at": "2026-09-20T10:18:49.273Z",
+    "verified_at": null,
+    "escalation_reason": "The role's configured agent agy-flash hit its provider quota mid-cell (Individual quota reached, resets in ~37m) with zero edits written. Escalating onto the session model is rescue-ladder rung 2, not a model preference; the alternative is idling the slice for the quota window.",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "T1-row-appears",
+            "status": "PASS",
+            "evidence": "The commit adds a setWidget factory keyed IN_FLIGHT_WORKERS_WIDGET_KEY with { placement: \"belowEditor\" } (9 added lines match setWidget|belowEditor), sourced from the result-inbox pending markers. D2 satisfied without any component library or vendored panel code."
+          },
+          {
+            "id": "T2-row-clears",
+            "status": "PASS",
+            "evidence": "setWidget(IN_FLIGHT_WORKERS_WIDGET_KEY, undefined) is the clear path — Pi 0.85.1 extensions.md documents the undefined third argument as 'Clear'. Rows derive from live markers, so a cleared marker removes its row (D3)."
+          },
+          {
+            "id": "T3-nothing-at-zero",
+            "status": "PASS",
+            "evidence": "The same undefined-clear call is taken when no markers exist, so the widget is not drawn at all rather than drawn empty (D3)."
+          },
+          {
+            "id": "T4-manifest",
+            "status": "PASS",
+            "evidence": "Re-run by the leader: .bee/bin/bee dev release-manifest --check -> '376 file(s) match stored manifest, 1 unhashed artifact(s) present', exit 0. release-manifest.json moved in the commit and .bee/bin/bee was rebuilt, so the regen chain was actually run."
+          },
+          {
+            "id": "P1-no-second-timer",
+            "status": "PASS",
+            "evidence": "Searched the added lines for setInterval|setTimeout — 0 matches. The widget rides the drain's existing unref'd timer at bee-guard.ts:965, which was claim 15 in the plan."
+          },
+          {
+            "id": "P2-no-input-handling",
+            "status": "PASS",
+            "evidence": "No onKey or onInput surface added; the widget is informational only (D4)."
+          },
+          {
+            "id": "P3-no-raw-job-id",
+            "status": "PASS",
+            "evidence": "formatWorkerRow(marker) renders '<seat> · <cell_id>' when both are present, seat alone, or cell_id alone, and falls back to the job id's SHORT SUFFIX only when the marker carries neither — never the raw job-1789899558831-338879-1 form. This implements the sparse-marker case that came out of the hat-user-impact finding."
+          },
+          {
+            "id": "P4-vocabulary-and-scope",
+            "status": "PASS",
+            "evidence": "Only the tick glyph appears in added rows; no unreachable success/failure glyphs were invented (D5). git show 0d32a4a6e --stat lists exactly the 4 declared files — herding/wave.rs, .claude/, .codex-plugin/ and .opencode/ are all untouched (D10)."
+          },
+          {
+            "id": "T5-suite-green",
+            "status": "PASS",
+            "evidence": "Leader re-ran the declared verify independently: cargo test --release -p bee --test pi_plugin_contracts -> 'test result: ok. 87 passed; 0 failed' (81 before this cell), plus node --check on the belt exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-20T10:32:45.928Z"
+      }
+    ]
+  },
+  "escalate": true
+}
