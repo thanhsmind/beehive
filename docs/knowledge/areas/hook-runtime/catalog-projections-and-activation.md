@@ -384,6 +384,41 @@ recovery.
   replayable proof, and concurrent herding allocations). Onboarding ships the
   belt from this checkout's own tree via the `copy_pi_extension` step
   (`onboard/apply.rs`, `onboard/plan.rs`).
+  The belt file grew a FOURTH capability with pi-worker-surface (`6b7e8f49`,
+  `7dfd593d`, contract `172cb2af` as amended by `73141b63`), and it is two
+  surfaces plus one rule that binds every future one:
+  a terminating **`verdict` tool** the worker calls to end its run — its
+  parameter schema MIRRORS `MailboxResult`
+  (`packages/bee-rs/crates/bee/src/herding/mailbox.rs:490`, parsed at
+  `:655-690`) rather than defining a second one, it writes the same
+  `result-N.json` the mailbox already reads, and it returns `terminate: true`
+  so the worker pays no follow-up assistant turn; Pi validates the fields
+  before `execute()` runs, so the `malformed_result` case a worker used to
+  produce by omitting a field is refused at the host instead. A worker that
+  never calls it is unchanged — the leader still reads `report-N.md`.
+  And an **in-flight worker widget** below the editor
+  (`ui.setWidget(..., { placement: "belowEditor" })`), sourced from the pending
+  markers the result-inbox drain already polls and re-rendered on that existing
+  timer, never a second one. A row names its seat, or `<seat> · <cell_id>`,
+  falling back to the job id's short suffix only when the marker carries
+  neither — the raw job id is never a row label. A row is removed when its
+  marker clears and the widget is not drawn at all when none remain, because
+  the drain already delivers each finished worker's outcome into the
+  conversation. Only DETACHED workers appear: `write_inbox_marker`
+  (`herding/run.rs:2271`) returns early without `--inbox-session`, so a
+  foreground run writes no marker — and it blocks the leader anyway.
+  **The rule: any NEW tool registered on this belt needs its own explicit
+  `mapToolCall` row, or every call to it is DENIED.** The fail-safe default arm
+  (`.pi/extensions/bee-guard.ts:493-528`) routes an unknown tool whose
+  arguments carry no `command`, no path field and no `url` to `tool_name`
+  `Write` with an empty `file_path`, and write-guard refuses that shape with
+  exit 2 ("could not be canonically contained inside the physical worktree") —
+  proven by running the real hook with that payload from both a worktree cwd
+  and the main cwd, and again after the row landed, where the same route
+  returns exit 0. The row's hook must stay `write-guard`: the belt parity test
+  (`pi_plugin_contracts.rs:1879-1884`) fails any routed pair whose blocking
+  destination is anything else, which is also what keeps model-guard a named
+  exclusion here.
 <!-- /bee:not-a-deferral -->
 - OpenCode belt internals (B7, B8): `mapToolCall` (tool→hook routing),
   `runBlockingHook` (throw-on-deny, exit-0 `updatedInput`/`ask`/unparseable

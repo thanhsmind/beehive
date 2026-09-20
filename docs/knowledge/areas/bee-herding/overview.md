@@ -251,8 +251,10 @@ inside the bee repo and died with "prompt file not found" in every host project.
 - **The pi-herdr-agents 1.5.1 distill is a brief, not behavior.** Its dependency
   matrix and ranked candidates live in
   `docs/history/research/pi-herdr-agents-xia.md`
-  (8ab31189, inside 9f5c6d17: Pi dispatch stays herding-only, design rules
-  only). The candidates that survived shaping became herding-cockpit-completeness
+  (8ab31189, written while 9f5c6d17 held — Pi dispatch stays herding-only —
+  so it carries design rules only; 9f5c6d17 is since superseded by `0d11a415`,
+  which gives Pi a native dispatch path beside herding, as amended by
+  `31fb9e15`). The candidates that survived shaping became herding-cockpit-completeness
   D1–D8 — interrupted and cancelled outcomes, stalled/recovered, the retryable
   bit, fail-closed cancel, the orphan sweep, the git handoff block, no automatic
   behavior, the new-words list
@@ -260,7 +262,9 @@ inside the bee repo and died with "prompt file not found" in every host project.
   and are stated in the concept files above. Agent fallback and review
   discipline stayed parked as backlog proposals; the two research briefs
   (pi-herdr-agents-xia, pi-workflows-xia) and the pi-beehive context are
-  history that cites 9f5c6d17 as written and is not rewritten.
+  history that cites 9f5c6d17 as written and is not rewritten — read those
+  citations as dated: `0d11a415` superseded 9f5c6d17 on 2026-09-18 and native
+  Pi dispatch is now the default.
 
 ## Pointers (implementation)
 

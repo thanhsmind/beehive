@@ -56,10 +56,10 @@ prompt event".
 **Pi surfaces an upgrade can break.** These are the rows a future audit
 re-checks. Each is a name the belt hard-codes:
 
-- Twelve registered events: `tool_call`, `session_start`, `before_agent_start`,
-  `tool_execution_start`, `ui_prompt_start`, `ui_prompt_end`, `tool_result`,
-  `agent_settled`, `turn_end`, `session_tree`, `session_before_compact`,
-  `session_shutdown`.
+- Thirteen registered events: `tool_call`, `session_start`,
+  `before_agent_start`, `tool_execution_start`, `ui_prompt_start`,
+  `ui_prompt_end`, `tool_result`, `agent_settled`, `turn_start`, `turn_end`,
+  `session_tree`, `session_before_compact`, `session_shutdown`.
 - The eight `PI_BUILTIN_TOOLS` names.
 - The blocking return shape `{ block: true, reason }` on `tool_call`.
 - `SessionManager.forkFrom` and `ctx.switchSession`, used by the five
@@ -67,6 +67,26 @@ re-checks. Each is a name the belt hard-codes:
 - `pi.sendUserMessage`, including the `{ deliverAs: "steer" }` form.
 - `ctx.ui.notify`, `ctx.ui.setStatus`, `ctx.isIdle`, `ctx.cwd`,
   `ctx.sessionManager`.
+- `pi.registerTool` and `ui.setWidget` with `{ placement: "belowEditor" }`,
+  added by pi-worker-surface for the `verdict` tool and the in-flight worker
+  widget.
+
+**How much of Pi the belt actually drives, measured.** A distill of
+pi-dynamic-workflows v3.12.0 (SHA `e29dbcae`) against the installed 0.85.1 docs
+found bee's belt driving a LARGER host surface than that project does: 13 events
+and 19 API members here against its 5 and 10. Its bulk — 172 files — is a
+workflow ENGINE, which bee declined (`pi-native-stage-driver` D6), not host
+integration. The brief is
+`docs/history/research/pi-harness-session-surface-xia.md`. Three deltas it
+found were real and two have since shipped: `ui.setWidget` belowEditor and the
+`terminate: true` terminating tool (both pi-worker-surface); the third, a
+sha256 baseline over bee's model-facing prose, is a filed backlog row under
+`prose-guidance-baseline`. Two of its findings are anti-lessons worth keeping:
+`.pi/agents/*.md` is NOT a Pi convention (0.85.1 documents only
+`.agents/skills/`, which is where bee already installs), and that project
+reaches its delivery path by stealing `sendCustomMessage` off
+`AgentSession.prototype` — bee's documented `pi.sendUserMessage` with the
+`steer` form is the cleaner path and stays.
 
 ## The 0.84.3 to 0.85.1 audit
 

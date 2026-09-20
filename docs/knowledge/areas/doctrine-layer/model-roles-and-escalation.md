@@ -331,11 +331,20 @@ extension that spawns pi child processes from markdown agent definitions; the Pi
 SDK's `createAgentSession` gives in-process child sessions; and `pi --mode rpc`
 gives headless children.
 
-The user was shown all three on 2026-09-02 and **declined to supersede** the
-locked decision: Pi dispatch stays herding-only (store `9f5c6d17`), and `pi`
-means the pi binary 0.84.x alone, not omp (store `5d87f14e`). So the rule stands
-on a choice about one transport, not on an absence of alternatives — which is
-what a later reader needs to know before proposing the "obvious" fix again.
+The user was shown all three on 2026-09-02 and **declined** then: Pi dispatch
+stayed herding-only (store `9f5c6d17`), and `pi` means the pi binary 0.84.x
+alone, not omp (store `5d87f14e`). So the rule stood on a choice about one
+transport, not on an absence of alternatives.
+
+**That choice was reversed on 2026-09-18.** `9f5c6d17` is superseded by
+`0d11a415`: Pi worker dispatch gains a native path beside herding, and native
+is now the DEFAULT with herding as the fallback (`pi-native-stage-driver` D1).
+`0d11a415` was itself amended by `31fb9e15` — the child `pi` process is spawned
+from Rust inside `bee herding run`, NOT from the extension, so the belt still
+carries no dispatch tool and no spawner and model-guard stays a named exclusion
+on it. The 2026-09-02 study is why the reversal was cheap when it came: the
+paths were already mapped. Read the 2026-09-02 "declined" as a dated choice,
+never as the current rule.
 <!-- /bee:not-a-deferral -->
 
 **`pi` and `omp` are two different binaries.** Both were installed side by side
