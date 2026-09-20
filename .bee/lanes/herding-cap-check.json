@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-cap-check",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"herding-cap-check\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 13181f7; capture what settled, then bee close --feature herding-cap-check.",
+  "next_action": "bee close finished \"herding-cap-check\" — feature is closed.",
   "created_at": "2026-09-20T13:56:19.152Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
