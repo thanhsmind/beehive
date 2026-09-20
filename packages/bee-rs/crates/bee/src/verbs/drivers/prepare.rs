@@ -2494,6 +2494,16 @@ pub(crate) fn prepare_dispatch_wire(
                     command.push_str(agent);
                     command.push('"');
                 }
+                // dispatch-cell-id-flag D1, D2, D3: a cell dispatch carries
+                // `--cell-id "<id>"` so `herding run`'s postflight_cap_check can
+                // identify the cell and refuse when it was not capped.
+                if kind == "cell" {
+                    if let Some(id) = cell_id {
+                        command.push_str(" --cell-id \"");
+                        command.push_str(id);
+                        command.push('"');
+                    }
+                }
                 // pi-native-stage-driver D1, D3, D11: on runtime pi, when the configured
                 // agent is a pi binary, choose the no-pane runner. The flag is appended
                 // here inside the herding arm so --seat, the 600 s hat clamp and
@@ -5855,9 +5865,14 @@ mod pi_native_door_tests {
                 let Prepared::Value(v) = out else { panic!("expected prepared value on {runtime} {kind}") };
                 let command = v["payload"]["command"].as_str().expect("command");
                 assert!(!command.contains("--no-pane"), "{runtime} {kind} herding command must not contain --no-pane: {command}");
+                let expected = if kind == "cell" {
+                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\""
+                } else {
+                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\""
+                };
                 assert_eq!(
                     command,
-                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\"",
+                    expected,
                     "{runtime} {kind} command bytes must be exact"
                 );
             }

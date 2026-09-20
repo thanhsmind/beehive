@@ -1414,7 +1414,7 @@ use std::time::Instant;
         let payload = v.get("payload").unwrap();
         assert_eq!(
             payload.get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
         );
         let stdin = payload.get("stdin").unwrap().as_str().unwrap();
         assert!(!stdin.is_empty());
@@ -1448,7 +1448,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""))
         );
     }
 
@@ -1485,7 +1485,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(format!(
-                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\""
+                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\" --cell-id \"c-1\""
             )))
         );
     }
@@ -1515,9 +1515,51 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(
-                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\""
+                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\" --cell-id \"c-1\""
             ))
         );
+    }
+
+    /// dispatch-cell-id-flag D1, D2: a cell herding dispatch carries --cell-id
+    /// with the cell's id, while non-cell dispatches (gather, reviewer, advisor)
+    /// never carry --cell-id and keep their commands byte-identical.
+    #[test]
+    fn herding_dispatch_carries_cell_id_only_for_cell_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding"},"review":{"kind":"herding"},"advisor":{"kind":"herding"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v_cell) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!("expected prepared value for cell")
+        };
+        let cmd_cell = v_cell["payload"]["command"].as_str().unwrap();
+        assert_eq!(
+            cmd_cell,
+            ".bee/bin/bee herding run --task-file - --json --cell-id \"c-1\""
+        );
+
+        for (kind, role) in [("gather", "generation"), ("reviewer", "review"), ("advisor", "advisor")] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", kind, Some(role), None, None, false, None, None, false, None,
+            )
+            .unwrap()
+            else {
+                panic!("expected prepared value for {kind}")
+            };
+            let cmd = v["payload"]["command"].as_str().unwrap();
+            assert!(!cmd.contains("--cell-id"), "{kind} command must not contain --cell-id: {cmd}");
+            assert_eq!(cmd, ".bee/bin/bee herding run --task-file - --json");
+        }
     }
 
     // ── hrv-3: herding-review-slots D3 — the fallback:default field ────────
