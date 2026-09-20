@@ -4,7 +4,7 @@
   "title": "Record an optional baseline floor on the cap trace",
   "lane": "small",
   "role": "code",
-  "status": "dropped",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "e4ad60dd",
@@ -51,19 +51,27 @@
     ]
   },
   "trace": {
-    "worker": "cbf-worker-2",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "leader-cap",
+    "outcome": "Record an optional baseline floor on the cap trace, cleared on release",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "tests landed in verbs/cells/tests.rs, which the cell's files list did not name — the cell said 'author tests' without listing the sibling test file; the leader's cell was wrong, not the worker",
+      "sync-ack: affects_skills was predicted [] at plan time and that prediction was WRONG. The sync door caught it: swarming-reference.md:605 lists the worker Result-form keys, so a worker reading it would never have learned baseline_floor exists - the feature would have shipped unusable by the workers it is for. The skill was updated rather than ack-ed past, and the trees re-rendered; this ack records only that the PREDICTION missed, not that the sync was skipped."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-09-20T16:47:04.486Z",
     "behavior_change": true,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verification_evidence": "leader re-ran it independently after the commit: 378 passed, 0 failed; parse_tests_proof and PROOF_SEPARATOR untouched (0 diff lines each)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
     "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
-    "verify_command": null,
-    "claimed_at": "2026-09-20T16:06:28.544Z",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells",
+    "claimed_at": "2026-09-20T16:45:19.091Z",
     "verified_at": null,
     "semantic_judge": [
       {
@@ -115,6 +123,41 @@
         "recorded_at": "2026-09-20T16:16:29.398Z"
       }
     ],
-    "dropped_reason": "Swallowed by proof-honesty ph-2, capped 2026-09-20T15:58:41Z with 24 tests and the release-manifest check green. Both sessions built the optional cap baseline within three minutes of each other; the user chose ph-2. cbf-1's own work survives uncommitted-to-main on branch wt/cap-baseline-floor at c8160b69b if it is ever wanted."
+    "dropped_reason": null,
+    "blocked_reason": null,
+    "reopened_at": "2026-09-20T16:45:13.497Z",
+    "reopened_reason": "Worker cbf-worker-2 dropped the cell AFTER committing its work (c8160b69b, correct trailer, 378 tests green, every prohibition held). A drop says the cell should not be done; the commit says it was. Reopening so the cap can record what actually landed.",
+    "sync_ack": "affects_skills was predicted [] at plan time and that prediction was WRONG. The sync door caught it: swarming-reference.md:605 lists the worker Result-form keys, so a worker reading it would never have learned baseline_floor exists - the feature would have shipped unusable by the workers it is for. The skill was updated rather than ack-ed past, and the trees re-rendered; this ack records only that the PREDICTION missed, not that the sync was skipped.",
+    "mistakes": [
+      {
+        "wrong": "The cell's files list omitted verbs/cells/tests.rs while its action asked for tests",
+        "better": "the same omission the leader made on tsag-1 one feature earlier — list the sibling test file in files whenever the action asks for tests"
+      },
+      {
+        "wrong": "The first dispatch of this cell was lost because the cell left the baseline floor's shape to discretion; a worker that is unsure either guesses or goes asking, and this one went asking",
+        "better": "decide the shape in the cell, or hand it in --expertise, before dispatching"
+      }
+    ],
+    "inline_reason": "The dispatched worker cbf-worker-2 DID the work and committed it (c8160b69b), then dropped the cell instead of capping it, so its registration died with the drop. The leader caps from main to record what actually landed; this is not a cell run inline, it is a cap recovering a dispatched run.",
+    "report": {
+      "outcome": "Record an optional baseline floor on the cap trace and report",
+      "commit": "1f86d8fba",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells — green:unit — leader re-ran it independently after the commit: 378 passed, 0 failed; parse_tests_proof and PROOF_SEPARATOR untouched (0 diff lines each)",
+      "deviations": [
+        "tests landed in verbs/cells/tests.rs, which the cell's files list did not name — the cell said 'author tests' without listing the sibling test file; the leader's cell was wrong, not the worker"
+      ],
+      "mistakes": [
+        "The cell's files list omitted verbs/cells/tests.rs while its action asked for tests — the same omission the leader made on tsag-1 one feature earlier — list the sibling test file in files whenever the action asks for tests",
+        "The first dispatch of this cell was lost because the cell left the baseline floor's shape to discretion; a worker that is unsure either guesses or goes asking, and this one went asking — decide the shape in the cell, or hand it in --expertise, before dispatching"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
