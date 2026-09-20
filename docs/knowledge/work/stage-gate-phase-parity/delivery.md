@@ -7,7 +7,7 @@ bee:
   id: stage-gate-phase-parity-delivery
   lifecycle: active
   required_context: [docs/history/stage-gate-phase-parity/plan.md]
-  sources: [docs/history/stage-gate-phase-parity/plan.md, .bee/cells/sgpp-1.json]
+  sources: [docs/history/stage-gate-phase-parity/plan.md, .bee/cells/archive/stage-gate-phase-parity/sgpp-1.json]
 ---
 
 # stage-gate-phase-parity — Delivery
