@@ -29,6 +29,7 @@ It also named four spec gaps in slices 2 and 3 that no claim row covered:
 what a replay returns to its caller, what round a non-`--continue` re-run is,
 which bytes the digest covers, and what marks a job "finished" for prune.
 
+<!-- bee:not-a-deferral: a historical record of what each hat seat reported. The words "deferred" and "DEFER" below quote the seats' verdicts; each verdict was acted on the same day (D5-D8) and none is an open promise. -->
 **hat-risks** — retracted the plan's one escalation and found the delete
 hazard. The usage-limit resume writes no brief (`run.rs:3176-3240` contains no
 `brief_path` write; the only two are `:2635` and `:3374`), so the
@@ -54,6 +55,8 @@ Both findings now sit in § Out of scope as inputs to the second shaping pass.
 **hat-user-impact** — wrote the byte-for-byte SEE mock of the round-1 and
 round-2 injections. The mock is what confirmed the `round` row belongs
 directly after `job_id` so the two read as one key.
+
+<!-- /bee:not-a-deferral -->
 
 ## What the leader kept
 

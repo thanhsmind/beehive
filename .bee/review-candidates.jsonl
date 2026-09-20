@@ -162,3 +162,4 @@
 {"id":"b370ce4a-c1f8-43c9-ae82-f40e48bf508f","type":"candidate","date":"2026-09-13T12:53:33.350Z","feature":"codex-reliability-closeout","head":"513f0cb2","mode":"high-risk","baseline":"7abaee23","cells":["crc-1","crc-2","crc-3","crc-4","crc-5"]}
 {"id":"33bc80db-c039-47e3-9fe4-2dfd8647c682","type":"candidate","date":"2026-09-19T23:32:22.522Z","feature":"stage-gate-phase-parity","head":"55f6997a3f3cfcbd9afb52c5f9c3fa2e43b5c9cf","mode":"tiny","baseline":null,"cells":["sgpp-1"]}
 {"id":"edcfc264-487b-4585-9265-d8ceecef9750","type":"candidate","date":"2026-09-20T02:24:25.898Z","feature":"worker-ledger-and-empty-fleet","head":"c63dfb52cd6312aedea35810d9aa7ba4c6006186","mode":"standard","baseline":null,"cells":[]}
+{"id":"29307274-fcb7-41bd-b5fa-bbf731772ed5","type":"candidate","date":"2026-09-20T05:04:09.900Z","feature":"idempotent-herding-receipts","head":"b5f82a37c94d0068eae89bd0774a4ab3cc51f872","mode":"high-risk","baseline":null,"cells":[]}

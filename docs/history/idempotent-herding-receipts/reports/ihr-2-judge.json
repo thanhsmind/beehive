@@ -1,0 +1,53 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "the pre-flight sits where D7 requires, above every dispatch path",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/herding/run.rs:3949 places the block immediately after `parse_options` returns at :3947, before the transport choice and before the `spawn_detached_runner` branch at :3944-in-the-old-numbering (now below it). It is NOT in `execute` or `execute_no_pane`, which the cell prohibited and which claims 2 and 3 showed would miss both the native and the detached path."
+    },
+    {
+      "id": "the round is resolved the way the callee resolves it",
+      "status": "PASS",
+      "evidence": "run.rs:3952-3964 computes `latest_result_round(entries) + 1` when `opts.is_continue`, else 1 — matching `execute_continue` (:3323-3327) and the fresh-run brief-1 write (:2635). Proven by `continue_at_round_2_with_same_task_proceeds_and_is_not_refused`, which passes by name; a round-1 assumption would have refused every --continue on every runtime."
+    },
+    {
+      "id": "all five outcomes are implemented, and three of them fail open",
+      "status": "PASS",
+      "evidence": "run.rs:3979-4003 branches: digest absent -> ReturnReceipt (legacy mailboxes); digest matches -> ReturnReceipt; digest differs -> Refuse; digest unreadable -> Proceed with a stderr note. The `if round > 0` / `result_path.exists()` guard at :3966-3968 covers 'no result -> proceed'. Four named tests cover them: replay_with_matching_digest..., replay_with_differing_digest..., replay_with_missing_digest..._legacy, replay_with_unreadable_digest_proceeds_to_spawn, plus job_with_brief_but_no_result_proceeds_to_spawn — all pass by name."
+    },
+    {
+      "id": "the replay path writes the inbox marker, as D5 demands",
+      "status": "PASS",
+      "evidence": "run.rs:4017 calls `write_inbox_marker(&bee_dir, &opts)` inside the ReturnReceipt arm before printing the envelope and returning SUCCESS. This is load-bearing: both callees that normally write it (:2296-2302, :2892-2896) are skipped on a replay, so without this call a detached Pi session would receive a success envelope and wait forever."
+    },
+    {
+      "id": "the refusal names both digests and the receipt path, in house shape",
+      "status": "PASS",
+      "evidence": "run.rs:4006-4013 prints `job \"<id>\" round <n> already has a stored receipt at <path> with digest \"<stored>\" (incoming task digest is \"<incoming>\") FIX: pass a fresh --job-id` and returns FAILURE without spawning. Covered by replay_with_differing_digest_refuses_loudly_and_spawns_nothing."
+    },
+    {
+      "id": "the digest covers task and files, never the rendered brief",
+      "status": "PASS",
+      "evidence": "mailbox.rs:93-102 `dispatch_digest(task, files)` hashes the task and each file with NUL separators and nothing else; no BriefSpec and no rendered brief reaches it. mailbox.rs:1466 `dispatch_digest_covers_task_and_files_only` pins determinism and sensitivity to both inputs."
+    },
+    {
+      "id": "the digest filename sits outside both existing parser families",
+      "status": "PASS",
+      "evidence": "`digest_path` yields `digest-N.sha256`, which `parse_brief_filename` (run.rs:3127-3133, strips `brief-`/`.txt`) and the drain's `/^result-(\\d+)\\.json$/` (.pi/extensions/bee-guard.ts:729) both ignore. The full suite stays green, including the drain tests that readdir the same directory."
+    },
+    {
+      "id": "the area skill was synced rather than acked past",
+      "status": "PASS",
+      "evidence": "skills/bee-herding/references/operational-invariants.md:403-425 now states the replay rule and corrects the opening sentence that claimed the verb always starts an agent; `bee dev regen` rendered it into all five harness trees in commit 94991b963. The --sync-ack on the cap names only the wrong affects_skills prediction, not a skipped sync."
+    },
+    {
+      "id": "the deviation is recorded, not hidden",
+      "status": "PASS",
+      "evidence": "D6's files half is a no-op because `bee herding run` carries no file list (run.rs:2466, :2910, :3359 each build BriefSpec with an empty vec, all predating this cell). Write sites (:2648, :3396) and the read site (:3971) pass the same empty vec, so the digest is symmetric and correct today. Recorded as its own store decision and as the cap's --deviation."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

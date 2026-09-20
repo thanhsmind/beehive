@@ -1,0 +1,38 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "the round row is present and sourced from the parsed result filename",
+      "status": "PASS",
+      "evidence": ".pi/extensions/bee-guard.ts:793 adds `push(\"round\", round)` directly after `push(\"job_id\", marker.job_id)`; :720 changed `latestResultFile` to return `{ round, file }` so the value flows from the existing `/^result-(\\d+)\\.json$/` capture with no second parse, and the drain at :894-897 threads `latest.round` through. The marker is untouched, as the cell's prohibitions required."
+    },
+    {
+      "id": "the dedupe sentence names job_id + round and keeps the pinned substrings",
+      "status": "PASS",
+      "evidence": ".pi/extensions/bee-guard.ts:803-806 reads \"Delivery is at-least-once, so job_id + round is the dedupe key\" and adds \"a same job_id at a higher round is a new result and must not be dropped\". Both literals the existing assertions pin survive: `cargo test --release ... pi_plugin_contracts` passes `a_restart_before_the_turn_settled_redelivers_the_same_job_id_at_least_once`, which asserts `contains(\"at-least-once\") && contains(\"dedupe key\")` at pi_plugin_contracts.rs:3157."
+    },
+    {
+      "id": "red-first, with the new case proving the reported defect",
+      "status": "PASS",
+      "evidence": "pi_plugin_contracts.rs adds `a_round_2_result_injected_under_an_already_seen_job_id_carries_round_2`, asserting `rows_2.contains(\"round: 2\")` and an `assert_ne!` between the two injections. Suite count moved 78 -> 79, so the case is new rather than renamed."
+    },
+    {
+      "id": "the one exact-row assertion was updated and the containment site left alone",
+      "status": "PASS",
+      "evidence": "Only pi_plugin_contracts.rs:3273 compares `fenced_rows(text)` with `assert_eq!` on a full vec, and it carries the new row. The other `fenced_rows` call site at :2786-2794 asserts by containment and is unedited, exactly as the cell's prohibitions required."
+    },
+    {
+      "id": "the hashed-root regen obligation was met",
+      "status": "PASS",
+      "evidence": "`.pi/extensions` is a release-manifest root; docs/history/codex-harness-hardening/release-manifest.json was regenerated in the same commit and `bee dev release-manifest --check` reports 376 files match, re-run on main after the merge at 83e426a."
+    },
+    {
+      "id": "no exactly-once claim was introduced",
+      "status": "PASS",
+      "evidence": "The reworded sentence still states at-least-once; decision a05636f8 is untouched. The redelivery test still expects two messages (pi_plugin_contracts.rs:3140), so the guarantee is unchanged in behavior as well as in wording."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

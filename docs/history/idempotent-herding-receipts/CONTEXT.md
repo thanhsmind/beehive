@@ -9,13 +9,23 @@
 ## Feature Boundary
 
 A `bee herding run` dispatch is safe to replay: the job mailbox it already
-wrote is the receipt, so the same `job_id` + round with the same brief returns
-that stored result instead of spawning a second worker, a changed brief refuses
-loudly, and the Pi drain's injected header names `job_id + round` as the dedupe
-key so a genuine later round is never read as a replay. It ends at the dispatch
-door, the mailbox directory and the drain header, plus a prune verb for the
-mailbox tree. Delivery itself is unchanged and still at-least-once; cells,
-gates, proof and worktrees are untouched.
+wrote is the receipt, so the same `job_id` + round carrying the same task
+returns that stored result instead of spawning a second worker, a changed task
+refuses loudly, and the Pi drain's injected header names `job_id + round` as the
+dedupe key so a genuine second round is never read as a replay. It ends at the
+dispatch door, the mailbox directory and the drain header. Delivery itself is
+unchanged and still at-least-once; cells, gates, proof and worktrees are
+untouched.
+
+<!-- bee:not-a-deferral: states a dropped scope item, not a plan to act later. D8 retired the prune verb outright; collecting the mailbox tree is a filed bee backlog row, which is the register, and this feature promises nothing about it. -->
+**Nothing is deleted.** The prune verb this boundary originally named was
+dropped by D8 on the corrected 14 MB figure, and the mailbox tree is not
+collected by this feature or by any successor it commits to.
+<!-- /bee:not-a-deferral -->
+
+**Shipped 2026-09-20**, both slices, merged at `83e426a`: cell ihr-1 (the drain
+header names the round) and cell ihr-2 (the receipt pre-flight and its
+refusal).
 
 ## Why now
 
@@ -151,6 +161,7 @@ From the quick scout only. Downstream agents read these before planning.
 
 None.
 
+<!-- bee:not-a-deferral: a CONTEXT.md template heading. The items under it are answered or carry their own named next step; none is an unregistered promise to act later. -->
 ### Deferred To Planning
 
 - [x] ~~Can a round-2 marker and a requeued round-1 claim coexist on disk?~~ —
@@ -164,6 +175,7 @@ None.
       answer is at least "bee itself does". Confirm the shape before slice 2's
       gate.
 
+<!-- bee:not-a-deferral: a CONTEXT.md template heading. Every idea under it is already filed as a bee backlog row, which is the register; this section only points at them. -->
 ## Deferred Ideas
 
 - Rules 1, 2, 4 and 5 of `pi-workflows-xia.md` § Five rules worth taking —
@@ -177,6 +189,7 @@ None.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
+<!-- /bee:not-a-deferral -->
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
 
 D2 is reasoned from code and not reproduced. `bee-principle-red-before-green`

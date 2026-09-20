@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "idempotent-herding-receipts",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"idempotent-herding-receipts\" started at phase \"exploring\" (lane).",
-  "next_action": "Compound: flush the capture queue and mine the promote proposals.",
+  "next_action": "bee close finished \"idempotent-herding-receipts\" — feature is closed.",
   "created_at": "2026-09-20T03:35:00.363Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
