@@ -1103,6 +1103,99 @@ use std::time::Instant;
         }
     }
 
+    #[test]
+    fn reconcile_capped_workers_marks_running_receipt_capped() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[{"nickname":"w1","cell":"c1","status":"running"}]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 1);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("nickname"), Some(&json!("w1")));
+        assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
+
+    #[test]
+    fn reconcile_capped_workers_leaves_open_missing_or_corrupt_cells_untouched() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[
+                {"nickname":"w2","cell":"c2","status":"running"},
+                {"nickname":"w3","cell":"c3","status":"running"},
+                {"nickname":"w4","cell":"c4","status":"running"}
+            ]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        // c3.json is missing
+        std::fs::write(cells.join("c4.json"), "{nope").unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 0);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 3);
+        assert_eq!(workers[0].get("status"), Some(&json!("running")));
+        assert_eq!(workers[1].get("status"), Some(&json!("running")));
+        assert_eq!(workers[2].get("status"), Some(&json!("running")));
+    }
+
+    #[test]
+    fn reconcile_capped_workers_does_not_recount_already_capped_and_preserves_length() {
+        let tmp = tmp_root();
+        write_state_file(
+            tmp.path(),
+            r#"{"workers":[
+                {"nickname":"w1","cell":"c1","tier":"code","status":"running"},
+                {"nickname":"w2","cell":"c2","tier":"review","status":"open"},
+                {"nickname":"w5","cell":"c5","tier":"generation","status":"capped"}
+            ]}"#,
+        );
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(cells.join("c1.json"), r#"{"status":"capped"}"#).unwrap();
+        std::fs::write(cells.join("c2.json"), r#"{"status":"open"}"#).unwrap();
+        std::fs::write(cells.join("c5.json"), r#"{"status":"capped"}"#).unwrap();
+
+        let changed = ok(reconcile_capped_workers(tmp.path()));
+        assert_eq!(changed, 1);
+
+        let state = read_state_strict(tmp.path()).unwrap();
+        let workers = state.get("workers").and_then(Value::as_array).unwrap();
+        assert_eq!(workers.len(), 3);
+
+        // w1 updated to capped, tier preserved
+        assert_eq!(workers[0].get("nickname"), Some(&json!("w1")));
+        assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
+        assert_eq!(workers[0].get("tier"), Some(&json!("code")));
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+
+        // w2 left as-is
+        assert_eq!(workers[1].get("nickname"), Some(&json!("w2")));
+        assert_eq!(workers[1].get("cell"), Some(&json!("c2")));
+        assert_eq!(workers[1].get("tier"), Some(&json!("review")));
+        assert_eq!(workers[1].get("status"), Some(&json!("open")));
+
+        // w5 was already capped, stays capped, tier preserved
+        assert_eq!(workers[2].get("nickname"), Some(&json!("w5")));
+        assert_eq!(workers[2].get("cell"), Some(&json!("c5")));
+        assert_eq!(workers[2].get("tier"), Some(&json!("generation")));
+        assert_eq!(workers[2].get("status"), Some(&json!("capped")));
+    }
+
     // ── handoff kinds ─────────────────────────────────────────────────────
 
     #[test]

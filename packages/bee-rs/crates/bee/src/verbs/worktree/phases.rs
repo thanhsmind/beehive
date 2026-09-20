@@ -961,6 +961,16 @@ pub(crate) fn merge_finish(
         let uat_wait_set =
             *uat_stop == UatStop::Close && precheck.lane_applies && !precheck.gate_approved;
         if let Some(feature) = feature.as_deref() {
+            if let Err(reason) = crate::verbs::state_group::reconcile_capped_workers(main_root) {
+                let reason_disp = match &reason {
+                    crate::verbs::reservations::Err2::Msg(m) => m.as_str(),
+                    crate::verbs::reservations::Err2::Ex => "internal error",
+                };
+                eprintln!(
+                    "bee worktree merge: could not reconcile worker receipts ({reason_disp}) — worker statuses may be stale until the next merge."
+                );
+                result.insert("reconcile_warning".into(), json!(reason_disp));
+            }
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
                 // mrf-2: `|| outcome.changed` is the second door into this
                 // same commit — a lane whose ONLY change was the

@@ -4515,6 +4515,25 @@ use std::time::Instant;
         assert_eq!(before, after, "a lane write that could not even be read must leave the file untouched");
     }
 
+    #[test]
+    fn reconcile_failure_leaves_merge_green() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let state_path = main.join(".bee").join("state.json");
+        std::fs::write(&state_path, "not json at all").unwrap();
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a failing reconcile must warn, not refuse the merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let warning = answer.result["reconcile_warning"].as_str().unwrap_or_default();
+        assert!(warning.contains("not valid JSON"), "{warning}");
+    }
+
     /// mcl-2 (R2): the regression the semantic judge caught. `main_repo`'s
     /// `.gitignore` (`.bee/*`) means every fixture above leaves the lane
     /// file UNTRACKED, so the post-commit dirty guard (which reads
