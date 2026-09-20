@@ -2160,9 +2160,10 @@ fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
 /// called exactly once, right after a real `agent start` succeeds. Both
 /// appends are fail-open: a logging failure is reported to stderr, never
 /// allowed to hide (or undo) the dispatch it is recording.
-fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) {
+fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) -> String {
+    let ts = chrono::Utc::now().to_rfc3339();
     let mut m = Map::new();
-    m.insert("ts".into(), Value::String(chrono::Utc::now().to_rfc3339()));
+    m.insert("ts".into(), Value::String(ts.clone()));
     m.insert("source".into(), Value::String("herding-run".into()));
     m.insert("job_id".into(), Value::String(opts.job_id.clone()));
     m.insert("kind".into(), Value::String(kind.to_string()));
@@ -2186,7 +2187,46 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
     };
     let row = WaveRow {
         wave_id: opts.job_id.clone(),
-        started_at: chrono::Utc::now().to_rfc3339(),
+        started_at: ts.clone(),
+        workers: vec![worker],
+    };
+    if let Err(e) = wave_ledger::append_wave(main_root, &row) {
+        eprintln!("bee herding run: could not append the wave ledger row: {e}");
+    }
+    ts
+}
+
+fn resolve_evidence(bee_dir: &Path, job_id: &str, outcome: &RunOutcome) -> Option<String> {
+    let report = match outcome {
+        RunOutcome::Result(r) => r.report_path.clone(),
+        RunOutcome::Malformed { report_path, .. } => report_path.clone(),
+        _ => None,
+    };
+    if let Some(p) = report {
+        return Some(p);
+    }
+    let log = mailbox::log_path(bee_dir, job_id);
+    if log.exists() {
+        return Some(log.display().to_string());
+    }
+    None
+}
+
+fn record_outcome(main_root: &Path, opts: &Options, pane_id: &str, started_at: &str, result: &ExecResult) {
+    let bee_dir = main_root.join(".bee");
+    let evidence = resolve_evidence(&bee_dir, &opts.job_id, &result.outcome);
+    let worker = WorkerRow {
+        name: opts.job_id.clone(),
+        pane_id: pane_id.to_string(),
+        worktree: opts.cwd.display().to_string(),
+        task: opts.task.clone(),
+        outcome: Some(outcome_label(&result.outcome).to_string()),
+        evidence,
+        retryable: None,
+    };
+    let row = WaveRow {
+        wave_id: opts.job_id.clone(),
+        started_at: started_at.to_string(),
         workers: vec![worker],
     };
     if let Err(e) = wave_ledger::append_wave(main_root, &row) {
@@ -2623,7 +2663,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(new_pane), closed_pane: false };
     }
 
-    record_dispatch(&opts.main_root, opts, &kind, &new_pane);
+    let started_at = record_dispatch(&opts.main_root, opts, &kind, &new_pane);
 
     // Persist pane+agent identity into job.json (D3): the ONLY way a later
     // `--continue` can find this agent's pane again. Best-effort — a
@@ -2680,7 +2720,9 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         false
     };
 
-    ExecResult { outcome, pane_id: Some(new_pane), closed_pane }
+    let res = ExecResult { outcome, pane_id: Some(new_pane.clone()), closed_pane };
+    record_outcome(&opts.main_root, opts, &new_pane, &started_at, &res);
+    res
 }
 
 /// Builds the child process environment, explicitly stripping leader session
@@ -3361,7 +3403,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
     }
 
     let kind = job_value.get("kind").and_then(Value::as_str).unwrap_or("unknown").to_string();
-    record_dispatch(&opts.main_root, opts, &kind, &pane_id);
+    let started_at = record_dispatch(&opts.main_root, opts, &kind, &pane_id);
 
     // Advance job.json's round so a THIRD `--continue` finds this round as
     // its prior one — everything else in job.json (pane_id, kind, cwd…)
@@ -3429,7 +3471,9 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         false
     };
 
-    ExecResult { outcome, pane_id: Some(pane_id), closed_pane }
+    let res = ExecResult { outcome, pane_id: Some(pane_id.clone()), closed_pane };
+    record_outcome(&opts.main_root, opts, &pane_id, &started_at, &res);
+    res
 }
 
 fn outcome_label(o: &RunOutcome) -> &'static str {
@@ -9315,6 +9359,115 @@ mod tests {
             "all concurrent child processes must produce unique job ids, got: {:?}",
             job_ids
         );
+    }
+
+    #[test]
+    fn ledger_outcome_appends_second_row_with_matching_outcome_and_preserves_first_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::Result(r) => assert_eq!(r.status, MailboxStatus::Done),
+            other => panic!("expected Result(done), got {other:?}"),
+        }
+
+        let ledger_path = bee_dir.join("wave-ledger.jsonl");
+        let content = std::fs::read_to_string(&ledger_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2, "must append a second wave-ledger row; got:\n{content}");
+
+        let row1: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(row1["wave_id"], opts.job_id);
+        assert!(row1["workers"][0]["outcome"].is_null(), "first row must have null outcome: {}", lines[0]);
+        let first_row_raw = lines[0];
+
+        let row2: Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(row2["wave_id"], opts.job_id);
+        assert_eq!(row2["started_at"], row1["started_at"], "second row must keep same started_at");
+        assert_eq!(row2["workers"][0]["name"], row1["workers"][0]["name"]);
+        assert_eq!(row2["workers"][0]["pane_id"], row1["workers"][0]["pane_id"]);
+        assert_eq!(row2["workers"][0]["worktree"], row1["workers"][0]["worktree"]);
+        assert_eq!(row2["workers"][0]["task"], row1["workers"][0]["task"]);
+
+        let expected_label = outcome_label(&result.outcome);
+        assert_eq!(row2["workers"][0]["outcome"], expected_label);
+        let envelope = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(row2["workers"][0]["outcome"], envelope["outcome"]);
+
+        let full_text = std::fs::read_to_string(&ledger_path).unwrap();
+        assert!(full_text.starts_with(first_row_raw), "first row bytes must remain unchanged on disk");
+    }
+
+    #[test]
+    fn ledger_outcome_blocked_with_report_fills_evidence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let report_file = dir.join("report-1.md");
+        std::fs::write(&report_file, "# Deliverable\n").unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            format!(
+                r#"{{"status":"blocked","summary":"blocked","files_changed":[],"proof":"n/a","report_path":"{}"}}"#,
+                report_file.display()
+            ),
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::Result(r) => assert_eq!(r.status, MailboxStatus::Blocked),
+            other => panic!("expected Result(blocked), got {other:?}"),
+        }
+
+        let ledger_path = bee_dir.join("wave-ledger.jsonl");
+        let content = std::fs::read_to_string(&ledger_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2, "must append a second wave-ledger row; got:\n{content}");
+
+        let row2: Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(row2["workers"][0]["outcome"], "blocked");
+        assert_eq!(
+            row2["workers"][0]["evidence"].as_str().unwrap(),
+            report_file.display().to_string()
+        );
+    }
+
+    #[test]
+    fn ledger_outcome_append_failure_leaves_run_outcome_and_exit_code_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let fake = FakeHerdr::new();
+        let ledger_path = bee_dir.join("wave-ledger.jsonl");
+        std::fs::create_dir_all(&ledger_path).unwrap();
+
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::Result(r) => assert_eq!(r.status, MailboxStatus::Done),
+            other => panic!("expected Result(done) even when ledger append fails, got {other:?}"),
+        }
+        let exit = exit_code_for(&result.outcome);
+        assert_eq!(exit, std::process::ExitCode::SUCCESS);
     }
 }
 
