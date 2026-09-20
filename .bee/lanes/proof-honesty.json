@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"proof-honesty\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"proof-honesty\" (lane).",
+  "next_action": "Merged into main at 9d98e30; capture what settled, then bee close --feature proof-honesty.",
   "created_at": "2026-09-20T15:35:42.051Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "AskUserQuestion",
-    "asked_at": "2026-09-20T16:02:14.587Z",
-    "session": "ebf62723-3a4f-4554-8743-4a53fb9df78e"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",
@@ -30,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-09-20T15:36:01.435Z",
     "feature": "proof-honesty"
-  },
-  "merge_ready": {
-    "since": "2026-09-20T15:46:07.413Z",
-    "branch": "wt/proof-honesty",
-    "worktree_id": "beehive--wt--proof-honesty",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
