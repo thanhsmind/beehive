@@ -6098,6 +6098,124 @@ use std::time::Instant;
         );
     }
 
+    // ══ proof-honesty D4 (decision f4261145) — optional baseline on cap report ══
+
+    /// D4: a cap carrying a valid baseline stores it on the cell trace and is
+    /// readable via `bee cells show`.
+    #[test]
+    fn report_baseline_valid_string_is_stored_on_trace_and_readable_via_show() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b1", &cell("ph-b1", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "added baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "baseline": "echo ok — green:unit — base commit before change"
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b1", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["baseline"],
+            json!("echo ok — green:unit — base commit before change")
+        );
+
+        let Handled::Emit { result, .. } = handle_show(root, "ph-b1").unwrap() else { panic!() };
+        assert_eq!(
+            result["trace"]["baseline"],
+            json!("echo ok — green:unit — base commit before change")
+        );
+    }
+
+    /// D4: an absent baseline still caps — absent and empty must not read alike,
+    /// matching how `mistakes` already distinguishes them.
+    #[test]
+    fn report_baseline_absent_still_caps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b2", &cell("ph-b2", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "no baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": []
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b2", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert!(capped["trace"].get("baseline").is_none());
+
+        let Handled::Emit { result, .. } = handle_show(root, "ph-b2").unwrap() else { panic!() };
+        assert!(result["trace"].get("baseline").is_none());
+    }
+
+    /// D4: a non-string baseline is refused by name with a fix line.
+    #[test]
+    fn report_baseline_non_string_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ph-b3", &cell("ph-b3", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "bad baseline",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "baseline": 12345
+        })
+        .to_string();
+        let flags = cap_flags_report("ph-b3", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("cells finish: --report key \"baseline\" must be a non-empty string"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "ph-b3").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    /// D4: an empty or whitespace string baseline is refused by name.
+    #[test]
+    fn report_baseline_empty_or_whitespace_string_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for empty in ["", "   ", "\t\n"] {
+            let id = format!("ph-b4-{}", empty.len());
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let bad = json!({
+                "outcome": "empty baseline",
+                "commit": "abc123",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                "baseline": empty
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains("cells finish: --report key \"baseline\" must be a non-empty string"),
+                "{empty:?}: {refusal}"
+            );
+            let after_norm = read_cell_norm(root, &id).ok().unwrap().unwrap();
+            assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+        }
+    }
+
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
     //
     // "`cells finish` verifies a commit whose trailer names the finishing

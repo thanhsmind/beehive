@@ -28,6 +28,11 @@ never the record, quote it instead. A repo declared no-test
 segment `none` and the reason naming the parity/docs check actually
 used.
 
+The report also carries an optional `baseline` field. A baseline is what
+the SAME proof command produced on the base commit, before this change.
+It is optional, but expected whenever the proof command could have passed
+before the change.
+
 Tests are yours to write, TDD-style, as part of the cell's own work:
 judge existing coverage first (`.bee/expertise/tests.md`), author only
 the gap, and for a bugfix watch the repro fail before the fix —

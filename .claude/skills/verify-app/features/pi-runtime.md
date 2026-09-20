@@ -12,6 +12,8 @@ bee integrates with the Pi runtime using an extension file, fail-closed health i
 - `pi-herding-transport` validates agent pane transport for Pi worker execution.
 - `pi-model-usage-status` aggregates active-branch assistant token totals by provider and model and renders compact new and cached token counts in Pi's statusline.
 - `pi-no-pane-dispatch` drives child-process worker execution directly without tmux panes for pi binary agents, returning full output through standard mailbox reports.
+- `pi-worker-verdict` registers a terminating tool mirroring `MailboxResult` that ends worker execution with a structured result file (`result-N.json`) and returns `terminate: true`.
+- `pi-in-flight-worker-widget` renders an informational widget below the editor listing active in-flight workers from `.bee/result-inbox/` with progress tick glyphs, updating on drain poll ticks and vanishing when all workers complete.
 
 ## How to get to it (user POV)
 

@@ -29,7 +29,7 @@ a silent edit.
 | D1 | ~~Anti-cherry-pick rule in AGENTS.md~~ — **delivered by the sibling feature `proof-completeness-rules`**, not by this one. See Prior Art. Kept as a D-ID so nothing downstream renumbers. | Another session shaped the same distill from spec drop `3d41a292` and landed it in `packages/bee/AGENTS.block.md` before this lane reached its gate. Re-filing it here would be a near-duplicate. |
 | D2 | ~~Smoke-first rule in AGENTS.md~~ — **delivered by `proof-completeness-rules`**. Same note as D1. | Same. |
 | D3 | `scripts/release.sh --no-test` prints a four-item release checklist and exits 1 unless `--confirm` is also passed. With no TTY (headless, or the unattended herding loop) it proceeds and prints every checklist line into the log instead of refusing. Decision `b4b806c4`. | A retyped command is a deliberate act; a scrolling warning line is not. An absolute refusal would break herding's release path until its call site is taught both flags, buying no guard the logged skip does not already give. |
-| D4 | The cap proof line gains a baseline as an OPTIONAL fourth field: `<command> — <result> — <scope reason> — <baseline>`. `parse_proof` keeps its three required parts, so every already-capped cell parses unchanged. Decision `f873d3f5`. | 141 capped cells and their archived traces carry the three-part shape. Requiring the field would retire all of them as malformed. |
+| D4 | The baseline rides the cap REPORT, not the proof line. `bee cells finish --report` gains `"baseline"` as a second OPTIONAL key beside `mistakes`: a string naming what the same proof command produced on the base commit, validated as a string when present and stored on the cell trace. `REPORT_KEYS` keeps its five required keys; the proof line keeps its three segments byte for byte. Decision `f4261145`, superseding `f873d3f5`. | The first draft put the floor inside the proof line as a fourth segment. Measured, that costs 26 source files, 11 crate tests and four doc homes, and walks through `proof-strength-and-expiry` D6. The report is already the structured half of a cap; a baseline is structured data, not prose. Same honesty, about six files, and D6 is never touched. |
 | D5 | The four adoptions ship as two slices: slice 1 = D1, D2, D3 (docs lines plus one shell script, no parsed contract touched); slice 2 = D4 (the parser, its callers, and the skills that state the proof-line shape). | Slice 1 has no contract surface and can land on its own. Binding it to the parser change would hold two one-line rules behind a covered-contract change. |
 
 ### Agent's Discretion
@@ -114,13 +114,15 @@ Read before touching D4 — this line has been changed once already, deliberatel
 - Its **D6** reads: "No change to the proof line's three-segment shape." Its own
   rationale states why — "the blast radius is already 20+ files; widening it to the
   proof line's structure would put a second contract change in the same feature." So
-  D6 is a scope boundary of that feature, not a property of the line. D4 proceeds
-  beside it, related by `touches:cb7b14b7`, never by reinterpreting it. If the user
-  reads D6 as permanent, D4 needs a supersession and this feature loses its slice 2.
+  D6 is a scope boundary of that feature, not a property of the line. D4 no longer
+  goes near it: the revised D4 (`f4261145`) leaves the three-segment shape byte for
+  byte and puts the baseline in the cap report instead. The fence is respected, not
+  argued with — which is also why no supersession of another feature's decision is
+  needed.
 - Measured blast radius of the shape: 26 files under
   `packages/bee-rs/crates/bee/src/verbs/cells`, 11 crate tests, plus the three worker
-  contract files and the knowledge entry above. The CONTEXT's earlier "4 product
-  files" was the parser count, not the contract count.
+  contract files and the knowledge entry above. That measurement is what killed the
+  first D4: it is the cost of touching the shape, and the revised D4 pays none of it.
 
 ## Outstanding Questions
 

@@ -66,7 +66,13 @@ pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests"
 /// `bee close`, which reads the capped cells and names the ones that never
 /// answered. Making the key required here would refuse caps mid-flight for a
 /// field their prompt never mentioned.
-pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 1] = ["mistakes"];
+///
+/// `baseline` (proof-honesty D4, decision f4261145): what the same proof
+/// command produced on the base commit before this change — the floor a
+/// result is read against. Optional here so callers without a baseline keep
+/// capping cleanly; validated as a non-empty string when present and stored
+/// on the cell trace.
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 2] = ["mistakes", "baseline"];
 
 /// D8 (docs/history/test-doctrine/CONTEXT.md) proof-string separator —
 /// three segments joined by `" — "` (space, em dash U+2014, space).
@@ -203,6 +209,19 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         _ => {
             return Err(Fail::Thrown(
                 "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better>\"; an empty array states that this cell hit none.".to_string(),
+            ))
+        }
+    }
+    // proof-honesty D4 (decision f4261145): `baseline` is optional, but
+    // when present it must be a non-empty string. Any other JSON type, or
+    // an empty/whitespace string, is refused by name with a fix line.
+    // Absent is legal and distinct from empty.
+    match map.get("baseline") {
+        None => {}
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"baseline\" must be a non-empty string — name what the same proof command produced on the base commit, or omit the key entirely.".to_string(),
             ))
         }
     }
