@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"idempotent-herding-receipts\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming for ihr-2.",
+  "next_action": "Merged into main at 83e426a; reload the product and test \"idempotent-herding-receipts\", then either approve uat (\"bee gate --name uat --approved true --lane idempotent-herding-receipts\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-20T03:35:00.363Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: idempotent-herding-receipts",
+    "asked_at": "2026-09-20T04:42:35.656Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -454,12 +459,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-09-20T04:41:46.955Z",
-    "branch": "wt/idempotent-herding-receipts",
-    "worktree_id": "beehive--wt--idempotent-herding-receipts",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
