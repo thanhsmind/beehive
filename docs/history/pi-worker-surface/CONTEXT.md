@@ -59,8 +59,10 @@ changes is D6's basis and its honest payoff:
 - The widget key, row layout and truncation rule are the agent's, within D3–D5.
 - The verdict tool's name, and how it reports a write failure, are the agent's.
 
+<!-- bee:not-a-deferral: This sentence names the CONTEXT template's own "Deferred To Planning" section and states the OPPOSITE of a deferral — both items are closed, with their evidence recorded below. It promises no future action. -->
 The other two discretion items were settled by planning's reality touches and
 are recorded under Deferred To Planning below — they are no longer open.
+<!-- /bee:not-a-deferral -->
 
 ## Terms
 
@@ -139,6 +141,7 @@ From the quick scout only. Downstream agents read these before planning.
   inherited premises, cited above and never reinterpreted here.
 - `docs/history/research/pi-harness-session-surface-xia.md` — evidence pack.
 
+<!-- bee:not-a-deferral: These sections are CONTEXT.md's own record of what was resolved and what was consciously left out of scope. "Deferred To Planning" is a fixed template heading whose every item is answered and checked off with a command or a file:line; "Deferred Ideas" names three FILED backlog rows (A4 a P3 proposal, A5 a P3 debt row, A3 a P2 proposal under slug prose-guidance-baseline), which are their home and where they get picked up; the Handoff Note is template boilerplate describing what a planning agent reads. None is an unregistered promise to act later. -->
 ## Outstanding Questions
 
 ### Resolve Before Planning
@@ -179,12 +182,15 @@ drafted. Kept here with their evidence so a later cell does not re-open them.
 
 ## Deferred Ideas
 
+Each of these is a filed backlog row. This section records why it is not in
+this feature, never a promise to return to it here.
+
 - A4 — hook `model_select` and `thinking_level_select` to refresh the model-usage
   status line. Real but cosmetic: the line self-corrects at the next `turn_end`,
-  so the harm is latency, not correctness. Backlog polish, not this feature.
+  so the harm is latency, not correctness. Filed as a P3 `proposal`.
 - A5 — guard the six `registerCommand` calls with `pi.getCommands()`. Defensive
   only: Pi re-creates extensions on session replacement, so no live defect was
-  found. Backlog polish.
+  found. Filed as a P3 `debt` row.
 - A3 — the prose guidance baseline. Filed as a P2 `proposal` backlog row under
   `prose-guidance-baseline`, with its drift policy already locked (`460a639f`).
 
@@ -193,3 +199,4 @@ drafted. Kept here with their evidence so a later cell does not re-open them.
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->

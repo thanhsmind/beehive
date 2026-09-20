@@ -174,6 +174,7 @@ what it does today for a worker that produces no parsable result.
 `pws-2` is the walking skeleton for the panel: a real dispatched worker appears
 as a row and the row clears when it finishes.
 
+<!-- bee:not-a-deferral: The flagged phrases in the sections below describe things that ALREADY happened, never future work. In the hat synthesis, "the result the drain later delivers" names the existing result-inbox behaviour that is the reason D3 can drop a finished row. In Open Questions, "the three questions CONTEXT.md deferred to planning" is written only to record that all three were ANSWERED before this plan was drafted, each with a command or a file:line behind it. Neither promises action after this feature ships. -->
 ## Plan check — hat wave findings
 
 One wave, three seats (`hat-facts-gaps`, `hat-alternatives`, `hat-user-impact`),
@@ -371,3 +372,4 @@ reality touches and are recorded there with their evidence.
 - Foreground workers in the panel: no pending marker is written without
   `--inbox-session`, and a foreground run blocks the leader anyway.
 - Any change to the Claude, Codex or OpenCode belts (D10).
+<!-- /bee:not-a-deferral -->
