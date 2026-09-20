@@ -26,6 +26,7 @@ refused outright, so "done" can never mean "I said so".
   cell cites no `contract:<name>` decision, `CONTRACT_UNSETTLED` when a cited
   decision carries an open revisit trigger, and `CONTRACT_RETIRED` when one has
   left the active set.
+- `cell-self-cap` a dispatched execution worker finishes its work, commits with cell trailer, and self-caps via `cells finish` using the terminal composed prompt instruction.
 
 ## How to get to it (user POV)
 
@@ -35,6 +36,7 @@ refused outright, so "done" can never mean "I said so".
 - Run `bee cells cap --id <id> --files <list> --report '<json>' --json`, or its
   porcelain spelling `bee cells finish` / `bee finish`.
 - Run `bee cells list --json` and `bee cells show --id <id> --json` to read back.
+- Run `bee dispatch prepare --runtime <rt> --kind cell --cell <id> --worker <name> --claim --json` to prepare execution worker dispatch.
 
 ## Driving it with control-bee
 
@@ -88,13 +90,27 @@ Preconditions:
   The payload reports `status: "capped"`. `trace.verify_command` holds `"test -f NOTE.md"`, `trace.verify_output` holds `"green:unit"`, `trace.verify_passed` holds `true`, and `trace.verification_evidence` holds `"file exists"`.
   Automated contract verification for this proof match and trace population across the Pi lifecycle is covered in
   `packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs` (`pi_lifecycle_end_to_end_onboarded_repo_parity`).
+- **Dispatched execution worker self-caps its cell.**
+  With feature `demo-cap` started, `plan.md` previewed, merged gate approved, and cell `demo-cap-1` added in worktree `repo--wt--demo-cap`, configure `team.<runtime>.code` to a herding worker (`agy-flash`).
+  Run `VERIFY_CWD=repo--wt--demo-cap control-bee cli -- dispatch prepare --runtime claude --kind cell --cell demo-cap-1 --worker w1 --json`.
+  The payload returns `tool: "Bash"` and a herding run command whose stdin carries the task text with the runnable `.bee/bin/bee cells finish` instruction as the terminal action:
+  `Finish with: .bee/bin/bee cells finish --id demo-cap-1 --outcome "<one line>" --files <a,b> --report '<json>'`.
+  Execute the prepared dispatch through the returned command with `--task-file -`:
+  `control-bee cli -- herding run --task-file - --json --cwd "/tmp/bee-verify/run/<run-id>/repo--wt--demo-cap" --agent "agy-flash"`.
+  The worker executes, creates `DUMMY.txt`, commits with trailer `cell: demo-cap-1`, runs verification, and calls `cells finish` itself.
+  Inspect the cell state from the main checkout without manual capping:
+  `control-bee cli -- cells show --id demo-cap-1 --json`.
+  The cell reports `status: "capped"`, `trace.outcome: "Created DUMMY.txt with hello"`, `trace.capped_at` populated (`"2026-09-19T05:32:10.615Z"`), `trace.verify_command: "test -f DUMMY.txt"`, `trace.verify_output: "green:live"`, and `trace.report.tests` holding `"test -f DUMMY.txt — green:live — DUMMY.txt created with hello"`.
 - **Proof.** Run `control-bee snapshot capped`. The snapshot's
   `cells/demo-note-1.json` shows `status: "capped"` with the green proof line on
   `trace.report.tests`, `git-log.txt` shows the commit the report names, and the
   earlier refusal's `.exit` file is still `1` in the evidence dir.
+  Snapshot `self-cap-drive` confirms `cells/demo-cap-1.json` capped by worker `w1`
+  with zero manual intervention.
 
 ## Gotchas
 
+- `bee cells show` reads the shared control plane and refuses inside a granted feature worktree; run it from the main sandbox checkout to inspect cell state.
 - The `--report` value is a JSON **string** with exactly five keys: `outcome`,
   `commit`, `files`, `tests`, `deviations`. An unknown or missing key is refused
   by name. `mistakes` is an optional sixth.

@@ -14,11 +14,15 @@ per seat, named by its `seat:` row, and the leader reads each full answer at
 - `pi-hat-seat-injection` injects one `bee-result` block per seat into the Pi session, with `job_id`, `seat`, `status`, `summary`, `proof`, and `report_path` rows.
 - `pi-hat-full-answer` gives the leader the full hat answer in the file at `report_path`. The injection carries only a one-line summary.
 - `pi-hat-advisor-record` records the synthesis from the bound Pi leader inside the worktree.
+- `pi-hat-no-pane-wave` runs a five-seat parallel hat wave as child processes without tmux panes. It verifies seat naming, budget limits, and drop-and-name ceiling enforcement.
 
 ## How to get to it (user POV)
 
 - In a Pi session opened in a feature worktree, ask for the plan-step hat wave. The leader follows `.agents/skills/bee-hive/references/gates-and-delegation.md` ("Hat wave", its `On Pi:` block).
 - Per seat, the leader runs `.bee/bin/bee dispatch prepare --runtime pi --kind advisor --role <hat-seat> --purpose "<open question>" --json` and then the returned command, with `--inbox-session "$PI_SESSION_ID"` appended.
+- Dispatch no-pane hat seats with `.bee/bin/bee dispatch prepare --runtime pi --kind advisor --role <seat> --json`.
+- Execute the returned commands with `--no-pane` in parallel.
+- Verify each result envelope shows `seat: "<seat>"` and `pane_id: null`.
 - The leader records the synthesis with `.bee/bin/bee state advisor-ref record --advisor "<name>" --digest-file <path>`.
 
 ## Driving it with control-bee
@@ -49,6 +53,35 @@ Preconditions:
 - **The advisor record succeeds from the bound leader.** `.bee/bin/bee state advisor-ref record --advisor "hat-wave:live-check" --digest-file <synthesis>` prints `Recorded advisor_ref (advisor "hat-wave:live-check", feature "hat-demo").`
 - **Each detached launch returns at once.** Each backgrounded `herding run ... --inbox-session "$PI_SESSION_ID"` prints one JSON line with `outcome detached` (`"outcome":"detached"`) and the job id. The launch shell exits with no timeout.
 - **Hat panes stay in the worker column and close.** Capture the herdr pane layout (a `cli:pane:layout` result) every 15 s from before the leader starts until after it ends. While the hats run, each hat pane has the leader's `x` and sits below the leader pane, and the main pane keeps its `x`, width, and height. A hat pane is gone from the first capture after its `result-1.json` mtime. The last capture equals the first one.
+- **Five-seat hat wave runs as child processes without tmux panes (no-pane-wave outcome).**
+  Count open panes before launch:
+  `bash .bee/verify/verify-app/control-bee cli -- herding pane list`
+  Assert baseline pane count (for example, 27).
+  Dispatch five hat seats in parallel with `--no-pane`, `--ceiling 600`, and their seat names:
+  1. `hat-facts-gaps`
+  2. `hat-alternatives`
+  3. `hat-user-impact`
+  4. `hat-risks`
+  5. `hat-value`
+  `printf "<prompt>" | bash .bee/verify/verify-app/control-bee cli -- herding run --task-file - --json --agent "pi-gpt-5.6-luna" --no-pane --seat "<seat>" --ceiling 600`
+  Count open panes during parallel execution. Assert the pane count equals the baseline count.
+  Assert results after all seats stop:
+  - Each command exits with code 0.
+  - Each envelope shows `outcome: "done"`.
+  - Each envelope shows `pane_id: null` and `closed_pane: false`.
+  - Each envelope shows its matching `seat` field. Five distinct seats return.
+  - Each seat writes a full report file at `report_path`.
+  - Final pane count equals the baseline count.
+  - Total elapsed time stays below the 10-minute (600 s) budget.
+- **Ceiling timeout drops and names late seat (ceiling-timeout outcome).**
+  Start one seat with `--ceiling 1` and a long task:
+  `printf "Write an exhaustive 5000-word history of mathematics." | bash .bee/verify/verify-app/control-bee cli -- herding run --task-file - --json --agent "pi-gpt-5.6-luna" --no-pane --seat "hat-risks" --ceiling 1`
+  Assert the command output:
+  - Exit code is 1.
+  - Envelope shows `outcome: "timed_out_ceiling"`.
+  - Envelope shows `seat: "hat-risks"`.
+  - Envelope shows `pane_id: null` and `closed_pane: false`.
+  - Envelope shows `retryable: false`.
 
 ### Evidence (run 20260915-180023-56873, 2026-09-15, bee 2.37.3 candidate, Pi 0.85.1)
 
@@ -82,6 +115,24 @@ Preconditions:
 - Worker column: in `07-115101.txt` the main pane `w1:p3A` stays at `x=0`, width 95, height 45, as in `00-before.txt`. The leader `w1:p9Z` sits at `x=95, y=23` under `w1:p9Y`. The hats `w1:pA2` (`y=26`), `w1:pA1` (`y=29`), and `w1:p90` (`y=34`) are all at `x=95`. Every `down` split after `split_1_1` starts at the leader's rect (`x=95, y=23`), so each hat pane was split from the leader worker pane, never from the main pane.
 - Budget: launch 11:50:35Z, `result-1.json` at 11:52:21Z, 11:52:44Z, and 11:53:38Z. That is 3 min 3 s.
 
+### Evidence, third run: five-seat no-pane wave and drop-and-name (run 20260919-073214-2866155, 2026-09-19, bee 2.41.3 candidate, Pi 0.85.1)
+
+- Baseline pane count: `bash .bee/verify/verify-app/control-bee cli -- herding pane list` showed 27 panes (`evidence/024-bee-herding-pane-list.out`).
+- Parallel execution: five hat seats started at the same time with `herding run --no-pane --seat <seat> --ceiling 600`.
+- During execution: `herding pane list` showed 27 panes (`evidence/028-bee-herding-pane-list.out`). Zero tmux panes opened.
+- Post-run pane count: 27 panes (`evidence/029-bee-herding-pane-list.out`).
+- Total elapsed time: 12.62 s (budget 600 s).
+- Distinct seat returns: all five envelopes showed `outcome: "done"`, `pane_id: null`, `closed_pane: false`, and their seat name:
+  - `hat-facts-gaps`: job `job-1789781946966-3059014-1`, `report_path: .../job-1789781946966-3059014-1/report-1.md`
+  - `hat-alternatives`: job `job-1789781946967-3059019-1`, `report_path: .../job-1789781946967-3059019-1/report-1.md`
+  - `hat-user-impact`: job `job-1789781946966-3059015-1`, `report_path: .../job-1789781946966-3059015-1/report-1.md`
+  - `hat-risks`: job `job-1789781946966-3059018-1`, `report_path: .../job-1789781946966-3059018-1/report-1.md`
+  - `hat-value`: job `job-1789781946967-3059020-1`, `report_path: .../job-1789781946967-3059020-1/report-1.md`
+- Forced ceiling timeout: job `job-1789781937693-3058161-1` started with `--seat "hat-risks" --ceiling 1`.
+  - Exit code is 1.
+  - Envelope: `{"job_id":"job-1789781937693-3058161-1","seat":"hat-risks","outcome":"timed_out_ceiling","pane_id":null,"closed_pane":false,"dry_run":false,"retryable":false}`.
+  - The runner stopped the child at the 1-second ceiling. The runner returned `outcome: "timed_out_ceiling"` and kept `seat: "hat-risks"`.
+
 ## Gotchas
 
 - **A launcher timeout no longer leaves a hat pane open (second run).** In the first run the leader put `& wait` after the backgrounded launches, and its 30-second bash timeout ended the launcher. Pi kills the whole process group on a timeout, so the runner died before its pane close. Now an `--inbox-session` run detaches into its own process group and prints `outcome detached` at once. In the second run no shell timed out, and every hat pane closed after its result (see the second-run evidence). A leader must still not `wait` on the detached jobs.
@@ -91,3 +142,5 @@ Preconditions:
 - `result-1.json` in the mailbox carries no `seat` field. The seat rides the inbox marker, the `herding run --json` envelope, and the injected block.
 - A worktree's `.bee/bin/bee` is a symlink into the main sandbox. Vendor the candidate into the main sandbox store; copying a binary into the worktree path writes through the link.
 - Hats spend real model calls on the configured agents. A missing `herding.agents` entry for a `team.pi` agent refuses the run and lists the known agent names.
+- A seat that exceeds the ceiling stops and returns `timed_out_ceiling`. The result envelope keeps the `seat` label.
+- Running hat seats with `--no-pane` executes workers as child processes. It does not open tmux panes (`pane_id: null`).
