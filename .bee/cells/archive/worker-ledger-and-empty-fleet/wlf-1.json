@@ -88,6 +88,71 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:343 gates push_unique on !is_cell_file_capped; tests.rs:1077-1093 asserts !keep.contains(c1) with c1.json status capped; cargo test --release ... prune_ -> prune_keep_set_does_not_protect_capped_cell_with_worker_row ... ok, 8 passed 0 failed",
+            "id": "truth: capped cell with a worker row is not kept"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:302 Err(_) => Ok(false); tests.rs:1091 c4.json absent, assert!(keep.contains(c4)) green",
+            "id": "truth: missing cell file still keeps"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:307 ParsedJson::Unparseable => Ok(false); tests.rs:1090 c3.json = {nope, assert!(keep.contains(c3)) green",
+            "id": "truth: unparseable cell file still keeps"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:320-326 refusal block is outside the diff hunk; prune_refuses_malformed_workers ... ok",
+            "id": "truth: non-array state.workers refusal unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:343 (worker-row pass) and workers.rs:355 (cell-file pass) both call is_cell_file_capped defined at workers.rs:300",
+            "id": "key_link: both passes call one predicate"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show --stat a6eb5fc -> state_group/tests.rs 20 insertions with zero deletions; prune_keep_set_protects_non_capped_and_corrupt_cells at tests.rs:1058 untouched",
+            "id": "prohibition: no existing assertion edited"
+          },
+          {
+            "status": "PASS",
+            "evidence": "diff adds no worker_mutate/push_worker_record call; read_prune_keep_set reads via read_state_strict only (workers.rs:318)",
+            "id": "prohibition: no write to state.workers"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show --stat a6eb5fc lists only state_group/tests.rs and state_group/workers.rs; hooks/chain_nudge.rs absent from the diff",
+            "id": "prohibition: registered_worker_for_cell and SubagentStop nudge untouched"
+          },
+          {
+            "status": "PASS",
+            "evidence": "commit stat equals the exact 2 paths in .bee/cells/wlf-1.json files",
+            "id": "scope: no file outside declared files"
+          },
+          {
+            "status": "PASS",
+            "evidence": "the diff's removed line Some(cell) => push_unique(js_disp(cell)) pushed c1 unconditionally on the parent commit, so assert!(!keep.contains(c1)) was red pre-fix",
+            "id": "adversarial: new test can actually fail"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-20T02:21:34.642Z"
+      }
+    ]
   }
 }

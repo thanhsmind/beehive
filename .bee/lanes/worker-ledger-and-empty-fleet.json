@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-ledger-and-empty-fleet",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 90683ab; reload the product and test \"worker-ledger-and-empty-fleet\", then either approve uat (\"bee gate --name uat --approved true --lane worker-ledger-and-empty-fleet\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature worker-ledger-and-empty-fleet",
   "created_at": "2026-09-20T01:12:24.967Z",
   "run_state": "done",
   "waiting_on": null,
@@ -28,8 +28,8 @@
   },
   "gate_preview": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
-    "previewed_at": "2026-09-20T02:18:24.842Z",
+    "plan_sha256": "540d413849282722171b91512e04c8fe620889a3a7c3d4af88ca0313fa9d84c0",
+    "previewed_at": "2026-09-20T02:20:15.002Z",
     "cells": [
       {
         "id": "wlf-3",
@@ -268,8 +268,8 @@
   },
   "approved_cell_packet": {
     "feature": "worker-ledger-and-empty-fleet",
-    "plan_sha256": "f5ac16fe4d18873286350378f3be727ed979660540269d320777b99e04d77643",
-    "previewed_at": "2026-09-20T02:18:24.842Z",
+    "plan_sha256": "540d413849282722171b91512e04c8fe620889a3a7c3d4af88ca0313fa9d84c0",
+    "previewed_at": "2026-09-20T02:20:15.002Z",
     "cells": [
       {
         "id": "wlf-3",
@@ -508,5 +508,15 @@
   },
   "gate_revoked_at": {
     "execution": "2026-09-20T01:55:26.455Z"
+  },
+  "last_scribing_run": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "date": "2026-09-20",
+    "at": "2026-09-20T02:22:59.390Z",
+    "areas_synced": [
+      "workflow-state",
+      "bee-herding"
+    ],
+    "next_action": "bee close --feature worker-ledger-and-empty-fleet"
   }
 }

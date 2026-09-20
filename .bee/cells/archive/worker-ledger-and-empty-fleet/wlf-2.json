@@ -108,6 +108,86 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:383-393 upserts status capped via push_worker_record; tests.rs:1107 reconcile_capped_workers_marks_running_receipt_capped asserts status==capped and changed==1; cargo test --release ... reconcile -> 4 passed 0 failed",
+            "id": "truth: running receipt whose cell is capped ends capped"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:383 only acts when is_cell_file_capped returns true (Ok(false) for missing at workers.rs:302 and unparseable at :307); tests.rs:1129 asserts changed==0 and all three rows stay running",
+            "id": "truth: open, missing or unparseable receipt untouched"
+          },
+          {
+            "status": "PASS",
+            "evidence": "push_worker_record (workers.rs:122-130) matches the existing (nickname, cell) pair and assigns in place, never pushes, because reconcile passes the row's own nickname and cell; tests.rs:1157 asserts workers.len()==3 across a reconcile that changed 1",
+            "id": "truth: receipt array length unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "phases.rs:964 if let Err(reason) = reconcile_capped_workers(main_root) -> eprintln plus a result field only; worktree/tests.rs:4519 reconcile_failure_leaves_merge_green asserts answer.ok and result merged==true with a corrupt state.json; test green",
+            "id": "truth: failing reconcile leaves merge green"
+          },
+          {
+            "status": "PASS",
+            "evidence": "workers.rs:383 calls the same fn defined at workers.rs:300; no second predicate added in the diff",
+            "id": "key_link: reuses slice-1 is_cell_file_capped"
+          },
+          {
+            "status": "PASS",
+            "evidence": "the only mutation is push_worker_record with the row's own (nickname, cell); upsert-in-place proven by workers.rs:703 push_worker_record_upserts_the_same_nickname_cell_pair and the tests.rs:1157 length assertion",
+            "id": "prohibition: no row added or removed"
+          },
+          {
+            "status": "PASS",
+            "evidence": "phases.rs:964-973 swallows every Err into a warning; cargo test --release ... merge -> 150 passed 0 failed, 1 ignored",
+            "id": "prohibition: no new refusal or error path in worktree merge"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show --stat 91a1f2c -> 4 files changed, 158 insertions, zero deletions",
+            "id": "prohibition: no edit to any existing assertion"
+          },
+          {
+            "status": "PASS",
+            "evidence": "reconcile_capped_workers is pub(crate) with no run_ dispatcher entry; commit stat lists no registry or verbs table file",
+            "id": "prohibition: no new CLI verb or registry change"
+          },
+          {
+            "status": "PASS",
+            "evidence": "commit stat is state_group/{workers,tests}.rs and worktree/{phases,tests}.rs only; hooks/chain_nudge.rs and cells/handlers_close.rs absent",
+            "id": "prohibition: cap guard and SubagentStop nudge untouched"
+          },
+          {
+            "status": "PASS",
+            "evidence": "commit stat equals the exact 4 paths in .bee/cells/wlf-2.json files",
+            "id": "scope: no file outside declared files"
+          },
+          {
+            "status": "PASS",
+            "evidence": "push_worker_record rebuilds the row as {nickname,cell,tier,status} (workers.rs:121), and those are the only 4 keys any worker row carries; workers.rs:51 is the sole writer of state.workers and all 194 live rows match that shape",
+            "id": "adversarial: upsert does not drop unrelated row fields"
+          },
+          {
+            "status": "PASS",
+            "evidence": "the ignore file line 2 excludes .bee/state.json and it is untracked, so the post-commit dirty guard cannot see it",
+            "id": "adversarial: reconcile write cannot dirty main's tree"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-20T02:21:34.645Z"
+      }
+    ]
   }
 }

@@ -1303,5 +1303,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-19T23:28:23.833Z"
+  },
+  "worker-ledger-and-empty-fleet": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-20T02:24:12.469Z"
   }
 }

@@ -84,6 +84,81 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "run.rs:2215-2234 record_outcome sets outcome Some(outcome_label(result.outcome)) and appends; run.rs:9365 asserts lines.len()==2 and row2 outcome equals the result_envelope outcome; cargo test --release ... ledger_outcome -> 3 passed 0 failed",
+            "id": "truth: finished run appends a second row with the envelope's outcome"
+          },
+          {
+            "status": "PASS",
+            "evidence": "run.rs:9405-9406 assert!(full_text.starts_with(first_row_raw)) after the second append; append_wave is the only ledger call in the diff",
+            "id": "truth: dispatch-time row bytes unchanged on disk"
+          },
+          {
+            "status": "PASS",
+            "evidence": "run.rs:2232 if let Err(e) = wave_ledger::append_wave(...) { eprintln!(...) } with no question mark and no return; run.rs:9448 asserts Result(Done) and ExitCode::SUCCESS with a directory at wave-ledger.jsonl",
+            "id": "truth: failing append leaves outcome and exit code unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "run.rs:2222 calls outcome_label(result.outcome); run.rs:9402-9404 asserts row2 outcome equals both outcome_label(result.outcome) and the envelope field",
+            "id": "key_link: appended string is outcome_label's own value"
+          },
+          {
+            "status": "PASS",
+            "evidence": "diff adds only a second wave_ledger::append_wave (run.rs:2232); no truncate, write or remove of wave-ledger.jsonl in the diff",
+            "id": "prohibition: no ledger line rewritten or deleted"
+          },
+          {
+            "status": "PASS",
+            "evidence": "run.rs:3479 fn outcome_label body is outside every diff hunk; the last hunk ends at the execute_continue return, run.rs:3475",
+            "id": "prohibition: outcome_label vocabulary unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show --stat 90d2310 -> packages/bee-rs/crates/bee/src/herding/run.rs only, 1 file changed",
+            "id": "prohibition: herding/wave.rs and wave_ledger.rs unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "record_outcome returns unit, the append error is consumed at run.rs:2232, and the call sites at run.rs:2724 and 3475 sit after res is built and simply return res",
+            "id": "prohibition: no new failure path in bee herding run"
+          },
+          {
+            "status": "PASS",
+            "evidence": "the 7 deleted lines are record_dispatch's signature and timestamp lines (run.rs:2163-2189) and the two ExecResult return lines; no deletion falls inside mod tests",
+            "id": "prohibition: no edit to any existing assertion"
+          },
+          {
+            "status": "PASS",
+            "evidence": "commit stat equals herding/run.rs, the single path in .bee/cells/wlf-3.json files",
+            "id": "scope: no file outside declared files"
+          },
+          {
+            "status": "PASS",
+            "evidence": "in execute_new the only return between record_dispatch (run.rs:2666) and the tail is the final res at run.rs:2725; the SpawnFailed early return sits before record_dispatch. Same shape in execute_continue: record_dispatch run.rs:3406, single return run.rs:3476",
+            "id": "adversarial: no path appends a dispatch row without a closing row"
+          },
+          {
+            "status": "PASS",
+            "evidence": "run.rs:9448 places a directory at .bee/wave-ledger.jsonl so the dispatch append fails too, and the test would stay green without the wlf-3 change; the truth still holds by code shape at run.rs:2232, recorded here so the weakness is not lost",
+            "id": "judge note: the append-failure test is weaker than it reads"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-09-20T02:21:34.647Z"
+      }
+    ]
   }
 }
