@@ -295,6 +295,24 @@ pub(crate) fn kept_by_keep_set(name: &str, keep: &[String]) -> bool {
         .any(|id| name == id || name.starts_with(&format!("{id}.")))
 }
 
+/// is_cell_file_capped — returns true if cell JSON exists, parses, and has status == "capped".
+/// Missing or corrupt cell files return false (fall open to keep).
+fn is_cell_file_capped(path: &Path) -> Result<bool, Err2> {
+    match std::fs::read(path) {
+        Err(_) => Ok(false), // JSON.parse throws → cell null → keep
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            match parse_json_v8(&text).map_err(Err2::from)? {
+                ParsedJson::Unparseable => Ok(false),
+                ParsedJson::Parsed(v) => Ok(
+                    truthy(&v)
+                        && matches!(jget(&v, "status"), Some(Value::String(s)) if s == "capped"),
+                ),
+            }
+        }
+    }
+}
+
 /// readPruneKeepSet — strict state read + non-capped/corrupt cell stems.
 pub(crate) fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
     let state = read_state_strict(root)?;
@@ -313,34 +331,28 @@ pub(crate) fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
             keep.push(s);
         }
     };
+    let cells_dir = root.join(".bee").join("cells");
     for w in &workers {
         if !truthy(w) {
             continue;
         }
         match jget(w, "cell") {
             None | Some(Value::Null) => {}
-            Some(cell) => push_unique(js_disp(cell)),
+            Some(cell) => {
+                let cell_id = js_disp(cell);
+                let capped = is_cell_file_capped(&cells_dir.join(format!("{cell_id}.json")))?;
+                if !capped {
+                    push_unique(cell_id);
+                }
+            }
         }
     }
-    let cells_dir = root.join(".bee").join("cells");
     if cells_dir.exists() {
         let entries = std::fs::read_dir(&cells_dir).map_err(|_| Err2::Ex)?;
         for entry in entries.flatten() {
             let file = entry.file_name().to_string_lossy().into_owned();
             let Some(stem) = file.strip_suffix(".json") else { continue };
-            let capped = match std::fs::read(cells_dir.join(&file)) {
-                Err(_) => false, // JSON.parse throws → cell null → keep
-                Ok(bytes) => {
-                    let text = String::from_utf8_lossy(&bytes).into_owned();
-                    match parse_json_v8(&text).map_err(Err2::from)? {
-                        ParsedJson::Unparseable => false,
-                        ParsedJson::Parsed(v) => {
-                            truthy(&v)
-                                && matches!(jget(&v, "status"), Some(Value::String(s)) if s == "capped")
-                        }
-                    }
-                }
-            };
+            let capped = is_cell_file_capped(&cells_dir.join(&file))?;
             if !capped {
                 push_unique(stem.to_string());
             }
