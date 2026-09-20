@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-preflight-test-seam\" started at phase \"exploring\" (lane).",
-  "next_action": "Execute hpts-1.",
+  "next_action": "Merged into main at 7d8e11d; capture what settled, then bee close --feature herding-preflight-test-seam.",
   "created_at": "2026-09-20T06:13:45.621Z",
   "run_state": "done",
   "waiting_on": null,
@@ -405,12 +405,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-09-20T06:25:31.108Z",
-    "branch": "wt/herding-preflight-test-seam",
-    "worktree_id": "beehive--wt--herding-preflight-test-seam",
-    "uat": "approved",
-    "blocked_by": []
   }
 }
