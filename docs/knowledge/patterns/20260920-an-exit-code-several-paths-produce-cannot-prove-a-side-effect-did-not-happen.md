@@ -63,12 +63,12 @@ asserting the one thing both sides agree on.
 
 ## Related
 
-- [[pattern-20260812-a-guard-and-its-tests-are-one-model]] — a guard and its
+- [[20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself]] — a guard and its
   tests sharing one model prove only that the model agrees with itself; this
   is the same blindness expressed through a return value rather than a shared
   implementation.
 - [[pattern-20260710-a-non-exposure-invariant-needs-a-test-on]] — a
   "never emit X" invariant needs a probe on every surface it crosses; a
   "never spawn" invariant needs one on the effect, not the exit code.
-- [[bee-herding-the-run-verb-and-worker-outcomes]] — the pre-flight whose
+- [[the-run-verb-and-worker-outcomes]] — the pre-flight whose
   decision is now a pure function precisely so it can be asserted.
