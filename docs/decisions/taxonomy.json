@@ -550,6 +550,8 @@
     "pi-worker-surface",
     "ui",
     "prose-guidance-baseline",
-    "contract:pi-verdict-tool"
+    "contract:pi-verdict-tool",
+    "contract:herding-run-cap-check",
+    "herding-cap-check"
   ]
 }

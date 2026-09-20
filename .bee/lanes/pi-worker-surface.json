@@ -13,8 +13,13 @@
   "summary": "Pi worker surface: live in-flight worker widget + structured worker verdict tool",
   "next_action": "bee close finished \"pi-worker-surface\" — feature is closed.",
   "created_at": "2026-09-20T08:03:53.974Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Source found at `/home/thanhsmind/Projects/refs/openJev-verdict-2.0` (not `refs/` inside this repo). It is a Python ML repo — a decision mod",
+    "asked_at": "2026-09-20T14:11:23.060Z",
+    "session": "ebf62723-3a4f-4554-8743-4a53fb9df78e"
+  },
   "gate_revoked_at": {
     "execution": "2026-09-20T10:43:46.184Z"
   },

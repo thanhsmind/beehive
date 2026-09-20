@@ -1,0 +1,146 @@
+{
+  "id": "hcapc-1",
+  "feature": "herding-cap-check",
+  "title": "Refuse a herding run whose worker claimed success and left its cell uncapped",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "85e32ca2",
+    "a27ce76d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "docs/history/herding-cap-check/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add a POST-flight cap check to bee herding run, modelled on the preflight_receipt precedent in the same file (run.rs:3952-3973): a DECISION function pure over the filesystem — it reads, it decides, it spawns nothing — so its tests assert the outcome without a process. Place the call in fn run (run.rs:4111-4131), which is the ONE seam both launch paths converge on; record_outcome is NOT that seam (it runs only in execute_new at :2737 and execute_continue at :3497, both pane-only), so D5 is satisfied here and nowhere else. The decision fires ONLY when the worker CLAIMED SUCCESS — RunOutcome::Result(r) with r.status == MailboxStatus::Done, which is exactly the single SUCCESS arm exit_code_for already uses at :3524 — and only when opts.cell_id is Some (D3, D4). When it fires, read that cell's record: if it parses and its status is not capped (no capped_at), the run REFUSES — print to stderr naming the cell id, that the worker reported success without capping, and the verb that settles it, then return ExitCode::FAILURE (D1). REPORT ONLY: never cap the cell, and do not print a ready-to-paste cap line (D2). A missing or unparseable cell file does NOT refuse — return the exit the run would have had (D6). Keep exit_code_for PURE and unchanged: combine its result with the new decision inside fn run, so the existing test at :9621 that calls it directly stays green. Author inline tests in the same file's #[cfg(test)] mod tests covering: claimed-success + uncapped cell refuses; claimed-success + capped cell still succeeds; blocked result with an uncapped cell still exits as today; no cell_id unaffected; missing and unparseable cell files both fall open.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run",
+  "must_haves": {
+    "truths": [
+      "A worker that reports success and leaves its cell claimed makes bee herding run exit non-zero, naming the cell",
+      "A worker that reports success on a properly capped cell still exits zero",
+      "A blocked, timed-out or failed worker is completely unaffected",
+      "No cell is ever capped by this check"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "a filesystem-pure cap decision function called from fn run, plus inline tests for refuse, pass, blocked, no-cell-id, missing and unparseable; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the decision is called from fn run, the one seam both the pane and no-pane paths reach"
+    ],
+    "prohibitions": [
+      "No change to exit_code_for's signature or purity",
+      "No cap written by this check",
+      "No ready-to-paste cap line printed",
+      "No process spawned from any test added here",
+      "No change to any outcome class other than claimed success"
+    ]
+  },
+  "trace": {
+    "worker": "hcapc-worker",
+    "outcome": "Refuse herding run when worker claimed success and left cell uncapped",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: cell hcapc-1 scoped only to run.rs without skill edits as approved in cell definition"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T14:13:51.418Z",
+    "behavior_change": true,
+    "verification_evidence": "touched run.rs",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run",
+    "claimed_at": "2026-09-20T14:07:35.211Z",
+    "sync_ack": "cell hcapc-1 scoped only to run.rs without skill edits as approved in cell definition",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Refuse herding run when worker claimed success and left cell uncapped",
+      "commit": "38766e1eb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::run — green:unit — touched run.rs",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 225 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "D1-refuses",
+            "status": "PASS",
+            "evidence": "postflight_cap_check returns PostflightCapAction::Refuse { cell_id } when the cell parses and is not capped, and fn run turns that into a non-zero exit with one eprintln! naming the cell. Test postflight_cap_check_refuses_claimed_success_with_uncapped_cell pins it."
+          },
+          {
+            "id": "D2-report-only",
+            "status": "PASS",
+            "evidence": "Searched the added lines for any write path: the only std::fs::write calls are inside the tests, seeding fixtures including corrupt-cell.json. The decision function reads and returns an enum; it writes nothing and prints no ready-to-paste cap line."
+          },
+          {
+            "id": "D3-claimed-success-only",
+            "status": "PASS",
+            "evidence": "The match arm is `RunOutcome::Result(r) if r.status == MailboxStatus::Done => {}` with `_ => return Proceed`, which is exactly the single SUCCESS arm exit_code_for uses at run.rs:3524. Tests postflight_cap_check_proceeds_on_blocked_result_with_uncapped_cell and _proceeds_on_non_done_outcomes pin both halves."
+          },
+          {
+            "id": "D4-cell-id-required",
+            "status": "PASS",
+            "evidence": "`let Some(cell_id) = cell_id else { return Proceed }` is the first statement. Test postflight_cap_check_proceeds_when_no_cell_id pins it, so gather, advisor, hat and reviewer dispatches are untouched."
+          },
+          {
+            "id": "D5-both-launch-paths",
+            "status": "PASS",
+            "evidence": "The call sits in fn run (run.rs:4111-4131), after `let result = if opts.no_pane { execute_no_pane } else { execute }`, so both launch paths reach it. record_outcome was NOT used, correctly: it runs only in execute_new (:2737) and execute_continue (:3497), both pane-only."
+          },
+          {
+            "id": "D6-falls-open",
+            "status": "PASS",
+            "evidence": "`let Ok(raw) = std::fs::read_to_string(&cell_path) else { return Proceed }`, and an unparseable body returns Proceed too. Tests postflight_cap_check_falls_open_on_missing_cell_file and _on_unparseable_cell_file pin both."
+          },
+          {
+            "id": "P1-exit_code_for-untouched",
+            "status": "PASS",
+            "evidence": "fn exit_code_for is still at run.rs:3521 with an unchanged signature over &RunOutcome, so the pre-existing test at :9621 that calls it directly is unaffected. That purity is what let the lane de-escalate to small."
+          },
+          {
+            "id": "P2-no-process-in-tests",
+            "status": "PASS",
+            "evidence": "Zero Command::new or spawn( additions in the diff. The decision is pure over the filesystem, following the preflight_receipt precedent at run.rs:3952-3973, whose own comment records 12 leaked agent sessions in one day as the reason that rule exists."
+          },
+          {
+            "id": "T-suite-green",
+            "status": "PASS",
+            "evidence": "Leader re-ran the cell's declared verify independently after the commit: cargo test --release -p bee --bin bee herding::run -> 'test result: ok. 248 passed; 0 failed'."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-09-20T14:16:30.588Z"
+      }
+    ]
+  }
+}
