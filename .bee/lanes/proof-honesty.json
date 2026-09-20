@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ merged into main at `9d98e30`. It flagged the proofs as stale (taken before the merge base), so re-running them now — plus the binary rebu",
-    "asked_at": "2026-09-20T16:49:02.971Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-20T18:45:45.261Z",
     "session": "ebf62723-3a4f-4554-8743-4a53fb9df78e"
   },
   "route": {
