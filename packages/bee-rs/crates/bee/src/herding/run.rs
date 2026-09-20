@@ -3937,20 +3937,42 @@ fn spawn_detached_runner(_flags: &[&str], _opts: &Options) -> Result<(), String>
     Err("detached runs need a unix target".to_string())
 }
 
-pub(super) fn run(flags: &[&str]) -> ExitCode {
-    let opts = match parse_options(flags) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("bee herding run: {msg}");
-            return ExitCode::FAILURE;
-        }
-    };
+/// What the receipt pre-flight DECIDED. Carries everything the caller needs to
+/// print, so acting on it reads nothing further from disk.
+#[derive(Debug, PartialEq, Eq)]
+enum PreflightAction {
+    /// The stored result for `round` is this dispatch's answer (D1/D5).
+    ReturnReceipt { round: u32 },
+    /// Same job id and round, different work (D3).
+    Refuse { round: u32, result_path: PathBuf, stored_digest: String, incoming_digest: String },
+    /// Nothing stored, or nothing readable enough to be sure — dispatch normally.
+    Proceed,
+}
 
-    // Idempotent Herding Receipts (ihr-2, D1, D3, D5, D6, D7):
-    // Pre-flight runs in parent before any transport choice or detached re-launch.
-    let bee_dir = opts.main_root.join(".bee");
+/// The receipt pre-flight's DECISION, pure over the filesystem: it reads, it
+/// decides, and it spawns nothing.
+///
+/// WHY THIS IS A SEPARATE FUNCTION. The decision belongs in `fn run` (D7) —
+/// above the transport choice and above the detached re-launch, because that is
+/// the only place that covers every dispatch path AND prints where the caller
+/// can see it. But `fn run` builds the REAL transport, so a test that calls it
+/// to check a decision really splits a pane and really starts
+/// `herding.agent_command`. That happened: three tests added with the pre-flight
+/// itself spawned a live `claude-sonnet` per `cargo test` run, each pointed at a
+/// brief inside a `tempdir` the test then dropped — the agent read nothing, sat
+/// idle, and the pane never closed. Twelve leaked sessions in one day, with the
+/// asserts green throughout because they only checked `ExitCode::FAILURE`.
+/// Splitting DECIDING from ACTING is what lets a test assert the outcome without
+/// a process, and restores the promise this file already makes above
+/// `PaneTransport`: no process anywhere in this crate's test suite.
+///
+/// The round is resolved exactly as the callee resolves it: 1 for a fresh run,
+/// `latest_result_round + 1` for a `--continue`. Round 0 is the sentinel for
+/// "a continue with no prior result" — there is nothing to replay, so nothing
+/// to compare.
+fn preflight_receipt(bee_dir: &Path, opts: &Options) -> PreflightAction {
     let round = if opts.is_continue {
-        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        let dir = mailbox::mailbox_dir(bee_dir, &opts.job_id);
         let entries: Vec<String> = match std::fs::read_dir(&dir) {
             Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
             Err(_) => Vec::new(),
@@ -3963,71 +3985,94 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
         1
     };
 
-    if round > 0 {
-        let result_path = mailbox::result_path(&bee_dir, &opts.job_id, round);
-        if result_path.exists() {
-            let digest_path = mailbox::digest_path(&bee_dir, &opts.job_id, round);
-            let files: Vec<String> = Vec::new();
-            let incoming_digest = mailbox::dispatch_digest(&opts.task, &files);
+    if round == 0 {
+        return PreflightAction::Proceed;
+    }
 
-            enum PreflightAction {
-                ReturnReceipt,
-                Refuse { stored_digest: String },
-                Proceed,
-            }
+    let result_path = mailbox::result_path(bee_dir, &opts.job_id, round);
+    if !result_path.exists() {
+        // Outcome 1: no stored result — a fresh job, or a worker that died
+        // after its brief and must stay re-runnable under its own id.
+        return PreflightAction::Proceed;
+    }
 
-            let action = if !digest_path.exists() {
-                // Outcome 2: result present, digest file ABSENT -> RETURN THE RECEIPT (legacy mailboxes, claim 12)
-                PreflightAction::ReturnReceipt
+    let digest_path = mailbox::digest_path(bee_dir, &opts.job_id, round);
+    let files: Vec<String> = Vec::new();
+    let incoming_digest = mailbox::dispatch_digest(&opts.task, &files);
+
+    if !digest_path.exists() {
+        // Outcome 2: result present, digest file ABSENT -> RETURN THE RECEIPT.
+        // Every mailbox written before this feature has none; refusing them
+        // would refuse the whole backlog of history.
+        return PreflightAction::ReturnReceipt { round };
+    }
+
+    match std::fs::read_to_string(&digest_path) {
+        Ok(content) => {
+            let stored_digest = content.trim();
+            if stored_digest == incoming_digest {
+                // Outcome 3: digest MATCHES -> RETURN THE RECEIPT (D1).
+                PreflightAction::ReturnReceipt { round }
             } else {
-                match std::fs::read_to_string(&digest_path) {
-                    Ok(content) => {
-                        let stored_digest = content.trim();
-                        if stored_digest == incoming_digest {
-                            // Outcome 3: result present, digest MATCHES -> RETURN THE RECEIPT (D1)
-                            PreflightAction::ReturnReceipt
-                        } else {
-                            // Outcome 4: result present, digest DIFFERS -> REFUSE (D3)
-                            PreflightAction::Refuse { stored_digest: stored_digest.to_string() }
-                        }
-                    }
-                    Err(e) => {
-                        // Outcome 5: digest present but UNREADABLE -> PROCEED, with one note on stderr
-                        eprintln!(
-                            "bee herding run: could not read digest file {}: {e} — proceeding anyway",
-                            digest_path.display()
-                        );
-                        PreflightAction::Proceed
-                    }
+                // Outcome 4: digest DIFFERS -> REFUSE (D3).
+                PreflightAction::Refuse {
+                    round,
+                    result_path,
+                    stored_digest: stored_digest.to_string(),
+                    incoming_digest,
                 }
-            };
-
-            match action {
-                PreflightAction::Refuse { stored_digest } => {
-                    eprintln!(
-                        "bee herding run: job \"{}\" round {} already has a stored receipt at {} with digest \"{}\" (incoming task digest is \"{}\") FIX: pass a fresh --job-id",
-                        opts.job_id,
-                        round,
-                        result_path.display(),
-                        stored_digest,
-                        incoming_digest,
-                    );
-                    return ExitCode::FAILURE;
-                }
-                PreflightAction::ReturnReceipt => {
-                    write_inbox_marker(&bee_dir, &opts);
-                    let outcome = read_result_for_round(&bee_dir, &opts.job_id, round);
-                    let result = ExecResult { outcome, pane_id: None, closed_pane: false };
-                    if opts.json || opts.inbox_session.is_some() {
-                        println!("{}", result_envelope(&opts, &result, "replay", None));
-                    } else {
-                        emit_result(&opts, &result, "replay", None);
-                    }
-                    return ExitCode::SUCCESS;
-                }
-                PreflightAction::Proceed => {}
             }
         }
+        Err(e) => {
+            // Outcome 5: digest present but UNREADABLE -> PROCEED, saying so.
+            // An ENOSPC or a permission fault must never refuse every dispatch.
+            eprintln!(
+                "bee herding run: could not read digest file {}: {e} — proceeding anyway",
+                digest_path.display()
+            );
+            PreflightAction::Proceed
+        }
+    }
+}
+
+pub(super) fn run(flags: &[&str]) -> ExitCode {
+    let opts = match parse_options(flags) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("bee herding run: {msg}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Idempotent Herding Receipts (ihr-2, D1, D3, D5, D6, D7):
+    // Pre-flight runs in the parent before any transport choice or detached
+    // re-launch. DECIDING is `preflight_receipt` (pure); ACTING is here, and
+    // only here — see that function's note for why the split is load-bearing.
+    let bee_dir = opts.main_root.join(".bee");
+    match preflight_receipt(&bee_dir, &opts) {
+        PreflightAction::Refuse { round, result_path, stored_digest, incoming_digest } => {
+            eprintln!(
+                "bee herding run: job \"{}\" round {} already has a stored receipt at {} with digest \"{}\" (incoming task digest is \"{}\") FIX: pass a fresh --job-id",
+                opts.job_id,
+                round,
+                result_path.display(),
+                stored_digest,
+                incoming_digest,
+            );
+            return ExitCode::FAILURE;
+        }
+        PreflightAction::ReturnReceipt { round } => {
+            write_inbox_marker(&bee_dir, &opts);
+            let outcome = read_result_for_round(&bee_dir, &opts.job_id, round);
+            let result = ExecResult { outcome, pane_id: None, closed_pane: false };
+            if opts.json || opts.inbox_session.is_some() {
+                println!("{}", result_envelope(&opts, &result, "replay", None));
+            } else {
+                emit_result(&opts, &result, "replay", None);
+            }
+            return ExitCode::SUCCESS;
+        }
+        PreflightAction::Proceed => {}
     }
 
     // tmux-herding-transport D1: the transport is chosen from config here,
@@ -9586,6 +9631,13 @@ mod tests {
         let bee_dir = tmp.path().join(".bee");
         let mbox = bee_dir.join("mailbox").join("job-replay-1");
         std::fs::create_dir_all(&mbox).unwrap();
+        // BELT (herding-preflight-test-seam): an illegal transport in THIS temp
+        // root, so that if the pre-flight ever regresses and falls through,
+        // `run` refuses at transport selection instead of splitting a real pane
+        // and starting a real agent. The comment this replaces assumed a bare
+        // tempdir could not spawn; it could, and it did — 12 leaked sessions.
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"nope"}}"#).unwrap();
+
 
         let result_content = r#"{"status":"done","summary":"stored result summary","files_changed":["src/lib.rs"],"proof":"cargo test — green:unit — lib"}"#;
         std::fs::write(mbox.join("result-1.json"), result_content).unwrap();
@@ -9619,6 +9671,13 @@ mod tests {
         let bee_dir = tmp.path().join(".bee");
         let mbox = bee_dir.join("mailbox").join("job-diff-1");
         std::fs::create_dir_all(&mbox).unwrap();
+        // BELT (herding-preflight-test-seam): an illegal transport in THIS temp
+        // root, so that if the pre-flight ever regresses and falls through,
+        // `run` refuses at transport selection instead of splitting a real pane
+        // and starting a real agent. The comment this replaces assumed a bare
+        // tempdir could not spawn; it could, and it did — 12 leaked sessions.
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"nope"}}"#).unwrap();
+
 
         std::fs::write(
             mbox.join("result-1.json"),
@@ -9644,6 +9703,13 @@ mod tests {
         let bee_dir = tmp.path().join(".bee");
         let mbox = bee_dir.join("mailbox").join("job-legacy-1");
         std::fs::create_dir_all(&mbox).unwrap();
+        // BELT (herding-preflight-test-seam): an illegal transport in THIS temp
+        // root, so that if the pre-flight ever regresses and falls through,
+        // `run` refuses at transport selection instead of splitting a real pane
+        // and starting a real agent. The comment this replaces assumed a bare
+        // tempdir could not spawn; it could, and it did — 12 leaked sessions.
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"transport":"nope"}}"#).unwrap();
+
 
         std::fs::write(
             mbox.join("result-1.json"),
@@ -9663,7 +9729,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_with_unreadable_digest_proceeds_to_spawn() {
+    fn replay_with_unreadable_digest_decides_proceed() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().display().to_string();
         let bee_dir = tmp.path().join(".bee");
@@ -9677,20 +9743,25 @@ mod tests {
         // Make digest-1.sha256 a directory so read_to_string fails
         std::fs::create_dir_all(mbox.join("digest-1.sha256")).unwrap();
 
-        // Since it proceeds past pre-flight in a bare temp dir without tmux/pane config,
-        // it fails at transport setup rather than returning early receipt.
-        let exit = run(&[
+        // Assert the DECISION, never `run` — `run` builds the real transport,
+        // so calling it here would split a real pane and start a real agent
+        // against a brief in this tempdir, which is dropped a line later.
+        let opts = parse_options(&[
             "--task", "any task",
             "--job-id", "job-unreadable-1",
             "--main-root", &root,
             "--json",
-        ]);
+        ]).unwrap();
 
-        assert_eq!(exit, ExitCode::FAILURE, "proceeding to spawn fails transport in empty tempdir");
+        assert_eq!(
+            preflight_receipt(&bee_dir, &opts),
+            PreflightAction::Proceed,
+            "an unreadable digest must fail OPEN: an I/O fault never refuses a dispatch",
+        );
     }
 
     #[test]
-    fn job_with_brief_but_no_result_proceeds_to_spawn() {
+    fn job_with_brief_but_no_result_decides_proceed() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().display().to_string();
         let bee_dir = tmp.path().join(".bee");
@@ -9700,15 +9771,20 @@ mod tests {
         // Brief exists, but worker crashed before result
         std::fs::write(mbox.join("brief-1.txt"), "some brief").unwrap();
 
-        let exit = run(&[
+        let opts = parse_options(&[
             "--task", "same task",
             "--job-id", "job-crashed-1",
             "--main-root", &root,
             "--json",
-        ]);
+        ]).unwrap();
 
-        // Must proceed past pre-flight (not treated as replay because no result-1.json)
-        assert_eq!(exit, ExitCode::FAILURE, "crashed job proceeds to spawn");
+        // No result-1.json, so this is not a replay: a worker that died after
+        // its brief must stay re-runnable under its own id.
+        assert_eq!(
+            preflight_receipt(&bee_dir, &opts),
+            PreflightAction::Proceed,
+            "a brief with no result is a crashed job, not a replay",
+        );
     }
 
     #[test]
@@ -9727,17 +9803,57 @@ mod tests {
         let digest = mailbox::dispatch_digest("same task", &Vec::<String>::new());
         std::fs::write(mbox.join("digest-1.sha256"), &digest).unwrap();
 
-        // Running with --continue job-cont-1 resolves to round 2, which has no result-2.json,
-        // so it proceeds and is NEVER refused as a round 1 conflict.
-        let exit = run(&[
+        // --continue resolves to round 2, which has no result-2.json, so it
+        // proceeds and is NEVER refused as a round-1 conflict. A pre-flight
+        // that assumed round 1 here would refuse EVERY continue, on every
+        // transport — which is why this case is asserted on the decision
+        // itself rather than on an exit code that several paths can produce.
+        let opts = parse_options(&[
             "--task", "same task",
             "--continue", "job-cont-1",
             "--main-root", &root,
             "--json",
-        ]);
+        ]).unwrap();
 
-        // It proceeds to execute_continue (which fails due to missing pane/job in empty tempdir, NOT preflight refusal)
-        assert_eq!(exit, ExitCode::FAILURE);
+        assert_eq!(
+            preflight_receipt(&bee_dir, &opts),
+            PreflightAction::Proceed,
+            "a continue at round 2 must proceed, never read round 1's receipt as a conflict",
+        );
+    }
+
+    /// The leak this seam exists to prevent (herding-preflight-test-seam).
+    /// Three tests once called `run` to check a decision; `run` builds the real
+    /// transport, so each `cargo test` split a real pane and started a real
+    /// agent against a brief in a tempdir that was already gone. This pins the
+    /// shape that made it impossible: the decision is reachable without `run`.
+    #[test]
+    fn the_preflight_decision_is_reachable_without_building_a_transport() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().display().to_string();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox = bee_dir.join("mailbox").join("job-seam-1");
+        std::fs::create_dir_all(&mbox).unwrap();
+        std::fs::write(
+            mbox.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"p"}"#,
+        ).unwrap();
+        let digest = mailbox::dispatch_digest("same task", &Vec::<String>::new());
+        std::fs::write(mbox.join("digest-1.sha256"), &digest).unwrap();
+
+        let opts = parse_options(&[
+            "--task", "same task",
+            "--job-id", "job-seam-1",
+            "--main-root", &root,
+            "--json",
+        ]).unwrap();
+
+        // Every one of the five outcomes is decidable here, with no transport
+        // constructed and no process started.
+        assert_eq!(
+            preflight_receipt(&bee_dir, &opts),
+            PreflightAction::ReturnReceipt { round: 1 },
+        );
     }
 }
 
