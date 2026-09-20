@@ -540,6 +540,8 @@
     "contract:test-path-expectations",
     "windows-ci-green",
     "tool-gate",
-    "single-source-of-truth"
+    "single-source-of-truth",
+    "worker-ledger",
+    "contract:worker-prune-keep-set"
   ]
 }

@@ -1,0 +1,414 @@
+{
+  "schema_version": "1.0",
+  "feature": "worker-ledger-and-empty-fleet",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-20T01:12:24.967Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-09-20T01:12:31.121Z",
+    "feature": "worker-ledger-and-empty-fleet"
+  },
+  "gate_preview": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "plan_sha256": "f2bc0d36faa7e1072f81c9fe023ba5f11aa98a14ee068c3d38ff0348a8c5b4c5",
+    "previewed_at": "2026-09-20T01:26:09.459Z",
+    "cells": [
+      {
+        "id": "wlf-1",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Stop protecting a capped cell that still has a worker receipt",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "602e80ae-6431-4da7-8fc3-d7a2828c9778"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first. In packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, beside prune_keep_set_protects_non_capped_and_corrupt_cells (around line 1058), add a new test that pins the defect: a worker row naming cell c1 PLUS a .bee/cells/c1.json whose status is \"capped\" must NOT appear in read_prune_keep_set's result. Run it and watch it fail because c1 IS currently kept — that is the reported reason. Then, in read_prune_keep_set (state_group/workers.rs:299-350), change the worker-row pass at lines 318-324 so a row contributes its cell to the keep set only when that cell is not capped, reusing the same capped predicate the cell-file pass already applies at lines 337-344 (per decision 602e80ae). Factor the predicate into one helper rather than duplicating the matches! expression, so the two passes can never disagree. A missing or unparseable cell file still protects: the function falls open on unknown state, and the existing corrupt assertion must stay green. Do not touch the receipt book itself, do not add or remove a worker row, and do not change any existing assertion — the existing keep-set tests must pass untouched.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+        "must_haves": {
+          "truths": [
+            "A worker row whose cell file reads capped does not keep that cell",
+            "A worker row whose cell file is missing still keeps that cell",
+            "A worker row whose cell file is unparseable still keeps that cell",
+            "The typed refusal for a non-array state.workers still fires unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+              "substantive": "read_prune_keep_set's worker-row pass consults one shared capped predicate; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+              "substantive": "a new test pinning a capped cell that carries a worker row; existing keep-set assertions unedited"
+            }
+          ],
+          "key_links": [
+            "the worker-row pass and the cell-file pass call the same capped predicate"
+          ],
+          "prohibitions": [
+            "No edit to any existing assertion in prune_keep_set_protects_non_capped_and_corrupt_cells or prune_refuses_malformed_workers",
+            "No write to state.json workers[] — retiring rows is slice 2",
+            "No change to registered_worker_for_cell or the SubagentStop nudge"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "one Rust predicate plus its red-first test in one crate"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "the red-first keep-set test is the whole proof of this slice"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the two reality touches are already recorded in the claims table"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow fact lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers the only generation work"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked, never automatic"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "a one-predicate fix with nine recorded claims needs no second opinion"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the knowledge area for the state store needs the keep-set rule recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "single-cell slice, no swarm to supervise"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: one cell, one file, nine recorded claims"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is recorded inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes in this slice"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "worker-ledger-and-empty-fleet",
+    "plan_sha256": "f2bc0d36faa7e1072f81c9fe023ba5f11aa98a14ee068c3d38ff0348a8c5b4c5",
+    "previewed_at": "2026-09-20T01:26:09.459Z",
+    "cells": [
+      {
+        "id": "wlf-1",
+        "feature": "worker-ledger-and-empty-fleet",
+        "title": "Stop protecting a capped cell that still has a worker receipt",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "602e80ae-6431-4da7-8fc3-d7a2828c9778"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first. In packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs, beside prune_keep_set_protects_non_capped_and_corrupt_cells (around line 1058), add a new test that pins the defect: a worker row naming cell c1 PLUS a .bee/cells/c1.json whose status is \"capped\" must NOT appear in read_prune_keep_set's result. Run it and watch it fail because c1 IS currently kept — that is the reported reason. Then, in read_prune_keep_set (state_group/workers.rs:299-350), change the worker-row pass at lines 318-324 so a row contributes its cell to the keep set only when that cell is not capped, reusing the same capped predicate the cell-file pass already applies at lines 337-344 (per decision 602e80ae). Factor the predicate into one helper rather than duplicating the matches! expression, so the two passes can never disagree. A missing or unparseable cell file still protects: the function falls open on unknown state, and the existing corrupt assertion must stay green. Do not touch the receipt book itself, do not add or remove a worker row, and do not change any existing assertion — the existing keep-set tests must pass untouched.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml prune_",
+        "must_haves": {
+          "truths": [
+            "A worker row whose cell file reads capped does not keep that cell",
+            "A worker row whose cell file is missing still keeps that cell",
+            "A worker row whose cell file is unparseable still keeps that cell",
+            "The typed refusal for a non-array state.workers still fires unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+              "substantive": "read_prune_keep_set's worker-row pass consults one shared capped predicate; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+              "substantive": "a new test pinning a capped cell that carries a worker row; existing keep-set assertions unedited"
+            }
+          ],
+          "key_links": [
+            "the worker-row pass and the cell-file pass call the same capped predicate"
+          ],
+          "prohibitions": [
+            "No edit to any existing assertion in prune_keep_set_protects_non_capped_and_corrupt_cells or prune_refuses_malformed_workers",
+            "No write to state.json workers[] — retiring rows is slice 2",
+            "No change to registered_worker_for_cell or the SubagentStop nudge"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "one Rust predicate plus its red-first test in one crate"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "the red-first keep-set test is the whole proof of this slice"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the two reality touches are already recorded in the claims table"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow fact lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers the only generation work"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked, never automatic"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "a one-predicate fix with nine recorded claims needs no second opinion"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the knowledge area for the state store needs the keep-set rule recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "single-cell slice, no swarm to supervise"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: one cell, one file, nine recorded claims"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is recorded inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes in this slice"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-09-20T01:25:40.469Z",
+    "branch": "wt/worker-ledger-and-empty-fleet",
+    "worktree_id": "beehive--wt--worker-ledger-and-empty-fleet",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
