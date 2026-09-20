@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"deploy-role-agy-flash\" started at phase \"planning\".",
-  "next_action": "bee close finished \"deploy-role-agy-flash\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-14T04:08:45.760Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
@@ -19,5 +19,14 @@
     "subject": "fix Pi session-relocation result loss?",
     "asked_at": "2026-09-15T17:15:50.432Z",
     "session": "6f3236e7-8071-46e7-aa47-bd47394b0ba6"
+  },
+  "last_scribing_run": {
+    "feature": "deploy-role-agy-flash",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:17.827Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-caps-on-clean-report\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"herding-caps-on-clean-report\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-19T04:49:00.960Z",
   "run_state": "shaping",
   "waiting_on": null,
@@ -568,13 +568,11 @@
   },
   "last_scribing_run": {
     "feature": "herding-caps-on-clean-report",
-    "date": "2026-09-19",
-    "at": "2026-09-19T05:37:54.605Z",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:17.995Z",
     "areas_synced": [
-      "dispatch-door",
-      "herding",
-      "workflow-state"
+      "bee-herding"
     ],
-    "next_action": "Merge and close; the cause and the four blockers on the runner route are recorded in hat-synthesis.md."
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

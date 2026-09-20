@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"idempotent-herding-receipts\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"idempotent-herding-receipts\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-20T03:35:00.363Z",
   "run_state": "shaping",
   "waiting_on": null,
@@ -458,10 +458,10 @@
   "last_scribing_run": {
     "feature": "idempotent-herding-receipts",
     "date": "2026-09-20",
-    "at": "2026-09-20T05:03:45.938Z",
+    "at": "2026-09-20T14:44:18.133Z",
     "areas_synced": [
       "bee-herding"
     ],
-    "next_action": "Compound: flush the capture queue and mine the promote proposals."
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

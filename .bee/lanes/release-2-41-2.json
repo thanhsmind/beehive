@@ -11,8 +11,17 @@
     "uat": true
   },
   "summary": "Feature \"release-2-41-2\" started at phase \"swarming\" (lane).",
-  "next_action": "bee close finished \"release-2-41-2\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-18T02:11:28.602Z",
   "run_state": "shaping",
-  "waiting_on": null
+  "waiting_on": null,
+  "last_scribing_run": {
+    "feature": "release-2-41-2",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:18.903Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
+  }
 }

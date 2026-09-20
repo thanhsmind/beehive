@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"three-findings\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"three-findings\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-18T14:26:21.003Z",
   "run_state": "shaping",
   "waiting_on": null,
@@ -389,12 +389,11 @@
   },
   "last_scribing_run": {
     "feature": "three-findings",
-    "date": "2026-09-18",
-    "at": "2026-09-18T14:48:55.417Z",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:19.102Z",
     "areas_synced": [
-      "bee-herding",
-      "hook-runtime"
+      "workflow-state"
     ],
-    "next_action": "Merge, rebuild the vendored binary, hand main to the user for uat."
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

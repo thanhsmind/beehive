@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"pi-version-floor\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f25206f; capture what settled, then bee close --feature pi-version-floor.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-18T14:06:37.494Z",
   "run_state": null,
   "waiting_on": null,
@@ -147,5 +147,14 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "pi-version-floor",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:18.529Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

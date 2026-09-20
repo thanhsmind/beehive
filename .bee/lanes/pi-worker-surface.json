@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Pi worker surface: live in-flight worker widget + structured worker verdict tool",
-  "next_action": "bee close finished \"pi-worker-surface\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-20T08:03:53.974Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Source found at `/home/thanhsmind/Projects/refs/openJev-verdict-2.0` (not `refs/` inside this repo). It is a Python ML repo — a decision mod",
-    "asked_at": "2026-09-20T14:11:23.060Z",
-    "session": "ebf62723-3a4f-4554-8743-4a53fb9df78e"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "gate_revoked_at": {
     "execution": "2026-09-20T10:43:46.184Z"
   },
@@ -544,11 +539,11 @@
   "last_scribing_run": {
     "feature": "pi-worker-surface",
     "date": "2026-09-20",
-    "at": "2026-09-20T10:47:33.994Z",
+    "at": "2026-09-20T14:44:18.609Z",
     "areas_synced": [
       "hook-runtime"
     ],
-    "next_action": "Flush the three queued pi-worker-surface capture stubs into the hook-runtime bundle at the next bee-capturing compound pass."
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   },
   "merge_ready": {
     "since": "2026-09-20T10:47:06.734Z",

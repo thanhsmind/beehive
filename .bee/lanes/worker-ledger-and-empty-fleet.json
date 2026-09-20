@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"worker-ledger-and-empty-fleet\" started at phase \"planning\" (lane).",
-  "next_action": "bee close finished \"worker-ledger-and-empty-fleet\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-20T01:12:24.967Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
@@ -517,11 +517,10 @@
   "last_scribing_run": {
     "feature": "worker-ledger-and-empty-fleet",
     "date": "2026-09-20",
-    "at": "2026-09-20T02:22:59.390Z",
+    "at": "2026-09-20T14:44:19.234Z",
     "areas_synced": [
-      "workflow-state",
       "bee-herding"
     ],
-    "next_action": "bee close --feature worker-ledger-and-empty-fleet"
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

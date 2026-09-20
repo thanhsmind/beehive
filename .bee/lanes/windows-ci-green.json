@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-green\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"windows-ci-green\" — feature is closed.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-19T15:55:33.893Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -148,5 +148,14 @@
   },
   "gate_revoked_at": {
     "execution": "2026-09-19T16:30:29.747Z"
+  },
+  "last_scribing_run": {
+    "feature": "windows-ci-green",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:19.168Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }

@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"pi-stage-dispatch\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 4fe3e8e; capture what settled, then bee close --feature pi-stage-dispatch.",
+  "next_action": "Closed; proposal reviewed.",
   "created_at": "2026-09-15T08:39:48.577Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
@@ -1439,13 +1439,11 @@
   },
   "last_scribing_run": {
     "feature": "pi-stage-dispatch",
-    "date": "2026-09-15",
-    "at": "2026-09-15T12:44:57.206Z",
+    "date": "2026-09-20",
+    "at": "2026-09-20T14:44:18.398Z",
     "areas_synced": [
-      "bee-herding",
-      "hook-runtime",
-      "doctrine-layer"
+      "bee-herding"
     ],
-    "next_action": "bee close --feature pi-stage-dispatch"
+    "next_action": "Proposal reviewed at the 2026-09-20 capture flush: delivery record written, area bullets judged already stated, pattern candidates rejected as mechanical."
   }
 }
