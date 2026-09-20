@@ -1,0 +1,96 @@
+{
+  "id": "dcif-1",
+  "feature": "dispatch-cell-id-flag",
+  "title": "Pass --cell-id on door-prepared cell dispatches",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "3aa96ff2-26db-4780-81ce-9b04030ac2e9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In prepare.rs's Resolved::Herding arm (around :2480-2531), append ` --cell-id \"<id>\"` to the composed command when kind == \"cell\", placed directly after the --agent block and before the --no-pane check. D1: herding arm only - the Cli arm runs a user-configured binary and the native arms spawn no herding process, so neither runs postflight_cap_check. D2: quoted like --agent/--seat; non-cell kinds keep byte-identical commands. Then update the five byte-exact cell-row assertions this changes: prepare.rs:5860 and tests.rs:1417, :1451, :1488, :1518. Add one test proving the flag rides a cell command and rides no other kind.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers",
+  "must_haves": {
+    "truths": [
+      "A kind=cell herding dispatch carries --cell-id with the cell's id",
+      "gather, reviewer and advisor commands are byte-identical to before",
+      "The id herding run parses is --cell-id, never --cell"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "the --cell-id push_str in the Herding arm"
+      }
+    ],
+    "key_links": [
+      "postflight_cap_check in herding/run.rs:4065 returns Proceed on a None cell id - this flag is what makes the refusal reachable"
+    ],
+    "prohibitions": [
+      "No --cell-id on the Resolved::Cli arm",
+      "No change to herding run's own flag parsing",
+      "No new refusal added"
+    ]
+  },
+  "trace": {
+    "worker": "dcif-w",
+    "outcome": "Pass --cell-id on door-prepared cell dispatches, making the cap refusal reachable",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: No skill text is stale: this is the dispatch door's own command composition. bee-swarming already tells the orchestrator to run exactly the tool and payload `dispatch prepare` returns, and nothing in any skill spells out that command's flags — an agent never types it by hand."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-20T23:17:15.480Z",
+    "behavior_change": true,
+    "verification_evidence": "415 passed, 0 failed, 8 ignored. Proven red first: with the --cell-id block stripped from prepare.rs the new test fails at tests.rs:1546 with left \".bee/bin/bee herding run --task-file - --json\" vs right the same plus --cell-id \\\"c-1\\\" (exit 101), restored green. And green:live — the leader re-ran the real door with the freshly built binary: `bee dispatch prepare --cell dcif-1 --kind cell --runtime claude` now emits `... --agent \"agy-flash\" --cell-id \"dcif-1\" --ceiling 1800`, where the SAME command captured from this feature's own dispatch at prep time — the before-state on main — carried no cell id at all; --kind gather and --kind advisor are byte-identical to that before-state",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "044a7c9a-a928-4ed5-bee9-4718396ee427",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers",
+    "claimed_at": "2026-09-20T23:06:15.313Z",
+    "sync_ack": "No skill text is stale: this is the dispatch door's own command composition. bee-swarming already tells the orchestrator to run exactly the tool and payload `dispatch prepare` returns, and nothing in any skill spells out that command's flags — an agent never types it by hand.",
+    "mistakes": [
+      {
+        "wrong": "I read a 414-passed-1-failed run of the drivers suite as a red base, when it was the main checkout and the worktree thrashing one shared ~/.cache/cargo-target",
+        "better": "measure a baseline with CARGO_TARGET_DIR pointed at a scratch dir, because a number read through a target dir another checkout also writes is not a measurement (the isolated re-run says the base is green at 414)"
+      },
+      {
+        "wrong": "The worker left an untracked packages/bee-rs/crates/bee/.bee/ directory behind, a stray store from running a bee verb inside the crate dir",
+        "better": "a worker should run bee verbs from the worktree root, and the cap should have caught the dirty path instead of the leader spotting it in git status"
+      }
+    ],
+    "report": {
+      "outcome": "Pass --cell-id on door-prepared cell dispatches",
+      "commit": "e66084071",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers — green:unit — 415 passed, 0 failed, 8 ignored. Proven red first: with the --cell-id block stripped from prepare.rs the new test fails at tests.rs:1546 with left \".bee/bin/bee herding run --task-file - --json\" vs right the same plus --cell-id \\\"c-1\\\" (exit 101), restored green. And green:live — the leader re-ran the real door with the freshly built binary: `bee dispatch prepare --cell dcif-1 --kind cell --runtime claude` now emits `... --agent \"agy-flash\" --cell-id \"dcif-1\" --ceiling 1800`, where the SAME command captured from this feature's own dispatch at prep time — the before-state on main — carried no cell id at all; --kind gather and --kind advisor are byte-identical to that before-state",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "I read a 414-passed-1-failed run of the drivers suite as a red base, when it was the main checkout and the worktree thrashing one shared ~/.cache/cargo-target — measure a baseline with CARGO_TARGET_DIR pointed at a scratch dir, because a number read through a target dir another checkout also writes is not a measurement (the isolated re-run says the base is green at 414)",
+        "The worker left an untracked packages/bee-rs/crates/bee/.bee/ directory behind, a stray store from running a bee verb inside the crate dir — a worker should run bee verbs from the worktree root, and the cap should have caught the dirty path instead of the leader spotting it in git status"
+      ],
+      "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers — green:unit — same command on the base commit b62390eb5, measured in an isolated CARGO_TARGET_DIR: 414 passed, 0 failed, 8 ignored (the new test did not exist there)"
+    },
+    "baseline": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee drivers — green:unit — same command on the base commit b62390eb5, measured in an isolated CARGO_TARGET_DIR: 414 passed, 0 failed, 8 ignored (the new test did not exist there)",
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

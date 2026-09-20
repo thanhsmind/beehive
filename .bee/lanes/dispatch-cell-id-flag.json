@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "dispatch-cell-id-flag",
   "mode": "small",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"dispatch-cell-id-flag\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b533f7b; capture what settled, then bee close --feature dispatch-cell-id-flag.",
+  "next_action": "Flush the dispatch-cell-id-flag stub at the next compound pass.",
   "created_at": "2026-09-20T23:04:31.675Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-09-20T23:04:34.821Z",
     "feature": "dispatch-cell-id-flag"
+  },
+  "last_scribing_run": {
+    "feature": "dispatch-cell-id-flag",
+    "date": "2026-09-20",
+    "at": "2026-09-20T23:18:32.688Z",
+    "areas_synced": [
+      "dispatch"
+    ],
+    "next_action": "Flush the dispatch-cell-id-flag stub at the next compound pass."
   }
 }

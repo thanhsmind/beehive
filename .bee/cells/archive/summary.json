@@ -1338,5 +1338,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-20T18:56:23.379Z"
+  },
+  "dispatch-cell-id-flag": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-20T23:18:33.426Z"
   }
 }
