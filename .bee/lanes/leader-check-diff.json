@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "leader-check-diff",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"leader-check-diff\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at cdce63f; capture what settled, then bee close --feature leader-check-diff.",
+  "next_action": "bee close finished \"leader-check-diff\" — feature is closed.",
   "created_at": "2026-09-21T07:55:53.226Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
