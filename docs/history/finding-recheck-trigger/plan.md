@@ -121,7 +121,7 @@ doctrine) in parallel on disjoint files.
 |---|---|---|---|---|---|
 | frt-1 | Add a path-changed trigger predicate anchored at HEAD | `verbs/triggers/mod.rs`, `generated/registry_payload.json` | — | `bee triggers add --predicate path-changed:src/a.rs` records the HEAD sha, and `bee triggers list` shows it due after a commit touches `src/a.rs` | `cargo test … -p bee triggers` + registry contract tests green, red-first |
 | frt-2 | Print the due trigger count in the per-prompt reminder | `hooks/prompt_context.rs` | frt-1 | every prompt shows `triggers due: 1 — bee triggers list --due` while a predicate trigger is due, and nothing when none is | `cargo test … -p bee prompt_context` green, red-first |
-| frt-3 | Tell reviewers to register open findings as path-changed triggers | `skills/bee-reviewing/SKILL.md`, `skills/bee-hive/references/routing-and-contracts.md` + regen mirrors | frt-1 | the review Finish step says to register each open finding with its anchor files, and to read the due list before recommending | `bee dev regen` green + pointer check |
+| frt-3 | Tell reviewers to register open findings as path-changed triggers | `skills/bee-reviewing/SKILL.md`, `skills/bee-hive/references/routing-and-contracts.md` + regen mirrors | frt-1 | the review Finish step says to register each open finding with its anchor files, and to read the due list before recommending | `bee dev regen` green + pointer check + `bee dev release-manifest --check` |
 
 ```json
 [
@@ -246,7 +246,7 @@ doctrine) in parallel on disjoint files.
     ],
     "affects_specs": [],
     "action": "Per decision 4c024330 (D3 rev 2). (1) skills/bee-reviewing/SKILL.md, section Finish (the paragraph at :152-156 that sends P2/P3 to the backlog and closes with `bee reviews record --kind decision`): add, AFTER that record step, that every finding left open is ALSO registered as a watch on the files it is about — `bee triggers add --decision <the review session id> --condition \"re-check: <finding title>\" --predicate path-changed:<repo-relative anchor files, comma-separated>` — run from the reviewed tree, so the finding goes due when a later commit touches those files. Add the handling of a due finding in the same place: re-check it against the current code; fixed → `bee triggers resolve`; still open → resolve it and add it again, which takes a fresh anchor. (2) skills/bee-hive/references/routing-and-contracts.md: next to the leader completeness check section, add ONE pointer line: before recommending the next open finding, read `bee triggers list --due` and follow bee-reviewing's Finish rule for each due one. One fact, one home: the rule lives in bee-reviewing; routing-and-contracts only points; AGENTS.md is NOT edited. Write through the bee-technical-writing standard. Then run the regen chain `bee dev regen` and commit the rendered mirrors and docs/history/codex-harness-hardening/release-manifest.json with the edit.",
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test rule_index_parity",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test rule_index_parity && .bee/bin/bee dev release-manifest --check",
     "must_haves": {
       "truths": [
         "bee-reviewing's Finish step tells the reviewer to register each open finding with a path-changed trigger on its anchor files, after bee reviews record, using the review session id",
