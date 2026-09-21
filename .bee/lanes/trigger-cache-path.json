@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"trigger-cache-path\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"trigger-cache-path\" (lane).",
+  "next_action": "Merged into main at 8c12457; capture what settled, then bee close --feature trigger-cache-path.",
   "created_at": "2026-09-21T22:31:26.934Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -23,12 +23,5 @@
     "rationale": null,
     "updated_at": "2026-09-21T22:31:34.193Z",
     "feature": "trigger-cache-path"
-  },
-  "merge_ready": {
-    "since": "2026-09-21T22:33:43.813Z",
-    "branch": "wt/trigger-cache-path",
-    "worktree_id": "beehive--wt--trigger-cache-path",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
