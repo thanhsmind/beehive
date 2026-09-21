@@ -25,10 +25,10 @@ sanctioned script, and a permit that is validated before a single byte moves.
 
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
-| 1 | The release refuses without a deployment permit | read | `scripts/release.sh:102-107` | `\|\| fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"` |
+| 1 | The release refuses without a deployment permit | read | `scripts/release.sh:112-113` | `\|\| fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"` |
 | 2 | A deployment stage needs an approved v2 role plan, as the 2.40.0 lane found | read | `docs/history/release-2-40-0/CONTEXT.md:23` | `plan carrying a role plan, so the` |
 | 3 | The permit is validated against the plan hash, stage, role, issuer session and a two-hour lifetime | read | `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` via `bee dispatch authorize --help` | `Validates that the dispatch record matches the requested release version, current main commit, approved plan hash, deployment stage, deploy role, issuer session, and two-hour expiration lifetime` |
-| 4 | The script owns the permit check before any mutation, and refuses with zero changes | read | `scripts/release.sh:102-107` | `[ -n "${BEE_DISPATCH_ID:-}" ] \` |
+| 4 | The script owns the permit check before any mutation, and refuses with zero changes | read | `scripts/release.sh:112-113` | `[ -n "${BEE_DISPATCH_ID:-}" ] \` |
 | 5 | The version moves from the released 2.42.0 | ran | `.claude-plugin/plugin.json` | `"version": "2.42.0"` |
 | 6 | The work this release ships is capped, leader-checked and proven | ran | `docs/history/finding-recheck-trigger/plan.md`, cells lcdiff-1, frt-1..frt-3, tcp-1 | each cell carries an ok leader check with commit_diff checked; the script runs the full suite before tagging |
 
