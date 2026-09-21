@@ -14,17 +14,28 @@
 // deferring decision), `condition` (prose), `tier` (`predicate` or
 // `manual`, derived at `add` time — present `--predicate` makes it
 // `predicate`, absent makes it `manual`), `predicate` (optional
-// `path-exists:<p>` | `path-missing:<p>`), `status` (`waiting` | `due` |
-// `resolved`), `created_at`/`updated_at`, `outcome` (set only by
-// `resolve`).
+// `path-exists:<p>` | `path-missing:<p>` | `path-changed:<p>[,<p>...]`),
+// `anchored_at` (path-changed only: the HEAD sha of the tree where `add`
+// ran), `status` (`waiting` | `due` | `resolved`),
+// `created_at`/`updated_at`, `outcome` (set only by `resolve`).
+//
+// `path-changed` (finding-recheck-trigger D1) goes true once a commit in
+// `<anchored_at>..HEAD` at the CONTROL root touches one of its
+// repo-relative paths. The anchor is the HEAD of the tree where `add` ran
+// (a feature worktree, usually), so the feature's own commits never fire
+// it when that branch merges. A git error or a missing anchor reads as
+// true: a watched condition never sinks silently.
 //
 // Verbs:
 //   triggers add     --decision <id> --condition <text> [--predicate <spec>] [--json]
 //   triggers list     [--due] [--json]
 //   triggers resolve  --id <id> --outcome <text> [--json]
 //
-// Evaluation happens ON READ (`list`, and the `due_and_manual_counts`
-// door `bee orient` calls): a `predicate`-tier trigger still `waiting`
+// Evaluation happens ON READ (`list`, the `due_and_manual_counts` door
+// `bee orient` calls, and the per-prompt `due_count_for_prompt`, which
+// re-evaluates only when the control root HEAD moved since its last run —
+// cached in `.bee/triggers/.last-eval-head`, a name the `.json` store walk
+// never lists): a `predicate`-tier trigger still `waiting`
 // has its predicate checked, and a true predicate flips it to `due` AND
 // PERSISTS that flip — the same write-on-read shape `bee orient`'s own
 // `sweep_on_orient` already uses (status_full/orient.rs:260-289).
@@ -81,6 +92,8 @@ pub(crate) struct TriggerRecord {
     condition: String,
     pub(crate) tier: String,
     predicate: Option<String>,
+    /// `path-changed` only: the HEAD sha of the tree where `add` ran.
+    anchored_at: Option<String>,
     pub(crate) status: String,
     created_at: String,
     updated_at: String,
@@ -110,12 +123,13 @@ impl TriggerRecord {
         let created_at = m.get("created_at").and_then(Value::as_str).unwrap_or("").to_string();
         let updated_at = m.get("updated_at").and_then(Value::as_str).unwrap_or("").to_string();
         let predicate = m.get("predicate").and_then(Value::as_str).map(str::to_string);
+        let anchored_at = m.get("anchored_at").and_then(Value::as_str).map(str::to_string);
         let outcome = m.get("outcome").and_then(Value::as_str).map(str::to_string);
-        Some(Self { id, decision, condition, tier, predicate, status, created_at, updated_at, outcome })
+        Some(Self { id, decision, condition, tier, predicate, anchored_at, status, created_at, updated_at, outcome })
     }
 
     fn to_value(&self) -> Value {
-        json!({
+        let mut v = json!({
             "id": self.id,
             "decision": self.decision,
             "condition": self.condition,
@@ -125,15 +139,44 @@ impl TriggerRecord {
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "outcome": self.outcome,
-        })
+        });
+        if let Some(sha) = &self.anchored_at {
+            v["anchored_at"] = json!(sha);
+        }
+        v
     }
 }
 
 // ─── predicate evaluation ───────────────────────────────────────────────
 
 fn is_valid_predicate(spec: &str) -> bool {
+    if let Some(list) = spec.strip_prefix("path-changed:") {
+        return list.split(',').map(js_trim).all(|p| {
+            !p.is_empty() && !Path::new(p).is_absolute() && !p.starts_with('/') && !p.starts_with('\\')
+        });
+    }
     let after = spec.strip_prefix("path-exists:").or_else(|| spec.strip_prefix("path-missing:"));
     matches!(after, Some(p) if !js_trim(p).is_empty())
+}
+
+/// The trimmed HEAD sha of the checkout at `root`, `None` when git cannot
+/// name one (no repo, no commit yet).
+fn head_sha(root: &Path) -> Option<String> {
+    let out = crate::verbs::worktree::run_git(root, &["rev-parse", "HEAD"]);
+    let sha = js_trim(out.stdout.as_deref().unwrap_or("")).to_string();
+    (out.status == Some(0) && !sha.is_empty()).then_some(sha)
+}
+
+/// True when a commit in `<anchor>..HEAD` at `control` touches one of the
+/// comma-separated `paths`. A missing anchor or any git failure is ALSO
+/// true — a watched condition never reads as waiting because git broke.
+fn paths_changed_since(control: &Path, anchor: Option<&str>, paths: &str) -> bool {
+    let Some(anchor) = anchor.filter(|a| !a.is_empty()) else { return true };
+    let range = format!("{anchor}..HEAD");
+    let mut args = vec!["log", "-1", "--format=%H", range.as_str(), "--"];
+    args.extend(paths.split(',').map(js_trim).filter(|p| !p.is_empty()));
+    let out = crate::verbs::worktree::run_git(control, &args);
+    out.status != Some(0) || !js_trim(out.stdout.as_deref().unwrap_or("")).is_empty()
 }
 
 /// A relative predicate path resolves against the CONTROL root (where the
@@ -143,7 +186,7 @@ fn is_valid_predicate(spec: &str) -> bool {
 /// (should not happen past `add`'s own validation, but a hand-edited
 /// store file could carry one) never fires — fail closed on the
 /// PREDICATE, fail open on the READ.
-fn predicate_true(control: &Path, spec: &str) -> bool {
+fn predicate_true(control: &Path, spec: &str, anchored_at: Option<&str>) -> bool {
     let resolve = |raw: &str| -> PathBuf {
         let p = Path::new(raw);
         if p.is_absolute() {
@@ -156,6 +199,8 @@ fn predicate_true(control: &Path, spec: &str) -> bool {
         resolve(p).exists()
     } else if let Some(p) = spec.strip_prefix("path-missing:") {
         !resolve(p).exists()
+    } else if let Some(paths) = spec.strip_prefix("path-changed:") {
+        paths_changed_since(control, anchored_at, paths)
     } else {
         false
     }
@@ -254,7 +299,7 @@ fn read_entries(control: &Path, evaluate: bool) -> Vec<TriggerEntry> {
                 Some(mut rec) => {
                     if evaluate && rec.tier == "predicate" && rec.status == "waiting" {
                         if let Some(spec) = rec.predicate.clone() {
-                            if predicate_true(control, &spec) {
+                            if predicate_true(control, &spec, rec.anchored_at.as_deref()) {
                                 rec.status = "due".to_string();
                                 rec.updated_at = now_iso();
                                 let _ = write_json_atomic(&path, &rec.to_value());
@@ -318,6 +363,40 @@ pub(crate) fn trigger_registered(root: &Path, id: &str) -> bool {
         _ => false,
     }
 }
+
+/// The per-prompt door (finding-recheck-trigger D2): the count of
+/// `predicate`-tier triggers at `due`. Evaluation (and so any `git log`)
+/// runs only when the control root HEAD differs from the sha cached in
+/// `.bee/triggers/.last-eval-head`; an unchanged HEAD counts the stored
+/// statuses as they are. An unreadable HEAD always evaluates and caches
+/// nothing. No trigger store at all is zero, with nothing written.
+pub(crate) fn due_count_for_prompt(control: &Path) -> usize {
+    let dir = triggers_dir(control);
+    if !dir.is_dir() {
+        return 0;
+    }
+    let cache = dir.join(LAST_EVAL_HEAD);
+    let head = head_sha(control);
+    let cached = std::fs::read_to_string(&cache).ok();
+    let entries = match &head {
+        Some(sha) if cached.as_deref().map(js_trim) == Some(sha.as_str()) => read_entries(control, false),
+        _ => {
+            let entries = read_and_evaluate(control);
+            if let Some(sha) = &head {
+                let _ = std::fs::write(&cache, sha);
+            }
+            entries
+        }
+    };
+    entries
+        .iter()
+        .filter(|e| matches!(e, TriggerEntry::Ok(r) if r.tier == "predicate" && r.status == "due"))
+        .count()
+}
+
+/// The prompt door's HEAD cache — no `.json` suffix, so the store walk
+/// never lists it as a trigger.
+const LAST_EVAL_HEAD: &str = ".last-eval-head";
 
 pub(crate) fn due_and_manual_counts(control: &Path) -> (usize, usize) {
     let mut due = 0usize;
@@ -397,6 +476,69 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 
 // ─── add ─────────────────────────────────────────────────────────────────
 
+/// Validate, anchor, and write one trigger record; `Err` is the refusal
+/// line and means nothing was written. A `path-changed` predicate anchors
+/// on the HEAD of `root` — the tree where `add` runs, NOT the control
+/// root — so the reviewed branch's own commits never fire it after merge.
+fn add_record(
+    root: &Path,
+    control: &Path,
+    decision: &str,
+    condition: &str,
+    predicate: Option<&str>,
+) -> Result<TriggerRecord, String> {
+    let cmd = "triggers add";
+    if let Some(p) = predicate {
+        if !is_valid_predicate(p) {
+            return Err(format!(
+                "bee {cmd}: --predicate must be path-exists:<path>, path-missing:<path>, or \
+                 path-changed:<path>[,<path>...] with repo-relative paths (a path containing a \
+                 comma cannot be watched), got {p:?}."
+            ));
+        }
+    }
+    let anchored_at = match predicate {
+        Some(p) if p.starts_with("path-changed:") => match head_sha(root) {
+            Some(sha) => Some(sha),
+            None => {
+                return Err(format!(
+                    "bee {cmd}: --predicate path-changed needs a git HEAD at {} to anchor on.",
+                    root.display()
+                ))
+            }
+        },
+        _ => None,
+    };
+    let tier = if predicate.is_some() { "predicate" } else { "manual" };
+    let short8 = truncate_chars_head(decision, 8);
+    let dir = triggers_dir(control);
+    let path = trigger_path_new(&dir, &slug_from_text(condition), &short8);
+    let id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| "trigger".to_string());
+    let ts = now_iso();
+    let rec = TriggerRecord {
+        id,
+        decision: short8,
+        condition: condition.to_string(),
+        tier: tier.to_string(),
+        predicate: predicate.map(str::to_string),
+        anchored_at,
+        status: "waiting".to_string(),
+        created_at: ts.clone(),
+        updated_at: ts,
+        outcome: None,
+    };
+    if write_json_atomic(&path, &rec.to_value()).is_err() {
+        return Err(format!("bee {cmd}: could not write trigger record."));
+    }
+    // The next prompt must evaluate the new trigger even if HEAD is still.
+    let _ = std::fs::remove_file(dir.join(LAST_EVAL_HEAD));
+    Ok(rec)
+}
+
 fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let cmd = "triggers add";
     let ctx = match preamble(cmd, parsed.pre_json, t0) {
@@ -409,41 +551,11 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let Some(condition) = flag(&parsed, "condition") else {
         return Some(emit_error(&ctx.root, cmd, parsed.json, &format!("bee {cmd}: --condition is required."), t0));
     };
-    let predicate = flag(&parsed, "predicate");
-    if let Some(p) = predicate {
-        if !is_valid_predicate(p) {
-            let msg = format!(
-                "bee {cmd}: --predicate must be path-exists:<path> or path-missing:<path>, got {p:?}."
-            );
-            return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
-        }
-    }
-    let tier = if predicate.is_some() { "predicate" } else { "manual" };
-    let short8 = truncate_chars_head(decision, 8);
-    let dir = triggers_dir(&ctx.control);
-    let path = trigger_path_new(&dir, &slug_from_text(condition), &short8);
-    let id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| "trigger".to_string());
-    let ts = now_iso();
-    let rec = TriggerRecord {
-        id: id.clone(),
-        decision: short8.clone(),
-        condition: condition.to_string(),
-        tier: tier.to_string(),
-        predicate: predicate.map(str::to_string),
-        status: "waiting".to_string(),
-        created_at: ts.clone(),
-        updated_at: ts,
-        outcome: None,
+    let rec = match add_record(&ctx.root, &ctx.control, decision, condition, flag(&parsed, "predicate")) {
+        Ok(rec) => rec,
+        Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
     };
-    if write_json_atomic(&path, &rec.to_value()).is_err() {
-        let msg = format!("bee {cmd}: could not write trigger record.");
-        return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
-    }
-    let text = format!("Registered {tier} trigger {id} for decision {short8}.");
+    let text = format!("Registered {} trigger {} for decision {}.", rec.tier, rec.id, rec.decision);
     Some(emit_success(&ctx.root, cmd, parsed.json, &ctx.drift, &rec.to_value(), &text, t0))
 }
 
@@ -599,6 +711,7 @@ mod tests {
             condition: "revisit when upstream lands".to_string(),
             tier: "manual".to_string(),
             predicate: None,
+            anchored_at: None,
             status: "waiting".to_string(),
             created_at: "2026-08-16T00:00:00.000Z".to_string(),
             updated_at: "2026-08-16T00:00:00.000Z".to_string(),
@@ -643,6 +756,7 @@ mod tests {
             condition: "watched.txt lands".to_string(),
             tier: "predicate".to_string(),
             predicate: Some("path-exists:watched.txt".to_string()),
+            anchored_at: None,
             status: "waiting".to_string(),
             created_at: "2026-08-16T00:00:00.000Z".to_string(),
             updated_at: "2026-08-16T00:00:00.000Z".to_string(),
@@ -680,6 +794,7 @@ mod tests {
             condition: "when the team decides".to_string(),
             tier: "manual".to_string(),
             predicate: None,
+            anchored_at: None,
             status: "waiting".to_string(),
             created_at: "2026-08-16T00:00:00.000Z".to_string(),
             updated_at: "2026-08-16T00:00:00.000Z".to_string(),
@@ -738,6 +853,160 @@ mod tests {
         assert!(!is_valid_predicate("path-exists:"));
         assert!(!is_valid_predicate("something-else:foo"));
         assert!(!is_valid_predicate(""));
+    }
+
+    // ─── path-changed (finding-recheck-trigger D1/D2) ──────────────────
+
+    /// A committed git repo at `root` (canonical form) with `a.txt` and
+    /// `b.txt` tracked.
+    fn change_repo(tmp: &Path) -> PathBuf {
+        let root = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        write(&root, "a.txt", "a");
+        write(&root, "b.txt", "b");
+        git(&root, &["init", "-q", "-b", "main", "."]);
+        git(&root, &["config", "user.email", "a@b.c"]);
+        git(&root, &["config", "user.name", "t"]);
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-qm", "init"]);
+        root
+    }
+
+    fn commit_edit(root: &Path, rel: &str, content: &str) {
+        write(root, rel, content);
+        git(root, &["add", rel]);
+        git(root, &["commit", "-qm", &format!("edit {rel}")]);
+    }
+
+    fn stored_status(control: &Path, rec: &TriggerRecord) -> String {
+        let ReadJson::Parsed(v) = read_json(&triggers_dir(control).join(format!("{}.json", rec.id))) else {
+            panic!("expected Parsed")
+        };
+        TriggerRecord::from_value(&v).unwrap().status
+    }
+
+    #[test]
+    fn predicate_validation_for_path_changed() {
+        assert!(is_valid_predicate("path-changed:a.txt"));
+        assert!(is_valid_predicate("path-changed:a.txt, src/b.rs"));
+        assert!(!is_valid_predicate("path-changed:"));
+        assert!(!is_valid_predicate("path-changed:a.txt,,b.txt"));
+        assert!(!is_valid_predicate("path-changed:a.txt, "));
+        assert!(!is_valid_predicate("path-changed:/etc/passwd"));
+        assert!(!is_valid_predicate("path-changed:a.txt,/abs/b.txt"));
+    }
+
+    #[test]
+    fn add_refuses_bad_path_changed_specs_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = change_repo(tmp.path());
+        for bad in ["path-changed:", "path-changed:a.txt,,b.txt", "path-changed:/abs.txt"] {
+            let err = add_record(&root, &root, "deadbeef00", "x", Some(bad)).err().expect("refused");
+            assert!(err.contains("path-changed:<path>[,<path>...]"), "{err}");
+            assert!(err.contains("path-exists:<path>") && err.contains("path-missing:<path>"), "{err}");
+            assert!(err.contains("comma cannot be watched"), "{err}");
+        }
+        assert!(!triggers_dir(&root).exists());
+    }
+
+    #[test]
+    fn add_anchors_path_changed_on_the_tree_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = change_repo(tmp.path());
+        let rec = add_record(&root, &root, "deadbeef00", "a changes", Some("path-changed:a.txt")).unwrap();
+        assert_eq!(rec.anchored_at, head_sha(&root));
+        assert!(rec.anchored_at.is_some());
+        let ReadJson::Parsed(v) = read_json(&triggers_dir(&root).join(format!("{}.json", rec.id))) else {
+            panic!("expected Parsed")
+        };
+        assert_eq!(v["anchored_at"], json!(head_sha(&root).unwrap()));
+        // path-exists records keep their old shape: no anchored_at key.
+        let plain = add_record(&root, &root, "deadbeef00", "b lands", Some("path-exists:b.txt")).unwrap();
+        assert!(plain.to_value().get("anchored_at").is_none());
+    }
+
+    #[test]
+    fn add_outside_a_git_repo_refuses_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let err = add_record(root, root, "deadbeef00", "x", Some("path-changed:a.txt")).err().expect("refused");
+        assert_eq!(
+            err,
+            format!("bee triggers add: --predicate path-changed needs a git HEAD at {} to anchor on.", root.display())
+        );
+        assert!(!triggers_dir(root).exists());
+    }
+
+    #[test]
+    fn path_changed_waits_until_a_commit_touches_a_watched_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = change_repo(tmp.path());
+        let rec = add_record(&root, &root, "deadbeef00", "a changes", Some("path-changed:c.txt, a.txt")).unwrap();
+        // No commit since the anchor.
+        assert_eq!(due_and_manual_counts(&root), (0, 0));
+        assert_eq!(stored_status(&root, &rec), "waiting");
+        // A commit touching an unrelated file.
+        commit_edit(&root, "b.txt", "b2");
+        assert_eq!(due_and_manual_counts(&root), (0, 0));
+        assert_eq!(stored_status(&root, &rec), "waiting");
+        // A commit touching a watched path flips and persists.
+        commit_edit(&root, "a.txt", "a2");
+        assert_eq!(due_and_manual_counts(&root), (1, 0));
+        assert_eq!(stored_status(&root, &rec), "due");
+    }
+
+    #[test]
+    fn path_changed_with_a_bogus_or_missing_anchor_reads_as_due() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = change_repo(tmp.path());
+        assert!(predicate_true(&root, "path-changed:a.txt", Some("0123456789abcdef0123456789abcdef01234567")));
+        assert!(predicate_true(&root, "path-changed:a.txt", Some("not-a-sha")));
+        assert!(predicate_true(&root, "path-changed:a.txt", None));
+        let head = head_sha(&root).unwrap();
+        assert!(!predicate_true(&root, "path-changed:a.txt", Some(&head)));
+    }
+
+    #[test]
+    fn path_changed_added_in_a_feature_worktree_stays_waiting_after_its_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = worktree_fixture(tmp.path());
+        // The feature branch's own commits touch the watched path.
+        commit_edit(&wt, "f.txt", "feature edit");
+        let rec = add_record(&wt, &control_root_path(&wt), "deadbeef00", "f changes", Some("path-changed:f.txt"))
+            .unwrap();
+        assert_eq!(rec.anchored_at, head_sha(&wt));
+        // An unrelated commit on main, then a real merge commit.
+        commit_edit(&main, "other.txt", "o");
+        git(&main, &["merge", "--no-ff", "-q", "-m", "merge wt/one", "wt/one"]);
+        assert_eq!(due_and_manual_counts(&main), (0, 0));
+        assert_eq!(stored_status(&main, &rec), "waiting");
+        // A later change to the path on main does fire it.
+        commit_edit(&main, "f.txt", "post-merge edit");
+        assert_eq!(due_and_manual_counts(&main), (1, 0));
+    }
+
+    #[test]
+    fn due_count_for_prompt_evaluates_only_when_head_moves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = change_repo(tmp.path());
+        // No store yet: zero, nothing written.
+        assert_eq!(due_count_for_prompt(&root), 0);
+        assert!(!triggers_dir(&root).exists());
+        let rec = add_record(&root, &root, "deadbeef00", "c lands", Some("path-exists:c.txt")).unwrap();
+        let cache = triggers_dir(&root).join(LAST_EVAL_HEAD);
+        assert_eq!(due_count_for_prompt(&root), 0);
+        assert_eq!(std::fs::read_to_string(&cache).unwrap(), head_sha(&root).unwrap());
+        // The predicate turns true, but HEAD has not moved: no evaluation.
+        write(&root, "c.txt", "c");
+        assert_eq!(due_count_for_prompt(&root), 0);
+        assert_eq!(stored_status(&root, &rec), "waiting");
+        // HEAD moves: the next prompt evaluates and counts it.
+        commit_edit(&root, "b.txt", "b2");
+        assert_eq!(due_count_for_prompt(&root), 1);
+        assert_eq!(stored_status(&root, &rec), "due");
+        assert_eq!(std::fs::read_to_string(&cache).unwrap(), head_sha(&root).unwrap());
+        // A new add drops the cache so the next prompt evaluates it.
+        add_record(&root, &root, "deadbeef00", "d lands", Some("path-exists:d.txt")).unwrap();
+        assert!(!cache.exists());
     }
 
     #[test]
