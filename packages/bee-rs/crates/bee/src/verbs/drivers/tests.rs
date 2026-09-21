@@ -4608,6 +4608,7 @@ exit 0
                 "door capture-queue: clear\n",
                 "door mistakes: clear\n",
                 "door dissent-debt: clear\n",
+                "door leader-check: clear\n",
                 // an-3: the advisor-nudge door joined the builder beside the
                 // dissent one; this feature carries no nudge, so it is clear.
                 "door advisor-nudge-debt: clear\n",
@@ -5034,6 +5035,7 @@ exit 0
                 // sd-4: the dissent-debt door joined the builder; this
                 // feature carries no dissent, so it reports clear.
                 "door dissent-debt: clear",
+                "door leader-check: clear",
                 // an-3: and the advisor-nudge door beside it, same posture.
                 "door advisor-nudge-debt: clear",
             ]

@@ -204,8 +204,9 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      no artifact behind it → the cell is NOT done. Depth is risk-based:
      a low-risk mechanical cell needs direct artifact spot-checks; high
      risk, missing evidence, or a contradiction between report and diff
-     earns the full diff read and wiring trace. No new report schema, no
-     mandatory full-suite rerun — the single home of this rule is
+     earns the full diff read and wiring trace. Record with `bee cells leader-check`
+     — the cap is not the end of the cell; the recorded mark is. No new report
+     schema, no mandatory full-suite rerun — the single home of this rule is
      `bee-hive/references/routing-and-contracts.md` ("Leader completeness
      check").
    - **Read the recorded proof; re-run tests only on smell.** The worker's
@@ -621,8 +622,9 @@ after the user's word, a `planned-next` at adoption — sorts each
 `cells_in_flight` entry before it dispatches anything. `bee cells show
 --id <id>` and `git log --grep 'cell: <id>'` answer each row:
 
-- capped since the handoff → run the leader completeness check (step 7),
-  as for any `[DONE]`;
+- capped since the handoff → run the leader completeness check
+  (`bee cells leader-check`, step 7) as for any `[DONE]` — the recorded
+  mark ends the cell;
 - claimed, with no live worker and no commit → `bee cells unclaim --id
   <id>`, `bee reservations release --agent <nickname> --cell <id>`, then
   re-dispatch;

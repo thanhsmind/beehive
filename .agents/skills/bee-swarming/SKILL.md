@@ -72,7 +72,8 @@ From two cells up, state the one-line concurrency plan before dispatching.
    `references/swarming-reference.md` ("Operating Contract in full",
    steps 3 and 6).
 5. On `[DONE]`: the worker's word is never the evidence. Run the leader
-   completeness check before accepting — compare every approved
+   completeness check before accepting (`bee cells leader-check`) — the cap
+   is not the end of the cell; the recorded mark is. Compare every approved
    requirement (the cell's `must_haves`, the plan's acceptance criteria)
    against the actual artifacts, wiring, and recorded proof; the worker's
    report only tells you where to look

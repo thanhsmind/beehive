@@ -63,6 +63,10 @@ pub(crate) const MISTAKES_CLEAN_RUN_COMMAND: &str = "bee mailbox reflect --no-mi
 /// dissent door's own). Cite: 9e5eda5b.
 pub(crate) const CLOSE_ADVISOR_NUDGE_DEBT_PREFIX: &str = "Advisor nudge debt for";
 
+/// leader-check-door: pinned prefix of the leader-check refusal headline
+/// (message-contract tests live in this file's own tests).
+pub(crate) const CLOSE_LEADER_CHECK_DEBT_PREFIX: &str = "Leader check debt for";
+
 /// D1: pinned prefix of the knowledge-freshness refusal headline (message-
 /// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
 pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
@@ -1701,6 +1705,64 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         },
     });
 
+    // leader-check-door: the leader-check door (a38dc4bd). It applies to
+    // EVERY lane and every capped cell (D4), grandfathered by
+    // LEADER_CHECK_DOOR_INTRODUCED_AT (D5).
+    //
+    // Pushed after dissent-debt and before advisor-nudge-debt per D6a.
+    // The debt count and deferral escape are read from verbs/cells/leader_check.rs:
+    // one obligation, two doors (bee close and bee worktree merge).
+    let leader_check = crate::verbs::cells::feature_leader_check_debt(root, feature)?;
+    let leader_check_deferred = if leader_check.count > 0 {
+        crate::verbs::cells::has_leader_check_deferral_decision(root, feature)?
+    } else {
+        false
+    };
+    let leader_check_blocking = leader_check.count > 0 && !leader_check_deferred;
+    let leader_check_archived: Vec<&str> = leader_check
+        .ids
+        .iter()
+        .filter_map(|id| id.as_str())
+        .filter(|id| {
+            !crate::verbs::cells::cell_file(root, id).exists()
+                && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+        })
+        .collect();
+    let leader_check_command = if !leader_check_blocking {
+        None
+    } else if leader_check_archived.is_empty() {
+        Some("bee cells leader-check")
+    } else {
+        Some("bee cells unarchive")
+    };
+    doors.push(Door {
+        door: "leader-check",
+        blocking: leader_check_blocking,
+        detail: if leader_check.count == 0 {
+            "clear".to_string()
+        } else if leader_check_deferred {
+            format!(
+                "deferred — {} cell(s) capped with no leader check ({}); a logged leader-check-deferral decision names \"{feature}\"",
+                leader_check.count,
+                js_join(&leader_check.ids, ", ")
+            )
+        } else if !leader_check_archived.is_empty() {
+            format!(
+                "{} cell(s) capped with no leader check ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                leader_check.count,
+                js_join(&leader_check.ids, ", "),
+                leader_check_archived.len(),
+            )
+        } else {
+            format!(
+                "{} cell(s) capped with no leader check ({}); run bee cells leader-check to record a check, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it",
+                leader_check.count,
+                js_join(&leader_check.ids, ", ")
+            )
+        },
+        command: leader_check_command,
+    });
+
     // slp-advisor-nudge an-3: the advisor-nudge response debt (9e5eda5b). It
     // copies the dissent arm right above — NOT the judge arm's standard-up
     // lane gate — and for the same reason a2affcba gave the dissent one: the
@@ -2668,6 +2730,40 @@ pub(crate) fn close_handler(
                 "remedy: record each mistake with `bee mailbox reflect --wrong \"<what went wrong>\" --better \"<what would have been better>\"` — or, if those cells truly hit none, say so: {MISTAKES_CLEAN_RUN_COMMAND}."
             ),
             format!("next: answer, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // leader-check-door: refuse on leader check debt, in EVERY lane.
+    //
+    // Placed last among the cell-debt arms: after mistakes and before uat,
+    // so the specific debts surface first and this broad one masks none of them.
+    if doors.iter().any(|d| d.door == "leader-check" && d.blocking) {
+        let debt = crate::verbs::cells::feature_leader_check_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let archived = debt.ids.iter().any(|id| {
+            id.as_str().is_some_and(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+        });
+        let remedy = if archived {
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells leader-check to record a check for each cell, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+        } else {
+            format!("remedy: run bee cells leader-check to record a check for each cell above, or log a decision tagged leader-check-deferral naming \"{feature}\" to defer it (or bee cells reopen if a recorded gap needs rework).")
+        };
+        let lines = vec![
+            format!(
+                "{CLOSE_LEADER_CHECK_DEBT_PREFIX} \"{feature}\" — close stops at the leader-check door: {} cell(s) capped with no leader check ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            remedy,
+            format!("next: settle the leader check debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -5341,4 +5437,325 @@ mod tests {
         let note = feature_close_note(root, "demo", Some(printed));
         assert_eq!(note.token_usage, vec![printed.to_string()]);
     }
+
+    // ── leader-check-door: the leader-check door and refusal tests ─────────
+
+    fn make_leader_check_cell(
+        id: &str,
+        feature: &str,
+        lane: &str,
+        capped_at: Option<&str>,
+        leader_check_verdicts: &[&str],
+    ) -> Value {
+        let mut trace = json!({
+            "worker": "w-1",
+            "files_changed": ["src/lib.rs"],
+            "no_mistakes": true,
+            "report": {
+                "outcome": "done",
+                "commit": "c1",
+                "files": ["src/lib.rs"],
+                "tests": "cargo test — green:unit — lib",
+                "deviations": []
+            }
+        });
+        if let Some(ts) = capped_at {
+            trace.as_object_mut().unwrap().insert("capped_at".into(), json!(ts));
+        }
+        if !leader_check_verdicts.is_empty() {
+            let checks: Vec<Value> = leader_check_verdicts
+                .iter()
+                .map(|v| {
+                    json!({
+                        "verdict": v,
+                        "answers": [{"requirement": "req", "artifact": "src/lib.rs"}],
+                        "recorded_at": "2026-09-21T10:00:00.000Z"
+                    })
+                })
+                .collect();
+            trace.as_object_mut().unwrap().insert("leader_check".into(), Value::Array(checks));
+        }
+        json!({
+            "id": id,
+            "feature": feature,
+            "title": format!("title {id}"),
+            "status": "capped",
+            "lane": lane,
+            "trace": trace
+        })
+    }
+
+    #[test]
+    fn close_refuses_a_tiny_lane_feature_whose_capped_cell_carries_no_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "leader-check door must refuse tiny lane: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert!(text.contains("demo-1"), "{text}");
+        assert!(text.contains("bee cells leader-check"), "{text}");
+        assert!(text.contains("leader-check-deferral"), "{text}");
+        assert!(text.contains("bee cells reopen"), "{text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "leader-check").unwrap()["blocking"],
+            json!(true)
+        );
+    }
+
+    #[test]
+    fn close_refuses_a_standard_lane_feature_whose_capped_cell_carries_no_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        write_lane_mode(root, "demo", "standard");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "standard",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "leader-check door must refuse standard lane: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert_eq!(
+            result["doors"].as_array().unwrap().iter().find(|d| d["door"] == "leader-check").unwrap()["blocking"],
+            json!(true)
+        );
+    }
+
+    #[test]
+    fn close_clears_once_an_ok_mark_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &["ok"],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "door must be clear once ok is recorded");
+        assert_eq!(door.detail, "clear");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "close must succeed when leader check is ok: {text}");
+    }
+
+    #[test]
+    fn close_still_refuses_when_newest_mark_is_a_gap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        // Ok first, but then gap
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &["ok", "gap"],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(door.blocking, "door must block when newest verdict is gap");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1, "close must refuse when newest verdict is gap: {text}");
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+    }
+
+    #[test]
+    fn cell_capped_before_stamp_is_grandfathered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-20T23:59:59.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "pre-stamp cap must be grandfathered");
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn cell_with_missing_or_unparseable_capped_at_is_grandfathered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+
+        // Missing capped_at
+        let cell_missing = make_leader_check_cell("demo-1", "demo", "tiny", None, &[]);
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell_missing).unwrap());
+        let doors1 = build_close_report_doors(root, "demo").unwrap();
+        assert!(!doors1.iter().find(|d| d.door == "leader-check").unwrap().blocking);
+
+        // Unparseable capped_at
+        let cell_corrupt = make_leader_check_cell("demo-2", "demo", "tiny", Some("not-a-date"), &[]);
+        w(root, ".bee/cells/demo-2.json", &serde_json::to_string(&cell_corrupt).unwrap());
+        let doors2 = build_close_report_doors(root, "demo").unwrap();
+        assert!(!doors2.iter().find(|d| d.door == "leader-check").unwrap().blocking);
+    }
+
+    #[test]
+    fn logged_leader_check_deferral_decision_clears_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+        let cell = make_leader_check_cell(
+            "demo-1",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+
+        // Log deferral decision
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-lcd\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer leader check for demo\",\"rationale\":\"r\",\"tags\":[\"leader-check-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let door = doors.iter().find(|d| d.door == "leader-check").unwrap();
+        assert!(!door.blocking, "leader-check-deferral decision must clear the door");
+        assert!(door.detail.contains("deferred"), "{}", door.detail);
+        assert!(door.detail.contains("demo"), "{}", door.detail);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "close must succeed with deferral decision: {text}");
+    }
+
+    #[test]
+    fn mistakes_and_judge_debt_refusals_fire_first_before_leader_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        // Cell has mistakes debt (no_mistakes false/omitted) AND leader check debt AND judge debt (behavior_change true)
+        let cell = json!({
+            "id": "demo-1",
+            "feature": "demo",
+            "status": "capped",
+            "lane": "standard",
+            "trace": {
+                "worker": "w-1",
+                "behavior_change": true,
+                "capped_at": "2026-09-21T12:00:00.000Z",
+                "files_changed": ["src/lib.rs"],
+                "report": {
+                    "outcome": "done",
+                    "commit": "c1",
+                    "files": ["src/lib.rs"],
+                    "tests": "cargo test — green:unit — lib",
+                    "deviations": []
+                }
+            }
+        });
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell).unwrap());
+        // Clear scribing debt with deferral so judge debt surfaces first
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-cap\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer capture for demo\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        // First close run: judge-debt fires first!
+        let out1 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text1, code1) = out1 else { panic!("expected Emit") };
+        assert_eq!(code1, 1);
+        assert!(text1.starts_with(CLOSE_JUDGE_DEBT_PREFIX), "judge-debt must fire before mistakes and leader-check: {text1}");
+
+        // Now clear judge-debt with deferral as well
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d-cap\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer capture for demo\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n{\"id\":\"d-jd\",\"type\":\"decide\",\"date\":\"2026-09-21T12:00:00.000Z\",\"decision\":\"defer judge for demo\",\"rationale\":\"r\",\"tags\":[\"judge-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        // Second close run: mistakes fires before leader-check!
+        let out2 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text2, code2) = out2 else { panic!("expected Emit") };
+        assert_eq!(code2, 1);
+        assert!(text2.starts_with(CLOSE_MISTAKES_PREFIX), "mistakes must fire before leader-check: {text2}");
+
+        // Now clear mistakes by setting no_mistakes in cell trace
+        let mut cell2 = cell.clone();
+        cell2["trace"]["no_mistakes"] = json!(true);
+        w(root, ".bee/cells/demo-1.json", &serde_json::to_string(&cell2).unwrap());
+
+        // Third close run: now leader-check fires!
+        let out3 = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text3, code3) = out3 else { panic!("expected Emit") };
+        assert_eq!(code3, 1);
+        assert!(text3.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "leader-check must fire once judge and mistakes are cleared: {text3}");
+    }
+
+    #[test]
+    fn close_leader_check_refusal_names_bee_cells_unarchive_first_for_archived_offender() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        write_lane_mode(root, "demo", "tiny");
+
+        let cell = make_leader_check_cell(
+            "demo-arch",
+            "demo",
+            "tiny",
+            Some("2026-09-21T12:00:00.000Z"),
+            &[],
+        );
+        let arch_dir = root.join(".bee").join("cells").join("archive").join("demo");
+        std::fs::create_dir_all(&arch_dir).unwrap();
+        std::fs::write(arch_dir.join("demo-arch.json"), serde_json::to_string(&cell).unwrap()).unwrap();
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1);
+        assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
+        assert!(text.contains("bee cells unarchive --feature demo first"), "{text}");
+        assert!(text.contains("bee cells leader-check"), "{text}");
+    }
 }
+

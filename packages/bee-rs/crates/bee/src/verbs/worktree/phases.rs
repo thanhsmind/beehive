@@ -269,6 +269,44 @@ pub(crate) fn merge_stage(
         }
     }
 
+    // leader-check-door lcd-3 (a38dc4bd): the merge door's leader-check
+    // precondition — a branch must not land while a capped cell has no
+    // leader check recorded. Both readers are the SAME two functions
+    // `bee close`'s leader-check door calls (verbs/cells/leader_check.rs),
+    // never a second reading of the rule: one obligation, two doors (the
+    // comment at :236-238 names that rule). The escape is consulted ONLY
+    // when there is debt to escape, exactly as the close door consults it.
+    //
+    // Placed HERE — after the dissent arm and before the advisor-nudge arm —
+    // in the zero-mutation zone above the bookkeeping auto-commit, so a
+    // leader-check-debt merge is refused, never staged. A dissent-debt
+    // refusal therefore MASKS this one on the same feature, matching the
+    // close door's own ordering.
+    //
+    // A worktree whose feature cannot be resolved has no cell record to
+    // check, so the helper is never called at all — the same `None` posture
+    // every door here takes.
+    if let Some(feature) = identity.feature.as_deref() {
+        let leader_check = crate::verbs::cells::feature_leader_check_debt(main_root, feature)
+            .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+        if leader_check.count > 0 {
+            let deferred = crate::verbs::cells::has_leader_check_deferral_decision(main_root, feature)
+                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?;
+            if !deferred {
+                // `DebtSummary.ids` is `Vec<Value>`, not `Vec<String>` — the
+                // close door renders it through `js_join` and so does this.
+                return Err(refuse_merge(
+                    "WORKTREE_MERGE_LEADER_CHECK_DEBT",
+                    format!(
+                        "worktree {id}'s feature \"{feature}\" has {} cell(s) capped with no leader check ({}) — \"bee worktree merge\" refuses until each one is checked: bee cells leader-check. To defer instead, log a decision tagged leader-check-deferral naming \"{feature}\" — the same escape \"bee close\"'s leader-check door reads.",
+                        leader_check.count,
+                        crate::verbs::drivers::js_join(&leader_check.ids, ", "),
+                    ),
+                ));
+            }
+        }
+    }
+
     // slp-advisor-nudge an-3 (9e5eda5b): the merge door's advisor-nudge
     // precondition — a branch must not land while the supervisor's advisor
     // recommendation about that work is unanswered.

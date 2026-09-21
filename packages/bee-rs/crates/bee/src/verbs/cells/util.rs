@@ -86,6 +86,7 @@ pub(crate) fn try_mutating(verb: &str, rest: &[OsString], t0: Instant) -> Option
         "judge" => run_judge(flags, use_json, t0),
         "reset-budget" => run_reset_budget(flags, use_json, t0),
         "judge-record" => run_judge_record(flags, use_json, t0),
+        "leader-check" => leader_check::run_leader_check(flags, use_json, t0),
         // slp-dissent-stop-and-ask sd-1 (decisions 4b7aa303, a2affcba) — a
         // worker's recorded disagreement with the cell it was handed. Served
         // here and DECLARED in generated/registry_payload.json in the same

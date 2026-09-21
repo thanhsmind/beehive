@@ -1323,6 +1323,185 @@ use std::time::Instant;
         assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
+    // ── leader-check-door lcd-3: leader-check debt at the merge door ───────
+    //
+    // Placed beside the dissent-debt merge tests above: same slot, same
+    // zero-mutation posture.
+
+    fn write_leader_check_cell(
+        main: &Path,
+        id: &str,
+        feature: &str,
+        status: &str,
+        capped_at: Option<&str>,
+        leader_check_verdicts: &[&str],
+    ) {
+        let mut trace = json!({
+            "files_changed": ["src/lib.rs"],
+        });
+        if status == "capped" {
+            trace["report"] = valid_proof_report();
+            trace["capped_at"] = json!(capped_at.unwrap_or("2026-09-21T01:00:00.000Z"));
+        }
+        if !leader_check_verdicts.is_empty() {
+            let checks: Vec<Value> = leader_check_verdicts
+                .iter()
+                .map(|v| {
+                    json!({
+                        "verdict": v,
+                        "answers": [{"requirement": "req", "artifact": "src/lib.rs"}],
+                        "recorded_at": "2026-09-21T01:00:00.000Z",
+                    })
+                })
+                .collect();
+            trace["leader_check"] = Value::Array(checks);
+        }
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": status,
+            "trace": trace,
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
+    fn write_leader_check_deferral(main: &Path, named: &str) {
+        std::fs::write(
+            main.join(".bee").join("decisions.jsonl"),
+            format!(
+                "{{\"id\":\"d-lcd\",\"type\":\"decide\",\"date\":\"2026-09-21T00:00:00.000Z\",\"decision\":\"defer leader check for {named}\",\"rationale\":\"r\",\"tags\":[\"leader-check-deferral\"],\"scope\":\"repo\"}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// lcd-3: an unmarked capped cell on the merging feature refuses the merge,
+    /// zero-mutation, naming every offending cell.
+    #[test]
+    fn an_unmarked_capped_cell_refuses_the_merge_naming_every_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "unmarked");
+        let wt = created.worktree_root.clone();
+
+        write_leader_check_cell(&main, "unmarked-1", "unmarked", "capped", None, &[]);
+        write_leader_check_cell(&main, "unmarked-2", "unmarked", "capped", None, &[]);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "an unmarked capped cell must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+        assert!(message.contains("unmarked-1"), "every offender is named: {message}");
+        assert!(message.contains("unmarked-2"), "every offender is named: {message}");
+        assert!(
+            message.contains("bee cells leader-check"),
+            "the refusal carries its own remedy: {message}"
+        );
+        assert!(message.contains("leader-check-deferral"), "the refusal names its escape: {message}");
+        // Zero mutation: HEAD on main never moved, and the worktree stands.
+        let head_after =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(head_after, pre_merge_head, "a refused merge must never touch main");
+        assert!(wt.exists(), "the worktree stands — nothing was torn down");
+    }
+
+    /// lcd-3: recording an ok leader check lets the merge proceed.
+    #[test]
+    fn a_recorded_leader_check_ok_lets_the_same_merge_proceed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "checked");
+        write_leader_check_cell(&main, "checked-1", "checked", "capped", None, &["ok"]);
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a checked cell must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// lcd-3: recording a gap leader check still refuses the merge.
+    #[test]
+    fn a_recorded_gap_leader_check_still_refuses_the_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "gapfeat");
+        write_leader_check_cell(&main, "gapfeat-1", "gapfeat", "capped", None, &["gap"]);
+
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a gap leader check must refuse, never merge silently: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+    }
+
+    /// lcd-3: a logged leader-check-deferral decision naming this feature clears the merge door.
+    #[test]
+    fn a_logged_leader_check_deferral_naming_this_feature_lets_the_merge_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "lcdeferred");
+        write_leader_check_cell(&main, "lcdeferred-1", "lcdeferred", "capped", None, &[]);
+
+        // Naming someone else never lifts this block.
+        write_leader_check_deferral(&main, "elsewhere");
+        let message = match merge_feature_worktree(&main, &created.id, false, None, true, None) {
+            Ok(answer) => panic!(
+                "a deferral naming another feature must not clear this door: {:?}",
+                answer.result
+            ),
+            Err(MErr::Thrown(m)) => m,
+            Err(MErr::Ex) => panic!("merge delegated instead of refusing"),
+        };
+        assert!(message.starts_with("[WORKTREE_MERGE_LEADER_CHECK_DEBT] "), "{message}");
+
+        // Naming this feature does.
+        write_leader_check_deferral(&main, "lcdeferred");
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a logged deferral must clear the door: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// lcd-3: a WORKTREE_MERGE_LEADER_CHECK_DEBT refusal is zero-mutation —
+    /// leaves lane record byte-identical.
+    #[test]
+    fn a_leader_check_debt_refusal_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "unmarked");
+        write_leader_check_cell(&main, "unmarked-1", "unmarked", "capped", None, &[]);
+        write_stranded_lane(&main, "unmarked", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("unmarked.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
+        let Err(err) = result else { panic!("an unmarked cell must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_LEADER_CHECK_DEBT"), "{msg}");
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a leader-check-debt refusal must not touch the lane record at all");
+    }
+
     // ── slp-advisor-nudge an-3: the advisor-nudge debt at the merge door ───
     //
     // Placed beside the dissent-debt merge tests above for the same reason
