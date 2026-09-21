@@ -177,6 +177,8 @@ When a worker caps a cell, the leader must verify completion before accepting th
 - **Reuse existing requirements**: Reuse existing `must_haves`, acceptance criteria, and proof lines from the cell and plan. Do not invent new checklists.
 - **No new report schema or mandatory full-suite rerun**: This check introduces no new report schema. It demands no mandatory full-suite test rerun.
 - **Risk-based depth**: Verification depth stays risk-based. Deeper checks (reading full diffs, verifying call sites, inspecting runtime evidence) apply to high risk, missing evidence, or contradictions. Low-risk mechanical changes need only direct artifact spot-checks.
+- **Recorded check**: Record the check with `bee cells leader-check --id <cell> --verdict ok|gap --file <answers.json>`. The payload answers every derived requirement with an artifact. The verb verifies that these artifacts exist. An artifact that looks like a repo path must exist on disk. At least one answer must name a path from the cell's `trace.files_changed`.
+- **Verdict and doors**: A `gap` verdict records without reopening the cell, so the door stays red. Both `bee close` and `bee worktree merge` refuse a feature whose capped cells carry no `ok` mark. This rule applies at every lane. Cells capped before `LEADER_CHECK_DOOR_INTRODUCED_AT` are grandfathered. A logged decision tagged `leader-check-deferral` is the one named escape.
 
 ### Capture discipline
 
