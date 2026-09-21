@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"finding-recheck-trigger\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"finding-recheck-trigger\" (lane).",
+  "next_action": "Merged into main at 92820ff; reload the product and test \"finding-recheck-trigger\", then either approve uat (\"bee gate --name uat --approved true --lane finding-recheck-trigger\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-21T14:58:13.173Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "uncommitted .bee/config.json on main (Claude roles -> opus): commit it so the work area can pick it up, or copy it into the work area",
-    "asked_at": "2026-09-21T15:05:40.924Z",
-    "session": "51beeb2f-06ab-4324-a9ef-cb11453519ab"
+    "kind": "gate",
+    "subject": "uat: finding-recheck-trigger",
+    "asked_at": "2026-09-21T15:21:19.449Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -347,12 +347,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-09-21T15:19:41.919Z",
-    "branch": "wt/finding-recheck-trigger",
-    "worktree_id": "beehive--wt--finding-recheck-trigger",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
