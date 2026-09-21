@@ -464,6 +464,7 @@ mod obligation;
 mod validate;
 mod judge;
 mod dissent;
+pub mod leader_check;
 mod schedule;
 mod finish_support;
 mod sync_door;
@@ -481,6 +482,8 @@ pub(crate) use self::obligation::*;
 pub(crate) use self::validate::*;
 pub(crate) use self::judge::*;
 pub(crate) use self::dissent::*;
+#[allow(unused_imports)]
+pub(crate) use self::leader_check::*;
 pub(crate) use self::schedule::*;
 pub(crate) use self::finish_support::*;
 pub(crate) use self::sync_door::*;
