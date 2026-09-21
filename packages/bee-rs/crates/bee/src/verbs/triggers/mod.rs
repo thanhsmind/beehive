@@ -34,8 +34,8 @@
 // Evaluation happens ON READ (`list`, the `due_and_manual_counts` door
 // `bee orient` calls, and the per-prompt `due_count_for_prompt`, which
 // re-evaluates only when the control root HEAD moved since its last run —
-// cached in `.bee/triggers/.last-eval-head`, a name the `.json` store walk
-// never lists): a `predicate`-tier trigger still `waiting`
+// cached in `.bee/cache/triggers-last-eval-head`, outside the tracked
+// store): a `predicate`-tier trigger still `waiting`
 // has its predicate checked, and a true predicate flips it to `due` AND
 // PERSISTS that flip — the same write-on-read shape `bee orient`'s own
 // `sweep_on_orient` already uses (status_full/orient.rs:260-289).
@@ -367,7 +367,7 @@ pub(crate) fn trigger_registered(root: &Path, id: &str) -> bool {
 /// The per-prompt door (finding-recheck-trigger D2): the count of
 /// `predicate`-tier triggers at `due`. Evaluation (and so any `git log`)
 /// runs only when the control root HEAD differs from the sha cached in
-/// `.bee/triggers/.last-eval-head`; an unchanged HEAD counts the stored
+/// `.bee/cache/triggers-last-eval-head`; an unchanged HEAD counts the stored
 /// statuses as they are. An unreadable HEAD always evaluates and caches
 /// nothing. No trigger store at all is zero, with nothing written.
 pub(crate) fn due_count_for_prompt(control: &Path) -> usize {
@@ -375,7 +375,7 @@ pub(crate) fn due_count_for_prompt(control: &Path) -> usize {
     if !dir.is_dir() {
         return 0;
     }
-    let cache = dir.join(LAST_EVAL_HEAD);
+    let cache = eval_head_cache(control);
     let head = head_sha(control);
     let cached = std::fs::read_to_string(&cache).ok();
     let entries = match &head {
@@ -383,6 +383,9 @@ pub(crate) fn due_count_for_prompt(control: &Path) -> usize {
         _ => {
             let entries = read_and_evaluate(control);
             if let Some(sha) = &head {
+                if let Some(parent) = cache.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
                 let _ = std::fs::write(&cache, sha);
             }
             entries
@@ -394,9 +397,12 @@ pub(crate) fn due_count_for_prompt(control: &Path) -> usize {
         .count()
 }
 
-/// The prompt door's HEAD cache — no `.json` suffix, so the store walk
-/// never lists it as a trigger.
-const LAST_EVAL_HEAD: &str = ".last-eval-head";
+/// The prompt door's HEAD cache. It lives in `.bee/cache/`, which every
+/// onboarded repo git-ignores, never in the tracked `.bee/triggers/` store:
+/// a HEAD sha that changes on every commit must not show as a repo change.
+fn eval_head_cache(control: &Path) -> PathBuf {
+    control.join(".bee").join("cache").join("triggers-last-eval-head")
+}
 
 pub(crate) fn due_and_manual_counts(control: &Path) -> (usize, usize) {
     let mut due = 0usize;
@@ -535,7 +541,7 @@ fn add_record(
         return Err(format!("bee {cmd}: could not write trigger record."));
     }
     // The next prompt must evaluate the new trigger even if HEAD is still.
-    let _ = std::fs::remove_file(dir.join(LAST_EVAL_HEAD));
+    let _ = std::fs::remove_file(eval_head_cache(control));
     Ok(rec)
 }
 
@@ -992,9 +998,11 @@ mod tests {
         assert_eq!(due_count_for_prompt(&root), 0);
         assert!(!triggers_dir(&root).exists());
         let rec = add_record(&root, &root, "deadbeef00", "c lands", Some("path-exists:c.txt")).unwrap();
-        let cache = triggers_dir(&root).join(LAST_EVAL_HEAD);
+        let cache = root.join(".bee").join("cache").join("triggers-last-eval-head");
         assert_eq!(due_count_for_prompt(&root), 0);
         assert_eq!(std::fs::read_to_string(&cache).unwrap(), head_sha(&root).unwrap());
+        // The cache lives in the git-ignored cache dir, never in the tracked store.
+        assert!(!triggers_dir(&root).join(".last-eval-head").exists());
         // The predicate turns true, but HEAD has not moved: no evaluation.
         write(&root, "c.txt", "c");
         assert_eq!(due_count_for_prompt(&root), 0);
