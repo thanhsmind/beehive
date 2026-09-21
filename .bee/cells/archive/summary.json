@@ -1348,5 +1348,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-09-21T06:23:02.490Z"
+  },
+  "release-2-42-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T06:31:45.026Z"
   }
 }
