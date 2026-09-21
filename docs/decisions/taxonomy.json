@@ -565,6 +565,7 @@
     "contract:dispatch-cell-id",
     "dispatch-cell-id-flag",
     "plan-hat-wave",
-    "leader-check-door"
+    "leader-check-door",
+    "leader-check"
   ]
 }
