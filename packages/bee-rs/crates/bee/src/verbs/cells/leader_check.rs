@@ -264,6 +264,47 @@ pub(crate) fn record_leader_check(
             }
         }
 
+        // (c) files_changed is checked against the cell's real commit diff
+        // (decision 5e3f0baf): every claimed path must appear in a commit
+        // carrying the `cell: <id>` trailer. Extra diff paths are not refused.
+        let commit_diff = if files_changed.is_empty() {
+            None
+        } else {
+            let feature = cell_map.get("feature").and_then(Value::as_str);
+            let history_root = commit_trailer_history_root(root, feature);
+            Some(match cell_commit_files(&history_root, id) {
+                None => "skipped: git unavailable",
+                Some(paths) if paths.is_empty() => {
+                    let pending = trace_obj
+                        .and_then(|t| t.get("commit_pending"))
+                        .and_then(Value::as_str)
+                        .is_some_and(|s| !js_trim(s).is_empty());
+                    if !pending {
+                        return Err(Fail::Thrown(format!(
+                            "{VERB}: cell \"{id}\" has no commit carrying the trailer \"{}\" in the last {COMMIT_TRAILER_WINDOW} commit(s) of {} — files_changed cannot be verified against a real diff.",
+                            cell_commit_trailer(id),
+                            history_root.display()
+                        )));
+                    }
+                    "skipped: commit_pending"
+                }
+                Some(paths) => {
+                    let untouched: Vec<String> = files_changed
+                        .iter()
+                        .map(|f| normalize_cell_path(f))
+                        .filter(|f| !paths.contains(f))
+                        .collect();
+                    if !untouched.is_empty() {
+                        return Err(Fail::Thrown(format!(
+                            "{VERB}: cell \"{id}\" files_changed names path(s) the cell's commit(s) never touched: {}.",
+                            untouched.join(", ")
+                        )));
+                    }
+                    "checked"
+                }
+            })
+        };
+
         let mut trace = merge_trace(cell_map.get("trace"))?;
         trace = guard_claim_ownership(
             root,
@@ -291,6 +332,9 @@ pub(crate) fn record_leader_check(
             .map(Value::String)
             .unwrap_or(Value::Null);
         entry.insert("recorded_by".into(), recorded_by);
+        if let Some(commit_diff) = commit_diff {
+            entry.insert("commit_diff".into(), Value::String(commit_diff.into()));
+        }
 
         let mut existing: Vec<Value> = match trace.get(LEADER_CHECK_TRACE_KEY) {
             Some(Value::Array(a)) => a.clone(),
@@ -307,6 +351,38 @@ pub(crate) fn record_leader_check(
     })();
     guard.release();
     saved
+}
+
+/// The union of paths changed by every commit in the last
+/// `COMMIT_TRAILER_WINDOW` commits of `cwd`'s HEAD whose body carries the
+/// exact `cell: <id>` trailer line, each normalized. None when git cannot
+/// answer (no repo, no commits, spawn failure); Some(empty) when no commit
+/// carries the trailer.
+pub(crate) fn cell_commit_files(cwd: &Path, id: &str) -> Option<Vec<String>> {
+    let window = COMMIT_TRAILER_WINDOW.to_string();
+    let out = crate::verbs::worktree::run_git(cwd, &["log", "-n", &window, "--format=%H%n%B%x00"]);
+    if out.status != Some(0) {
+        return None;
+    }
+    let trailer = cell_commit_trailer(id);
+    let mut files: Vec<String> = Vec::new();
+    for record in out.stdout.unwrap_or_default().split('\u{0}') {
+        let mut lines = record.trim_start_matches('\n').lines();
+        let Some(hash) = lines.next().map(js_trim).filter(|h| !h.is_empty()) else { continue };
+        if !lines.any(|line| js_trim(line) == trailer) {
+            continue;
+        }
+        let show = crate::verbs::worktree::run_git(cwd, &["show", "--name-only", "--format=", hash]);
+        if show.status != Some(0) {
+            return None;
+        }
+        for path in show.stdout.unwrap_or_default().lines().map(normalize_cell_path) {
+            if !path.is_empty() && !files.contains(&path) {
+                files.push(path);
+            }
+        }
+    }
+    Some(files)
 }
 
 /// D6: The single debt scan for the leader-check obligation, shared by both
@@ -756,5 +832,111 @@ mod tests {
         let debt = feature_leader_check_debt(root, "feat-1").unwrap();
         assert_eq!(debt.count, 1);
         assert_eq!(debt.ids, vec![json!("c-new")]);
+    }
+
+    // ─── commit-diff check (decision 5e3f0baf) ──────────────────────────────
+
+    fn git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the commit-diff fixtures");
+        assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// A git repo with an init commit, plus src/a.rs and src/b.rs on disk.
+    fn diff_repo(root: &Path) {
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("f.txt"), "x").unwrap();
+        std::fs::write(root.join("src/a.rs"), "// a").unwrap();
+        std::fs::write(root.join("src/b.rs"), "// b").unwrap();
+        git_ok(root, &["init", "-q", "-b", "main", "."]);
+        git_ok(root, &["config", "user.email", "a@b.c"]);
+        git_ok(root, &["config", "user.name", "t"]);
+        git_ok(root, &["add", "f.txt"]);
+        git_ok(root, &["commit", "-qm", "init"]);
+    }
+
+    fn commit_paths(root: &Path, paths: &[&str], message: &str) {
+        let mut args = vec!["add"];
+        args.extend_from_slice(paths);
+        git_ok(root, &args);
+        git_ok(root, &["commit", "-qm", message]);
+    }
+
+    fn a_payload() -> Value {
+        json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "src/a.rs"}]
+        })
+    }
+
+    #[test]
+    fn claimed_file_in_trailer_commit_passes_with_commit_diff_checked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        commit_paths(root, &["src/a.rs"], "Add a\n\ncell: c-1");
+        write_cell_fixture(root, "c-1", &make_capped_cell("c-1", &["Truth A"], &["src/a.rs"], None));
+        let updated = record_leader_check(root, "c-1", "ok", &a_payload(), None, false).unwrap();
+        assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("checked"));
+        assert_eq!(updated["status"], json!("capped"));
+    }
+
+    #[test]
+    fn claimed_file_absent_from_trailer_commit_is_refused_naming_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        commit_paths(root, &["src/a.rs"], "Add a\n\ncell: c-1");
+        commit_paths(root, &["src/b.rs"], "Add b under another cell\n\ncell: c-2");
+        write_cell_fixture(
+            root,
+            "c-1",
+            &make_capped_cell("c-1", &["Truth A"], &["src/a.rs", "src/b.rs"], None),
+        );
+
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &a_payload(), None, false));
+        assert!(msg.contains("files_changed names path(s) the cell's commit(s) never touched: src/b.rs."), "{msg}");
+        assert_eq!(read_cell_fixture(root, "c-1")["status"], json!("capped"));
+    }
+
+    #[test]
+    fn no_trailer_commit_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        commit_paths(root, &["src/a.rs"], "Add a, mentions c-1 only in prose");
+        write_cell_fixture(root, "c-1", &make_capped_cell("c-1", &["Truth A"], &["src/a.rs"], None));
+
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &a_payload(), None, false));
+        assert!(msg.contains("has no commit carrying the trailer \"cell: c-1\" in the last 50 commit(s)"), "{msg}");
+        assert!(msg.contains("files_changed cannot be verified against a real diff."), "{msg}");
+    }
+
+    #[test]
+    fn no_trailer_commit_with_commit_pending_passes_with_skip_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        let mut cell = make_capped_cell("c-1", &["Truth A"], &["src/a.rs"], None);
+        cell["trace"]["commit_pending"] = json!("committed by the leader later");
+        write_cell_fixture(root, "c-1", &cell);
+
+        let updated = record_leader_check(root, "c-1", "ok", &a_payload(), None, false).unwrap();
+        assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("skipped: commit_pending"));
+    }
+
+    #[test]
+    fn non_git_root_passes_with_git_unavailable_skip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/a.rs"), "// a").unwrap();
+        write_cell_fixture(root, "c-1", &make_capped_cell("c-1", &["Truth A"], &["src/a.rs"], None));
+
+        let updated = record_leader_check(root, "c-1", "ok", &a_payload(), None, false).unwrap();
+        assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("skipped: git unavailable"));
     }
 }
