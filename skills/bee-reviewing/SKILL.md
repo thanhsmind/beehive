@@ -155,6 +155,15 @@ write findings to `docs/history/<feature>/reports/residual-findings.md` —
 nothing evaporates. Close with `bee reviews record --kind decision`: that
 closes the review, not any feature; their already-closed state stays untouched.
 
+Then register every finding left open as a watch on the files it is
+about, from the reviewed tree: `bee triggers add --decision <review
+session id> --condition "re-check: <finding title>" --predicate
+path-changed:<anchor files, repo-relative, comma-separated>`. The
+finding goes due when a later commit touches those files. Handle a due
+finding here too: re-check it against the current code. Fixed →
+`bee triggers resolve`. Still open → resolve it and add it again, which
+takes a fresh anchor.
+
 ## Boundaries
 
 Review reports; it does not repair, decide, or close. Every excluded
