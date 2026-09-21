@@ -1,0 +1,85 @@
+{
+  "id": "tcp-1",
+  "feature": "trigger-cache-path",
+  "title": "Keep the prompt trigger cache in the ignored cache directory",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "73d0a444-7e45-4bf7-a94b-2163d65a36a2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per decision 73d0a444: move due_count_for_prompt's HEAD cache from <control>/.bee/triggers/.last-eval-head to <control>/.bee/cache/triggers-last-eval-head (create .bee/cache when missing). Update the path in due_count_for_prompt, in add_record's delete, in the module header comment and doc comment, and in the test due_count_for_prompt_evaluates_only_when_head_moves. Behaviour is otherwise unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee triggers",
+  "must_haves": {
+    "truths": [
+      "the prompt trigger HEAD cache is written under .bee/cache/, never under .bee/triggers/"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs",
+        "substantive": "new cache path in code, comments and test"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No other behaviour change"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "prompt trigger HEAD cache moved to .bee/cache/triggers-last-eval-head",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T22:33:43.788Z",
+    "behavior_change": false,
+    "verification_evidence": "17 triggers tests; due_count_for_prompt test seen red at the new path first",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee triggers",
+    "claimed_at": "2026-09-21T22:31:53.043Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "prompt trigger HEAD cache moved to .bee/cache/triggers-last-eval-head",
+      "commit": "HEAD",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee triggers — green:unit — 17 triggers tests; due_count_for_prompt test seen red at the new path first",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the prompt trigger HEAD cache is written under .bee/cache/, never under .bee/triggers/",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+          }
+        ],
+        "recorded_at": "2026-09-21T22:33:43.889Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
