@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "leader-check-door",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"leader-check-door\" started at phase \"planning\".",
+  "next_action": "Invoke bee-swarming: dispatch lcd-1, then lcd-2 and lcd-3 concurrently.",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: leader-check-door — the leader-check door is live on main",
+    "asked_at": "2026-09-21T03:02:24.875Z",
+    "session": "695ef661-d172-4f5a-b000-fd74bf610bff"
+  },
+  "created_at": "2026-09-21T02:02:21.977Z"
+}

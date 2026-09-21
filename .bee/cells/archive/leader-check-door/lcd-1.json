@@ -1,0 +1,142 @@
+{
+  "id": "lcd-1",
+  "feature": "leader-check-door",
+  "title": "Record a verified leader check on a capped cell",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "a38dc4bd-a94e-4ae5-91e8-2bfb0bf6a0b1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "docs/history/leader-check-door/CONTEXT.md"
+  ],
+  "action": "Create verbs/cells/leader_check.rs holding the whole obligation, the way dissent.rs holds its own (handler + record + debt + escape in one topic file — NOT handlers_meta.rs). Four parts. (1) const LEADER_CHECK_DOOR_INTRODUCED_AT: &str — today's date at 00:00:00.000Z, per D5. (2) run_leader_check(flags, use_json, t0): flags --id, --verdict (ok|gap), --file, --session-id, --force-ownership, --json — every one of those names is ALREADY in the 210-name registry vocabulary, so catalog.rs is NOT touched and PINNED_FLAG_COUNT is NOT bumped. Walk handlers_meta.rs:184-214's path: read_file_text + parse_json_js, assert_not_archived, guard_claim_ownership, merge_trace, write_cell. Payload schema leader-check/1: {schema, answers:[{requirement, artifact}]}. Refuse a bad schema, an unknown verdict, an uncapped cell, and an archived cell (name bee cells unarchive in the refusal). (3) D3a derivation, in order: must_haves.truths when non-empty; else one requirement per trace.files_changed entry; else exactly one free requirement. Refuse when answers do not cover every derived requirement, naming the misses. (4) D3 verification, the point of the whole feature: an artifact string that looks like a repo path (contains '/' and no whitespace) MUST exist on disk relative to the repo root, and at least one answer per cell MUST name a path present in that cell's trace.files_changed. Refuse, naming the offending artifact, otherwise. Append the entry {verdict, answers, recorded_at, recorded_by} to trace.leader_check (an array, append-only) — and per D8 NEVER touch cell status, not even on gap. Then: pub mod leader_check + re-exports in verbs/cells/mod.rs beside the dissent ones; the match arm \"leader-check\" => leader_check::run_leader_check(flags, use_json, t0) in verbs/cells/util.rs beside :88's judge-record arm; and the cells.leader-check entry in src/generated/registry_payload.json, hand-edited per decision 3358743e (no regen chain exists here).",
+  "must_haves": {
+    "truths": [
+      "An answer naming a path that is not on disk is refused",
+      "A payload whose answers name no path from the cell's trace.files_changed is refused",
+      "A cell with empty must_haves.truths still owes one answer per trace.files_changed entry",
+      "A gap verdict is appended and the cell status stays capped",
+      "An archived cell is refused with bee cells unarchive named first",
+      "The distinct flag-name count is still 210 and catalog.rs is untouched"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "substantive": "run_leader_check, feature_leader_check_debt, has_leader_check_deferral_decision, LEADER_CHECK_DOOR_INTRODUCED_AT"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "the cells.leader-check entry"
+      }
+    ],
+    "key_links": [
+      "verbs/cells/dissent.rs:83,309,507,536 is the file-per-obligation precedent this copies",
+      "verbs/cells/handlers_meta.rs:184-214 is the --file read + archive guard + ownership guard path",
+      "verbs/cells/util.rs:283-294 assert_not_archived is what refuses an archived cell"
+    ],
+    "prohibitions": [
+      "No edit to packages/bee-rs/crates/bee/src/catalog.rs",
+      "No status mutation on any verdict, including gap",
+      "No new flag name outside the existing 210-name vocabulary",
+      "No handler code in handlers_meta.rs"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee leader_check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "lcd-w1",
+    "outcome": "bee cells leader-check records a verified completeness check; the debt scan counts a capped cell unless its newest entry reads ok",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The worker returned a success summary without capping the cell; the leader capped it after running the completeness check. Named, not silent.",
+      "sync-ack: The workflow-state skill sync is lcd-4, a planned slice-2 cell (docs/history/leader-check-door/plan.md, 'Slice 2 — the doctrine sync'). Slicing it away from lcd-1 is deliberate: the doctrine text must describe the verb AND both doors, and lcd-2/lcd-3 have not landed yet, so a sync written now would document a half-built door. The close-time scribing door still holds the feature to it."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T02:33:16.632Z",
+    "behavior_change": false,
+    "verification_evidence": "10 leader_check + 12 registry_contracts + 9 registry_dispatch passed, 0 failed; the leader re-ran both itself after the worker returned without capping",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "695ef661-d172-4f5a-b000-fd74bf610bff",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee leader_check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch",
+    "claimed_at": "2026-09-21T02:23:15.772Z",
+    "sync_ack": "The workflow-state skill sync is lcd-4, a planned slice-2 cell (docs/history/leader-check-door/plan.md, 'Slice 2 — the doctrine sync'). Slicing it away from lcd-1 is deliberate: the doctrine text must describe the verb AND both doors, and lcd-2/lcd-3 have not landed yet, so a sync written now would document a half-built door. The close-time scribing door still holds the feature to it.",
+    "mistakes": [
+      {
+        "wrong": "The dispatched worker reported success for lcd-1 but never ran cells finish, so bee herding run printed 'worker reported success without capping it' and the cell sat claimed",
+        "better": "the leader had to cap it by hand. Better: the worker prompt's contract line about capping should be the LAST instruction it reads, not the sixth bullet, so the cap is the final act rather than one item among many."
+      }
+    ],
+    "report": {
+      "outcome": "bee cells leader-check records a verified completeness check on a capped cell, and feature_leader_check_debt counts a capped cell as debt unless its newest entry reads ok",
+      "commit": "e40bf6daa1d6595ba66da9bb4c5434e638dd14c6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee leader_check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_contracts --test registry_dispatch — green:unit — 10 leader_check + 12 registry_contracts + 9 registry_dispatch passed, 0 failed; the leader re-ran both itself after the worker returned without capping",
+      "deviations": [
+        "The worker returned a success summary without capping the cell; the leader capped it after running the completeness check. Named, not silent."
+      ],
+      "mistakes": [
+        "The dispatched worker reported success for lcd-1 but never ran cells finish, so bee herding run printed 'worker reported success without capping it' and the cell sat claimed — the leader had to cap it by hand. Better: the worker prompt's contract line about capping should be the LAST instruction it reads, not the sixth bullet, so the cap is the final act rather than one item among many."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 766 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An answer naming a path that is not on disk is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "A payload whose answers name no path from the cell's trace.files_changed is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "A cell with empty must_haves.truths still owes one answer per trace.files_changed entry",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "A gap verdict is appended and the cell status stays capped",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "An archived cell is refused with bee cells unarchive named first",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "The distinct flag-name count is still 210 and catalog.rs is untouched",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          }
+        ],
+        "recorded_at": "2026-09-21T03:01:43.005Z",
+        "recorded_by": "695ef661-d172-4f5a-b000-fd74bf610bff"
+      }
+    ]
+  }
+}
