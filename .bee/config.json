@@ -118,28 +118,23 @@
     },
     "claude": {
       "code": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "author or repair tests, red-first"
       },
       "docs": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "doc edits and parity sweeps"
       },
       "deploy": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
@@ -147,13 +142,11 @@
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -177,8 +170,7 @@
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "hat-facts-gaps": {
@@ -190,8 +182,7 @@
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
       },
       "hat-value": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
@@ -199,8 +190,7 @@
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
-        "kind": "herding",
-        "agent": "agy-flash",
+        "model": "opus",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     },
