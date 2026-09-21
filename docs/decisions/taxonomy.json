@@ -566,6 +566,7 @@
     "dispatch-cell-id-flag",
     "plan-hat-wave",
     "leader-check-door",
-    "leader-check"
+    "leader-check",
+    "finding-recheck"
   ]
 }
