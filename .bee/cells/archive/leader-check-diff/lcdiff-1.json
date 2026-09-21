@@ -1,0 +1,107 @@
+{
+  "id": "lcdiff-1",
+  "feature": "leader-check-diff",
+  "title": "Verify leader-check files against the cell's real commit diff",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "5e3f0baf-e0e4-4d15-9500-4ee44fad9a99"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per decision 5e3f0baf: make `bee cells leader-check` (record_leader_check in leader_check.rs) check the cell's trace.files_changed against the real git diff. (1) In leader_check.rs (NOT finish_support.rs — that file is held by another session's reservation; only READ it and reuse its pub(crate) COMMIT_TRAILER_WINDOW / cell_commit_trailer / commit_trailer_history_root), add `pub(crate) fn cell_commit_files(cwd: &Path, id: &str) -> Option<Vec<String>>`: scan the last COMMIT_TRAILER_WINDOW commits of cwd's HEAD (git log via crate::verbs::worktree::run_git, %H plus full %B body, NUL-separated like commit_trailer_present), pick every commit whose body has a line that trims to cell_commit_trailer(id), and return the union of their changed paths (git show --name-only --format= <hash>), each normalized with normalize_cell_path. Return None when git cannot run (non-zero exit / no repo); Some(vec![]) when no commit carries the trailer. (2) In record_leader_check, after the existing D3 checks and only when files_changed is non-empty: resolve the history root with commit_trailer_history_root(root, feature) (feature from the cell). None -> skip, entry field commit_diff = \"skipped: git unavailable\". Some(empty) -> if trace.commit_pending is a non-empty string, skip with commit_diff = \"skipped: commit_pending\"; else refuse: `recordLeaderCheck: cell \"<id>\" has no commit carrying the trailer \"cell: <id>\" in the last N commit(s) of <root> — files_changed cannot be verified against a real diff.` Some(paths) -> every normalized files_changed entry not in paths refuses: `recordLeaderCheck: cell \"<id>\" files_changed names path(s) the cell's commit(s) never touched: <list>.`; else commit_diff = \"checked\". (3) Write commit_diff onto each appended leader_check entry. Extra files in the diff that files_changed does not declare are NOT refused here. Keep the existing tests in leader_check.rs green (their tempdirs are not git repos, so they take the skip path). Add tests in leader_check.rs's tests module using a real git repo fixture (git init, config user, commits — copy the shape of commit_history_repo in cells/tests.rs): a claimed file present in the trailer commit passes with commit_diff checked; a claimed file absent from the trailer commit refuses naming it; no trailer commit refuses; no trailer commit plus trace.commit_pending passes with the skip value; a non-git root passes with the git-unavailable skip.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee leader_check",
+  "must_haves": {
+    "truths": [
+      "leader-check refuses when a files_changed path is absent from the cell's trailer commit diff, naming the path",
+      "leader-check refuses when no commit carries the cell trailer and trace.commit_pending is unset",
+      "leader-check records commit_diff on every entry: checked, skipped: commit_pending, or skipped: git unavailable"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "substantive": "cell_commit_files helper and the diff check wired into record_leader_check plus the five new tests, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "record_leader_check calls cell_commit_files with commit_trailer_history_root(root, feature)"
+    ],
+    "prohibitions": [
+      "No change to cell status on any path (D8)",
+      "No change to the existing refusal texts or to feature_leader_check_debt"
+    ]
+  },
+  "trace": {
+    "worker": "w-lcdiff-1",
+    "outcome": "leader-check verifies files_changed against the cell's trailer-commit diff and records commit_diff on each entry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+    ],
+    "deviations": [
+      "capped with --sync-ack instead of editing a bee-swarming skill — the SYNC_DOOR asked for a skill touch but the cell names only leader_check.rs and affects_skills is empty — hit an unforeseen obstacle",
+      "sync-ack: cell planned affects_skills []; skills/bee-swarming only names the leader-check verb, not its checks; any skill note is an orchestrator scope call outside this cell's files"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T08:04:13.209Z",
+    "behavior_change": false,
+    "verification_evidence": "filter covers leader_check.rs tests plus close and worktree-merge leader-check door tests (24 passed)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee leader_check",
+    "claimed_at": "2026-09-21T08:01:33.174Z",
+    "verified_at": null,
+    "baseline": null,
+    "escalation_reason": "code-role worker agy-flash (gemini-3.8-flash) hit its provider quota (resets in 42h); spawn_failed on first dispatch",
+    "sync_ack": "cell planned affects_skills []; skills/bee-swarming only names the leader-check verb, not its checks; any skill note is an orchestrator scope call outside this cell's files",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "cell_commit_files helper + diff check in record_leader_check (leader_check.rs); commit_diff on each entry; 5 new tests",
+      "commit": "74bdd7623a5a4f29d8851ead887865d909c631b2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee leader_check — green:unit — filter covers leader_check.rs tests plus close and worktree-merge leader-check door tests (24 passed)",
+      "deviations": [
+        "capped with --sync-ack instead of editing a bee-swarming skill — the SYNC_DOOR asked for a skill touch but the cell names only leader_check.rs and affects_skills is empty — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 182 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "leader-check refuses when a files_changed path is absent from the cell's trailer commit diff, naming the path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "leader-check refuses when no commit carries the cell trailer and trace.commit_pending is unset",
+            "artifact": "leader_check.rs record_leader_check step (c) + test no_trailer_commit_is_refused"
+          },
+          {
+            "requirement": "leader-check records commit_diff on every entry: checked, skipped: commit_pending, or skipped: git unavailable",
+            "artifact": "leader_check.rs entry.insert commit_diff + tests claimed_file_in_trailer_commit_passes_with_commit_diff_checked, no_trailer_commit_with_commit_pending_passes_with_skip_value, non_git_root_passes_with_git_unavailable_skip"
+          }
+        ],
+        "recorded_at": "2026-09-21T08:05:05.323Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

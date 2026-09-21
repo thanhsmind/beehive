@@ -1353,5 +1353,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-21T06:31:45.026Z"
+  },
+  "leader-check-diff": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-21T08:05:59.852Z"
   }
 }
