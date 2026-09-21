@@ -291,7 +291,8 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
     };
 
     // inject.mjs buildPromptReminder — fields + stableHash(sha1(JSON)).
-    let (reminder_text, reminder_hash) = build_prompt_reminder(&record);
+    let triggers_due = crate::verbs::triggers::due_count_for_prompt(&control_root);
+    let (reminder_text, reminder_hash) = build_prompt_reminder(&record, triggers_due);
     let inject_key = match &session_id {
         Some(sid) => format!("prompt:{sid}"),
         None => "prompt".to_string(),
@@ -905,8 +906,10 @@ fn first_open_gate(record: &StateRecord) -> Option<&'static str> {
         .find(|g| record.gates.get(*g) != Some(&Value::Bool(true)))
 }
 
-/// inject.mjs buildPromptReminder → (text, stableHash).
-fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
+/// inject.mjs buildPromptReminder → (text, stableHash). A non-zero
+/// `triggers_due` (predicate triggers only) adds one line and one hashed
+/// field; at zero the text and hash are the JS shape, byte for byte.
+fn build_prompt_reminder(record: &StateRecord, triggers_due: usize) -> (String, String) {
     let mode = nullish_or_null(Some(&record.mode));
     let next_action = nullish_or_null(Some(&record.next_action));
     let gate = first_open_gate(record);
@@ -919,6 +922,9 @@ fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
         "first_open_gate".into(),
         gate.map_or(Value::Null, |g| Value::String(g.to_string())),
     );
+    if triggers_due > 0 {
+        fields.insert("triggers_due".into(), Value::from(triggers_due as u64));
+    }
     let hash = sha1_hex(&jsjson::stringify(&Value::Object(fields)));
 
     let mut lines = vec![format!(
@@ -936,7 +942,10 @@ fn build_prompt_reminder(record: &StateRecord) -> (String, String) {
     if let Some(g) = gate {
         lines.push(format!("gate pending: {g}"));
     }
-    lines.truncate(3);
+    if triggers_due > 0 {
+        lines.push(format!("triggers due: {triggers_due} — bee triggers list --due"));
+    }
+    lines.truncate(4);
     (lines.join("\n"), hash)
 }
 
@@ -2052,7 +2061,7 @@ mod tests {
             r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":false,"review":false}}"#,
         );
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, hash) = build_prompt_reminder(&record);
+        let (text, hash) = build_prompt_reminder(&record, 0);
         assert_eq!(text, "bee: phase=swarming mode=standard\nnext: do x\ngate pending: execution");
         // stableHash = sha1(JSON.stringify({phase, mode, next_action, first_open_gate}))
         let expected = sha1_hex(
@@ -2067,8 +2076,73 @@ mod tests {
         bee_repo(tmp.path());
         // Missing state.json → defaultState(): idle, default next_action.
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, _) = build_prompt_reminder(&record);
+        let (text, _) = build_prompt_reminder(&record, 0);
         assert_eq!(text, "bee: phase=idle\nnext: No active bee work — awaiting a user request.");
+    }
+
+    fn trigger_file(root: &Path, id: &str, tier: &str, status: &str) {
+        let predicate = if tier == "predicate" { json!("path-missing:never-there.txt") } else { Value::Null };
+        let rec = json!({
+            "id": id, "decision": "deadbeef", "condition": "c", "tier": tier,
+            "predicate": predicate, "status": status,
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z", "outcome": null,
+        });
+        write(root, &format!(".bee/triggers/{id}.json"), &rec.to_string());
+    }
+
+    fn plan_for(root: &Path) -> Plan {
+        plan(root, &parse_payload(&json!({ "cwd": root.to_string_lossy() }).to_string()))
+            .ok()
+            .flatten()
+            .unwrap()
+    }
+
+    const IDLE_TEXT: &str = "bee: phase=idle\nnext: No active bee work — awaiting a user request.";
+
+    #[test]
+    fn a_due_predicate_trigger_adds_the_due_line_and_changes_the_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        trigger_file(tmp.path(), "t1", "predicate", "due");
+        let p = plan_for(tmp.path());
+        assert_eq!(p.reminder_text, format!("{IDLE_TEXT}\ntriggers due: 1 — bee triggers list --due"));
+        let record = read_state(tmp.path()).ok().unwrap();
+        assert_ne!(p.reminder_hash, build_prompt_reminder(&record, 0).1, "a changed N must re-inject");
+    }
+
+    #[test]
+    fn the_due_line_survives_a_full_three_line_reminder() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true}}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, _) = build_prompt_reminder(&record, 2);
+        assert_eq!(text.lines().count(), 4);
+        assert_eq!(text.lines().last(), Some("triggers due: 2 — bee triggers list --due"));
+    }
+
+    #[test]
+    fn a_manual_waiting_trigger_adds_no_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        trigger_file(tmp.path(), "t1", "manual", "waiting");
+        assert_eq!(plan_for(tmp.path()).reminder_text, IDLE_TEXT);
+    }
+
+    #[test]
+    fn no_trigger_store_keeps_text_and_hash_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        let p = plan_for(tmp.path());
+        assert_eq!(p.reminder_text, IDLE_TEXT);
+        let expected = sha1_hex(
+            r#"{"phase":"idle","mode":null,"next_action":"No active bee work — awaiting a user request.","first_open_gate":null}"#,
+        );
+        assert_eq!(p.reminder_hash, expected);
     }
 
     #[test]
