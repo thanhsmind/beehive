@@ -1358,5 +1358,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-21T08:05:59.852Z"
+  },
+  "finding-recheck-trigger": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-09-21T22:30:58.524Z"
   }
 }

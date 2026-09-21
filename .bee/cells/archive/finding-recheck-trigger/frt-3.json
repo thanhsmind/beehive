@@ -1,0 +1,117 @@
+{
+  "id": "frt-3",
+  "feature": "finding-recheck-trigger",
+  "title": "Tell reviewers to register open findings as path-changed triggers",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "frt-1"
+  ],
+  "decisions": [
+    "4c024330-023c-4643-aed2-a03801e0a6cb"
+  ],
+  "files": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "affects_specs": [],
+  "action": "Per decision 4c024330 (D3 rev 2). (1) skills/bee-reviewing/SKILL.md, section Finish (the paragraph at :152-156 that sends P2/P3 to the backlog and closes with `bee reviews record --kind decision`): add, AFTER that record step, that every finding left open is ALSO registered as a watch on the files it is about — `bee triggers add --decision <the review session id> --condition \"re-check: <finding title>\" --predicate path-changed:<repo-relative anchor files, comma-separated>` — run from the reviewed tree, so the finding goes due when a later commit touches those files. Add the handling of a due finding in the same place: re-check it against the current code; fixed → `bee triggers resolve`; still open → resolve it and add it again, which takes a fresh anchor. (2) skills/bee-hive/references/routing-and-contracts.md: next to the leader completeness check section, add ONE pointer line: before recommending the next open finding, read `bee triggers list --due` and follow bee-reviewing's Finish rule for each due one. One fact, one home: the rule lives in bee-reviewing; routing-and-contracts only points; AGENTS.md is NOT edited. Write through the bee-technical-writing standard. Then run the regen chain `bee dev regen` and commit the rendered mirrors and docs/history/codex-harness-hardening/release-manifest.json with the edit.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test rule_index_parity && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee-reviewing's Finish step tells the reviewer to register each open finding with a path-changed trigger on its anchor files, after bee reviews record, using the review session id",
+      "bee-reviewing says a due finding that is still open is resolved and added again with a fresh anchor",
+      "routing-and-contracts points the leader at bee triggers list --due before recommending an open finding"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-reviewing/SKILL.md",
+        "substantive": "the registration sentence in Finish"
+      },
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "one pointer line"
+      }
+    ],
+    "key_links": [
+      "the rendered skill mirrors carry both edits after bee dev regen"
+    ],
+    "prohibitions": [
+      "No AGENTS.md edit",
+      "No second copy of the rule"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-frt-3",
+    "outcome": "bee-reviewing Finish registers open findings as path-changed triggers; routing-and-contracts points at triggers list --due",
+    "files_changed": [
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "left .bee/onboarding.json (regen agents_sync delta from the earlier opus role commit) uncommitted — it is outside the cell files and unrelated to this edit — something else had to be fixed first",
+      "committed the rendered mirrors under the five rendered skill trees — the action requires them though the files list names only sources — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-21T15:19:41.886Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only skill edit; pointer/rule-index parity (10+3 passed) and manifest check (376 files match)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test rule_index_parity && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-09-21T15:16:29.603Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee-reviewing Finish registers each open finding as a path-changed trigger (after bee reviews record, review session id) and handles due ones (fixed: resolve; still open: resolve + re-add for a fresh anchor); routing-and-contracts Leader completeness check gains one Due findings first pointer to bee triggers list --due; mirrors + release manifest regenerated",
+      "commit": "a4d8be1da",
+      "files": [
+        "skills/bee-reviewing/SKILL.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pointer_integrity --test rule_index_parity && .bee/bin/bee dev release-manifest --check — green:static — docs-only skill edit; pointer/rule-index parity (10+3 passed) and manifest check (376 files match)",
+      "deviations": [
+        "left .bee/onboarding.json (regen agents_sync delta from the earlier opus role commit) uncommitted — it is outside the cell files and unrelated to this edit — something else had to be fixed first",
+        "committed the rendered mirrors under the five rendered skill trees — the action requires them though the files list names only sources — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee-reviewing's Finish step tells the reviewer to register each open finding with a path-changed trigger on its anchor files, after bee reviews record, using the review session id",
+            "artifact": "skills/bee-reviewing/SKILL.md"
+          },
+          {
+            "requirement": "bee-reviewing says a due finding that is still open is resolved and added again with a fresh anchor",
+            "artifact": "skills/bee-reviewing/SKILL.md Finish paragraph: Still open -> resolve it and add it again"
+          },
+          {
+            "requirement": "routing-and-contracts points the leader at bee triggers list --due before recommending an open finding",
+            "artifact": "skills/bee-hive/references/routing-and-contracts.md"
+          }
+        ],
+        "recorded_at": "2026-09-21T15:21:11.212Z",
+        "recorded_by": "51beeb2f-06ab-4324-a9ef-cb11453519ab",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"finding-recheck-trigger\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 92820ff; reload the product and test \"finding-recheck-trigger\", then either approve uat (\"bee gate --name uat --approved true --lane finding-recheck-trigger\") or fix it in the worktree and merge again.",
+  "next_action": "Continue bee-exploring for \"finding-recheck-trigger\" (lane).",
   "created_at": "2026-09-21T14:58:13.173Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: finding-recheck-trigger",
-    "asked_at": "2026-09-21T15:21:19.449Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
