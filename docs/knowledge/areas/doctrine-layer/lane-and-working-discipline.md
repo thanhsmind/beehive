@@ -214,7 +214,9 @@ govern the working residue of a cell rather than its content.
   exactly three values, and a bare `green` is refused by name (D1):
 
   - `green:live` — the real product or command was driven and its observable
-    result inspected.
+    result inspected. The scope reason must name an evidence locator — a run
+    URL, an absolute path, or a path containing `evidence/` — checked on the
+    write path only (live-proof-evidence D1, decision `d56826ef`, 2026-09-22).
   - `green:unit` — automated tests passed.
   - `green:static` — it compiled, type-checked, linted, or a parity/pointer
     check passed; nothing was executed. Deliberately the weakest and

@@ -194,8 +194,9 @@ included: add guidance beside those words, never over them.
    (`references/swarming-reference.md`, "Result Formats"). Its `tests`
    proof line is yours to pick (code → related tests green; docs →
    parity/pointer checks; behavior → judge verdict; user-facing surface →
-   drive its mapped feature and inspect the result, evidence attached,
-   `green:live`), run and record — a `red` result refuses the cap. For
+   drive its mapped feature and inspect the result, the evidence locator
+   named in the scope reason, `green:live`), run and record — a `red`
+   result refuses the cap. For
    `green:live` on a `behavior_change` cell, the scope reason names the
    before-state you saw on main. `bee close` and `bee worktree merge`
    check that recorded proof at the boundary; they run nothing
