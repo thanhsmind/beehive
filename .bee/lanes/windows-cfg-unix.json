@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0",
+  "feature": "windows-cfg-unix",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"windows-cfg-unix\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"windows-cfg-unix\" (lane).",
+  "created_at": "2026-09-22T10:35:40.391Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-09-22T10:35:40.426Z",
+    "feature": "windows-cfg-unix"
+  },
+  "gate_preview": {
+    "feature": "windows-cfg-unix",
+    "plan_sha256": "e91f1a176fc1dd23cf359a99cb0018df7a7c1f5d0e48d1a87731453dc28b0aae",
+    "previewed_at": "2026-09-22T10:35:40.566Z",
+    "cells": [
+      {
+        "id": "wcu-1",
+        "feature": "windows-cfg-unix",
+        "title": "Gate the backlog fail-open test behind cfg(unix)",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "0f2e5d4e-e11f-42aa-ae01-b3689a2a2fe4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In close.rs, add #[cfg(unix)] on the line above #[test] for an_unwritable_backlog_warns_and_the_close_still_passes (line 5281), matching gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit at 4242 (per D1). Change nothing else.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee an_unwritable_backlog_warns",
+        "must_haves": {
+          "truths": [
+            "the test carries #[cfg(unix)] and still passes on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the test body",
+            "Do not touch any other test"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "windows-cfg-unix",
+    "plan_sha256": "e91f1a176fc1dd23cf359a99cb0018df7a7c1f5d0e48d1a87731453dc28b0aae",
+    "previewed_at": "2026-09-22T10:35:40.566Z",
+    "cells": [
+      {
+        "id": "wcu-1",
+        "feature": "windows-cfg-unix",
+        "title": "Gate the backlog fail-open test behind cfg(unix)",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "0f2e5d4e-e11f-42aa-ae01-b3689a2a2fe4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In close.rs, add #[cfg(unix)] on the line above #[test] for an_unwritable_backlog_warns_and_the_close_still_passes (line 5281), matching gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit at 4242 (per D1). Change nothing else.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee an_unwritable_backlog_warns",
+        "must_haves": {
+          "truths": [
+            "the test carries #[cfg(unix)] and still passes on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the test body",
+            "Do not touch any other test"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  }
+}
