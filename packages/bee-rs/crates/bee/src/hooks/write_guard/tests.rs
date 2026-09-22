@@ -1647,6 +1647,206 @@ use std::process::ExitCode;
         assert!(!e.stderr.contains("could not be canonically contained"), "{}", e.stderr);
     }
 
+    fn write_main_config(lx: &Linked, config: &Value) {
+        std::fs::write(
+            lx.main_root.join(".bee").join("config.json"),
+            format!("{}\n", serde_json::to_string_pretty(config).unwrap()),
+        )
+        .unwrap();
+    }
+
+    fn outward_deny(lx: &Linked, cmd: &str) -> Emit {
+        let e = expect_done(bash(cmd), &lx.work_root);
+        assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+        assert!(
+            e.stderr.contains("bee worker-outward guard denied"),
+            "expected the outward text for {cmd:?}: {}",
+            e.stderr
+        );
+        e
+    }
+
+    fn outward_allow(lx: &Linked, cmd: &str) {
+        let e = expect_done(bash(cmd), &lx.work_root);
+        assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_refuses_push_github_writes_and_agent_launches() {
+        let lx = build_linked(true);
+        for cmd in [
+            "git push origin main",
+            "git push --dry-run",
+            "git -C /tmp/x push",
+            "git status && git push",
+            "sh -c \"git push\"",
+            "echo git push",
+            "gh pr create --fill",
+            "gh pr merge 12",
+            "gh pr checkout 12",
+            "gh api -X POST repos/o/r/issues",
+            "gh api -XPOST repos/o/r/issues",
+            "gh api --method=POST repos/o/r/issues",
+            "gh api repos/o/r/issues -f title=x",
+            "gh api graphql -f query='mutation { x }'",
+            "gh api --input body.json repos/o/r",
+            "gh auth token",
+            "gh v",
+            "claude -p \"hi\"",
+            "codex exec x",
+            "pi --mode rpc",
+            "opencode run",
+            "npx claude -p x",
+            "npx -y claude -p x",
+            "env FOO=1 claude -p x",
+            "sudo claude",
+            "timeout 60 claude -p x",
+            "( gh pr create )",
+        ] {
+            outward_deny(&lx, cmd);
+        }
+
+        let push = outward_deny(&lx, "git push origin main");
+        assert!(push.stderr.contains("bee worktree merge --id fixture"), "{}", push.stderr);
+        assert!(push.stderr.contains("scripts/release.sh"), "{}", push.stderr);
+        assert!(push.stderr.contains("guards.worker_outward"), "{}", push.stderr);
+        assert!(
+            push.stderr.contains("MAIN checkout's .bee/config.json"),
+            "{}",
+            push.stderr
+        );
+
+        let write = outward_deny(&lx, "gh pr create --fill");
+        assert!(write.stderr.contains("`gh pr create`"), "{}", write.stderr);
+        assert!(write.stderr.contains("Reads still run here"), "{}", write.stderr);
+        assert!(write.stderr.contains("bee worktree merge --id fixture"), "{}", write.stderr);
+        assert!(write.stderr.contains("guards.worker_outward"), "{}", write.stderr);
+
+        let launch = outward_deny(&lx, "claude -p \"hi\"");
+        assert!(launch.stderr.contains("bee dispatch prepare"), "{}", launch.stderr);
+        assert!(launch.stderr.contains("fixture"), "{}", launch.stderr);
+        assert!(launch.stderr.contains("guards.worker_outward"), "{}", launch.stderr);
+    }
+
+    #[test]
+    fn worker_outward_judges_a_codex_exec_payload_like_a_bash_one() {
+        let lx = build_linked(true);
+        let e = expect_done(
+            json!({"tool_name":"exec","tool_input":{"cmd":"git push"}}),
+            &lx.work_root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worker-outward guard denied"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_allows_reads_the_dispatch_door_and_ordinary_work() {
+        let lx = build_linked(true);
+        for cmd in [
+            "gh pr view 12",
+            "gh -R o/r pr list",
+            "gh pr list --search \"x\"",
+            "gh run list",
+            "gh run download 5",
+            "gh workflow view ci.yml",
+            "gh search prs x",
+            "gh api repos/o/r",
+            "gh api -X GET search/issues -f q=x",
+            "gh api --method GET search/issues -F q=x",
+            "gh api graphql -f query='query { x }'",
+            "gh auth status",
+            "bee dispatch prepare --runtime claude --kind cell --json",
+            "bee herding run --role x",
+            "bash scripts/release.sh 1.0.0",
+            "git status",
+            "pip install x",
+            "python pi.py",
+            "echo gh pr create",
+            "cat <<EOF\ngit push\nEOF",
+            "codex exec --sandbox read-only --ephemeral --cd /x -",
+            "codex exec -s read-only -",
+        ] {
+            outward_allow(&lx, cmd);
+        }
+    }
+
+    #[test]
+    fn worker_outward_allows_a_configured_cli_command_prefix() {
+        let lx = build_linked(true);
+        outward_deny(&lx, "opencode run --quiet extra args");
+        write_main_config(
+            &lx,
+            &json!({"models":{"claude":{"cli-x":{"kind":"cli","command":"opencode run --quiet"}}}}),
+        );
+        outward_allow(&lx, "opencode run --quiet extra args");
+        outward_deny(&lx, "opencode run --loud extra args");
+    }
+
+    #[test]
+    fn worker_outward_opt_out_is_read_from_the_main_checkout_only() {
+        let lx = build_linked(true);
+        write_main_config(&lx, &json!({"guards":{"worker_outward":false}}));
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            outward_allow(&lx, cmd);
+        }
+
+        let wt = build_linked(true);
+        std::fs::create_dir_all(wt.work_root.join(".bee")).unwrap();
+        std::fs::write(
+            wt.work_root.join(".bee").join("config.json"),
+            "{\"guards\":{\"worker_outward\":false}}\n",
+        )
+        .unwrap();
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            outward_deny(&wt, cmd);
+        }
+    }
+
+    #[test]
+    fn worker_outward_scans_an_opaque_wrapper_instead_of_allowing_it() {
+        let lx = build_linked(true);
+        outward_deny(&lx, &wrap_bash_c(5, "git push"));
+        outward_deny(&lx, &wrap_bash_c(5, "gh pr create"));
+        outward_deny(&lx, &wrap_bash_c(5, "claude -p x"));
+        expect_delegate(bash(&wrap_bash_c(5, "ls")), &lx.work_root);
+    }
+
+    #[test]
+    fn worker_outward_leaves_the_main_checkout_byte_identical() {
+        let fx = build_fixture("swarming", true);
+        for cmd in ["git push origin main", "gh pr create --fill", "claude -p x"] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+            assert_eq!(e.stderr, "", "{cmd}");
+        }
+        let idle = build_git_fixture("idle");
+        let push = expect_done(bash("git push origin main"), &idle.root);
+        assert_eq!(push.code, 2, "{}", push.stderr);
+        assert!(push.stderr.contains("never exempted"), "{}", push.stderr);
+    }
+
+    #[test]
+    fn worker_outward_text_precedes_the_idle_intake_text() {
+        let lx = build_linked(true);
+        write_state(
+            &lx.main_root,
+            &json!({
+                "phase": "idle", "mode": "high-risk", "feature": "worktree-isolation",
+                "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+            }),
+        );
+        let e = outward_deny(&lx, "git push origin main");
+        assert!(!e.stderr.contains("bee intake gate"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worker_outward_keeps_the_linked_invalid_text() {
+        let lx = build_linked(false);
+        let e = expect_done(bash("git push origin main"), &lx.work_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("WORKTREE_LINK_INVALID"), "{}", e.stderr);
+    }
+
     // ── worktree-first (docs/specs/worktree-first.md §2) ───────────────────
 
     struct Wtf {

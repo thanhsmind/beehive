@@ -709,16 +709,28 @@ pub(crate) fn check_git_bash_command(
     cwd: &str,
     session_id: Option<&str>,
     control_root_override: Option<&str>,
+    worktree_resolution: &str,
     emit: &mut Emit,
 ) -> R<Option<WV>> {
     let fenced = fence_heredocs(command);
     let deep = tokenize_deep(&fenced);
+    let invocations = find_git_invocations(&deep.tokens);
+    if let Some(verdict) = outward_arm(
+        root,
+        cwd,
+        control_root_override,
+        worktree_resolution,
+        &deep,
+        &invocations,
+        emit,
+    )? {
+        return Ok(Some(verdict));
+    }
     if deep.truncated {
         // A wrapper nested past the depth bound could hide a git verb this
         // scan cannot see — fail open (delegate) rather than silently allow.
         return Err(Nd);
     }
-    let invocations = find_git_invocations(&deep.tokens);
     if invocations.is_empty() {
         // This guard judges git invocations and nothing else. Resolving the
         // acting record first made a lane-resolution failure deny EVERY Bash
@@ -958,6 +970,284 @@ writers (\"bee staging add\", \"bee staging rebuild\"), never a hand-run commit.
 branch, then \"bee staging add --feature <slug>\" to re-merge it into staging.",
         record.worktree_root.display()
     )))
+}
+
+const OUTWARD_AGENTS: [&str; 4] = ["claude", "codex", "pi", "opencode"];
+
+const GH_READ_ONLY_LIST: &str = "pr view|list|status|checks|diff, run list|view|watch|download, \
+issue view|list, release view|list|download, repo view, workflow list|view, search <any>, \
+cache list, label list, status, auth status, api with an explicit GET, and api graphql with no mutation";
+
+#[allow(clippy::too_many_arguments)]
+fn outward_arm(
+    root: &str,
+    cwd: &str,
+    control_root_override: Option<&str>,
+    worktree_resolution: &str,
+    deep: &DeepTokens,
+    invocations: &[GitInvocation],
+    emit: &mut Emit,
+) -> R<Option<WV>> {
+    if worktree_resolution != "linked-valid" {
+        return Ok(None);
+    }
+    let mut config: Option<Map<String, Value>> = None;
+    if deep.truncated {
+        let words: Vec<String> = deep
+            .tokens
+            .iter()
+            .flat_map(|t| t.split_whitespace().map(str::to_string))
+            .collect();
+        let pushed = find_git_invocations(&words)
+            .iter()
+            .any(|i| i.subcommand.as_deref() == Some("push"));
+        let launched = words
+            .iter()
+            .map(|t| command_basename(t))
+            .find(|b| b == "gh" || OUTWARD_AGENTS.contains(&b.as_str()));
+        let (form, blocked) = match (pushed, launched) {
+            (true, _) => (OutwardForm::Push, "`git push`".to_string()),
+            (false, Some(head)) if head == "gh" => (OutwardForm::Gh, "`gh`".to_string()),
+            (false, Some(head)) => (OutwardForm::Launch, format!("`{head}`")),
+            (false, None) => {
+                push_gap(
+                    emit,
+                    Path::new(root),
+                    "worker-outward-opaque-wrapper",
+                    "a wrapper nested past the depth bound hid its payload from the worker-outward scan".to_string(),
+                );
+                return Ok(None);
+            }
+        };
+        if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        return Ok(Some(WV::Deny(outward_refusal(form, &blocked, cwd))));
+    }
+
+    if invocations.iter().any(|i| i.subcommand.as_deref() == Some("push")) {
+        if !outward_guard_on(&mut config, root, control_root_override)? {
+            return Ok(None);
+        }
+        return Ok(Some(WV::Deny(outward_refusal(OutwardForm::Push, "`git push`", cwd))));
+    }
+
+    for segment in deep.tokens.split(|t| is_separator(t)) {
+        let Some((head_index, head)) = outward_segment_head(segment) else {
+            continue;
+        };
+        let rest = &segment[head_index + 1..];
+        if head == "gh" {
+            let (sub, args) = gh_sub_and_args(rest);
+            if gh_read_only_form(sub, args) {
+                continue;
+            }
+            if !outward_guard_on(&mut config, root, control_root_override)? {
+                return Ok(None);
+            }
+            let verb = args.iter().find(|t| !t.starts_with('-'));
+            let blocked = match verb {
+                Some(v) => format!("`gh {sub} {v}`"),
+                None => format!("`gh {sub}`"),
+            };
+            return Ok(Some(WV::Deny(outward_refusal(OutwardForm::Gh, &blocked, cwd))));
+        }
+        if OUTWARD_AGENTS.contains(&head.as_str()) {
+            if codex_read_only_exec(&head, rest) {
+                continue;
+            }
+            if !outward_guard_on(&mut config, root, control_root_override)? {
+                return Ok(None);
+            }
+            let configured = config
+                .as_ref()
+                .is_some_and(|c| configured_cli_command(c, &segment[head_index..]));
+            if configured {
+                continue;
+            }
+            return Ok(Some(WV::Deny(outward_refusal(
+                OutwardForm::Launch,
+                &format!("`{head}`"),
+                cwd,
+            ))));
+        }
+    }
+    Ok(None)
+}
+
+fn outward_guard_on(
+    slot: &mut Option<Map<String, Value>>,
+    root: &str,
+    control_root_override: Option<&str>,
+) -> R<bool> {
+    if slot.is_none() {
+        let topo = resolve_write_topology(root, control_root_override)?;
+        let config = read_config(Path::new(&topo.control_root))?;
+        if matches!(
+            config.get("guards"),
+            Some(g) if truthy(g) && g.get("worker_outward") == Some(&Value::Bool(false))
+        ) {
+            return Ok(false);
+        }
+        *slot = Some(config);
+    }
+    Ok(true)
+}
+
+fn outward_refusal(form: OutwardForm, blocked: &str, cwd: &str) -> String {
+    let id = derive_current_worktree(cwd).ok().flatten().map(|(_, id)| id);
+    let named = id.as_deref().unwrap_or("<worktree-id>");
+    let head = match form {
+        OutwardForm::Push => format!(
+            "bee worker-outward guard denied this shell command: {blocked} is outward-facing and is \
+never exempted inside a linked worktree, regardless of what it would push."
+        ),
+        OutwardForm::Gh => format!(
+            "bee worker-outward guard denied this shell command: {blocked} writes to GitHub or moves \
+the checkout, and a linked worktree never does either. Reads still run here: {GH_READ_ONLY_LIST}."
+        ),
+        OutwardForm::Launch => format!(
+            "bee worker-outward guard denied this shell command: {blocked} starts another agent, and \
+a worker inside the linked worktree \"{named}\" runs exactly the one cell it was handed — starting \
+helpers is the leader's."
+        ),
+    };
+    format!("{head} {}", outward_fix_line(form, id.as_deref()))
+}
+
+fn command_basename(token: &str) -> String {
+    token.replace('\\', "/").rsplit('/').next().unwrap_or("").to_string()
+}
+
+fn outward_segment_head(segment: &[String]) -> Option<(usize, String)> {
+    let mut i = 0usize;
+    while i < segment.len() {
+        let token = segment[i].as_str();
+        if token == "timeout" {
+            let numeric = segment.get(i + 1).is_some_and(|n| {
+                !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == '.')
+            });
+            i += if numeric { 2 } else { 1 };
+            continue;
+        }
+        let skipped = matches!(
+            token,
+            "env" | "npx" | "bunx" | "sudo" | "nohup" | "command" | "exec" | "(" | "{" | "!"
+        ) || token.starts_with('-')
+            || is_env_assignment(token);
+        if skipped {
+            i += 1;
+            continue;
+        }
+        return Some((i, command_basename(token)));
+    }
+    None
+}
+
+fn is_env_assignment(token: &str) -> bool {
+    let Some(eq) = token.find('=') else {
+        return false;
+    };
+    let name = &token[..eq];
+    let mut chars = name.chars();
+    let head = chars.next();
+    head.is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
+    head == "codex"
+        && rest.first().map(String::as_str) == Some("exec")
+        && rest
+            .windows(2)
+            .any(|w| (w[0] == "--sandbox" || w[0] == "-s") && w[1] == "read-only")
+}
+
+fn configured_cli_command(config: &Map<String, Value>, segment: &[String]) -> bool {
+    let line = segment.join(" ");
+    let Some(Value::Object(models)) = config.get("team").or_else(|| config.get("models")) else {
+        return false;
+    };
+    models
+        .values()
+        .filter_map(Value::as_object)
+        .flat_map(|runtime| runtime.values())
+        .any(|slot| {
+            slot.get("kind").and_then(Value::as_str) == Some("cli")
+                && slot
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| !c.is_empty() && line.starts_with(c))
+        })
+}
+
+fn gh_sub_and_args(rest: &[String]) -> (&str, &[String]) {
+    let mut i = 0usize;
+    while i < rest.len() {
+        let token = rest[i].as_str();
+        if matches!(token, "-R" | "--repo" | "--hostname") {
+            i += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return (token, &rest[i + 1..]);
+    }
+    ("", &rest[rest.len()..])
+}
+
+fn gh_read_only_form(sub: &str, rest: &[String]) -> bool {
+    let verb = rest.iter().find(|t| !t.starts_with('-')).map(String::as_str);
+    match sub {
+        "pr" => matches!(verb, Some("view" | "list" | "status" | "checks" | "diff")),
+        "run" => matches!(verb, Some("list" | "view" | "watch" | "download")),
+        "issue" => matches!(verb, Some("view" | "list")),
+        "release" => matches!(verb, Some("view" | "list" | "download")),
+        "repo" => verb == Some("view"),
+        "workflow" => matches!(verb, Some("list" | "view")),
+        "cache" => verb == Some("list"),
+        "label" => verb == Some("list"),
+        "auth" => verb == Some("status"),
+        "search" | "status" => true,
+        "api" => gh_api_read_only_form(verb, rest),
+        _ => false,
+    }
+}
+
+fn gh_api_read_only_form(target: Option<&str>, rest: &[String]) -> bool {
+    if rest.iter().any(|t| t == "--input" || t.starts_with("--input=")) {
+        return false;
+    }
+    if target == Some("graphql") {
+        return !rest.iter().any(|t| t.contains("mutation"));
+    }
+    match gh_api_method(rest) {
+        Some(method) => method.eq_ignore_ascii_case("get"),
+        None => !rest.iter().any(|t| {
+            matches!(t.as_str(), "-f" | "-F" | "--field" | "--raw-field")
+                || t.starts_with("--field=")
+                || t.starts_with("--raw-field=")
+        }),
+    }
+}
+
+fn gh_api_method(rest: &[String]) -> Option<&str> {
+    for (i, token) in rest.iter().enumerate() {
+        if token == "-X" || token == "--method" {
+            return rest.get(i + 1).map(String::as_str);
+        }
+        if let Some(glued) = token.strip_prefix("-X") {
+            if !glued.is_empty() {
+                return Some(glued);
+            }
+        }
+        if let Some(joined) = token.strip_prefix("--method=") {
+            return Some(joined);
+        }
+    }
+    None
 }
 
 /// Idle-gate safe-form table: per-verb predicates that admit a read-only
