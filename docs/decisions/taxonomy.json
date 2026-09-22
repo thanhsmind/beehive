@@ -597,6 +597,8 @@
     "ci-green-fixes",
     "contract:pi-harness-steps",
     "contract:live-proof-locator",
-    "live-proof-evidence"
+    "live-proof-evidence",
+    "contract:worker-outward-guard",
+    "contract:skill-trigger-cases"
   ]
 }
