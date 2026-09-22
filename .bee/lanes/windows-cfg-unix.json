@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-cfg-unix",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"windows-cfg-unix\" started at phase \"exploring\" (lane).",
-  "next_action": "Run cell wcu-1 inline",
+  "next_action": "bee close finished \"windows-cfg-unix\" — feature is closed.",
   "created_at": "2026-09-22T10:35:40.391Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Đang chờ test Linux của cell sửa Windows chạy xong (build release mất vài phút). Sau đó commit, cap, đóng lane, push và xem CI Windows.",
-    "asked_at": "2026-09-22T10:36:35.554Z",
-    "session": "aff5297e-0798-4b11-88d0-789832ebce95"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "tiny",

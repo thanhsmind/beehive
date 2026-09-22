@@ -590,6 +590,8 @@
     "record-correction",
     "ncc-2",
     "rehomed-why",
-    "leader-check-deferral"
+    "leader-check-deferral",
+    "windows-cfg-unix",
+    "fix-first"
   ]
 }
