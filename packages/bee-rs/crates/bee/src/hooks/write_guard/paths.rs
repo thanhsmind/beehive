@@ -535,6 +535,38 @@ set guards.idle_gate to false in .bee/config.json (plain JSON; delete the key to
     )
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum OutwardForm {
+    Push,
+    Gh,
+    Launch,
+}
+
+pub(crate) fn outward_fix_line(form: OutwardForm, worktree_id: Option<&str>) -> String {
+    let id = worktree_id.unwrap_or("<worktree-id>");
+    let remedy = match form {
+        OutwardForm::Push => format!(
+            "FIX: if you are executing a cell, stop here and report the push as blocked — your leader \
+lands the work. To land it yourself, run `bee worktree merge --id {id}` from the MAIN checkout; a \
+release goes through `scripts/release.sh <version>` from main."
+        ),
+        OutwardForm::Gh => format!(
+            "FIX: open the pull request or make the GitHub write from the MAIN checkout, or land the \
+branch with `bee worktree merge --id {id}` from main; releases and their GitHub writes go through \
+`scripts/release.sh` from main."
+        ),
+        OutwardForm::Launch => "FIX: run `bee dispatch prepare --runtime <rt> --kind \
+cell|gather|reviewer|advisor --json` and then run exactly the tool and payload it returns; `bee` \
+itself is never judged by this guard."
+            .to_string(),
+    };
+    format!(
+        "{remedy} Last resort, repo-level opt-out: set guards.worker_outward to false in the MAIN \
+checkout's .bee/config.json (plain JSON; delete the key to re-enable) — the copy inside this \
+worktree is not read."
+    )
+}
+
 /// sfg-1 / slp-followup-gaps D2. The intake FIX line tells the caller to
 /// route the request through the workflow. For a session that is bound to no
 /// lane, that is the wrong remedy: the work IS routed — this session just is

@@ -842,6 +842,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     &cwd,
                     session_id.as_deref(),
                     control_root_s.as_deref(),
+                    ctx.worktree_resolution,
                     &mut emit,
                 )? {
                     denial = Some(reason);
