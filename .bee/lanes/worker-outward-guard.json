@@ -5,21 +5,16 @@
   "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": true,
+    "shape": false,
     "execution": true,
     "review": false,
     "uat": false
   },
   "summary": "Feature \"worker-outward-guard\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at a05e1b0; reload the product and test \"worker-outward-guard\", then either approve uat (\"bee gate --name uat --approved true --lane worker-outward-guard\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-09-22T15:59:01.304Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: worker-outward-guard",
-    "asked_at": "2026-09-22T23:45:02.200Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -42,7 +37,7 @@
   "gate_preview": {
     "feature": "worker-outward-guard",
     "plan_sha256": "de80890cf4ffcd009b5f62ee081e613f107b42ae8ce8a0c245af8d100a0d6266",
-    "previewed_at": "2026-09-22T16:32:47.978Z",
+    "previewed_at": "2026-09-22T23:47:31.863Z",
     "cells": [
       {
         "id": "wog-1",
