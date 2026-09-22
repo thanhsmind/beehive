@@ -1,0 +1,113 @@
+{
+  "id": "rel450-1",
+  "feature": "release-2-45-0",
+  "title": "Publish release 2.45.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-45-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.45.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.45.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.45.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.45.0",
+      "tag v2.45.0 exists locally and on the remote",
+      "the GitHub release for v2.45.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.45.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.45.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Published bee 2.45.0 through scripts/release.sh; the script printed its final OK line",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The deploy role's dispatch on the claude runtime is a read-only gather payload that cannot run the script; the leader ran scripts/release.sh itself with BEE_DISPATCH_ID=c94240a4-8099-4db2-b79d-c8124aadd019 exported, as release-2-44-0 did"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T10:34:32.431Z",
+    "behavior_change": false,
+    "verification_evidence": "the script ran the full declared suite before tagging, tag v2.45.0 pushed, release-binaries run 35716171894 green, five binaries plus SHA256SUMS verified, manifest check exit 0; log at scratchpad/release-2.45.0.log",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "bash scripts/release.sh 2.45.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-09-22T10:34:01.959Z",
+    "no_mistakes": true,
+    "commit_pending": "the release commit d98e53e5 is authored by scripts/release.sh and carries no cell trailer",
+    "report": {
+      "outcome": "Published bee 2.45.0: both manifests bumped, full suite green inside the script, tag v2.45.0 pushed, release-binaries green, five binaries plus SHA256SUMS verified, final OK line printed",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.45.0 && bee dev release-manifest --check — green:live — the script ran the full declared suite before tagging, tag v2.45.0 pushed, release-binaries run 35716171894 green, five binaries plus SHA256SUMS verified, manifest check exit 0; log at scratchpad/release-2.45.0.log",
+      "deviations": [
+        "The deploy role's dispatch on the claude runtime is a read-only gather payload that cannot run the script; the leader ran scripts/release.sh itself with BEE_DISPATCH_ID=c94240a4-8099-4db2-b79d-c8124aadd019 exported, as release-2-44-0 did"
+      ],
+      "commit": "d98e53e5"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.45.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.45.0 exists locally and on the remote",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "the GitHub release for v2.45.0 carries the binaries and SHA256SUMS",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": "docs/history/release-2-45-0/plan.md"
+          }
+        ],
+        "recorded_at": "2026-09-22T10:34:32.491Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

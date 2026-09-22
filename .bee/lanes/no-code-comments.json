@@ -13,8 +13,13 @@
   "summary": "Feature \"no-code-comments\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"no-code-comments\" — feature is closed.",
   "created_at": "2026-09-22T06:45:55.548Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The user picked option 1: push main.",
+    "asked_at": "2026-09-22T10:24:01.854Z",
+    "session": "aff5297e-0798-4b11-88d0-789832ebce95"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
