@@ -9641,10 +9641,14 @@ mod tests {
         std::fs::write(&report_file, "# Deliverable\n").unwrap();
         std::fs::write(
             dir.join("result-1.json"),
-            format!(
-                r#"{{"status":"blocked","summary":"blocked","files_changed":[],"proof":"n/a","report_path":"{}"}}"#,
-                report_file.display()
-            ),
+            serde_json::json!({
+                "status": "blocked",
+                "summary": "blocked",
+                "files_changed": [],
+                "proof": "n/a",
+                "report_path": report_file.display().to_string()
+            })
+            .to_string(),
         )
         .unwrap();
         let fake = FakeHerdr::new();
