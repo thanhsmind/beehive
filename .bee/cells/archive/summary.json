@@ -1398,5 +1398,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-22T10:34:38.137Z"
+  },
+  "windows-cfg-unix": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-09-22T10:36:42.619Z"
   }
 }
