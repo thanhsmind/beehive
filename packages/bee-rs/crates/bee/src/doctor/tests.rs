@@ -961,3 +961,98 @@ fn pi_doctor_supports_configured_tmux_transport() {
     let transport_fail = rows_fail.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
     assert_eq!(transport_fail.1, Some(false), "tmux transport without tmux env must be not_ok");
 }
+
+// ═══ host-packaging-gaps D1/D5: Pi rows judge a host by what it has ════════
+
+#[cfg(unix)]
+fn write_onboarding(root: &Path, bee_version: &str) {
+    std::fs::write(
+        root.join(".bee/onboarding.json"),
+        format!("{{\"schema_version\": \"1.0\", \"bee_version\": \"{bee_version}\"}}\n"),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn freshness_of(root: &Path) -> (Option<bool>, String) {
+    let rows = pi_rows_of(root, &mock_herdr_env);
+    let (_, ok, detail) = rows.into_iter().find(|(k, _, _)| k == "binary_freshness").unwrap();
+    (ok, detail)
+}
+
+/// A host with no plugin manifest judges freshness against onboarding.json.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_matches_onboarding_record() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), None, None);
+    write_onboarding(&root, "0.1.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(true), "{detail}");
+}
+
+/// A host whose binary differs from onboarding.json names the record and the installer.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_mismatch_names_record_and_installer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), None, None);
+    write_onboarding(&root, "0.2.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(false), "{detail}");
+    assert!(detail.contains(".bee/onboarding.json"), "{detail}");
+    assert!(detail.contains("scripts/install.sh"), "{detail}");
+    assert!(!detail.contains("cargo"), "{detail}");
+}
+
+/// When both files exist in a host and disagree, onboarding.json wins.
+#[cfg(unix)]
+#[test]
+fn pi_host_freshness_onboarding_record_beats_plugin_manifest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(
+        root.join(".claude-plugin/plugin.json"),
+        "{\"name\": \"bee\", \"version\": \"9.9.9\"}\n",
+    )
+    .unwrap();
+    write_onboarding(&root, "0.1.0");
+    let (ok, detail) = freshness_of(&root);
+    assert_eq!(ok, Some(true), "{detail}");
+}
+
+#[cfg(unix)]
+const PI_TEAM_CONFIG: &str = r#"{
+  "team": {"pi": {
+    "code": {"kind": "herding", "agent": "pi-worker"},
+    "advisor": {"kind": "herding", "agent": "SLOT2"}
+  }},
+  "herding": {"agents": {"pi-worker": ["pi"], "claude-pane": ["claude"]}}
+}"#;
+
+/// Every team.pi slot is a no-pane Pi agent: no multiplexer is needed.
+#[cfg(unix)]
+#[test]
+fn pi_transport_ok_without_multiplexer_when_every_slot_is_no_pane_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = PI_TEAM_CONFIG.replace("SLOT2", "pi-worker");
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), Some(&cfg));
+    let rows = pi_rows_of(&root, &|_| None);
+    assert_eq!(rows.len(), 6);
+    for (key, ok, detail) in &rows {
+        assert_eq!(*ok, Some(true), "row {key} failed: {detail}");
+    }
+}
+
+/// One non-Pi team.pi slot keeps the HERDR/TMUX check.
+#[cfg(unix)]
+#[test]
+fn pi_transport_keeps_pane_check_when_a_slot_is_not_pi() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = PI_TEAM_CONFIG.replace("SLOT2", "claude-pane");
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), Some(&cfg));
+    let rows = pi_rows_of(&root, &|_| None);
+    let (_, ok, detail) = rows.iter().find(|(k, _, _)| k == "herding_transport").unwrap();
+    assert_eq!(*ok, Some(false), "{detail}");
+    assert!(detail.contains("HERDR_ENV is not set"), "{detail}");
+}

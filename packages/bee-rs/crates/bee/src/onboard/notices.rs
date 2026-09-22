@@ -151,6 +151,24 @@ pub fn detect_commands(root: &Path) -> Vec<Candidate> {
 
 // ── notices ────────────────────────────────────────────────────────────────
 
+/// host-packaging-gaps D2: name the two keys the one-time `add_pi_team` item
+/// adds to an existing `.bee/config.json` (planned or applied — `items` is
+/// whichever list this run reports).
+pub fn pi_team_notices(items: &[Value]) -> Vec<String> {
+    items
+        .iter()
+        .filter(|i| i["action"] == "add_pi_team")
+        .map(|i| {
+            let table = i["table"].as_str().unwrap_or("team");
+            format!(
+                "Pi role table: .bee/config.json gains {table}.pi (every role a herding slot on \
+agent \"pi\") and herding.agents.pi = [\"pi\"] (your own Pi default model), each only if absent. \
+Onboarding adds them once; delete them to opt out and they stay deleted."
+            )
+        })
+        .collect()
+}
+
 /// commandsNotices (l. 2594): propose-only (decision D3) — this script never
 /// writes detected values to .bee/config.json.
 pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {

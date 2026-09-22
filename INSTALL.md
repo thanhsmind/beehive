@@ -28,7 +28,7 @@ Useful flags (same semantics in both scripts):
 | bash                            | PowerShell        | Effect                                                                                                                                     |
 | ------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--dry-run`                   | `-DryRun`       | Show the exact plan for YOUR repo; write nothing                                                                                           |
-| `--runtime claude\|codex\|both` | `-Runtime …`   | Which runtime skills to install (default both)                                                                                             |
+| `--runtime claude\|codex\|pi\|both` | `-Runtime …`   | Which runtime skills to install (default both). The Pi extension and skills are written for every value; `pi` skips the Claude/Codex plugin steps and needs `--distribution repo-copy` |
 | `--global-skills`             | `-GlobalSkills` | Also copy skills into the legacy global runtime dirs (`~/.claude/skills`, `~/.codex/skills`). Off by default — see "two layers" below |
 | `--no-claude-md`              | `-NoClaudeMd`   | Skip writing/extending CLAUDE.md with the`@AGENTS.md` import (written by default)                                                        |
 | `--claude-md`                 | `-ClaudeMd`     | Accepted for compatibility; a no-op alias of the default (CLAUDE.md is written unless`--no-claude-md`/`-NoClaudeMd` is passed)         |
@@ -51,7 +51,7 @@ bee installs in two layers:
 1. **Repo layer** (once per project, the default): onboarding installs the `AGENTS.md` BEE block, the `.bee/` runtime directory, the vendored `bee` binary, a `CLAUDE.md` `@AGENTS.md` import, and a per-project copy of the `bee-*` skills into the repo itself — `<repo>/.claude/skills` for Claude Code, `<repo>/.agents/skills` for Codex. These skill trees are committed to the host repo (same policy as the vendored CLI), so every teammate and CI job sees identical skills without any machine-wide install; re-onboarding refreshes them.
 2. **Runtime layer** (opt-in, once per machine): a legacy global copy of the `bee-*` skills into `~/.claude/skills` and/or `~/.codex/skills`. Nothing in this layer is touched unless you pass `--global-skills` (`-GlobalSkills`) — the per-project copy above is what agents actually discover by default. On Claude Code, the hook skeleton still needs one of the routes below (the plugin, or `--repo-hooks` during onboarding).
 
-Requirement for both on x86_64 Linux/Windows: **none** — each installer downloads the release binary for the platform, checks it against the release `SHA256SUMS`, and falls back to a source build only if no asset fits or `--build-from-source` / `-BuildFromSource` is given. For that fallback: **a Rust toolchain** (`cargo --version`, stable). bee ships
+Requirement for both on x86_64 Linux/Windows, macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+): **none** — each installer downloads the release binary for the platform, checks it against the release `SHA256SUMS`, and falls back to a source build only if no asset fits or `--build-from-source` / `-BuildFromSource` is given. For that fallback: **a Rust toolchain** (`cargo --version`, stable). bee ships
 as a single native binary and, by decision 1f4262ca, no prebuilt binaries live in
 the repo — you build it once per machine from the source checkout:
 

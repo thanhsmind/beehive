@@ -3,7 +3,7 @@
 // repo.
 //
 //   bee onboard [--repo-root <path>] [--apply] [--json] [--repo-hooks]
-//               [--plugin-source] [--runtime claude|codex|both]
+//               [--plugin-source] [--runtime claude|codex|pi|both]
 //               [--no-claude-md] [--claude-md] [--global-skills]
 //               [--force-downgrade] [--no-statusline]
 //
@@ -214,9 +214,9 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
         }
         i += 1;
     }
-    if !["claude", "codex", "both"].contains(&args.runtime.as_str()) {
+    if !["claude", "codex", "pi", "both"].contains(&args.runtime.as_str()) {
         return ParseOutcome::Error(format!(
-            "--runtime must be claude, codex, or both (got: {})",
+            "--runtime must be claude, codex, pi, or both (got: {})",
             args.runtime
         ));
     }
@@ -418,7 +418,8 @@ does run a POSIX shell."
         .chain(statusline_skip_notices.iter())
         .cloned()
         .collect();
-    let build_notices = |extra: &[String]| -> Value {
+    // `items` is the plan (plan mode) or the applied list (apply mode).
+    let build_notices = |items: &[Value]| -> Value {
         let mut out: Vec<Value> = Vec::new();
         for n in notices::commands_notices(&repo_root, first_onboard) {
             out.push(json!(n));
@@ -429,7 +430,10 @@ does run a POSIX shell."
         for n in notices::tracked_paths_notices(&repo_root) {
             out.push(json!(n));
         }
-        for n in extra {
+        for n in &all_extra_notices {
+            out.push(json!(n));
+        }
+        for n in notices::pi_team_notices(items) {
             out.push(json!(n));
         }
         Value::Array(out)
@@ -460,7 +464,7 @@ does run a POSIX shell."
                 "targets": computed.skill_sync.targets.iter().map(|t| t.to_json()).collect::<Vec<_>>(),
             }),
         );
-        payload.insert("notices".into(), build_notices(&all_extra_notices));
+        payload.insert("notices".into(), build_notices(&computed.plan));
         if computed.worktree_migration.applicable {
             payload.insert(
                 "worktree_migration".into(),
@@ -523,6 +527,7 @@ does run a POSIX shell."
                 forced_versions,
                 skills,
             } = *result;
+            let notices = build_notices(&applied);
             let recheck = compute_plan(engine, &repo_root, &opts);
             // Review P1-7: blocked-first precedence — a recheck can NEVER
             // read "up_to_date" while ANY target is still blocked.
@@ -556,7 +561,7 @@ does run a POSIX shell."
             );
             payload.insert("skills".into(), skills);
             payload.insert("onboarding".into(), onboarding);
-            payload.insert("notices".into(), build_notices(&all_extra_notices));
+            payload.insert("notices".into(), notices);
             if forced_downgrade {
                 // F9: a forced apply reports the fact machine-readably.
                 payload.insert("forced_downgrade".into(), json!(true));

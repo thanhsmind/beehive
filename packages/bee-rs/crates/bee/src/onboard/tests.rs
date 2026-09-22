@@ -175,8 +175,158 @@ fn parse_args_rejects_unknown_flags_and_bad_runtimes() {
     assert_eq!(err(&["--nope"]), "Unknown argument: --nope");
     assert_eq!(
         err(&["--runtime", "rust"]),
-        "--runtime must be claude, codex, or both (got: rust)"
+        "--runtime must be claude, codex, pi, or both (got: rust)"
     );
+}
+
+// ── Pi role table (host-packaging-gaps D2/D3) ──────────────────────────────
+
+fn config_path(fx: &Fixture) -> PathBuf {
+    fx.repo.join(".bee").join("config.json")
+}
+
+fn pi_items(payload: &Value, key: &str) -> Vec<Value> {
+    payload[key].as_array().unwrap().iter().filter(|i| i["action"] == "add_pi_team").cloned().collect()
+}
+
+fn read_json(p: &Path) -> Value {
+    serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+#[test]
+fn runtime_pi_parses_plans_and_applies() {
+    let parsed = parse_args(&["--runtime".to_string(), "pi".to_string()]);
+    assert!(matches!(parsed, ParseOutcome::Parsed(a) if a.runtime == "pi"));
+    let fx = fixture();
+    assert_eq!(plan(&fx, &["--runtime", "pi"])["status"], "changes_needed");
+    let a = apply(&fx, &["--runtime", "pi"]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(a["recheck"], "up_to_date");
+}
+
+#[test]
+fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let config = read_json(&config_path(&fx));
+    let pi = config["team"]["pi"].as_object().unwrap();
+    assert_eq!(pi.len(), 18);
+    assert_eq!(
+        pi.keys().collect::<Vec<_>>(),
+        config["team"]["claude"].as_object().unwrap().keys().collect::<Vec<_>>()
+    );
+    for (name, slot) in pi {
+        assert_eq!(slot["kind"], "herding", "{name}");
+        assert_eq!(slot["agent"], "pi", "{name}");
+        assert!(slot["description"].as_str().is_some_and(|d| !d.is_empty()), "{name}");
+    }
+    assert_eq!(config["herding"]["agents"]["pi"], json!(["pi"]));
+    let ledger = read_json(&fx.repo.join(".bee").join("onboarding.json"));
+    assert_eq!(ledger["pi_team_offered"], true);
+    // Deleting the table afterwards is respected.
+    let mut trimmed = config.clone();
+    trimmed["team"].as_object_mut().unwrap().remove("pi");
+    let body = format!("{}\n", crate::jsjson::stringify_pretty(&trimmed));
+    write(&config_path(&fx), &body);
+    assert!(pi_items(&plan(&fx, &[]), "plan").is_empty());
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), body);
+}
+
+/// A 4-space, CRLF config with a `team` but no `team.pi`.
+const EXISTING_CONFIG: &str = "{\r\n    \"host_shell\": \"posix\",\r\n    \"team\": {\r\n        \"claude\": {\r\n            \"code\": \"opus\"\r\n        }\r\n    },\r\n    \"herding\": {\r\n        \"agents\": {\r\n            \"mine\": [\"claude\"]\r\n        }\r\n    },\r\n    \"zeta\": 1\r\n}\r\n";
+
+#[test]
+fn an_existing_config_gains_the_pi_table_once_keeping_everything_else() {
+    let fx = fixture();
+    write(&config_path(&fx), EXISTING_CONFIG);
+    let p = plan(&fx, &[]);
+    let items = pi_items(&p, "plan");
+    assert_eq!(items, vec![json!({"action": "add_pi_team", "path": ".bee/config.json", "table": "team"})]);
+    let notice = |payload: &Value| {
+        payload["notices"].as_array().unwrap().iter().any(|n| {
+            let n = n.as_str().unwrap();
+            n.contains("team.pi") && n.contains("herding.agents.pi") && n.contains(".bee/config.json")
+        })
+    };
+    assert!(notice(&p), "plan names the keys");
+
+    let a = apply(&fx, &[]);
+    assert!(notice(&a), "apply names the keys");
+    assert_eq!(a["recheck"], "up_to_date");
+    let text = std::fs::read_to_string(config_path(&fx)).unwrap();
+    assert!(text.ends_with("}\r\n"));
+    assert!(!text.replace("\r\n", "").contains('\n'), "every line ending stays CRLF");
+    assert!(text.starts_with("{\r\n    \"host_shell\": \"posix\",\r\n    \"team\": {\r\n        \"claude\""));
+    let v: Value = serde_json::from_str(&text).unwrap();
+    let before: Value = serde_json::from_str(EXISTING_CONFIG).unwrap();
+    // Top-level keys: same order, nothing new.
+    assert_eq!(
+        v.as_object().unwrap().keys().collect::<Vec<_>>(),
+        before.as_object().unwrap().keys().collect::<Vec<_>>()
+    );
+    assert_eq!(v["host_shell"], before["host_shell"]);
+    assert_eq!(v["zeta"], before["zeta"]);
+    assert_eq!(v["team"]["claude"], before["team"]["claude"]);
+    assert_eq!(v["team"].as_object().unwrap().keys().collect::<Vec<_>>(), vec!["claude", "pi"]);
+    assert_eq!(v["team"]["pi"], super::templates::default_config()["team"]["pi"]);
+    assert_eq!(v["herding"]["agents"]["mine"], json!(["claude"]));
+    assert_eq!(
+        v["herding"]["agents"].as_object().unwrap().keys().collect::<Vec<_>>(),
+        vec!["mine", "pi"]
+    );
+    assert_eq!(v["herding"]["agents"]["pi"], json!(["pi"]));
+
+    // Second run: nothing to add.
+    let p2 = plan(&fx, &[]);
+    assert!(pi_items(&p2, "plan").is_empty());
+    assert!(!notice(&p2));
+}
+
+#[test]
+fn a_legacy_models_config_gains_models_pi() {
+    let fx = fixture();
+    write(&config_path(&fx), "{\n  \"models\": {\n    \"claude\": {}\n  }\n}\n");
+    assert_eq!(pi_items(&plan(&fx, &[]), "plan")[0]["table"], "models");
+    apply(&fx, &[]);
+    let v = read_json(&config_path(&fx));
+    assert_eq!(v["models"]["pi"], super::templates::default_config()["team"]["pi"]);
+    assert!(v.get("team").is_none());
+    assert_eq!(v["herding"], json!({"agents": {"pi": ["pi"]}}));
+}
+
+#[test]
+fn a_config_the_pi_table_must_not_touch_stays_byte_identical() {
+    let cases: [(&str, &str, Option<&str>, bool); 5] = [
+        ("team.pi present", "{\n  \"team\": {\n    \"pi\": {}\n  }\n}\n", None, false),
+        (
+            "team.pi only in config.local.json",
+            "{\n  \"team\": {\n    \"claude\": {}\n  }\n}\n",
+            Some("{\"team\": {\"pi\": {\"code\": {\"kind\": \"herding\", \"agent\": \"pi\"}}}}"),
+            false,
+        ),
+        ("unparseable", "{ not json", None, false),
+        ("neither team nor models", "{\"host_shell\":\"posix\"}\n", None, false),
+        ("offered already, then deleted", "{\n  \"team\": {\n    \"claude\": {}\n  }\n}\n", None, true),
+    ];
+    for (label, body, local, offered) in cases {
+        let fx = fixture();
+        write(&config_path(&fx), body);
+        if let Some(local) = local {
+            write(&fx.repo.join(".bee").join("config.local.json"), local);
+        }
+        if offered {
+            // A first apply adds the table and records the offer; the user
+            // then deletes the table again.
+            assert_eq!(pi_items(&apply(&fx, &[]), "applied").len(), 1, "{label}: first offer");
+            write(&config_path(&fx), body);
+        }
+        assert!(pi_items(&plan(&fx, &[]), "plan").is_empty(), "{label}: planned");
+        let a = apply(&fx, &[]);
+        assert_eq!(a["status"], "applied", "{label}");
+        assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), body, "{label}: bytes");
+        assert!(pi_items(&a, "applied").is_empty(), "{label}: applied");
+    }
 }
 
 #[test]
@@ -355,7 +505,15 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     let keys: Vec<&str> = ledger.as_object().unwrap().keys().map(|k| k.as_str()).collect();
     assert_eq!(
         keys,
-        vec!["schema_version", "bee_version", "managed", "agents_sync", "created_at", "updated_at"]
+        vec![
+            "schema_version",
+            "bee_version",
+            "managed",
+            "agents_sync",
+            "pi_team_offered",
+            "created_at",
+            "updated_at"
+        ]
     );
     assert_eq!(ledger["schema_version"], "1.0");
     assert_eq!(ledger["bee_version"], VERSION);

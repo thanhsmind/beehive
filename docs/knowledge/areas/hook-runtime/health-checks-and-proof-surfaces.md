@@ -111,9 +111,14 @@ against isolated fixtures, asserting that a denied action changed nothing.
   structurally unprovable trust rows; `doctor attest --runtime pi` is refused.
   Whole-file equality verifies `.pi/extensions/bee-guard.ts` against the
   embedded extension bytes. Binary freshness checks the release version against
-  `.claude-plugin/plugin.json` in both source and host repositories. Herding
-  transport validates configured agent pane transport readiness (tmux or
-  direct). Any required row that is not ok or unknown results in a `blocked`
+  `.claude-plugin/plugin.json` in the source checkout; in a host it reads
+  `.bee/onboarding.json` `bee_version` first (null or absent is missing),
+  falls back to the plugin manifest, and reports unknown with neither. Every
+  host remedy names the bee installer, never cargo (host-packaging-gaps D1).
+  Herding transport validates configured agent pane transport readiness (tmux
+  or direct) — except when every `team.pi` slot is a herding slot whose agent
+  is a Pi process: those dispatch with `--no-pane`, so the row is ok with no
+  multiplexer (host-packaging-gaps D5). Any required row that is not ok or unknown results in a `blocked`
   verdict (exit 1) (pi-parity-review-fixes D5, D6).
 
 - Doctor resolves hook handlers at HOST topology: each handler filename is

@@ -342,7 +342,7 @@ gh run watch "$RUN_ID" --exit-status >/dev/null \
 ASSETS="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
 printf '%s\n' "$ASSETS" | grep -q "SHA256SUMS" || fail "$TAG release has no SHA256SUMS — assets: $ASSETS"
 BIN_COUNT="$(printf '%s\n' "$ASSETS" | grep -c '^bee-' || true)"
-[ "$BIN_COUNT" -ge 2 ] || fail "$TAG release has $BIN_COUNT bee-* binaries (expected >= 2) — assets: $ASSETS"
+[ "$BIN_COUNT" -ge 5 ] || fail "$TAG release has $BIN_COUNT bee-* binaries (expected >= 5) — assets: $ASSETS"
 
 log "assets   $(printf '%s' "$ASSETS" | tr '\n' ' ')"
 log "OK       bee $VERSION is live — installers now serve $TAG"

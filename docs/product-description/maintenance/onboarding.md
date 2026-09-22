@@ -2,7 +2,7 @@
 
 ## Summary
 
-`bee onboard` is the one command that installs bee into a repository and keeps it current afterwards. It copies a fixed set of artifacts *out of* a bee source checkout and *into* a host repo — the AGENTS.md instruction block, the `.bee/` store skeleton, the vendored expertise guides and prompts, the per-runtime skill trees and worker agent files, the managed `.gitignore` block, and (opt-in) the hook wiring — then records a fingerprint of everything it wrote in `.bee/onboarding.json`. That record is the *ledger*: the file every later run, and every session preamble, compares against to decide whether the host has drifted from the bee it is running. The command has exactly two run modes. Without `--apply` it is a **check run**: it computes the same plan and writes nothing. With `--apply` it is an **apply run**: it refuses as a whole or performs the plan in order. Both modes belong to the agent; the human approves the apply when the check reports changes.
+`bee onboard` is the one command that installs bee into a repository and keeps it current afterwards. It copies a fixed set of artifacts *out of* a bee source checkout and *into* a host repo — the AGENTS.md instruction block, the `.bee/` store skeleton, the vendored expertise guides and prompts, the per-runtime skill trees and worker agent files, the managed `.gitignore` block, and (opt-in) the hook wiring — then records a fingerprint of everything it wrote in `.bee/onboarding.json`. That record is the *ledger*: the file every subsequent run, and every session preamble, compares against to decide whether the host has drifted from the bee it is running. The command has exactly two run modes. Without `--apply` it is a **check run**: it computes the same plan and writes nothing. With `--apply` it is an **apply run**: it refuses as a whole or performs the plan in order. Both modes belong to the agent; the human approves the apply when the check reports changes.
 
 ## The simple case
 
@@ -50,7 +50,7 @@ stateDiagram-v2
 
 ### Invoke
 
-`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
+`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|pi|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
 
 Two things are settled before any work:
 
@@ -63,7 +63,7 @@ Two things are settled before any work:
 
 The paths that answer without touching the host:
 
-- **A parse error.** `Unknown argument: --bogus`, or `--runtime must be claude, codex, or both (got: X)`. Both are printed as `{"error": "<message>"}` on **stdout** and exit 1 — even without `--json`.
+- **A parse error.** `Unknown argument: --bogus`, or `--runtime must be claude, codex, pi, or both (got: X)`. Both are printed as `{"error": "<message>"}` on **stdout** and exit 1 — even without `--json`.
 - **No source checkout visible.** The refusal names the invocation root it searched, the template path it did not find, the `--repo-root` candidate if one was passed, and two ways forward: run from inside a bee checkout, or re-run the installer one-liner. Under `--json` it carries `status: "blocked_no_engine"` and `kind: "engine_not_found"` so the installer can branch on it. This is the refusal a plain host repo meets: with no bee checkout on the machine, onboarding cannot be re-run from inside the host.
 - **A check run.** Always exit 0 — including when the status is a `blocked_*` one. Reporting is not failing.
 
@@ -98,7 +98,7 @@ CLAUDE.md                     the @AGENTS.md import section
 .gitignore                    managed block between # BEE:START / # BEE:END
 .bee/onboarding.json          the ledger
 .bee/state.json               phase idle, gates false
-.bee/config.json              six hooks on, gate_bypass false, team.claude / team.codex
+.bee/config.json              six hooks on, gate_bypass false, team.claude / team.codex / team.pi
 .bee/config-sample.json       the annotated copy of bee's own sample
 .bee/reservations.json        {"reservations": []}
 .bee/decisions.jsonl          empty
@@ -133,7 +133,7 @@ Two artifacts reach outside the repo: `~/.codex/config.toml` gets a status-line 
 | Where it runs | Two independent roots: the *target* (`--repo-root`, else the working directory) and the *source checkout* (walked up from the invocation root, bounded at the first `.git`). A worktree renders its own checkout's templates. With no source checkout visible, the command refuses. | Per invocation. |
 | Who runs it | The agent runs both modes; no hook ever invokes it. The human approves an apply that reports changes and owns the opt-in switches, but never runs the command. A hand edit of `.bee/onboarding.json` is denied by the direct-edit guard, which names `bee onboard` as the remedy. | — |
 
-`--repo-hooks` deserves its own line: the opt-in is **sticky**. Once the ledger records repo hooks, later runs keep wiring them without the flag. Only a `--plugin-source` apply lets the record lapse, and it says so in a notice.
+`--repo-hooks` deserves its own line: the opt-in is **sticky**. Once the ledger records repo hooks, subsequent runs keep wiring them without the flag. Only a `--plugin-source` apply lets the record lapse, and it says so in a notice.
 
 ## Cancel and interrupt
 
@@ -144,7 +144,7 @@ Columns: before and after the first plan item is written (a check run never reac
 | The process killed mid-command | Nothing anywhere. A check run has no second column. | A partial tree, whole files only (every write is atomic). The ledger is the last write, so a killed apply leaves it stale or absent — and the next check run therefore re-plans the remainder. Re-running the apply is the whole repair. |
 | The session turning elsewhere (compaction, handoff, turn end) | No effect; the command is atomic from the session's view. | Same. The installed state is on disk and needs no session to survive. |
 | A clean completion from outside (gate approved, question answered, new message) | No effect. Onboarding reads no gate. | No effect. |
-| The store unavailable (lock contention, corrupt JSON, hook binary missing) | No store lock is taken, so contention cannot occur. A corrupt or unreadable `.bee/onboarding.json` reads as *absent*: the run re-plans everything, which is safe because every copy is content-compared. A malformed `.claude/settings.json` or `.codex/hooks.json` refuses by name instead of being rewritten. A missing hook binary is irrelevant — onboarding installs the wiring, not the binary. | Same rules on every later read. |
+| The store unavailable (lock contention, corrupt JSON, hook binary missing) | No store lock is taken, so contention cannot occur. A corrupt or unreadable `.bee/onboarding.json` reads as *absent*: the run re-plans everything, which is safe because every copy is content-compared. A malformed `.claude/settings.json` or `.codex/hooks.json` refuses by name instead of being rewritten. A missing hook binary is irrelevant — onboarding installs the wiring, not the binary. | Same rules on every subsequent read. |
 | The session going away (heartbeat, lease expiry, release) | No effect — onboarding holds no lease, claim, or session record. | No effect. |
 | A sibling changing the target | Per-item plan-to-apply races are handled where they matter: the Codex status line and the legacy global refresh both re-check at apply time and skip rather than clobber. Nothing serializes two concurrent applies against one host — see "Open questions". | Same. |
 | The channel changing (piped, `--json`, Codex, from a hook) | Both forms already print on stdout; `--json` changes the shape. `--runtime` decides which runtime's hook belt is wired; the Codex projection has no `SessionEnd` row and matches `spawn_agent` for the model guard. No hook invokes onboarding. | Same. |
@@ -153,7 +153,7 @@ Columns: before and after the first plan item is written (a check run never reac
 
 **Gates and approval.** None recorded. Onboarding is outside the [gate](../foundations/gates.md) chain entirely: it needs no approval to run, approves nothing, and its own consent moment — "the check reports changes, may I apply?" — is a plain question to the human.
 
-**The store and history.** Onboarding *creates* the store and then stays out of it: `state.json`, `config.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`, and the `cells/` and `logs/` directories are create-if-missing and never rewritten. The one store file it owns outright is the ledger, rewritten on every apply. See [the store](../foundations/store.md).
+**The store and history.** Onboarding *creates* the store and then stays out of it: `state.json`, `config.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`, and the `cells/` and `logs/` directories are create-if-missing and never rewritten (one exception: the one-time Pi role table added to `config.json`, under Configuration below). The one store file it owns outright is the ledger, rewritten on every apply. See [the store](../foundations/store.md).
 
 **Worktrees and containment.** The target root and the source checkout are resolved separately, and the source is bounded at the first `.git` so an ancestor outside the repository can never become the template source. A worktree-local coordination store from an older layout is migrated into the main one as a plan item — and a conflict there outranks every other refusal. See [worktrees](../foundations/worktrees.md).
 
@@ -169,7 +169,7 @@ Columns: before and after the first plan item is written (a check run never reac
 
 `bee status` carries the same fact with detail: `onboarding.installed`, `bee_version`, `plugin_version`, a `drift` boolean, and a `drift_detail` list naming each managed file that changed, went `(missing)`, or appeared `(extra)`. The report only reports — bringing a drifted host back is an apply run. See [status](../observability/status.md).
 
-**Configuration.** Onboarding seeds `.bee/config.json` once and never edits it again. It *reads* config to resolve each agent file's model from `team.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
+**Configuration.** Onboarding seeds `.bee/config.json` once and edits it at most once more. The seed carries a Pi role table: `team.pi` names every `team.claude` role as a herding slot on agent `pi`, and `herding.agents.pi` is `["pi"]` — plain `pi` on the user's own Pi default model. An existing config with a `team` (or legacy `models`) object and no `team.pi` in the merged view gains those two keys once, each only if absent, with every other key, the indent and the line ending kept; the ledger records the offer as `pi_team_offered`, so a deleted table is never re-added. A config with neither roster key is left alone. It *reads* config to resolve each agent file's model from `team.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
 
 **Output modes and exit codes.** Check run: exit 0 always, including `blocked_*`. Apply run: exit 0 on success, exit 1 on any blocked preflight (zero mutations). Parse errors and the no-source refusal exit 1. No timing line on any path.
 

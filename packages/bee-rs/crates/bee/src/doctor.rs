@@ -482,6 +482,10 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
     const KEY: &str = "binary_freshness";
     const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
         -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
+    const HOST_REMEDY: &str = "FIX: re-run the bee installer in this repo: curl -fsSL \
+        https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+    const PLUGIN_MANIFEST: &str = ".claude-plugin/plugin.json";
+    const ONBOARDING_RECORD: &str = ".bee/onboarding.json";
 
     let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
     let is_source_checkout = workspace_cargo.is_file();
@@ -489,11 +493,25 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
         return None;
     }
 
-    let Some(source_version) = read_source_release_version(root) else {
+    // A host has no plugin manifest; the version its installer wrote to
+    // `.bee/onboarding.json` is what it expects (host-packaging-gaps D1).
+    let (expected, source, remedy) = if is_source_checkout {
+        (read_source_release_version(root), PLUGIN_MANIFEST, REMEDY)
+    } else {
+        match read_onboarded_version(root) {
+            Some(v) => (Some(v), ONBOARDING_RECORD, HOST_REMEDY),
+            None => (read_source_release_version(root), PLUGIN_MANIFEST, HOST_REMEDY),
+        }
+    };
+    let Some(source_version) = expected else {
         return Some(Row {
             key: KEY,
             ok: None,
-            detail: ".claude-plugin/plugin.json is missing or unreadable — cannot determine source release version".to_string(),
+            detail: if is_source_checkout {
+                ".claude-plugin/plugin.json is missing or unreadable — cannot determine source release version".to_string()
+            } else {
+                ".bee/onboarding.json has no bee_version and .claude-plugin/plugin.json is missing or unreadable — cannot determine the expected release version".to_string()
+            },
         });
     };
 
@@ -514,7 +532,7 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
                 key: KEY,
                 ok: Some(false),
                 detail: format!(
-                    "installed binary is too old to report its release version (rs-info carries no bee_version field). {REMEDY}"
+                    "installed binary is too old to report its release version (rs-info carries no bee_version field). {remedy}"
                 ),
             });
         }
@@ -525,7 +543,7 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
                     ok: Some(false),
                     detail: format!(
                         "installed binary reports release version {installed_version}, source \
-                         (.claude-plugin/plugin.json) is {source_version}. {REMEDY}"
+                         ({source}) is {source_version}. {remedy}"
                     ),
                 });
             }
@@ -553,7 +571,7 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
                     key: KEY,
                     ok: Some(false),
                     detail: format!(
-                        "{} was modified {} (binary is {}). {REMEDY}",
+                        "{} was modified {} (binary is {}). {remedy}",
                         rel.display(),
                         fmt_system_time(mtime),
                         fmt_system_time(bin_mtime)
@@ -570,12 +588,12 @@ fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
             detail: if is_source_checkout {
                 format!(
                     "could not read the installed binary's release version (bee rs-info: {reason}), \
-                     and no source input is newer than it — freshness is unknown. {REMEDY}"
+                     and no source input is newer than it — freshness is unknown. {remedy}"
                 )
             } else {
                 format!(
                     "could not read the installed binary's release version (bee rs-info: {reason}) \
-                     — freshness is unknown. {REMEDY}"
+                     — freshness is unknown. {remedy}"
                 )
             },
         });
@@ -602,6 +620,14 @@ fn pi_herding_transport_row(root: &Path) -> Row {
 
 fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Row {
     const KEY: &str = "herding_transport";
+    if every_pi_slot_runs_no_pane(root) {
+        return Row {
+            key: KEY,
+            ok: Some(true),
+            detail: "every team.pi role runs a Pi process with --no-pane; no pane multiplexer is needed"
+                .to_string(),
+        };
+    }
     match crate::herding::transport_kind_at(root) {
         Ok(kind) => {
             let (ready, reason, _) =
@@ -618,6 +644,34 @@ fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<S
             detail: reason,
         },
     }
+}
+
+/// True when `team.pi` has at least one slot and every slot is a herding slot
+/// whose agent is a Pi process — the same test dispatch uses to add
+/// `--no-pane` (host-packaging-gaps D5).
+fn every_pi_slot_runs_no_pane(root: &Path) -> bool {
+    let mut map = crate::state::read_config_raw(root);
+    crate::verbs::drivers::fold_team_key(&mut map);
+    let cfg = Value::Object(map);
+    let Some(slots) = cfg.pointer("/team/pi").and_then(Value::as_object) else {
+        return false;
+    };
+    !slots.is_empty()
+        && slots.values().all(|slot| {
+            slot.get("kind").and_then(Value::as_str) == Some("herding")
+                && slot
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| crate::verbs::drivers::is_pi_agent(&cfg, name))
+        })
+}
+
+/// The `bee_version` the installer recorded in `<root>/.bee/onboarding.json`;
+/// null or absent reads as missing.
+fn read_onboarded_version(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(".bee/onboarding.json")).ok()?;
+    let parsed: Value = serde_json::from_str(&text).ok()?;
+    parsed.get("bee_version").and_then(Value::as_str).map(str::to_string)
 }
 
 /// The release version from `<root>/.claude-plugin/plugin.json`.
