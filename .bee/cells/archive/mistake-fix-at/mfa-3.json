@@ -1,0 +1,195 @@
+{
+  "id": "mfa-3",
+  "feature": "mistake-fix-at",
+  "title": "Key the weekly lesson miner by layer and first four words, and say so in the lesson",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "mfa-1"
+  ],
+  "decisions": [
+    "9173fbd2-4453-476c-9502-d86290ae5513"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+  ],
+  "read_first": [
+    "docs/history/mistake-fix-at/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "action": "Change what the weekly lesson miner keys a reflection on (per D3), and make the lesson row say what matched. In verbs/mailbox_digest.rs change `trouble_lines` (rg hit: `fn trouble_lines(letter: &Letter) -> Vec<String> {`) to return `Vec<(String, String)>` = (key, verbatim). For a broken-or-unfinished bullet and a departure line, key and verbatim are both the whole line as today. For a reflection item (rg hit: `fn reflection_what(item: &LetterItem) -> Option<&str> {`): apply the four-word brake to the normalized `what` FIRST (rg hit: `const MIN_SHAPE_WORDS: usize = 4;`) and skip a shorter one; then key = `<fix_at> <first four words of normalize_shape(what)>` where `fix_at` is the item's `fix_at` or `none` when the letter carries none (per D4), and verbatim = the whole `what`. In `mine_shapes` (rg hit: `let normalized = normalize_shape(&line);`) normalize and tokenize the KEY, store the first letter's verbatim as `Shape.verbatim`, and add `others: Vec<String>` to `Shape` holding the verbatim of every other run that matched (one per run, letter order); the brake in `mine_shapes` stays for the non-reflection lines. Change `lesson_decision` (rg hit: `fn lesson_decision(shape: &Shape) -> String {`) so a reflection lesson reads `Separate runs reported the same mistake shape (fix-at <layer>, \"<head>…\"): \"<verbatim>\"` and a non-reflection lesson keeps today's text; change `lesson_rationale` (rg hit: `fn lesson_rationale(period: &Period, shape: &Shape) -> String {`) to add, before the letters citation, `Matched on fix-at <layer> + the first four words \"<head>\"; the other letter(s) said: \"<verbatim B>\"[, \"<verbatim C>\"]` for a reflection shape; the `Stable id for this wording: <token>` tail stays, since `spent_tokens` reads it (rg hit: `if word.starts_with(SHAPE_TOKEN_PREFIX) {`). Update the header comment block above `LESSON_TAG` (the 'FOUR WORDS' and 'ONLY trouble' brakes) to state the reflection key. TESTS, red-first, beside `one_reflection_shape_in_two_runs_becomes_exactly_one_cited_lesson` (extend `file_answer_letter` or add a sibling that writes `fix_at` on the item): two runs with reflections `check` + the same four-word head and different tails → exactly one lesson whose decision names `check` and the head and quotes run A's sentence, and whose rationale quotes run B's sentence; the same head under `check` vs `doctrine` → no lesson; two letters without `fix_at` and the same head → one lesson keyed `none`; a reflection whose `what` has three words → skipped even with a layer; a broken bullet still keys on its whole line and `one_broken_shape_in_two_runs_becomes_exactly_one_cited_lesson` stays green. Confirm by test that a token spent by an old whole-sentence lesson row does not block the new key.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest",
+  "must_haves": {
+    "truths": [
+      "two distinct runs whose reflections share fix_at and the first four normalized words of wrong yield exactly one lesson-tagged decision",
+      "that decision names the layer and the four-word head and quotes the first run's sentence; its rationale quotes the other run's sentence and keeps the shape token",
+      "the same head under two different fix_at values yields no lesson",
+      "letters filed before fix_at existed are keyed as none and still mine",
+      "a reflection shorter than four normalized words never becomes a shape, layer or not",
+      "broken-or-unfinished bullets and departures keep the whole-line key and their existing tests stay green; the once-ever token rule and the two-run rule are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+        "substantive": "trouble_lines returns (key, verbatim); reflection key = fix_at + four-word head with the brake on the what; Shape.others; lesson_decision and lesson_rationale name the key and quote the other run; header comment; tests"
+      }
+    ],
+    "key_links": [
+      "trouble_lines reads LetterItem.fix_at that mfa-1 added — the miner never reads the entries store",
+      "spent_tokens still finds the token in the rationale"
+    ],
+    "prohibitions": [
+      "No fuzzy matching, stemming or stop-word removal",
+      "The no-mistakes answer is still never mined",
+      "Digest composition and filing are untouched"
+    ]
+  },
+  "trace": {
+    "worker": "mfa-w3",
+    "outcome": "The weekly miner keys a reflection on its fix-at layer plus the first four words, and the lesson row names the key and quotes every run",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+    ],
+    "deviations": [
+      "trouble_lines returns Vec<TroubleLine> (a 3-field struct) instead of the cell's Vec<(String,String)> — the lesson row must print `fix-at <layer>`, and a (key, verbatim) pair cannot tell a reflection key from a whole-line key without parsing the key back and mistaking a broken bullet that starts with the word \"check\" for a reflection — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T06:08:31.284Z",
+    "behavior_change": true,
+    "verification_evidence": "28 tests, the whole mailbox_digest module, the only file this cell touched; cargo was already on PATH so the prefix was a no-op",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest",
+    "claimed_at": "2026-09-22T05:57:42.357Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "reflection_key(fix_at, what) is the new fold key; trouble_lines hands back TroubleLine{key, verbatim, fix_at}; Shape gains others+fix_at; lesson_decision/lesson_rationale name the layer and head and quote the other runs; 5 new tests beside the existing ones",
+      "commit": "8eb1303e19f0d44d0768a67c875749881d0803a0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest — green:unit — 28 tests, the whole mailbox_digest module, the only file this cell touched; cargo was already on PATH so the prefix was a no-op",
+      "deviations": [
+        "trouble_lines returns Vec<TroubleLine> (a 3-field struct) instead of the cell's Vec<(String,String)> — the lesson row must print `fix-at <layer>`, and a (key, verbatim) pair cannot tell a reflection key from a whole-line key without parsing the key back and mistaking a broken bullet that starts with the word \"check\" for a reflection — found a better route"
+      ],
+      "mistakes": [],
+      "baseline": "same command on the base commit: 23 tests green with the whole-sentence key; the 5 new tests did not exist and the reflection key did not compile (the red captured before the change)"
+    },
+    "baseline": "same command on the base commit: 23 tests green with the whole-sentence key; the 5 new tests did not exist and the reflection key did not compile (the red captured before the change)",
+    "warnings": [
+      "advisory: this cap's commit changes 307 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "two distinct runs whose reflections share fix_at and the first four normalized words of wrong yield exactly one lesson-tagged decision",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "that decision names the layer and the four-word head and quotes the first run's sentence; its rationale quotes the other run's sentence and keeps the shape token",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "the same head under two different fix_at values yields no lesson",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "letters filed before fix_at existed are keyed as none and still mine",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "a reflection shorter than four normalized words never becomes a shape, layer or not",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          },
+          {
+            "requirement": "broken-or-unfinished bullets and departures keep the whole-line key and their existing tests stay green; the once-ever token rule and the two-run rule are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T06:09:16.516Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "mfa3-t1",
+            "status": "PASS",
+            "evidence": "mailbox_digest.rs:755 reflection_key returns <fix_at_or_none> <first four normalized words>; trouble_lines (806-820) folds reflections under it; mine_shapes keys on normalize_shape(trouble.key). mailbox_digest.rs:1594 two_runs_sharing_a_layer_and_four_words_teach_one_lesson_that_quotes_both. Ran: cargo test --release -p bee mailbox_digest -> 28 passed."
+          },
+          {
+            "id": "mfa3-t2",
+            "status": "PASS",
+            "evidence": "lesson_decision (940-950) formats the fix-at layer, head and verbatim; lesson_rationale (957-975) prepends Matched on fix-at + the first four words and the other letter's sentence, keeps Stable id for this wording at 971. Test at 1594 asserts all of it."
+          },
+          {
+            "id": "mfa3-t3",
+            "status": "PASS",
+            "evidence": "The layer is the key's first word (762), so two layers are two map entries. mailbox_digest.rs:1636 the_same_four_words_under_two_layers_is_never_one_lesson."
+          },
+          {
+            "id": "mfa3-t4",
+            "status": "PASS",
+            "evidence": "mailbox_digest.rs:736-741 fix_at_or_none maps None/empty to none (637). mailbox_digest.rs:1652 letters_filed_before_the_layer_existed_key_as_none_and_still_mine."
+          },
+          {
+            "id": "mfa3-t5",
+            "status": "PASS",
+            "evidence": "reflection_key returns None below MIN_SHAPE_WORDS (756-761) and trouble_lines drops the item. mailbox_digest.rs:1670 a_reflection_shorter_than_four_words_is_never_a_shape_layer_or_not."
+          },
+          {
+            "id": "mfa3-t6",
+            "status": "PASS",
+            "evidence": "TroubleLine::whole_line (778-781) keeps key == verbatim for broken bullets (808-812) and departures (827-830); mine_shapes' brake stays; one_broken_shape_in_two_runs_becomes_exactly_one_cited_lesson green; MIN_DISTINCT_RUNS and spent_tokens untouched."
+          },
+          {
+            "id": "mfa3-p1",
+            "status": "PASS",
+            "evidence": "Only normalize_shape transforms text, unchanged by 8eb1303e; key is an exact join and map equality (762, 885)."
+          },
+          {
+            "id": "mfa3-p2",
+            "status": "PASS",
+            "evidence": "reflection_what (732) still gates on the reflection kind; the_clean_run_answer_is_never_mined_however_many_runs_answer_it unchanged and green."
+          },
+          {
+            "id": "mfa3-p3",
+            "status": "PASS",
+            "evidence": "git show --stat 8eb1303e: one file, hunks only in the header comment, reflection_key/TroubleLine/Shape/mine_shapes/lesson_decision/lesson_rationale and tests; compose_due_digests and filing have no hunks."
+          },
+          {
+            "id": "mfa3-x3",
+            "status": "PASS",
+            "evidence": "Brake before the key at 756-761, key built at 762; rationale ends on Stable id for this wording: {token} (971) so spent_tokens finds it; 1686 a_token_an_old_whole_sentence_lesson_spent_does_not_block_the_new_key passes."
+          },
+          {
+            "id": "mfa3-x4",
+            "status": "PASS",
+            "evidence": "D3 fixes the key and the three rules, not the carrier type; TroubleLine (771-782) is the (key, verbatim) pair plus fix_at used only to print the layer; nothing reinterpreted."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T06:21:38.153Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

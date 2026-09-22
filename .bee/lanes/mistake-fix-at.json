@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "mistake-fix-at",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"mistake-fix-at\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e67b1e2; reload the product and test \"mistake-fix-at\", then either approve uat (\"bee gate --name uat --approved true --lane mistake-fix-at\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature mistake-fix-at",
   "created_at": "2026-09-22T05:07:00.413Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: mistake-fix-at",
-    "asked_at": "2026-09-22T06:25:33.770Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -954,5 +949,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "mistake-fix-at",
+    "date": "2026-09-22",
+    "at": "2026-09-22T06:32:30.869Z",
+    "areas_synced": [
+      "human-mailbox"
+    ],
+    "next_action": "bee close --feature mistake-fix-at"
   }
 }

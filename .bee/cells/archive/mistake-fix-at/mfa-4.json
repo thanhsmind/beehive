@@ -1,0 +1,211 @@
+{
+  "id": "mfa-4",
+  "feature": "mistake-fix-at",
+  "title": "Teach the three homes, the promotion tree, the knowledge layer and the close recipe the fix-at line",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "mfa-1",
+    "mfa-2",
+    "mfa-3"
+  ],
+  "decisions": [
+    "5c43da33-0b88-4dab-9faa-891a57a74e24",
+    "402cf686-9c6a-44a0-9f68-95f2592c9cec",
+    "6e79d14e-7961-4a3f-b0a2-c9d9af288c07",
+    "9173fbd2-4453-476c-9502-d86290ae5513"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/prompts/worker-cell.md",
+    "AGENTS.md",
+    ".bee/bin/prompts/worker-cell.md",
+    "skills/bee-capturing/references/promotion.md",
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/mistake-fix-at/CONTEXT.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-capturing/references/promotion.md",
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "affects_skills": [
+    "skills/bee-capturing/references/promotion.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    ".bee/verify/verify-app/features/worktree-and-close.md"
+  ],
+  "action": "Land the fix-at instruction in the three homes D4 names through their two SOURCES, then sync the state layer to the behavior mfa-1..mfa-3 landed, with ONE regen. AGENTS.md's bee block (between `<!-- BEE:START -->` and `<!-- BEE:END -->`) is a RENDER of packages/bee/AGENTS.block.md — onboarding reads the template from disk (`agents_block_template: templates_dir.join(\"AGENTS.block.md\")` in onboard/source.rs) — so never hand-edit AGENTS.md. (1) packages/bee/AGENTS.block.md, the bullet starting `- Write a mistake down the MOMENT you notice it` (rg hit: `  memory at the end: \\`bee mailbox reflect --wrong \"<what went wrong>\"`): add `--fix-at <architecture|check|doctrine|none>` to the reflect command; define the four words in one sentence each (architecture: a code change makes the mistake impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard); add the tie-break sentence: pick the strongest layer someone would actually build now — a known and accepted state is `doctrine`, a mistake nobody would guard against is `none`; state that the flag is required; extend the cap spelling to `--mistake \"<wrong> — <better>\" --fix-at <layer>`. (2) packages/bee/prompts/worker-cell.md: in the Result-form paragraph change `mistakes carries one entry per mistake you made, each in TWO parts` to THREE parts with the third named `<fix-at>`, the four values listed and the tie-break in one clause; update the fenced JSON example (rg hit: `\"mistakes\": [\"<what went wrong> — <what would have been better>\", \"...\"]`) to `\"<what went wrong> — <what would have been better> — <fix-at>\"`; update the closing parenthetical's `bee mailbox reflect` spelling to include `--fix-at <layer>`. (3) skills/bee-capturing/references/promotion.md, the Promotion Decision Tree step 1 (rg hit: `1. Seen twice (review finding, user correction, repeated deviation)`): add the closing feature's fix-at reflections as an input — read from the capped cells' trace.mistakes and the run's letter — and state per D5 that a `check`/`architecture` reflection already has its backlog row from close (`bee backlog findings --feature <feature>`), may be taken in-feature as a tiny cell that ships the check (then mark that row done with the reason), and otherwise stands for grooming; a `doctrine` reflection routes through steps 3–4 unchanged; `none` is not promoted. Keep the rest of the tree byte-for-byte. (4) docs/knowledge/areas/human-mailbox/overview.md: extend the `reflection` row of the entry-kind table (rg hit: `| **reflection** |`) with the required fix-at part and its four values; extend rule 15 (rg hit: `15. **Lesson mining reads only trouble**`) to state the reflection key is fix-at plus the first four normalized words of `what`, the brake on the `what`, and that the lesson row names the key and quotes the other run; add one rule after 16 stating the close-time filing of D2 (one P3 `finding` row, layer `fix-at:<value>`, never twice, fail-open, source set per D2a, the Filed line and its command); add decision ids af14e1d6, 6e79d14e, 9173fbd2, 5c43da33, 402cf686 and d1d83be7 (D2a) to the frontmatter decisions list. (5) .bee/verify/verify-app/features/worktree-and-close.md: add the close text line `Filed for \"<feature>\": …` and the backlog rows to the drive recipe and the gotchas. (6) Run `.bee/bin/bee dev regen` ONCE from the worktree root: render-skill-trees mirrors promotion.md into .claude/skills, .agents/skills and .claude-plugin/skills; onboard --apply re-renders the block into AGENTS.md and copies the prompt to .bee/bin/prompts/worker-cell.md from the on-disk template (`read_text_if_exists(&engine.templates_prompts_dir.join(name))` in onboard/plan.rs); release-manifest --write refreshes docs/history/codex-harness-hardening/release-manifest.json. Commit every listed file plus the three mirrored promotion.md copies. Do NOT reinstall .bee/bin/bee: the dispatcher's own copy of the prompt is compiled into the binary (`include_str!` in drivers/prompt.rs), so `bee dispatch prepare` in a checkout whose vendored binary is old will report prompt skew from now until the post-merge reinstall on main — that is expected and named in the plan; this cell is last so no dispatch follows it inside the wave. PROOF: the skew test target `verbs::drivers::tests` (it holds `every_template_carries_the_original_request_block_and_matches_disk`) green, `--test agents_block_render_parity` green, `.bee/bin/bee dev release-manifest --check` green, `diff -q` silent for all three promotion.md mirrors, `rg -q fix-at` on the block, the prompt, promotion.md and overview.md; read back the rendered AGENTS.md bullet and .bee/bin/prompts/worker-cell.md line 65 and quote them in the cap report (`green:live`).",
+  "verify": ".bee/bin/bee dev regen && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check && diff -q skills/bee-capturing/references/promotion.md .claude-plugin/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .claude/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .agents/skills/bee-capturing/references/promotion.md && rg -q fix-at packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md skills/bee-capturing/references/promotion.md docs/knowledge/areas/human-mailbox/overview.md .bee/verify/verify-app/features/worktree-and-close.md",
+  "must_haves": {
+    "truths": [
+      "packages/bee/AGENTS.block.md's reflect bullet names --fix-at, the four values, the tie-break, and that it is required; AGENTS.md carries the same bullet as its rendered block and the block parity test is green",
+      "packages/bee/prompts/worker-cell.md's Result form spells the three-part mistake line and lists the four values; .bee/bin/prompts/worker-cell.md matches it and the skew test is green",
+      "promotion.md step 1 names fix-at reflections as an input and states the check/architecture and doctrine routes per D5; the three mirrored copies equal the source",
+      "overview.md's reflection row names the required fix-at part, rule 15 names the new key and the honest lesson row, a rule states the close-time row filing, and the decisions list carries the six ids",
+      "worktree-and-close.md drives the Filed line",
+      ".bee/bin/bee dev release-manifest --check is green after one regen"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "the reflect bullet with --fix-at, the four values, the tie-break, the cap spelling"
+      },
+      {
+        "path": "AGENTS.md",
+        "substantive": "the rendered bee block carrying that bullet — written by regen, never by hand"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "three-part mistakes line in prose and in the JSON example"
+      },
+      {
+        "path": ".bee/bin/prompts/worker-cell.md",
+        "substantive": "the regen copy of the prompt"
+      },
+      {
+        "path": "skills/bee-capturing/references/promotion.md",
+        "substantive": "step 1 extended with fix-at reflections and the D5 routes"
+      },
+      {
+        "path": "docs/knowledge/areas/human-mailbox/overview.md",
+        "substantive": "reflection row, rule 15, the close-filing rule, decisions list"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/worktree-and-close.md",
+        "substantive": "close recipe drives the Filed line"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md's block equals the rendered template — regen reports no agents_block drift afterwards",
+      "overview.md cites the decision ids so bee close's routing door finds them homed",
+      "release-manifest.json is refreshed in the same commit; the skill mirrors are regenerated, never hand-edited"
+    ],
+    "prohibitions": [
+      "No hand edit of AGENTS.md or of any mirrored skill copy",
+      "No edit to promotion.md outside step 1",
+      "No new knowledge file — one fact, one home",
+      "No Rust edits; no reinstall of .bee/bin/bee"
+    ]
+  },
+  "trace": {
+    "worker": "mfa-w4",
+    "outcome": "The fix-at layer is spelled in every home an agent reads: the doctrine bullet, the worker prompt's Result form, the promotion tree, the mailbox area spec and the close recipe",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "skills/bee-capturing/references/promotion.md",
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      ".bee/verify/verify-app/features/worktree-and-close.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Committed regen outputs the cell's files list did not name (the .codex-plugin and .opencode promotion.md mirrors, the three verify-app feature copies that also carry mfa-1's cells-and-proof edit, five .bee-render.json files and .bee/onboarding.json) — bee dev regen's onboard step renders every tree, not only the three the cell named, and leaving them out would commit a half-rendered tree; each was reserved under mfa-w4 before the write — hit an unforeseen obstacle",
+      "Ran the verify chain as separate commands with PATH=\"$HOME/.cargo/bin:$PATH\" instead of the one &&-joined line — the worktree isolation guard refuses a compound command carrying ${CARGO_HOME:-...} — every step ran, in order, all green — hit an unforeseen obstacle",
+      "sync-ack: No rule text changed: the edited reflect bullet sits outside every <!-- rule --> block in packages/bee/AGENTS.block.md, and AGENTS.md changed only as the regenerated render of that template, so agents-capture-line-at-close and its applied_at files are untouched."
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T06:22:18.019Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell's own verify, run step by step: regen 3/3 green, verbs::drivers::tests 305 passed 0 failed (every_template_carries_the_original_request_block_and_matches_disk ok), agents_block_render_parity 1 passed, release-manifest --check 376 file(s) match, the three promotion.md mirrors diff silent, rg finds fix-at in all seven files, and the rendered AGENTS.md bullet plus .bee/bin/prompts/worker-cell.md:65 were read back. The PATH prefix was spelled $HOME/.cargo/bin because the worktree guard refuses a runtime-computed CARGO_HOME inside a compound command; no step was skipped, filtered or narrowed.",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": ".bee/bin/bee dev regen && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check && diff -q skills/bee-capturing/references/promotion.md .claude-plugin/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .claude/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .agents/skills/bee-capturing/references/promotion.md && rg -q fix-at packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md skills/bee-capturing/references/promotion.md docs/knowledge/areas/human-mailbox/overview.md .bee/verify/verify-app/features/worktree-and-close.md",
+    "claimed_at": "2026-09-22T06:13:13.713Z",
+    "sync_ack": "No rule text changed: the edited reflect bullet sits outside every <!-- rule --> block in packages/bee/AGENTS.block.md, and AGENTS.md changed only as the regenerated render of that template, so agents-capture-line-at-close and its applied_at files are untouched.",
+    "mistakes": [
+      {
+        "wrong": "The python script editing docs/knowledge/areas/human-mailbox/overview.md inserted the new rule 17 before renumbering, so the following \"18. **\" matched twice and the script aborted mid-edit",
+        "better": "renumber a manual ordered list from the bottom up first, then insert the new item"
+      }
+    ],
+    "report": {
+      "outcome": "The fix-at layer is spelled in every home an agent reads: the doctrine bullet (packages/bee/AGENTS.block.md, rendered into AGENTS.md:307-322), the worker prompt's Result form (packages/bee/prompts/worker-cell.md, vendored to .bee/bin/prompts/worker-cell.md:65), promotion.md step 1 with the D5 routes, the mailbox area spec (reflection row, rule 15, new rule 17, six decision ids) and the close recipe's Filed line - one regen, manifest refreshed.",
+      "commit": "cd3ac328b",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        "skills/bee-capturing/references/promotion.md",
+        "docs/knowledge/areas/human-mailbox/overview.md",
+        ".bee/verify/verify-app/features/worktree-and-close.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude/skills/bee-capturing/references/promotion.md",
+        ".agents/skills/bee-capturing/references/promotion.md",
+        ".claude-plugin/skills/bee-capturing/references/promotion.md",
+        ".codex-plugin/skills/bee-capturing/references/promotion.md",
+        ".opencode/skills/bee-capturing/references/promotion.md",
+        ".claude/skills/verify-app/features/worktree-and-close.md",
+        ".agents/skills/verify-app/features/worktree-and-close.md",
+        ".opencode/skills/verify-app/features/worktree-and-close.md",
+        ".claude/skills/verify-app/features/cells-and-proof.md",
+        ".agents/skills/verify-app/features/cells-and-proof.md",
+        ".opencode/skills/verify-app/features/cells-and-proof.md",
+        ".claude/skills/.bee-render.json",
+        ".agents/skills/.bee-render.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/.bee-render.json",
+        ".opencode/skills/.bee-render.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": ".bee/bin/bee dev regen && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check && diff -q skills/bee-capturing/references/promotion.md .claude-plugin/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .claude/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .agents/skills/bee-capturing/references/promotion.md && rg -q fix-at packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md skills/bee-capturing/references/promotion.md docs/knowledge/areas/human-mailbox/overview.md .bee/verify/verify-app/features/worktree-and-close.md — green:live — the cell's own verify, run step by step: regen 3/3 green, verbs::drivers::tests 305 passed 0 failed (every_template_carries_the_original_request_block_and_matches_disk ok), agents_block_render_parity 1 passed, release-manifest --check 376 file(s) match, the three promotion.md mirrors diff silent, rg finds fix-at in all seven files, and the rendered AGENTS.md bullet plus .bee/bin/prompts/worker-cell.md:65 were read back. The PATH prefix was spelled $HOME/.cargo/bin because the worktree guard refuses a runtime-computed CARGO_HOME inside a compound command; no step was skipped, filtered or narrowed.",
+      "deviations": [
+        "Committed regen outputs the cell's files list did not name (the .codex-plugin and .opencode promotion.md mirrors, the three verify-app feature copies that also carry mfa-1's cells-and-proof edit, five .bee-render.json files and .bee/onboarding.json) — bee dev regen's onboard step renders every tree, not only the three the cell named, and leaving them out would commit a half-rendered tree; each was reserved under mfa-w4 before the write — hit an unforeseen obstacle",
+        "Ran the verify chain as separate commands with PATH=\"$HOME/.cargo/bin:$PATH\" instead of the one &&-joined line — the worktree isolation guard refuses a compound command carrying ${CARGO_HOME:-...} — every step ran, in order, all green — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The python script editing docs/knowledge/areas/human-mailbox/overview.md inserted the new rule 17 before renumbering, so the following \"18. **\" matched twice and the script aborted mid-edit — renumber a manual ordered list from the bottom up first, then insert the new item"
+      ],
+      "baseline": "On the base commit e82490e22 the same chain was green with the old two-part prompt; between the template edit and regen the skew test every_template_carries_the_original_request_block_and_matches_disk is the step that goes red, which is why regen is the chain's first step."
+    },
+    "baseline": "On the base commit e82490e22 the same chain was green with the old two-part prompt; between the template edit and regen the skew test every_template_carries_the_original_request_block_and_matches_disk is the step that goes red, which is why regen is the chain's first step.",
+    "warnings": [
+      "advisory: this cap's commit changes 267 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "packages/bee/AGENTS.block.md's reflect bullet names --fix-at, the four values, the tie-break, and that it is required; AGENTS.md carries the same bullet as its rendered block and the block parity test is green",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "packages/bee/prompts/worker-cell.md's Result form spells the three-part mistake line and lists the four values; .bee/bin/prompts/worker-cell.md matches it and the skew test is green",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "promotion.md step 1 names fix-at reflections as an input and states the check/architecture and doctrine routes per D5; the three mirrored copies equal the source",
+            "artifact": "skills/bee-capturing/references/promotion.md"
+          },
+          {
+            "requirement": "overview.md's reflection row names the required fix-at part, rule 15 names the new key and the honest lesson row, a rule states the close-time row filing, and the decisions list carries the six ids",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          },
+          {
+            "requirement": "worktree-and-close.md drives the Filed line",
+            "artifact": ".bee/verify/verify-app/features/worktree-and-close.md"
+          },
+          {
+            "requirement": ".bee/bin/bee dev release-manifest --check is green after one regen",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T06:23:17.917Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "regen_obligation_ack": "the verify's first step is .bee/bin/bee dev regen, whose second step IS onboard --repo-root . --apply (devtools/mod.rs chain), so the ledger regen runs inside this cell; the literal onboard --json read is subsumed",
+  "status": "capped"
+}
