@@ -7639,7 +7639,7 @@ Parity test plan.
         "outcome": "parity verified",
         "commit": &commit_sha,
         "files": ["src/parity.rs"],
-        "tests": "manual inspection — green:live — checked",
+        "tests": "manual inspection — green:live — checked, evidence /tmp/x/evidence/r1",
         "deviations": []
     });
     let mismatched_cap = Command::new(&bee_target)
@@ -7661,7 +7661,7 @@ Parity test plan.
         "outcome": "parity verified",
         "commit": &commit_sha,
         "files": ["src/parity.rs"],
-        "tests": "test -f src/parity.rs — green:live — parity file verified on disk",
+        "tests": "test -f src/parity.rs — green:live — parity file verified on disk, evidence /tmp/x/evidence/r1",
         "deviations": []
     });
     let matching_cap = Command::new(&bee_target)
@@ -7694,7 +7694,7 @@ Parity test plan.
     assert_eq!(trace["verify_command"], "test -f src/parity.rs");
     assert_eq!(trace["verify_output"], "green:live");
     assert_eq!(trace["verify_passed"], true);
-    assert_eq!(trace["verification_evidence"], "parity file verified on disk");
+    assert_eq!(trace["verification_evidence"], "parity file verified on disk, evidence /tmp/x/evidence/r1");
 
     let verify_cmd = trace["verify_command"].as_str().expect("verify_command must be a string");
     let replay_out = Command::new("sh")

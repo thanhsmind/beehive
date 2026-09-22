@@ -94,6 +94,15 @@ pub(crate) const PROOF_RESULT_VALUES: [&str; 3] = [
     "green:static",
 ];
 
+pub(crate) fn proof_reason_names_evidence(reason: &str) -> bool {
+    reason.split_whitespace().any(|token| {
+        token.starts_with("http://")
+            || token.starts_with("https://")
+            || token.starts_with('/')
+            || token.contains("evidence/")
+    })
+}
+
 /// parseTestsProof — splits a D8 proof string `<command> — <result> —
 /// <scope reason>` into its three segments, splitting on the FIRST TWO
 /// occurrences of [`PROOF_SEPARATOR`] only, so the reason segment may
@@ -259,6 +268,13 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
                     "cells finish: --report key \"tests\" result segment is \"{result}\" — a cap records HOW the change was shown to work, so the result must be one of {} (a bare \"green\" no longer says which).",
                     PROOF_RESULT_VALUES.join(", ")
                 )))
+            }
+            Some((_, result, reason))
+                if result == "green:live" && !proof_reason_names_evidence(&reason) =>
+            {
+                return Err(Fail::Thrown(
+                    "cells finish: --report key \"tests\" result \"green:live\" names no evidence locator in its scope reason — a live proof must say where it can be reopened: a run URL (http:// or https://), an absolute path, or a path containing evidence/ (control-bee writes to $VERIFY_HOME/evidence/<run-id>).".to_string(),
+                ))
             }
             Some(_) => {}
             None => {

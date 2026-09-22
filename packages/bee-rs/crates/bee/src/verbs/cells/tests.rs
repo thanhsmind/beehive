@@ -6067,7 +6067,7 @@ use std::time::Instant;
             let id = format!("pse-v2{n}");
             write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
 
-            let proof = format!("echo ok — {strength} — touched close.rs");
+            let proof = format!("echo ok — {strength} — touched close.rs, evidence /tmp/x/evidence/r1");
             let report = json!({
                 "outcome": "o", "commit": "c", "files": [],
                 "tests": proof, "deviations": [],
@@ -6077,6 +6077,72 @@ use std::time::Instant;
             let capped = cap_cell_from_flags(root, &flags, false).unwrap();
             assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
         }
+    }
+
+    #[test]
+    fn report_tests_green_live_without_evidence_locator_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "lpe-v1", &cell("lpe-v1", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"echo ok — green:live — checked","deviations":[]}"#;
+        let flags = cap_flags_report("lpe-v1", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("names no evidence locator"), "{refusal}");
+        assert!(refusal.contains("http:// or https://"), "{refusal}");
+        assert!(refusal.contains("an absolute path"), "{refusal}");
+        assert!(refusal.contains("evidence/"), "{refusal}");
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(cell_file(root, "lpe-v1")).unwrap())
+                .unwrap();
+        assert_eq!(after["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn report_tests_green_live_accepts_every_locator_shape() {
+        for (n, reason) in [
+            "https://github.com/o/r/actions/runs/1",
+            "/home/u/.local/state/bee-verify/evidence/r1 snapshot ok",
+            "see evidence/20260922-1 out files",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_bee_config(root, &json!({"commands": {"test": "none"}}));
+            let id = format!("lpe-v2{n}");
+            write_cell_fixture(root, &id, &cell(&id, "claimed", "f", json!([])));
+
+            let proof = format!("echo ok — green:live — {reason}");
+            let report = json!({
+                "outcome": "o", "commit": "c", "files": [],
+                "tests": proof, "deviations": [],
+            })
+            .to_string();
+            let flags = cap_flags_report(&id, Some(&report));
+            let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+            assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
+        }
+    }
+
+    #[test]
+    fn report_tests_green_unit_needs_no_evidence_locator() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "lpe-v3", &cell("lpe-v3", "claimed", "f", json!([])));
+
+        let proof = "echo ok — green:unit — touched close.rs";
+        let report = json!({
+            "outcome": "o", "commit": "c", "files": [],
+            "tests": proof, "deviations": [],
+        })
+        .to_string();
+        let flags = cap_flags_report("lpe-v3", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["report"]["tests"], json!(proof));
     }
 
     /// D8: --report is now required on every cap path — an absent flag
@@ -10077,7 +10143,7 @@ use std::time::Instant;
         c["verify"] = json!("cargo test -p bee pihp_replayable_proof");
         write_cell_fixture(root, "pihp-fields", &c);
 
-        let report = r#"{"outcome":"passed tests","commit":"abc1234","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:live — live verification in sandbox","deviations":[]}"#;
+        let report = r#"{"outcome":"passed tests","commit":"abc1234","files":[],"tests":"cargo test -p bee pihp_replayable_proof — green:live — live verification in sandbox, evidence /tmp/x/evidence/r1","deviations":[]}"#;
         let flags = cap_flags_report("pihp-fields", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
 
@@ -10086,7 +10152,7 @@ use std::time::Instant;
         assert_eq!(trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
         assert_eq!(trace["verify_output"], json!("green:live"));
         assert_eq!(trace["verify_passed"], json!(true));
-        assert_eq!(trace["verification_evidence"], json!("live verification in sandbox"));
+        assert_eq!(trace["verification_evidence"], json!("live verification in sandbox, evidence /tmp/x/evidence/r1"));
 
         // Persisted cell on disk must also have all 4 fields non-null
         let on_disk = read_cell_norm(root, "pihp-fields").ok().unwrap().unwrap();
@@ -10094,7 +10160,7 @@ use std::time::Instant;
         assert_eq!(disk_trace["verify_command"], json!("cargo test -p bee pihp_replayable_proof"));
         assert_eq!(disk_trace["verify_output"], json!("green:live"));
         assert_eq!(disk_trace["verify_passed"], json!(true));
-        assert_eq!(disk_trace["verification_evidence"], json!("live verification in sandbox"));
+        assert_eq!(disk_trace["verification_evidence"], json!("live verification in sandbox, evidence /tmp/x/evidence/r1"));
     }
 
     #[test]
