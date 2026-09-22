@@ -21,6 +21,7 @@ on a different, long-flaky test.
   `create_new` on it fails with `ERROR_ACCESS_DENIED`. The store lock this
   module copies already treats `PermissionDenied` as Windows-transient
   (`hooks/prompt_context.rs:1736`).
+<!-- bee:not-a-deferral: the quoted assertion text names the harness's deferred command; the fixture sweep has its own trigger -->
 - Linux, run 35718068277 (and 35716164227, 35568900584, 35474190730 before
   it): `shell_tool_result_captures_marker_and_agent_settled_submits_private_command`
   fails `deferred command must execute switchSession` (left 0, right 1) at
@@ -28,6 +29,7 @@ on a different, long-flaky test.
   while the harness runs the command from `setTimeout(…, 0)` through an
   async handler; the harness already has a polling `await_messages` step and
   a `positive_wait_ms()` window meant for exactly this.
+<!-- /bee:not-a-deferral -->
 
 ## What will be done
 

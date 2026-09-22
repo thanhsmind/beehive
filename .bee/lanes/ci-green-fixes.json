@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "ci-green-fixes",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"ci-green-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Run cells cgf-1 and cgf-2 inline",
+  "next_action": "bee close --feature ci-green-fixes",
   "created_at": "2026-09-22T11:02:01.125Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Gate đã duyệt. Giờ sửa 2 file.",
-    "asked_at": "2026-09-22T11:03:23.874Z",
-    "session": "aff5297e-0798-4b11-88d0-789832ebce95"
-  },
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "tiny",
@@ -174,5 +169,14 @@
         "behavior_change": false
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "ci-green-fixes",
+    "date": "2026-09-22",
+    "at": "2026-09-22T11:04:54.652Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "bee close --feature ci-green-fixes"
   }
 }
