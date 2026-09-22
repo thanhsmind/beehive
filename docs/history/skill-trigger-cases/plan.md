@@ -50,7 +50,7 @@ Read `principle_index_parity.rs:1-50` and `pointer_integrity.rs:1-40` (the fence
 
 Recommended path: one integration test file `tests/skill_triggers.rs` holding the structural test (D3–D5) and one `#[ignore]` eval test (D6) that reads `BEE_SKILL_TRIGGER_EVAL` as the agent command; one fixture with the first case set for all 20 skills; one checklist row (D7). SMALLER PATH: a fixture without the eval would leave descriptions unmeasured (D6 is locked); a per-skill fixture ships into hosts (claim 1). PASS.
 
-Waves: stc-1 and stc-2 run in parallel — no shared file.
+Waves: skt-1 and skt-2 run in parallel — no shared file.
 
 ## Role assignments
 
@@ -60,8 +60,8 @@ Waves: stc-1 and stc-2 run in parallel — no shared file.
   "runtime": "claude",
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
-    {"stage":"test-and-fixture","classification":"required","role":"test","reason":"stc-1 authors the fence, the ignored eval and the first case set."},
-    {"stage":"documentation","classification":"required","role":"docs","reason":"stc-2 adds the checklist row and runs the regen chain for the rendered skill copies."},
+    {"stage":"test-and-fixture","classification":"required","role":"test","reason":"skt-1 authors the fence, the ignored eval and the first case set."},
+    {"stage":"documentation","classification":"required","role":"docs","reason":"skt-2 adds the checklist row and runs the regen chain for the rendered skill copies."},
     {"stage":"implementation","classification":"not-applicable","role":"code","reason":"No runtime code changes."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"This page is the plan; the leader wrote it."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"No release rides this feature."},
@@ -91,13 +91,13 @@ Two cells, one slice.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| stc-1 | Fence every skill description with opening briefs and near misses | `packages/bee-rs/crates/bee/tests/skill_triggers.rs` (new), `packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json` (new) | — | the suite fails by name when a skill has too few cases or a brief names its skill; `BEE_SKILL_TRIGGER_EVAL="claude -p" cargo test … -- --ignored` prints a per-skill pass count | `cargo test --test skill_triggers` green, red-first on a deliberately short fixture |
-| stc-2 | Tell skill authors to add trigger cases | `skills/bee-writing-skills/SKILL.md`, `docs/history/codex-harness-hardening/release-manifest.json` | — | the SKILL.md checklist has one row pointing at the fixture and the suite rule | `bee dev release-manifest --check` green |
+| skt-1 | Fence every skill description with opening briefs and near misses | `packages/bee-rs/crates/bee/tests/skill_triggers.rs` (new), `packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json` (new) | — | the suite fails by name when a skill has too few cases or a brief names its skill; `BEE_SKILL_TRIGGER_EVAL="claude -p" cargo test … -- --ignored` prints a per-skill pass count | `cargo test --test skill_triggers` green, red-first on a deliberately short fixture |
+| skt-2 | Tell skill authors to add trigger cases | `skills/bee-writing-skills/SKILL.md`, `docs/history/codex-harness-hardening/release-manifest.json` | — | the SKILL.md checklist has one row pointing at the fixture and the suite rule | `bee dev release-manifest --check` green |
 
 ```json
 [
   {
-    "id": "stc-1",
+    "id": "skt-1",
     "feature": "skill-trigger-cases",
     "title": "Fence every skill description with opening briefs and near misses",
     "lane": "small",
@@ -115,7 +115,7 @@ Two cells, one slice.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Write packages/bee-rs/crates/bee/tests/skill_triggers.rs in the shape of principle_index_parity.rs (std + serde_json only, repo root from CARGO_MANIFEST_DIR ancestors, findings collected then reported by name). It reads every skills/bee-*/SKILL.md, parses the front matter between the first two `---` lines by hand, and takes `description:` in both spellings — a quoted one-liner and a `>-` folded block (join the indented continuation lines with one space). Scope = every skills/bee-* directory whose name does not start with bee-principle- (per D1). Fixture packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json is a JSON array of objects `{\"brief\": string, \"expect\": [string], \"near\": string}`; `near` may be absent on a case that only expects (per D3). Test `skill_triggers_fixture_is_complete` fails, naming each offender, when: a skill in scope has fewer than 3 cases whose expect contains it, or fewer than 2 whose near equals it; a case names a skill (in expect or near) with no skills/<name>/SKILL.md; a brief contains, case-insensitively, the slug `bee-xyz` or `/bee-xyz` of any skill it expects or nears (per D4); two cases share a brief after trimming. RED FIRST: write the fixture with only one skill's cases, run the test, watch it fail naming the other 19, then fill it. Fill the fixture for all 20 skills: at least 3 briefs each in the user's own words (mix English and short Vietnamese asks, since this repo's users write both), and at least 2 near misses each whose expect names the skill that should open instead (or [] for a plain question that opens nothing) — the near misses must be real confusions: bee-how vs bee-why vs bee-teach; bee-researching vs bee-wayfinding; bee-verifying vs bee-verify-upkeep; bee-reviewing vs a plain code question; bee-shaping vs bee-planning; bee-capturing vs bee-evolving; bee-grooming vs a bug report; bee-herding vs bee-swarming vs bee-herdr; bee-unslop vs bee-technical-writing. Then the eval: `#[ignore] fn skill_triggers_real_agent_eval` reads env BEE_SKILL_TRIGGER_EVAL; unset → print `skipped: BEE_SKILL_TRIGGER_EVAL is unset (set it to an agent command such as `claude -p` to run the paid eval)` and return; set → for each case build the prompt `You route user requests to skills. Skills (name: description):\\n<list of in-scope name: description>\\n\\nRequest: <brief>\\n\\nAnswer with only JSON: {\"skills\": [...]} naming the skills that should open, or [] for none.`, run the command via `sh -c \"$CMD\"` with the prompt on stdin 3 times, parse the first JSON object in stdout, and score a run right when no near skill appears, an expect [] case returns an empty list, and otherwise at least one expected skill appears; a case passes at 2 of 3; print one line per skill `<skill>: <passed>/<cases>` and a final total, and fail the test only when a case passed 0 of 3 (per D6). NO COMMENTS of any form in the code (no_code_comments is on; the ratchet reds the suite if the count rises). One commit, subject in imperative mood, trailer `cell: stc-1`.",
+    "action": "Write packages/bee-rs/crates/bee/tests/skill_triggers.rs in the shape of principle_index_parity.rs (std + serde_json only, repo root from CARGO_MANIFEST_DIR ancestors, findings collected then reported by name). It reads every skills/bee-*/SKILL.md, parses the front matter between the first two `---` lines by hand, and takes `description:` in both spellings — a quoted one-liner and a `>-` folded block (join the indented continuation lines with one space). Scope = every skills/bee-* directory whose name does not start with bee-principle- (per D1). Fixture packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json is a JSON array of objects `{\"brief\": string, \"expect\": [string], \"near\": string}`; `near` may be absent on a case that only expects (per D3). Test `skill_triggers_fixture_is_complete` fails, naming each offender, when: a skill in scope has fewer than 3 cases whose expect contains it, or fewer than 2 whose near equals it; a case names a skill (in expect or near) with no skills/<name>/SKILL.md; a brief contains, case-insensitively, the slug `bee-xyz` or `/bee-xyz` of any skill it expects or nears (per D4); two cases share a brief after trimming. RED FIRST: write the fixture with only one skill's cases, run the test, watch it fail naming the other 19, then fill it. Fill the fixture for all 20 skills: at least 3 briefs each in the user's own words (mix English and short Vietnamese asks, since this repo's users write both), and at least 2 near misses each whose expect names the skill that should open instead (or [] for a plain question that opens nothing) — the near misses must be real confusions: bee-how vs bee-why vs bee-teach; bee-researching vs bee-wayfinding; bee-verifying vs bee-verify-upkeep; bee-reviewing vs a plain code question; bee-shaping vs bee-planning; bee-capturing vs bee-evolving; bee-grooming vs a bug report; bee-herding vs bee-swarming vs bee-herdr; bee-unslop vs bee-technical-writing. Then the eval: `#[ignore] fn skill_triggers_real_agent_eval` reads env BEE_SKILL_TRIGGER_EVAL; unset → print `skipped: BEE_SKILL_TRIGGER_EVAL is unset (set it to an agent command such as `claude -p` to run the paid eval)` and return; set → for each case build the prompt `You route user requests to skills. Skills (name: description):\\n<list of in-scope name: description>\\n\\nRequest: <brief>\\n\\nAnswer with only JSON: {\"skills\": [...]} naming the skills that should open, or [] for none.`, run the command via `sh -c \"$CMD\"` with the prompt on stdin 3 times, parse the first JSON object in stdout, and score a run right when no near skill appears, an expect [] case returns an empty list, and otherwise at least one expected skill appears; a case passes at 2 of 3; print one line per skill `<skill>: <passed>/<cases>` and a final total, and fail the test only when a case passed 0 of 3 (per D6). NO COMMENTS of any form in the code (no_code_comments is on; the ratchet reds the suite if the count rises). One commit, subject in imperative mood, trailer `cell: skt-1`.",
     "must_haves": {
       "truths": [
         "cargo test --test skill_triggers is green on the filled fixture",
@@ -139,7 +139,7 @@ Two cells, one slice.
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers"
   },
   {
-    "id": "stc-2",
+    "id": "skt-2",
     "feature": "skill-trigger-cases",
     "title": "Tell skill authors to add trigger cases",
     "lane": "small",
@@ -156,7 +156,7 @@ Two cells, one slice.
     ],
     "affects_skills": ["skills/bee-writing-skills/SKILL.md"],
     "affects_specs": [],
-    "action": "In skills/bee-writing-skills/SKILL.md, in the `## SKILL.md checklist (bee conventions)` list, directly after the `description:` row (the line starting `- [ ] \\`description\\`: one purpose clause, then \"Use when...\" triggers`), add one row: `- [ ] Trigger cases: a new or renamed skill adds at least 3 briefs that open it and 2 near misses that must not to \\`packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json\\` (\\`brief\\`/\\`expect\\`/\\`near\\`; a brief never names its skill) — the suite's \\`skill_triggers\\` test refuses a skill with none; \\`BEE_SKILL_TRIGGER_EVAL=\"claude -p\" cargo test --test skill_triggers -- --ignored\\` asks a real agent (per skill-trigger-cases D7)`. Change nothing else in the file. Then run `.bee/bin/bee dev regen` so the rendered copies under .claude/, .agents/ and .opencode/ match, and commit the refreshed copies plus docs/history/codex-harness-hardening/release-manifest.json with the rest. Prove: `.bee/bin/bee dev release-manifest --check` green. One commit, subject in imperative mood, trailer `cell: stc-2`.",
+    "action": "In skills/bee-writing-skills/SKILL.md, in the `## SKILL.md checklist (bee conventions)` list, directly after the `description:` row (the line starting `- [ ] \\`description\\`: one purpose clause, then \"Use when...\" triggers`), add one row: `- [ ] Trigger cases: a new or renamed skill adds at least 3 briefs that open it and 2 near misses that must not to \\`packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json\\` (\\`brief\\`/\\`expect\\`/\\`near\\`; a brief never names its skill) — the suite's \\`skill_triggers\\` test refuses a skill with none; \\`BEE_SKILL_TRIGGER_EVAL=\"claude -p\" cargo test --test skill_triggers -- --ignored\\` asks a real agent (per skill-trigger-cases D7)`. Change nothing else in the file. Then run `.bee/bin/bee dev regen` so the rendered copies under .claude/, .agents/ and .opencode/ match, and commit the refreshed copies plus docs/history/codex-harness-hardening/release-manifest.json with the rest. Prove: `.bee/bin/bee dev release-manifest --check` green. One commit, subject in imperative mood, trailer `cell: skt-2`.",
     "must_haves": {
       "truths": [
         "the checklist has one trigger-cases row naming the fixture path and the eval command",
@@ -166,7 +166,7 @@ Two cells, one slice.
         {"path": "skills/bee-writing-skills/SKILL.md", "substantive": "the trigger-cases checklist row"}
       ],
       "key_links": [
-        "stc-1's fixture path is the path the row names"
+        "skt-1's fixture path is the path the row names"
       ],
       "prohibitions": [
         "No hand edit under .claude/, .agents/ or .opencode/",
