@@ -274,7 +274,7 @@ High-risk: the twelve dimensions of `edge-dimensions.md`, applicable ones probed
 
 ## Out of scope
 
-- Refusing raw `git push` from the main checkout in execution phases (CONTEXT Deferred Ideas).
+- Refusing raw `git push` from the main checkout in execution phases (filed as a backlog row, see CONTEXT.md "Out of scope, filed as backlog rows").
 - Reading a script's contents for pushes it contains.
-- A doctor row reporting the key's state (the read-side signal for a worktree-flipped config that lands in main at merge — the merge diff is the signal today; Deferred Ideas).
+- A doctor row reporting the key's state (the read-side signal for a worktree-flipped config that lands in main at merge — the merge diff is the signal today; filed as a backlog row).
 - A per-call escape hatch for a human in their own worktree (would be a new decision).

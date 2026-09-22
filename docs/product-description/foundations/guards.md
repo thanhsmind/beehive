@@ -28,7 +28,9 @@ What each guard watches, when it fires, and what its deny opens with. Write-capa
 
 - **Direct-edit guard** — CLI-owned store files deny hand edits in every phase, naming the verb ([the store](store.md) carries the table).
 - **Docs-history code guard** — a code-extension file written under `docs/history/` (the tech-agnostic knowledge layer) is denied toward the project's own scripts directory.
-- **Scratch-shape guard** — ephemeral probe/verdict/digest files landing in a tracked directory are denied toward `.bee/tmp/` (or `.bee/spikes/` for feasibility proofs), swept later by `bee tmp sweep`.
+<!-- bee:not-a-deferral: describes the scratch guard's sweep mechanism, not a promise to act later -->
+- **Scratch-shape guard** — ephemeral probe/verdict/digest files landing in a tracked directory are denied toward `.bee/tmp/` (or `.bee/spikes/` for feasibility proofs), swept afterwards by `bee tmp sweep`
+<!-- /bee:not-a-deferral -->.
 - **Plan-freeze guard** — a feature's `plan.md` denies direct edits once its shape gate is approved; the remedy is a stamped revision (`bee state plan-rev bump`).
 
 ### Coordination (write-capable tools)

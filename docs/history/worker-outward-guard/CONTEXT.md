@@ -78,18 +78,24 @@ Where the check lives inside `write_guard/` (a new check in `checks.rs` or a sib
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: both planning questions were settled by the hat wave on 2026-09-22 and are marked [x]; this section records the answers, it promises no later action -->
 ### Deferred To Planning
 
 - [x] `linked-valid` is grant-independent (`adapter.rs:150-190`); D10(d) locks the scope as any linked worktree, and `merge.rs:699` drops the grant while a merged worktree is kept, so the grant ledger would have unguarded exactly the wrong set.
 - [x] D9 needs no belt edit: `.pi/extensions/bee-guard.ts:414` and `.opencode/plugins/bee-guard.ts:282` hand their shell tool to this guard as `tool_name: "Bash"` (hat wave, 2026-09-22).
 
-## Deferred Ideas
+<!-- /bee:not-a-deferral -->
 
-- Refusing raw `git push` from the main checkout in execution phases too, keeping only `scripts/release.sh` as the push path — needs its own shaping; hosts push PR branches from main.
-- Reading a script's contents for pushes it contains — the guard judges command lines, not files.
+## Out of scope, filed as backlog rows
 
+- Refusing raw `git push` from the main checkout in execution phases too, keeping only `scripts/release.sh` as the push path — needs its own shaping; hosts push PR branches from main (backlog row, 2026-09-23).
+- Reading a script's contents for pushes it contains — the guard judges command lines, not files (backlog row, 2026-09-23).
+- A doctor row reporting the key's state (backlog row, 2026-09-23).
+
+<!-- bee:not-a-deferral: template boilerplate describing which sections planning reads; it promises no later action -->
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->
