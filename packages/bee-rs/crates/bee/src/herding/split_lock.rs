@@ -143,6 +143,8 @@ fn try_acquire(lock_path: &Path, body: &Value) -> Result<bool, String> {
             Ok(true)
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        #[cfg(windows)]
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false),
         Err(e) => Err(format!("herding split lock: {}: {e}", lock_path.display())),
     }
 }
