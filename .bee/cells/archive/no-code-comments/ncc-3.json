@@ -1,0 +1,273 @@
+{
+  "id": "ncc-3",
+  "feature": "no-code-comments",
+  "title": "Refuse a write that adds a comment line to a code file",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ncc-1"
+  ],
+  "decisions": [
+    "c2477366-4b6c-4eca-a3c7-37b2062f12da",
+    "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+    "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5",
+    "cf9d0ee6-ab5f-4746-888e-7e98cadf0f2d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/no-code-comments/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/comments.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    ".bee/verify/verify-app/features/comment-guard.md"
+  ],
+  "action": "Add the comment arm to the write guard (per D3, D7, D4). All new code in this cell is comment-free; the ratchet in ncc-2 polices these files, so the proof ends with its test target. SHARED RECONSTRUCTION: extract from the config arm (rg hit: `        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json`) one helper `fn reconstruct_target_text(tool_name: &str, tool_input: &Map<String, Value>, root_pb: &Path, rel: &str) -> Option<(String, String)>` returning (old, new) whole-file text: Write → old = disk or empty, new = `content` (rg hit: `let Some(content) = tool_input.get(\"content\").and_then(Value::as_str) else {`); Edit → old = disk (rg hit: `let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {`), new = `current_text.replacen(old_s, new_s, 1)` (rg hit: that line); MultiEdit → the same fold over `edits` (rg hit: `let Some(Value::Array(edits)) = tool_input.get(\"edits\") else {`); None when the text cannot be reconstructed. Make the config arm call the helper for its own reconstruction so there is one home, keeping its refusals byte-identical (its existing tests prove that). NEW READERS: in guards.rs beside `pub(crate) fn fence_heredocs(command: &str) -> String {`, `pub(crate) fn heredoc_writes(command: &str) -> Vec<(String, String)>` — for each simple command that carries both a heredoc (`<<TAG` / `<<'TAG'` / `<<-TAG`) and a `>`/`>>` redirect target, the (target, body) pair, body = the lines between the operator line and the terminator; nothing for a heredoc with no redirect target or a redirect with no heredoc; in detectors.rs beside `pub(crate) fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {`, `pub(crate) fn apply_patch_added_lines(patch_text: &str) -> Vec<(String, Vec<String>)>` — per `*** Add File:` / `*** Update File:` target, the lines that start with `+` (marker stripped), in order. THE ARM, in main.rs directly after the config arm and only while `denial.is_none()`: read the merged config once here with `read_config(&store_root_pb)?` (the existing read at main.rs:126 is in the read-tool branch and is not reachable) and skip the whole arm unless `config.get(\"no_code_comments\") == Some(&Value::Bool(true))`; for each `rel` in `rel_paths`, skip the `**` sentinel (rg hit: `rel_paths = vec![\"**\".to_string()];`), skip unless `crate::comments::under_code_root(rel)`, then gather candidates: Write/Edit/MultiEdit → `reconstruct_target_text`, lang from `comments::code_lang(rel, first line of new)`, `added = comments::added_comment_lines(lang, &old, &new)`; Bash/exec → for each (target, body) from `heredoc_writes(&command)` whose normalized target equals rel: old = disk or empty, new = body (a `>>` append: new = disk + body), same diff; a Bash write with no readable body (echo, printf, sed, mv, cp) is NOT refused by this arm; apply_patch → for each (target, lines) from `apply_patch_added_lines` whose target equals rel: added = the `+` lines that `comments::is_comment_line` counts and `is_exception` does not, numbered by their position among the added lines (the refusal says `added line <n>`); Delete/Move targets are skipped. On the first non-empty `added`, `denial = Some(...)` with ONE message: `bee comment guard denied this write: <rel>:<line> adds a comment line (\"<trimmed, max 80 chars>\"). This repository keeps no comments in code (no_code_comments) — not //, not /// or //! doc comments, not /* */, not #. FIX: put the why in a docs/knowledge concept whose Pointers name this file, or log it with bee decisions log; a public item's description goes in the owning docs/knowledge concept; a workaround is fixed, or filed with bee backlog add and cited from the concept — never from the code. Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top.` Never refuse a target that is not under a code root or not a code file. TESTS, red-first, in write_guard/tests.rs, using `fn build_fixture(phase: &str, execution_approved: bool) -> Fx {`, a plain `std::fs::write(fx.root.join(\".bee/config.json\"), ...)` carrying `{\"no_code_comments\": true}` (the config-guard tests at tests.rs:313 show the shape), and `fn expect_done(payload: Value, cwd: &Path) -> Emit {`; EVERY fixture string stays an inline one-line `json!`/`\"...\\n...\"` literal — no multi-line raw string whose body line starts with `//` or `#`, or the ratchet counts it. Cases: Edit adding `// note` into packages/bee-rs/crates/bee/src/x.rs (write the file first) → deny with FIX, `x.rs:<line>`, the text `/// or //!`; the same Edit with the key absent → allow, with `false` → allow; Edit whose old_string and new_string carry the same comment moved → allow; Edit that deletes a comment → allow; Write of a new .rs file with a `///` line → deny; Write of a `.md` with `// x` → allow; Write under `docs/` → allow; Bash `cat > scripts/x.sh <<'EOF'` with a `# note` body line → deny, with only a `#!/usr/bin/env bash` body line → allow; Bash `echo '# x' > scripts/x.sh` → allow (unreadable); a `SAFETY:` line → allow; MultiEdit with one offending edit → deny naming it; apply_patch adding a `//` line under the crate → deny naming `added line <n>`; guards.rs unit tests for heredoc_writes (with and without a target, two heredocs, unterminated) and detectors.rs unit tests for apply_patch_added_lines (two targets, a Delete target ignored). In tests/hook_contracts.rs beside `fn a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr() {`: one end-to-end test that the comment deny reaches the host as exit 2 with FIX on stderr.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::write_guard:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline::",
+  "must_haves": {
+    "truths": [
+      "with no_code_comments true, an Edit, Write or MultiEdit that adds a comment line to a file under a code root, a Bash heredoc write into one, and an apply_patch that adds one are refused with a message naming the file, the line, the trimmed line, that /// and //! are comments, the two homes for a why, the home for a public item's description, and the three exceptions",
+      "a moved or deleted comment, a non-code target, a #! line, a SAFETY line, a license header, a Bash write with no readable body, and a repository without the key all pass this arm",
+      "the config arm still emits byte-identical refusals through the shared reconstruction helper",
+      "the deny reaches the host as exit 2 with FIX on stderr",
+      "every other write-guard test stays green and the comment ratchet stays green over the arm's own files"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "substantive": "reconstruct_target_text shared by the config arm and the comment arm; the comment arm gated by no_code_comments"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "substantive": "heredoc_writes with tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+        "substantive": "apply_patch_added_lines with tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "the arm's tests across the five tool shapes and the pass cases, inline fixtures only"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+        "substantive": "one end-to-end deny test"
+      }
+    ],
+    "key_links": [
+      "the arm calls comments::under_code_root, code_lang, added_comment_lines, is_comment_line and is_exception — no second predicate",
+      "the arm sits after the config arm and only while denial is none; config is read once in the write branch"
+    ],
+    "prohibitions": [
+      "No change to any existing refusal's text or order",
+      "No refusal on .md, .json, .toml, docs or .bee state paths, and none on a Bash write whose content the guard cannot see",
+      "No comment line in main.rs, guards.rs, detectors.rs, tests.rs or hook_contracts.rs from this cell; no multi-line fixture whose line starts with // or #"
+    ]
+  },
+  "trace": {
+    "worker": "ncc-w3r",
+    "outcome": "Write guard refuses the first comment line a change adds to a code file; re-capped after the rehomed why",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+    ],
+    "deviations": [
+      "re-cap after a NEEDS_REVISION on a deleted why: no source change this round; the why is rehomed in decision 658470bb — the plan was wrong about a fact",
+      "capped with --sync-ack: the sync door named rule home AGENTS.md, which this cell's five write-guard files never touch — the AGENTS.md statement of the rule is sibling cell ncc-4 (commit 1f0fdda9), so the skill-file sync it asks for is the orchestrator's scope, not this cell's — hit an unforeseen obstacle",
+      "reconstruct_target_text returns Result<(String,String), ReconstructFail> instead of Option<(String,String)> — a typed refusal lets the config arm keep its messages byte-identical — found a better route",
+      "heredoc_writes returns a named HeredocWrite { target, append, body } instead of a (String, String) tuple — three named fields read better than a tuple at both call sites — found a better route",
+      "the heredoc and apply_patch unit tests live in new #[cfg(test)] mod blocks inside guards.rs and detectors.rs — the tests sit beside the readers they cover — found a better route",
+      "sync-ack: this cell's five files are write-guard sources and touch no rule home; the AGENTS.md statement of the no-comments rule is sibling cell ncc-4 (commit 1f0fdda9), and this cap is a re-cap with no source change"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T09:51:29.264Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's own verify string, run whole and unmodified: 261 + 15 + 9 passed, 0 failed. It is narrowed by filter to the write-guard arm, the hook-contract binary and the comment ratchet that polices this cell's files; the rest of the crate suite was not run here and is CI's net.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::write_guard:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline::",
+    "claimed_at": "2026-09-22T09:47:17.247Z",
+    "mistakes": [
+      {
+        "wrong": "I added a section banner comment line '// ncc-3: the comment guard arm' to write_guard/tests.rs, in a cell whose prohibitions forbid any comment line in that file",
+        "better": "let the test names carry the section, as comments.rs already does, and grep the diff for an added // line before the commit, not after",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Comment arm lands in write_guard (reconstruct_target_text in main.rs, heredoc_writes in guards.rs, apply_patch_added_lines in detectors.rs, arm tests in tests.rs, end-to-end deny in tests/hook_contracts.rs); re-capped with a fresh verify after the deleted why was rehomed in decision 658470bb",
+      "commit": "a5c804274eae00694a0512e64fb5f07bd6bb7810",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::write_guard:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline:: — green:unit — the cell's own verify string, run whole and unmodified: 261 + 15 + 9 passed, 0 failed. It is narrowed by filter to the write-guard arm, the hook-contract binary and the comment ratchet that polices this cell's files; the rest of the crate suite was not run here and is CI's net.",
+      "deviations": [
+        "re-cap after a NEEDS_REVISION on a deleted why: no source change this round; the why is rehomed in decision 658470bb — the plan was wrong about a fact",
+        "capped with --sync-ack: the sync door named rule home AGENTS.md, which this cell's five write-guard files never touch — the AGENTS.md statement of the rule is sibling cell ncc-4 (commit 1f0fdda9), so the skill-file sync it asks for is the orchestrator's scope, not this cell's — hit an unforeseen obstacle",
+        "reconstruct_target_text returns Result<(String,String), ReconstructFail> instead of Option<(String,String)> — a typed refusal lets the config arm keep its messages byte-identical — found a better route",
+        "heredoc_writes returns a named HeredocWrite { target, append, body } instead of a (String, String) tuple — three named fields read better than a tuple at both call sites — found a better route",
+        "the heredoc and apply_patch unit tests live in new #[cfg(test)] mod blocks inside guards.rs and detectors.rs — the tests sit beside the readers they cover — found a better route"
+      ],
+      "mistakes": [],
+      "baseline": "the same three targets were green at the first cap on a5c80427; this run re-proves them at HEAD 1f0fdda94 with the cell's verify string unmodified"
+    },
+    "baseline": "the same three targets were green at the first cap on a5c80427; this run re-proves them at HEAD 1f0fdda94 with the cell's verify string unmodified",
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "ncc3-t1",
+            "status": "PASS",
+            "evidence": "comment_guard_denial in write_guard/main.rs names the file, the locus, the trimmed line (80 chars), not /// or //! doc comments, both homes, the API home and the three exceptions; driven by comment_guard_refuses_an_edit_that_adds_a_comment_and_names_every_remedy, _refuses_a_new_file_written_with_a_doc_comment, _names_the_offending_edit_inside_a_multiedit, _reads_a_heredoc_body_, _refuses_an_apply_patch_that_adds_a_comment_by_added_line. hooks::write_guard:: 261 passed (base 245)."
+          },
+          {
+            "id": "ncc3-t2",
+            "status": "PASS",
+            "evidence": "Pass cases proven by comment_guard_allows_a_moved_comment_and_a_deleted_one, comment_guard_never_touches_a_non_code_file_or_a_path_outside_the_roots, the shebang-only heredoc case, comment_guard_allows_a_safety_line_on_unsafe, the echo write case, comment_guard_is_silent_without_the_key_and_with_the_key_false; the license header passes through comments.rs:100-128,143 (walked, no test in this cell)."
+          },
+          {
+            "id": "ncc3-t3",
+            "status": "PASS",
+            "evidence": "config_reconstruct_denial rebuilds each old string with the nine original tails verbatim and the UnsupportedTool sentence; compared against the deleted lines in git show a5c80427 -- main.rs; check order matches; the config_role_key_guard tests are inside the 261 green."
+          },
+          {
+            "id": "ncc3-t4",
+            "status": "PASS",
+            "evidence": "tests/hook_contracts.rs a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr asserts code 2, empty stdout, stderr with FIX and bee comment guard; --test hook_contracts 15 passed (base 14)."
+          },
+          {
+            "id": "ncc3-t5",
+            "status": "PASS",
+            "evidence": "hooks::write_guard:: 261/0 against a 245 base; devtools::comment_baseline:: 9 passed including every_code_file_is_at_or_below_its_comment_baseline over the arm's files. Only filtered targets were run, never the full suite."
+          },
+          {
+            "id": "ncc3-p1",
+            "status": "PASS",
+            "evidence": "Every config-guard refusal string and its order are preserved through config_reconstruct_denial; the arm is appended after the config loop under denial.is_none()."
+          },
+          {
+            "id": "ncc3-p2",
+            "status": "PASS",
+            "evidence": "The arm skips **, then under_code_root, then code_lang (None for .md/.json/.toml); tests cover .md under src and docs/x.rs; echo redirect allowed because heredoc_writes yields nothing without a heredoc (guards.rs test)."
+          },
+          {
+            "id": "ncc3-p3",
+            "status": "PASS",
+            "evidence": "git show a5c80427 adds zero comment-shaped lines; every fixture is an inline one-line literal; the ratchet is green over these files."
+          },
+          {
+            "id": "ncc3-x3",
+            "status": "PASS",
+            "evidence": "The arm sits after the config loop inside denial.is_none(), skipped unless config no_code_comments == true; continues on ** and on !under_code_root; Delete/Move fall to UnsupportedTool; read_config appears at main.rs:265 (Read-tool branch) and :704 (this arm) — one read in the write branch."
+          },
+          {
+            "id": "ncc3-x4",
+            "status": "PASS",
+            "evidence": "Byte comparison of config_reconstruct_denial's nine tails and the UnsupportedTool sentence against git show 56d8b03f main.rs shows identical strings and interpolation; config tests green."
+          },
+          {
+            "id": "ncc3-x5",
+            "status": "PASS",
+            "evidence": "Message content verified in comment_guard_denial; git show a5c80427 | rg '^\\+\\s*//' empty; unreadable Bash write allowed; fixtures inline."
+          },
+          {
+            "id": "ncc3-x6",
+            "status": "FAIL",
+            "evidence": "a5c80427 deletes four existing comment lines from write_guard/main.rs (199-202: Reconstruction reads the file actually being edited — never a fallback to the other config file, which would apply this edit's strings to bytes that are not its target) and rehomes the why nowhere: rg over docs/ and .bee/ finds no copy. D6 keeps existing comments unless their why moves; D4 says a removed why moves in the same change. Behavior unaffected: reconstruct_target_text still reads root_pb.join(rel).",
+            "failure_signature": "a5c80427 deletes the four-line 'Reconstruction reads the file actually being edited — never a fallback to the other config file' comment from write_guard/main.rs and rehomes the why nowhere, against D4 and D6."
+          }
+        ],
+        "failure_signature": "a5c80427 deletes the four-line 'Reconstruction reads the file actually being edited — never a fallback to the other config file' comment from write_guard/main.rs and rehomes the why nowhere, against D4 and D6.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T09:41:39.405Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "ncc3-x6",
+            "status": "PASS",
+            "evidence": "Decision 658470bb (tags no-code-comments/write-guard/rehomed-why, touches 0ee8248d = D4) is a decision log entry, one of the two homes D4 allows (CONTEXT.md:62); it names packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs and carries the deleted why verbatim in substance (the four lines at old 199-202 of a5c804274) plus its consequence; the why still describes the live code (main.rs:67 let target = root_pb.join(rel)). D6's no-home clause is satisfied after the fact; named deviation: D4's letter says in the same change, this row landed after the commit because a cap trace is append-only."
+          },
+          {
+            "id": "prior-checks-ncc-3",
+            "status": "PASS",
+            "evidence": "Every other check of the earlier ncc-3 verdict passed and is not re-derived in this narrow pass."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T09:46:01.216Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-09-22T09:41:39.405Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "sync_ack": "this cell's five files are write-guard sources and touch no rule home; the AGENTS.md statement of the no-comments rule is sibling cell ncc-4 (commit 1f0fdda9), and this cap is a re-cap with no source change",
+    "no_mistakes": true,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "with no_code_comments true, an Edit, Write or MultiEdit that adds a comment line to a file under a code root, a Bash heredoc write into one, and an apply_patch that adds one are refused with a message naming the file, the line, the trimmed line, that /// and //! are comments, the two homes for a why, the home for a public item's description, and the three exceptions",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+          },
+          {
+            "requirement": "a moved or deleted comment, a non-code target, a #! line, a SAFETY line, a license header, a Bash write with no readable body, and a repository without the key all pass this arm",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "the config arm still emits byte-identical refusals through the shared reconstruction helper",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+          },
+          {
+            "requirement": "the deny reaches the host as exit 2 with FIX on stderr",
+            "artifact": "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+          },
+          {
+            "requirement": "every other write-guard test stays green and the comment ratchet stays green over the arm's own files",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T09:52:03.498Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

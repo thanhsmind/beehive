@@ -1,0 +1,132 @@
+{
+  "id": "ncc-1",
+  "feature": "no-code-comments",
+  "title": "Decide what a comment line is, once",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "38e323d6-abc3-4cc7-b533-eb27ef0603ed"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/comments.rs",
+    "packages/bee-rs/crates/bee/src/main.rs"
+  ],
+  "read_first": [
+    "docs/history/no-code-comments/CONTEXT.md",
+    "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+    "packages/bee-rs/crates/bee/tests/specs_fence.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+  ],
+  "action": "Build the one classifier (per D1). NEW MODULE packages/bee-rs/crates/bee/src/comments.rs, declared in src/main.rs with a `mod comments;` line beside the other top-level modules (rg hit: `mod catalog;`). The module carries NO comments of its own — not `//`, not `///`, not `//!` — the fence will police it. Contents: `pub(crate) fn under_code_root(rel: &str) -> bool` — true for a `/`-separated repo-relative path that is under `packages/bee-rs/crates/<any>/src/`, `packages/bee/hooks/`, `packages/bee/lib/`, `scripts/`, or `.bee/verify/` (spell the crates rule as a prefix `packages/bee-rs/crates/` followed by one segment then `/src/`, never a fixed crate list); `pub(crate) enum Lang { Rust, Shell, Python }`; `pub(crate) fn code_lang(rel: &str, first_line: &str) -> Option<Lang>` by extension (.rs → Rust; .sh/.bash → Shell; .py → Python) or, when the name has no extension, by a `#!` first line containing sh, bash or python; `pub(crate) fn is_comment_line(lang: Lang, line: &str, in_block: &mut bool) -> bool` — Rust: trimmed line starts with `//` (covers `///` and `//!`), or `/*` opens a block that runs until `*/` with every inner line counting; Shell and Python: trimmed line starts with `#`; `pub(crate) fn is_exception(lang: Lang, line: &str, in_leading_block: bool) -> bool` — any line whose trimmed text starts with `#!` (a shebang, on line 1 or inside a heredoc body — scripts/codex-parity-canary-test.sh carries ten of them); a Rust comment whose text after the marker starts with `SAFETY:`; any comment line inside the file's leading comment block when that block contains `Copyright`, `SPDX-License-Identifier` or `Licensed under`; `pub(crate) fn count_comment_lines(lang: Lang, text: &str) -> usize` (comment lines minus exceptions); `pub(crate) fn comment_lines(lang: Lang, text: &str) -> Vec<(usize, String)>` — every counted comment line with its 1-based line number and trimmed content; `pub(crate) fn added_comment_lines(lang: Lang, old: &str, new: &str) -> Vec<(usize, String)>` — the multiset difference of comment_lines(new) minus comment_lines(old) by trimmed content, so a moved or deleted comment yields nothing, each with its line number in new; `pub(crate) fn walk_code_files(root: &Path) -> Vec<(String, Lang)>` — walk the repo under the five roots, skipping directories named target, node_modules or .git (the same skip list tests/instruction_laws.rs uses at `if matches!(name.as_ref(), \"target\" | \"node_modules\" | \".git\") {` — copy it, do not import it: tests cannot be imported), return `/`-normalized repo-relative paths sorted, each with its Lang; `pub(crate) fn repo_root() -> PathBuf` is NOT here — each caller resolves its own root. Document nothing in prose; let names and tests carry the meaning. TESTS, red-first, in a `#[cfg(test)] mod tests` at the bottom: each language's comment detection; `///` and `//!` count; a `/* */` block counts every inner line and closes; `#!` on line 1 and `#!` inside a body do not count; a `SAFETY:` line does not count; a leading license block does not count and a later `Copyright` comment does; a `//` at line start inside a string literal DOES count (assert it, with the note in the test name that it is the documented limitation); added_comment_lines returns nothing for a move and a delete and the right (line, text) for an add; code_lang finds an extension-less bash file by shebang and rejects a `.md`; under_code_root accepts `packages/bee-rs/crates/fleet/src/lib.rs` and rejects `packages/bee-rs/crates/bee/tests/x.rs`, `docs/x.rs` and `.bee/state.json`; walk_code_files on a temp tree returns `/` keys with no `\\` and skips a target/ directory.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee comments::",
+  "must_haves": {
+    "truths": [
+      "comments.rs is the one home of under_code_root, Lang, code_lang, is_comment_line, is_exception, count_comment_lines, comment_lines, added_comment_lines and walk_code_files, and carries no comment line itself",
+      "every #! line, every SAFETY: line and a leading license block are never counted; ///, //!, block inner lines and a string-literal // are counted",
+      "added_comment_lines is empty for a move and a delete and names the line for an add",
+      "walk_code_files returns /-normalized sorted keys under the five roots and skips target, node_modules and .git",
+      "code_lang finds an extension-less shebang file"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/comments.rs",
+        "substantive": "the classifier and its tests, comment-free"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/main.rs",
+        "substantive": "mod comments;"
+      }
+    ],
+    "key_links": [
+      "main.rs declares the module so devtools and hooks can use crate::comments"
+    ],
+    "prohibitions": [
+      "No comment line of any kind in comments.rs",
+      "No allowlist for string literals that look like comments",
+      "No change to any other file"
+    ]
+  },
+  "trace": {
+    "worker": "ncc-w1",
+    "outcome": "comments.rs classifies a comment line once for every code root; 14 tests green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/comments.rs",
+      "packages/bee-rs/crates/bee/src/main.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T07:17:12.975Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify, narrowed to the new module: 14 passed, 0 failed, 3827 filtered out; run from a script file because the worktree guard refuses a shell variable in a compound command",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee comments::",
+    "claimed_at": "2026-09-22T07:09:22.928Z",
+    "mistakes": [
+      {
+        "wrong": "drafted the test block with a cat heredoc into the scratchpad and the worktree guard refused the compound command",
+        "better": "should have written the file with the Write tool at once",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "comments.rs is the one home of under_code_root, Lang, code_lang, is_comment_line, is_exception, count_comment_lines, comment_lines, added_comment_lines and walk_code_files; main.rs declares mod comments; 14 unit tests green, red-first",
+      "commit": "56d8b03fcc31da0c5b35d8bc3cff791372651e90",
+      "files": [
+        "packages/bee-rs/crates/bee/src/comments.rs",
+        "packages/bee-rs/crates/bee/src/main.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee comments:: — green:unit — the cell verify, narrowed to the new module: 14 passed, 0 failed, 3827 filtered out; run from a script file because the worktree guard refuses a shell variable in a compound command",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "drafted the test block with a cat heredoc into the scratchpad and the worktree guard refused the compound command — should have written the file with the Write tool at once — none"
+      ],
+      "baseline": "on the base commit the same filter matched 0 tests (no comments module); with the stub bodies in place it was 14 failed, 0 passed — the red-first run"
+    },
+    "baseline": "on the base commit the same filter matched 0 tests (no comments module); with the stub bodies in place it was 14 failed, 0 passed — the red-first run",
+    "warnings": [
+      "advisory: this cap's commit changes 375 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "comments.rs is the one home of under_code_root, Lang, code_lang, is_comment_line, is_exception, count_comment_lines, comment_lines, added_comment_lines and walk_code_files, and carries no comment line itself",
+            "artifact": "packages/bee-rs/crates/bee/src/comments.rs"
+          },
+          {
+            "requirement": "every #! line, every SAFETY: line and a leading license block are never counted; ///, //!, block inner lines and a string-literal // are counted",
+            "artifact": "packages/bee-rs/crates/bee/src/comments.rs"
+          },
+          {
+            "requirement": "added_comment_lines is empty for a move and a delete and names the line for an add",
+            "artifact": "packages/bee-rs/crates/bee/src/comments.rs"
+          },
+          {
+            "requirement": "walk_code_files returns /-normalized sorted keys under the five roots and skips target, node_modules and .git",
+            "artifact": "packages/bee-rs/crates/bee/src/comments.rs"
+          },
+          {
+            "requirement": "code_lang finds an extension-less shebang file",
+            "artifact": "packages/bee-rs/crates/bee/src/comments.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T09:44:15.252Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

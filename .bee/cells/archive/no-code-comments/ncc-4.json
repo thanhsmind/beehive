@@ -1,0 +1,303 @@
+{
+  "id": "ncc-4",
+  "feature": "no-code-comments",
+  "title": "State the rule by id where agents read, record it in the knowledge layer, map it, and switch it on",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [
+    "ncc-2",
+    "ncc-3"
+  ],
+  "decisions": [
+    "002a935d-0da1-4ab1-acea-0c208806f31a",
+    "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5",
+    "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+    "69326d15-0a5d-44a4-b63b-c544686d2d61"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/prompts/worker-cell.md",
+    "AGENTS.md",
+    ".bee/bin/prompts/worker-cell.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    ".bee/verify/verify-app/features/comment-guard.md",
+    ".bee/verify/verify-app/features/README.md",
+    ".bee/config.json",
+    ".bee/config-sample.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/no-code-comments/CONTEXT.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    ".bee/verify/verify-app/features/cells-and-proof.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+    ".bee/verify/verify-app/features/comment-guard.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Land the rule where agents read it (per D5, D4), record it in the knowledge layer, map it, and switch it on (per D7), with ONE regen; never hand-edit AGENTS.md (it renders from the block). (1) packages/bee/AGENTS.block.md: add a MARKED rule directly before the bullet `- Write a mistake down the MOMENT you notice it` (rg hit: `- Write a mistake down the MOMENT you notice it, never composed from`): `<!-- rule: agents-no-code-comments -->` … `<!-- /rule -->` around one bullet, shaped like the marker at `<!-- rule: agents-one-commit-per-cell -->`: no comment in code, any language — not `//`, `///` or `//!`, not `/* */`, not `#`; the why lives in a docs/knowledge concept whose Pointers name the file, or in bee decisions log; a public item's description lives in the owning docs/knowledge concept; a workaround is fixed or filed with bee backlog add and cited from the concept; the three exceptions (a `#!` line, a `SAFETY:` line on unsafe, a license header at file top); the write guard refuses the write where `no_code_comments` is on and the comment baseline reds the suite. (2) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, section `## AGENTS.md rule homes`: add the row for `agents-no-code-comments` in the shape of the `agents-one-commit-per-cell` row (its home section and spoken line), so tests/rule_index_parity.rs finds the id in all three places. (3) packages/bee/prompts/worker-cell.md: extend the craft bullet (rg hit: `- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it.`) with one sentence: no comments in code — the why goes to docs/knowledge or bee decisions log, a public item's description to its concept; the guard refuses the rest. (4) docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md: add a section for the comment arm and the ratchet — the config key and that a granted worktree reads its own config while an ungranted one reads main's; the code roots (Pointers: packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, .bee/comment-baseline.json); what a comment line is per language and the three exceptions; the refusal shape and which tool shapes it reads (Write, Edit, MultiEdit, a Bash heredoc with a redirect target, apply_patch added lines) and which it cannot (a Bash write with no readable body); the string-literal limitation; the baseline's seed over unmerged branches (D2b), `--check`/`--write`, the ratchet test name; cite 38e323d6, 80ec3cd1, 0add770d, c2477366, 0ee8248d, 002a935d, 69326d15, e3bf4a57 in the frontmatter decisions list. Write the D6 sentence about the existing comments inside a fenced `<!-- bee:not-a-deferral: D6 records the batched cleanup as separate grooming work; nothing here promises a date --> … <!-- /bee:not-a-deferral -->` block so bee close's doc-deferral door does not stop on it. (5) .bee/verify/verify-app/features/comment-guard.md, modeled on cells-and-proof.md: what it is, how a user reaches it (an Edit adding `// x` to a .rs under a code root with the key on; `bee dev comment-baseline --check`), how to drive it with control-bee (set no_code_comments true in the sandbox's .bee/config.json via `control-bee put`, then run the hook with a crafted Edit payload the way tests/hook_contracts.rs does, or drive the refusal from a hooked session; run `control-bee cli -- dev comment-baseline --check` — note it refuses outside a source checkout, so the verb is driven from the source root, not the sandbox), gotchas (string-literal counting; hosts default off; an ungranted worktree reads main's key; the baseline never rises and a merge-caused rise is fixed by deleting the merged lines); add its row to README.md (rg hit: `- [Cells and the proof line](./cells-and-proof.md) covers adding, claiming and`). (6) .bee/config.json: add `\"no_code_comments\": true` beside `uat_stop`; .bee/config-sample.json: the key with `false`, nothing else. (7) Run `.bee/bin/bee dev regen` ONCE from the worktree root; stage by explicit path list — every listed file plus every rendered copy regen touched (skill mirrors of the feature map, .bee-render.json files, .bee/onboarding.json) — and check `git status` for packages/bee-rs/crates/bee/.bee/logs before the commit; never stage that log. Do NOT reinstall .bee/bin/bee. PROOF: after the regen, run the verify's test targets and checks; read back the rendered AGENTS.md rule and quote it in the cap report (`green:live`).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && rg -q no_code_comments packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md .bee/verify/verify-app/features/comment-guard.md .bee/config.json && rg -q agents-no-code-comments docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md AGENTS.md",
+  "must_haves": {
+    "truths": [
+      "AGENTS.block.md carries the marked rule agents-no-code-comments with the two homes, the API-doc home and the three exceptions; AGENTS.md's rendered block matches and the rule-index row exists (parity and rule-index tests green)",
+      "worker-cell.md's craft bullet states the ban and the homes; the vendored copy matches (skew test green)",
+      "write-guard-request-shapes.md records the arm, the readable and unreadable tool shapes, the ratchet, the seed rule and the eight decision ids, with the D6 sentence fenced as not-a-deferral (pointer-integrity green)",
+      "comment-guard.md exists and README.md lists it",
+      ".bee/config.json sets no_code_comments true; config-sample.json shows the key false",
+      "release-manifest --check is green after one regen and the test-timings log was never staged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "the marked rule"
+      },
+      {
+        "path": "AGENTS.md",
+        "substantive": "the rendered block — written by regen"
+      },
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "substantive": "the rule-index row"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "the craft bullet's no-comment sentence"
+      },
+      {
+        "path": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+        "substantive": "the comment arm and ratchet section with decision ids"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/comment-guard.md",
+        "substantive": "the feature file"
+      },
+      {
+        "path": ".bee/config.json",
+        "substantive": "no_code_comments: true"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md's block equals the rendered template; the rule id is in the block, the render and the index",
+      "the concept's Pointers name comments.rs, comment_baseline.rs and .bee/comment-baseline.json",
+      "release-manifest.json is refreshed in the same commit"
+    ],
+    "prohibitions": [
+      "No hand edit of AGENTS.md or any mirrored copy",
+      "No Rust edits; no reinstall of .bee/bin/bee",
+      "No other config key changes",
+      "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl is never staged"
+    ]
+  },
+  "trace": {
+    "worker": "ncc-w4",
+    "outcome": "Landed the agents-no-code-comments rule in the block, the render, the rule index and the worker prompt; recorded the arm and the ratchet in the hook-runtime concept; added the comment-guard verify feature file and its README row; switched no_code_comments on for this repo and documented it false in the sample",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+      ".bee/verify/verify-app/features/comment-guard.md",
+      ".bee/verify/verify-app/features/README.md",
+      ".bee/config.json",
+      ".bee/config-sample.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "added a one-line _doc entry for no_code_comments to .bee/config-sample.json beside the live false value — that file's _doc block is its only documentation (JSON has no comments), so a live key with no _doc line teaches a host nothing — found a better route",
+      "rewrote the comment-guard.md bullet that told a verifier to run bee config set --key no_code_comments / bee config get — bee ships no config verb; the sandbox key is written with control-bee put .bee/config.json, the shape tests/hook_contracts.rs uses — the plan was wrong about a fact",
+      "staged with git add .bee instead of naming .bee/config.json on the git add line — the config guard refuses ANY Bash command naming that path, git add included, and git add --dry-run .bee showed it resolved to exactly the six intended files — hit an unforeseen obstacle",
+      "sync-ack: AGENTS.md is touched only to ADD the new rule agents-no-code-comments; the agents-capture-line-at-close rule and its wording are unchanged, so its applied_at files (skills/bee-capturing/SKILL.md, skills/bee-hive/SKILL.md, skills/bee-hive/references/routing-and-contracts.md) have nothing to sync"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T09:40:54.472Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's own verify, run whole after ONE regen: verbs::drivers 305 passed, agents_block_render_parity 1, rule_index_parity 3, pointer_integrity 10, instruction_laws 9, release-manifest --check 376 files match, both rg fences hit. Live beside it: the rendered AGENTS.md rule read back at line 307, bee dev comment-baseline --check printing 241 file(s) at or below baseline, and the real write-guard refusing an Edit that added // probe to comments.rs in this worktree with exit 2 now that no_code_comments is true. The full declared suite was NOT run here; CI runs it on push.",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && rg -q no_code_comments packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md .bee/verify/verify-app/features/comment-guard.md .bee/config.json && rg -q agents-no-code-comments docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md AGENTS.md",
+    "claimed_at": "2026-09-22T07:35:10.391Z",
+    "sync_ack": "AGENTS.md is touched only to ADD the new rule agents-no-code-comments; the agents-capture-line-at-close rule and its wording are unchanged, so its applied_at files (skills/bee-capturing/SKILL.md, skills/bee-hive/SKILL.md, skills/bee-hive/references/routing-and-contracts.md) have nothing to sync",
+    "mistakes": [
+      {
+        "wrong": "the draft of .bee/verify/verify-app/features/comment-guard.md quoted bee config set --key no_code_comments --value true as the recipe and no such verb ships",
+        "better": "every bee command written into a verify feature file should be resolved against bee --help --names before the file is saved",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "The marked rule agents-no-code-comments is in packages/bee/AGENTS.block.md and rendered into AGENTS.md line 307; its row with the spoken line is in the doctrine-layer concept's AGENTS.md rule homes section; the craft bullet in packages/bee/prompts/worker-cell.md carries the ban and the two homes, and the vendored .bee/bin/prompts/worker-cell.md matches after regen; write-guard-request-shapes.md carries the comment arm and comment ratchet section, the eight decision ids in its frontmatter, a Pointers entry naming comments.rs, comment_baseline.rs and .bee/comment-baseline.json, and the D6 sentence inside a bee:not-a-deferral fence; .bee/verify/verify-app/features/comment-guard.md exists and README.md lists it; .bee/config.json sets no_code_comments true and .bee/config-sample.json shows it false with a one-line _doc entry; one regen refreshed AGENTS.md, the three skill mirrors, .bee/onboarding.json and docs/history/codex-harness-hardening/release-manifest.json.",
+      "commit": "1f0fdda9439289d382e2f2c44f73a3ede681d62c",
+      "files": [
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+        "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+        ".bee/verify/verify-app/features/comment-guard.md",
+        ".bee/verify/verify-app/features/README.md",
+        ".bee/config.json",
+        ".bee/config-sample.json",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude/skills/verify-app/features/comment-guard.md",
+        ".claude/skills/verify-app/features/README.md",
+        ".agents/skills/verify-app/features/comment-guard.md",
+        ".agents/skills/verify-app/features/README.md",
+        ".opencode/skills/verify-app/features/comment-guard.md",
+        ".opencode/skills/verify-app/features/README.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && rg -q no_code_comments packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md .bee/verify/verify-app/features/comment-guard.md .bee/config.json && rg -q agents-no-code-comments docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md AGENTS.md — green:live — the cell's own verify, run whole after ONE regen: verbs::drivers 305 passed, agents_block_render_parity 1, rule_index_parity 3, pointer_integrity 10, instruction_laws 9, release-manifest --check 376 files match, both rg fences hit. Live beside it: the rendered AGENTS.md rule read back at line 307, bee dev comment-baseline --check printing 241 file(s) at or below baseline, and the real write-guard refusing an Edit that added // probe to comments.rs in this worktree with exit 2 now that no_code_comments is true. The full declared suite was NOT run here; CI runs it on push.",
+      "deviations": [
+        "added a one-line _doc entry for no_code_comments to .bee/config-sample.json beside the live false value — that file's _doc block is its only documentation (JSON has no comments), so a live key with no _doc line teaches a host nothing — found a better route",
+        "rewrote the comment-guard.md bullet that told a verifier to run bee config set --key no_code_comments / bee config get — bee ships no config verb; the sandbox key is written with control-bee put .bee/config.json, the shape tests/hook_contracts.rs uses — the plan was wrong about a fact",
+        "staged with git add .bee instead of naming .bee/config.json on the git add line — the config guard refuses ANY Bash command naming that path, git add included, and git add --dry-run .bee showed it resolved to exactly the six intended files — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "the draft of .bee/verify/verify-app/features/comment-guard.md quoted bee config set --key no_code_comments --value true as the recipe and no such verb ships — every bee command written into a verify feature file should be resolved against bee --help --names before the file is saved — check"
+      ],
+      "baseline": "on base commit c3abfb659 the cargo and release-manifest halves were green, but both rg fences failed (no_code_comments was in none of the doctrine files or the config, agents-no-code-comments in neither the index nor AGENTS.md), so the verify command as a whole could not have passed before this change"
+    },
+    "baseline": "on base commit c3abfb659 the cargo and release-manifest halves were green, but both rg fences failed (no_code_comments was in none of the doctrine files or the config, agents-no-code-comments in neither the index nor AGENTS.md), so the verify command as a whole could not have passed before this change",
+    "warnings": [
+      "advisory: this cap's commit changes 661 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "AGENTS.block.md carries the marked rule agents-no-code-comments with the two homes, the API-doc home and the three exceptions; AGENTS.md's rendered block matches and the rule-index row exists (parity and rule-index tests green)",
+            "artifact": "packages/bee/AGENTS.block.md"
+          },
+          {
+            "requirement": "worker-cell.md's craft bullet states the ban and the homes; the vendored copy matches (skew test green)",
+            "artifact": "packages/bee/prompts/worker-cell.md"
+          },
+          {
+            "requirement": "write-guard-request-shapes.md records the arm, the readable and unreadable tool shapes, the ratchet, the seed rule and the eight decision ids, with the D6 sentence fenced as not-a-deferral (pointer-integrity green)",
+            "artifact": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+          },
+          {
+            "requirement": "comment-guard.md exists and README.md lists it",
+            "artifact": ".bee/verify/verify-app/features/comment-guard.md"
+          },
+          {
+            "requirement": ".bee/config.json sets no_code_comments true; config-sample.json shows the key false",
+            "artifact": ".bee/config.json"
+          },
+          {
+            "requirement": "release-manifest --check is green after one regen and the test-timings log was never staged",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T09:44:15.265Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "ncc4-t1",
+            "status": "PASS",
+            "evidence": "packages/bee/AGENTS.block.md:300 opens the marked rule agents-no-code-comments; AGENTS.md:307-318 carries the identical rendered bullet (two homes, API-doc home, three exceptions) under ## Care for the session; index row at router-triage-and-the-agents-md-duplication-boundary.md:233-237. agents_block_render_parity 1 passed; rule_index_parity 3 passed."
+          },
+          {
+            "id": "ncc4-t2",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/worker-cell.md:53 craft bullet extended; diff against .bee/bin/prompts/worker-cell.md printed nothing. cargo test --release --bin bee verbs::drivers::tests: 305 passed, 0 failed, 8 ignored."
+          },
+          {
+            "id": "ncc4-t3",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md:227-327 section The comment arm and the comment ratchet covers switch, code roots, comment-line definition, readable and unreadable shapes, string-literal limitation, ratchet --check/--write with the test name, D2b seed; frontmatter decisions list at :11 carries the eight ids. pointer_integrity 10 passed."
+          },
+          {
+            "id": "ncc4-t4",
+            "status": "PASS",
+            "evidence": ".bee/verify/verify-app/features/comment-guard.md:1-122 exists; README.md:80-82 index row; the three rendered mirrors diff clean against the .bee source."
+          },
+          {
+            "id": "ncc4-t5",
+            "status": "PASS",
+            "evidence": ".bee/config.json:19 no_code_comments true (single added line); .bee/config-sample.json:181 false plus the recorded one-line _doc at :47; no other key touched."
+          },
+          {
+            "id": "ncc4-t6",
+            "status": "PASS",
+            "evidence": ".bee/bin/bee dev release-manifest --check: 376 file(s) match stored manifest, exit 0; release-manifest.json in the same commit; git show 1f0fdda9 --name-only lists 18 paths, none is the timings.jsonl log."
+          },
+          {
+            "id": "ncc4-p1",
+            "status": "PASS",
+            "evidence": "AGENTS.md's only change is AGENTS.md:307-318 inside the BEE:START/BEE:END region (AGENTS.md:7 and :363), byte-identical to AGENTS.block.md:300-311; mirrors diff clean, so each is a render."
+          },
+          {
+            "id": "ncc4-p2",
+            "status": "PASS",
+            "evidence": "git show 1f0fdda9 --name-only contains no .rs path and no .bee/bin/bee binary entry."
+          },
+          {
+            "id": "ncc4-p3",
+            "status": "PASS",
+            "evidence": ".bee/config.json diff is exactly one added line; config-sample.json diff is two lines about the same key (recorded deviation); no third key."
+          },
+          {
+            "id": "ncc4-p4",
+            "status": "PASS",
+            "evidence": "The commit's 18 paths include no packages/bee-rs/crates/bee/.bee/logs path."
+          },
+          {
+            "id": "ncc4-x1",
+            "status": "PASS",
+            "evidence": "x-check (a): AGENTS.md hunk is a single 12-insertion hunk inside the render region; agents_md_block_is_the_rendered_source_byte_for_byte ok."
+          },
+          {
+            "id": "ncc4-x2",
+            "status": "PASS",
+            "evidence": "x-check (b): write-guard-request-shapes.md:320-326 fences the D6 sentence between bee:not-a-deferral and /bee:not-a-deferral."
+          },
+          {
+            "id": "ncc4-x3",
+            "status": "PASS",
+            "evidence": "x-check (c): bee --help --names has no bee config verb; comment-guard.md:53 and :60 use control-bee put .bee/config.json and control-bee cli -- hook write-guard, both dispatched by control-bee:362/364; :59 cites hook_contracts.rs a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr at :461; bee dev comment-baseline --check: 241 file(s) at or below baseline."
+          },
+          {
+            "id": "ncc4-x4",
+            "status": "PASS",
+            "evidence": "x-check (d): the commit's .bee/ paths are exactly bin/prompts/worker-cell.md, config.json, config-sample.json, onboarding.json, verify-app/features/README.md, verify-app/features/comment-guard.md."
+          },
+          {
+            "id": "ncc4-x5",
+            "status": "PASS",
+            "evidence": "Both rg -q fences from the verify string exit 0. Scope: the cell's own verify targets only; the full declared suite was not run by the judge, matching the cap's statement."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-09-22T10:14:52.334Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "the action's step 7 runs .bee/bin/bee dev regen, whose second step IS onboard --repo-root . --apply (devtools/mod.rs chain), so the ledger regen runs inside this cell before its verify; the literal onboard --json read is subsumed",
+  "status": "capped"
+}

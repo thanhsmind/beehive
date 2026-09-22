@@ -1,0 +1,11 @@
+{
+  "id": "grooming-opens-the-first-comment-removal__69326d15",
+  "decision": "69326d15",
+  "condition": "grooming opens the first comment-removal batch: a module's comments are moved into docs/knowledge or the decision log and deleted, and bee dev comment-baseline --write lowers its entries",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-09-22T10:12:26.206Z",
+  "updated_at": "2026-09-22T10:12:26.206Z",
+  "outcome": null
+}
