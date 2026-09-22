@@ -35,8 +35,9 @@ Install bee into a target project directory (greenfield or brownfield).
 Options:
   -d, --directory <path>  Target project directory. Defaults to the current
                           directory. Created if missing (greenfield).
-      --runtime <which>   Which runtime skills to install: claude, codex, or
-                          both. Default: both.
+      --runtime <which>   Which runtime skills to install: claude, codex, pi,
+                          or both. Default: both. pi skips the Claude/Codex
+                          plugin steps and needs --distribution repo-copy.
       --distribution <mode>
                           plugin-first or repo-copy. Default: repo-copy.
       --plugin-state-file <path>
@@ -159,8 +160,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-case "$RUNTIME" in claude|codex|both) ;; *) fail "--runtime must be claude, codex, or both" ;; esac
+case "$RUNTIME" in claude|codex|pi|both) ;; *) fail "--runtime must be claude, codex, pi, or both" ;; esac
 case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution must be plugin-first or repo-copy" ;; esac
+# Pi has no plugin marketplace, and plugin-first writes no repo skills or hooks
+# — the pair would install nothing Pi can load. Refused before any write.
+if [ "$RUNTIME" = "pi" ] && [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
+  fail "--runtime pi needs --distribution repo-copy: Pi has no plugin, and plugin-first writes no repo skills or hooks."
+fi
 
 # ---------- prerequisites ----------
 
@@ -191,6 +197,9 @@ RELEASES="https://github.com/thanhsmind/beehive/releases"
 PREBUILT_ASSET=""
 case "$(uname -s 2>/dev/null || echo unknown)/$(uname -m 2>/dev/null || echo unknown)" in
   Linux/x86_64)                          PREBUILT_ASSET="bee-x86_64-unknown-linux-gnu" ;;
+  Linux/aarch64|Linux/arm64)             PREBUILT_ASSET="bee-aarch64-unknown-linux-gnu" ;;
+  Darwin/arm64)                          PREBUILT_ASSET="bee-aarch64-apple-darwin" ;;
+  Darwin/x86_64)                         PREBUILT_ASSET="bee-x86_64-apple-darwin" ;;
   MINGW*/x86_64|MSYS*/x86_64|CYGWIN*/x86_64) PREBUILT_ASSET="bee-x86_64-pc-windows-msvc.exe" ;;
 esac
 
@@ -217,6 +226,15 @@ fetch_why() {
   FETCH_WHY=""
   if [ -n "$FETCH_ERR" ]; then
     FETCH_WHY=" ($(printf '%s' "$FETCH_ERR" | tr '\n\r\t' '   ' | sed 's/  */ /g; s/^ //; s/ *$//'))"
+  fi
+}
+
+# Stock macOS ships `shasum`, not `sha256sum`. Neither present is a verify
+# failure: the caller builds from source rather than run an unchecked binary.
+sha256_check() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$1"
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 -c "$1"
+  else return 1
   fi
 }
 
@@ -276,15 +294,23 @@ else
     log "binary   could not resolve a published release$FETCH_WHY — building from source"
   else
     STATE_TMP_BIN="$(mktemp -d)"
-    if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET"        && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
+    if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET" \
+      && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
       # Verified, never trusted: this binary is about to be copied into the
       # target repo and executed by every hook.
-      if ( cd "$STATE_TMP_BIN" && grep " $PREBUILT_ASSET\$" SHA256SUMS > want.txt            && sha256sum -c want.txt >/dev/null 2>&1 ); then
+      if ( cd "$STATE_TMP_BIN" && grep " $PREBUILT_ASSET\$" SHA256SUMS > want.txt \
+           && sha256_check want.txt >/dev/null 2>&1 ); then
         chmod +x "$STATE_TMP_BIN/$PREBUILT_ASSET"
-        BEE_BIN="$STATE_TMP_BIN/$PREBUILT_ASSET"
-        log "binary   $PREBUILT_TAG $PREBUILT_ASSET (checksum verified) — no build needed"
+        # Verified is not runnable: an old glibc on ARM Linux loads nothing.
+        if "$STATE_TMP_BIN/$PREBUILT_ASSET" rs-info >/dev/null 2>&1; then
+          BEE_BIN="$STATE_TMP_BIN/$PREBUILT_ASSET"
+          log "binary   $PREBUILT_TAG $PREBUILT_ASSET (checksum verified) — no build needed"
+        else
+          log "binary   $PREBUILT_ASSET at $PREBUILT_TAG does not run on this host (too old a libc?) — building from source"
+          rm -rf "$STATE_TMP_BIN"
+        fi
       else
-        log "binary   CHECKSUM MISMATCH for $PREBUILT_ASSET at $PREBUILT_TAG — refusing it, building from source"
+        log "binary   CHECKSUM MISMATCH (or no sha256sum/shasum) for $PREBUILT_ASSET at $PREBUILT_TAG — refusing it, building from source"
         rm -rf "$STATE_TMP_BIN"
       fi
     else
@@ -695,10 +721,16 @@ apply_failure_fix_options() {
 }
 
 probe_plugin_state "$STATE_FILE"
-"$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" || {
-  apply_failure_fix_options
-  handle_transition_failure "Distribution preflight refused after transition"
-}
+# plugin-distribution knows claude and codex only; pi with plugin-first was
+# refused above, so this is the one call a pi run has to skip.
+if [ "$RUNTIME" = "pi" ]; then
+  log "plugin   Pi has no plugin marketplace — skipping the plugin distribution step"
+else
+  "$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" || {
+    apply_failure_fix_options
+    handle_transition_failure "Distribution preflight refused after transition"
+  }
+fi
 
 # 5. apply onboarding, but ONLY when the plan has work. A repeat install that is
 #    already current must not rewrite managed files (no timestamp-only churn).
@@ -741,7 +773,8 @@ printf '%s' "$STATUS" | "$BEE_BIN" dev install-support assert-parity \
 # will actually use.
 RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
   || fail "Verification failed: onboarding recheck did not run. $(sed -n '1,6p' "$CLEANUP_DIR/recheck.err" 2>/dev/null)"
-printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \n  || fail "Verification failed: onboarding is not up_to_date immediately after apply."
+printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \
+  || fail "Verification failed: onboarding is not up_to_date immediately after apply."
 
 # Plugin-first: the distribution recheck must also report nothing left to clean.
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
@@ -754,4 +787,7 @@ log "bee installed."
 log "  next: open an agent session in $TARGET_DIR"
 log "  - Claude Code: the session preamble appears via hooks; or say \"Route this through bee: <task>\""
 log "  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status"
+if [ "$RUNTIME" = "pi" ]; then
+  log "  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain \`pi\`)"
+fi
 log "  - scout any time: .bee/bin/bee status --json"

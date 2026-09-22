@@ -34,7 +34,7 @@
 [CmdletBinding()]
 param(
   [string]$Directory = (Get-Location).Path,
-  [ValidateSet('claude', 'codex', 'both')]
+  [ValidateSet('claude', 'codex', 'pi', 'both')]
   [string]$Runtime = 'both',
   [ValidateSet('plugin-first', 'repo-copy')]
   [string]$Distribution = 'repo-copy',
@@ -57,6 +57,12 @@ $ErrorActionPreference = 'Stop'
 $RepoUrl = 'https://github.com/thanhsmind/beehive.git'
 
 function Fail([string]$Message) { Write-Error $Message; exit 1 }
+
+# Pi has no plugin marketplace, and plugin-first writes no repo skills or
+# hooks - so the pair would install nothing Pi can load. Refuse before any write.
+if ($Runtime -eq 'pi' -and $Distribution -eq 'plugin-first') {
+  Fail '-Runtime pi needs -Distribution repo-copy: Pi has no plugin, and plugin-first writes no repo skills or hooks.'
+}
 
 function Confirm-Step([string]$Question) {
   if ($Yes) { return $true }
@@ -619,8 +625,12 @@ try {
     if ($Runtime -in @('codex', 'both')) { $distributionArgs += @('--user-skill-root', (Join-Path $codexHome 'skills')) }
   }
 
-  & $beeBin dev plugin-distribution @distributionArgs
-  if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Distribution preflight refused after transition' }
+  if ($Runtime -eq 'pi') {
+    Write-Host 'plugin   Pi has no plugin marketplace - skipping the plugin distribution step'
+  } else {
+    & $beeBin dev plugin-distribution @distributionArgs
+    if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Distribution preflight refused after transition' }
+  }
 
   # 4. apply onboarding. A refused/blocked apply (e.g. the codex-hybrid hook
   #    write preflight in onboard_bee.mjs applyPlan refusing because
@@ -668,6 +678,9 @@ try {
   Write-Host "  next: open an agent session in $Directory"
   Write-Host '  - Claude Code: the session preamble appears via hooks; or say "Route this through bee: <task>"'
   Write-Host '  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status'
+  if ($Runtime -eq 'pi') {
+    Write-Host '  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain `pi`)'
+  }
   Write-Host '  - scout any time: .bee/bin/bee status --json'
 } finally {
   if ($cleanupDir -and (Test-Path $cleanupDir)) {

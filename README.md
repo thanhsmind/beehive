@@ -511,7 +511,7 @@ If a session runs long, bee writes `.bee/HANDOFF.json` at ~65% context and pause
 
 ## Install
 
-Requirement: **nothing but the installer** on x86_64 Linux and Windows — the one-liner downloads the release binary for your platform, verifies its SHA-256 against the release `SHA256SUMS`, and copies it in. A **Rust toolchain** (`cargo`) is needed only on a platform with no published binary, or with `--build-from-source` (supersedes decision 1f4262ca, which kept every host compiling its own). Node.js is not required to run bee. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
+Requirement: **nothing but the installer** on x86_64 Linux and Windows, macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+) — the one-liner downloads the release binary for your platform, verifies its SHA-256 against the release `SHA256SUMS`, and copies it in. A **Rust toolchain** (`cargo`) is needed only on a platform with no published binary, or with `--build-from-source` (supersedes decision 1f4262ca, which kept every host compiling its own). Node.js is not required to run bee. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
 
 ### Brownfield — existing project (copy, paste, done)
 
@@ -623,7 +623,7 @@ Copied into every onboarded repo, so enforcement works even for agents that igno
 ### Onboarding — `bee onboard`
 
 ```bash
-bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|both] [--no-claude-md] [--claude-md] [--no-statusline] [--global-skills] [--force-downgrade]
+bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|pi|both] [--no-claude-md] [--claude-md] [--no-statusline] [--global-skills] [--force-downgrade]
 ```
 
 Without `--apply` it only reports the plan. With `--apply` it installs/refreshes the AGENTS.md BEE block, `.bee/` runtime files, and the vendored helpers — **never** overwriting your `state.json`, `decisions.jsonl`, or `cells/`. Re-run after pulling a new bee version; it detects drift via managed hashes in `.bee/onboarding.json`.
