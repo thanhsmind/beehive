@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0",
+  "feature": "windows-json-path",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"windows-json-path\" started at phase \"exploring\" (lane).",
+  "next_action": "Run cell wjp-1 inline",
+  "created_at": "2026-09-22T10:47:16.812Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-09-22T10:47:16.844Z",
+    "feature": "windows-json-path"
+  },
+  "gate_preview": {
+    "feature": "windows-json-path",
+    "plan_sha256": "26f9307ce251e573a15e89956f8674505d1b56cdadc1207120b94d159b308ab2",
+    "previewed_at": "2026-09-22T10:47:16.984Z",
+    "cells": [
+      {
+        "id": "wjp-1",
+        "feature": "windows-json-path",
+        "title": "Escape the report path in the herding ledger test",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "63e42e22-0d65-4940-bb9a-f0072052b587"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding/run.rs test ledger_outcome_blocked_with_report_fills_evidence, replace the format! raw JSON string for result-1.json with serde_json::json!({status, summary, files_changed, proof, report_path: report_file.display().to_string()}).to_string() (per D1). Keep every assertion unchanged.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee ledger_outcome_blocked_with_report_fills_evidence",
+        "must_haves": {
+          "truths": [
+            "the test builds result-1.json with serde_json::json! and still passes on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the assertions",
+            "Do not touch production code"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "windows-json-path",
+    "plan_sha256": "26f9307ce251e573a15e89956f8674505d1b56cdadc1207120b94d159b308ab2",
+    "previewed_at": "2026-09-22T10:47:16.984Z",
+    "cells": [
+      {
+        "id": "wjp-1",
+        "feature": "windows-json-path",
+        "title": "Escape the report path in the herding ledger test",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "63e42e22-0d65-4940-bb9a-f0072052b587"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding/run.rs test ledger_outcome_blocked_with_report_fills_evidence, replace the format! raw JSON string for result-1.json with serde_json::json!({status, summary, files_changed, proof, report_path: report_file.display().to_string()}).to_string() (per D1). Keep every assertion unchanged.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee ledger_outcome_blocked_with_report_fills_evidence",
+        "must_haves": {
+          "truths": [
+            "the test builds result-1.json with serde_json::json! and still passes on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the assertions",
+            "Do not touch production code"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  }
+}
