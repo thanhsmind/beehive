@@ -537,6 +537,14 @@ pub(crate) struct LetterItem {
     /// other stop leaves it `None` and the key emits as `null`, exactly like
     /// `commit` and `proof` already do.
     pub better: Option<String>,
+    /// mistake-fix-at D1's third part: the strongest layer that can stop this
+    /// mistake from recurring, one of [`FIX_AT_VALUES`].
+    ///
+    /// ADDITIVE on the same terms `better` was (D4): a letter filed before
+    /// this key existed reads back `None`, which every reader treats as
+    /// `none` — the vocabulary's own word for "no layer worth naming" — so
+    /// nothing is backfilled and no consumer of the older item shape breaks.
+    pub fix_at: Option<String>,
 }
 
 impl LetterItem {
@@ -548,6 +556,7 @@ impl LetterItem {
             "proof": self.proof,
             "departure": self.departure.as_ref().map(Departure::to_value),
             "better": self.better,
+            "fix_at": self.fix_at,
         })
     }
 
@@ -562,6 +571,7 @@ impl LetterItem {
             // Absent on every letter filed before this field existed, and that
             // is a `None`, never a parse failure.
             better: opt_string(m, "better"),
+            fix_at: opt_string(m, "fix_at"),
         })
     }
 }
@@ -597,6 +607,25 @@ pub(crate) const KIND_BLOCKER: &str = "blocker";
 /// [`read_reflection`], and the verb calls it — the store and the door can
 /// never disagree, because there is one of them.
 pub(crate) const KIND_REFLECTION: &str = "reflection";
+
+/// mistake-fix-at D1's closed vocabulary: the layer that can stop a recorded
+/// mistake from happening again, named by the agent at the moment it records
+/// the mistake.
+///
+/// The order is the pstack ladder, strongest first — a correction is only
+/// worth what the layer it lands on can enforce:
+///
+///   * `architecture` — a code or data-structure change makes it impossible.
+///   * `check` — a test, hook, guard, lint line or `bee doctor` row catches it.
+///   * `doctrine` — only prose can carry it; it is judgement or product intent.
+///   * `none` — a one-off with no layer worth naming, recorded so the answer
+///     exists.
+///
+/// It is CLOSED, and [`read_reflection`] refuses anything outside it, for the
+/// reason D1 gives: a free-text layer is a layer no reader can filter on, and
+/// `bee close` has to be able to ask "is this one mechanizable?" of a stored
+/// word rather than of a sentence.
+pub(crate) const FIX_AT_VALUES: [&str; 4] = ["architecture", "check", "doctrine", "none"];
 
 /// reflection-becomes-lesson D2's kind: the run was ASKED whether anything
 /// went wrong and answered "nothing" — out loud, on the record.
@@ -652,6 +681,10 @@ pub(crate) struct Entry {
     /// every fact the letter prints (D8): a `better` the entry could not carry
     /// would be one the composing pass had to author.
     pub better: Option<String>,
+    /// mistake-fix-at D1's third part, mirroring [`LetterItem::fix_at`] for the
+    /// same D8 reason `better` mirrors its own: the letter may print no fact
+    /// the entry cannot hold.
+    pub fix_at: Option<String>,
 }
 
 impl Entry {
@@ -666,6 +699,7 @@ impl Entry {
             "departure": self.departure.as_ref().map(Departure::to_value),
             "needs_you": self.needs_you.iter().map(NeedsYou::to_value).collect::<Vec<_>>(),
             "better": self.better,
+            "fix_at": self.fix_at,
         })
     }
 
@@ -673,10 +707,11 @@ impl Entry {
     /// verb appends and the shape the section renders, built in one place so
     /// the door and the composer can never disagree about what a reflection is.
     ///
-    /// The two parts arrive already checked by [`read_reflection`]; this only
-    /// normalises them onto one line each, the same edit every other stored
-    /// sentence gets.
-    pub(crate) fn reflection(at: &str, wrong: &str, better: &str) -> Self {
+    /// The three parts arrive already checked by [`read_reflection`] —
+    /// mistake-fix-at D1 added `fix_at`, one of [`FIX_AT_VALUES`] — and this
+    /// only normalises them onto one line each, the same edit every other
+    /// stored sentence gets.
+    pub(crate) fn reflection(at: &str, wrong: &str, better: &str, fix_at: &str) -> Self {
         Self {
             at: at.to_string(),
             kind: KIND_REFLECTION.to_string(),
@@ -689,6 +724,7 @@ impl Entry {
             departure: None,
             needs_you: Vec::new(),
             better: Some(one_line(better)),
+            fix_at: Some(fix_at.trim().to_string()),
         }
     }
 
@@ -712,6 +748,10 @@ impl Entry {
             departure: None,
             needs_you: Vec::new(),
             better: None,
+            // No mistake was made, so there is no layer that would have fixed
+            // one. D1's vocabulary answers a mistake; this entry answers the
+            // question instead of being one.
+            fix_at: None,
         }
     }
 
@@ -737,6 +777,10 @@ impl Entry {
             // that is a `None`, never a parse failure — the whole entry layer
             // is append-only, so old lines outlive every shape change.
             better: opt_string(m, "better"),
+            // Absent on every reflection row written before D1, and D4 forbids
+            // backfilling them: a `None` here IS the answer `none`, read that
+            // way by close and by the lesson miner.
+            fix_at: opt_string(m, "fix_at"),
         })
     }
 
@@ -778,16 +822,36 @@ impl Entry {
             proof: self.proof.clone(),
             departure: self.departure.clone(),
             better: self.better.clone(),
+            fix_at: self.fix_at.clone(),
         }
     }
 }
 
-/// letter-reflection D3's door: the two parts a reflection entry must carry.
+/// The four layers, each with its gloss, spelled ONCE and quoted by both
+/// refusals [`read_reflection`] can hand back.
+///
+/// It is written out rather than built from [`FIX_AT_VALUES`] because the
+/// gloss is the half that makes the refusal usable: a caller who is told only
+/// the four words still has to go and read what they mean, and a refusal a
+/// cold worker cannot act on in one retry is the refusal it works around.
+const FIX_AT_GLOSS: &str = "architecture (a code change makes it impossible) | check (a test, hook, guard or doctor row catches it) | doctrine (only prose can carry it) | none (a one-off nobody would guard)";
+
+/// The remedy line both refusals end on, naming all THREE flags.
+const FIX_AT_REMEDY: &str = "remedy: pass --wrong (what went wrong), --better (what would have been better) and --fix-at (which layer stops it coming back).";
+
+/// letter-reflection D3 + mistake-fix-at D1's door: the three parts a
+/// reflection entry must carry.
 ///
 /// `Err` names the MISSING part in the words the refusal hands back, because a
 /// refusal that does not say what to fix is a refusal the caller works around.
-/// Both parts are checked in one pass so a caller that left both out learns
-/// both at once instead of fixing one and being refused again.
+/// All three parts are checked in one pass so a caller that left two out
+/// learns both at once instead of fixing one and being refused again.
+///
+/// The refusal is SELF-SUFFICIENT on purpose (D1): it states how many parts a
+/// reflection has, names the missing flags, lists the four layers with what
+/// each one means, and ends on a remedy naming all three flags. A worker on a
+/// new binary whose doctrine still says "two parts" recovers from the refusal
+/// alone, in one retry, without reading a file.
 ///
 /// It lives HERE, with the store, for the same reason [`read_departure`] does:
 /// the verb is argv plumbing, and the rule about what a reflection IS must have
@@ -795,19 +859,26 @@ impl Entry {
 pub(crate) fn read_reflection<'a>(
     wrong: Option<&'a str>,
     better: Option<&'a str>,
-) -> Result<(&'a str, &'a str), String> {
-    let missing: Vec<&str> = [("--wrong", wrong), ("--better", better)]
+    fix_at: Option<&'a str>,
+) -> Result<(&'a str, &'a str, &'a str), String> {
+    let missing: Vec<&str> = [("--wrong", wrong), ("--better", better), ("--fix-at", fix_at)]
         .into_iter()
         .filter(|(_, v)| v.map(str::trim).unwrap_or("").is_empty())
         .map(|(name, _)| name)
         .collect();
     if !missing.is_empty() {
         return Err(format!(
-            "a reflection has two required parts, and it is missing {} (D3) — remedy: pass --wrong (what went wrong) and --better (what would have been better), each with text.",
+            "a reflection has three required parts, and it is missing {} (D3, mistake-fix-at D1). The layer is one of: {FIX_AT_GLOSS} — {FIX_AT_REMEDY}",
             missing.join(" and ")
         ));
     }
-    Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim()))
+    let layer = fix_at.unwrap_or("").trim();
+    if !FIX_AT_VALUES.contains(&layer) {
+        return Err(format!(
+            "\"{layer}\" is not a fix-at layer (mistake-fix-at D1). It is one of: {FIX_AT_GLOSS} — {FIX_AT_REMEDY}"
+        ));
+    }
+    Ok((wrong.unwrap_or("").trim(), better.unwrap_or("").trim(), layer))
 }
 
 /// The SEPARATOR between a mistake's two parts, on the one-line spelling.
@@ -821,31 +892,45 @@ pub(crate) const MISTAKE_SEPARATOR: &str = DEPARTURE_SEPARATOR;
 /// through the SAME door `bee mailbox reflect` uses ([`read_reflection`]).
 ///
 /// Two shapes, because two writers already exist: a cap flag hands one LINE
-/// (`<what went wrong> — <what would have been better>`), and a worker's
-/// `--report` may hand a structured `{wrong, better}` object. Both end at
-/// `read_reflection`, so the two-part rule keeps exactly one home and a
-/// mistake recorded at a cap is the same thing as one written by the verb.
+/// (`<what went wrong> — <what would have been better> — <fix-at>`), and a
+/// worker's `--report` may hand a structured `{wrong, better, fix_at}` object.
+/// Both end at `read_reflection`, so the three-part rule keeps exactly one
+/// home and a mistake recorded at a cap is the same thing as one written by
+/// the verb.
+///
+/// The line form splits on the FIRST TWO separators only: what follows the
+/// second one is the layer, whole. So neither the `wrong` nor the `better`
+/// part may itself carry a `" — "`, and the refusal SAYS that — a writer whose
+/// `better` swallowed the layer would otherwise read "add a third part" and
+/// have no way to see which of their own parts was eaten. The object form has
+/// no such limit, and is the shape to reach for when a part needs the dash.
 ///
 /// `Err` carries the words the refusal hands back, naming the missing part.
-pub(crate) fn read_mistake(v: &Value) -> Result<(String, String), String> {
-    let (wrong, better) = match v {
-        Value::String(line) => match line.split_once(MISTAKE_SEPARATOR) {
-            Some((wrong, better)) => (wrong.trim().to_string(), better.trim().to_string()),
-            // No separator at all: the whole line is offered as `--wrong` so
-            // the refusal below names the part that is actually missing,
-            // rather than a generic "unparseable" a writer cannot act on.
-            None => (line.trim().to_string(), String::new()),
-        },
+pub(crate) fn read_mistake(v: &Value) -> Result<(String, String, String), String> {
+    let (wrong, better, fix_at) = match v {
+        Value::String(line) => {
+            let mut parts = line.splitn(3, MISTAKE_SEPARATOR).map(str::trim);
+            // Missing segments are offered as empty so the refusal below names
+            // the part that is actually missing, rather than a generic
+            // "unparseable" a writer cannot act on.
+            let wrong = parts.next().unwrap_or("").to_string();
+            let better = parts.next().unwrap_or("").to_string();
+            let fix_at = parts.next().unwrap_or("").to_string();
+            (wrong, better, fix_at)
+        }
         Value::Object(m) => {
             let part = |key: &str| {
                 m.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
             };
-            (part("wrong"), part("better"))
+            (part("wrong"), part("better"), part("fix_at"))
         }
-        _ => (String::new(), String::new()),
+        _ => (String::new(), String::new(), String::new()),
     };
-    let (wrong, better) = read_reflection(Some(&wrong), Some(&better))?;
-    Ok((wrong.to_string(), better.to_string()))
+    let (wrong, better, fix_at) = read_reflection(Some(&wrong), Some(&better), Some(&fix_at))
+        .map_err(|why| {
+            format!("{why} On one line the three parts are separated by \"{MISTAKE_SEPARATOR}\", split at the first two, so the what-would-have-been-better part may not itself contain that separator.")
+        })?;
+    Ok((wrong.to_string(), better.to_string(), fix_at.to_string()))
 }
 
 /// Append one entry to this run's JSONL. One O_APPEND write, parents created
@@ -1363,6 +1448,9 @@ pub(crate) fn render_letter(letter: &Letter) -> String {
             // frontmatter only grows, so a consumer that reads the five older
             // keys sees exactly what it saw before.
             emit_opt(&mut out, 4, "better", item.better.as_deref());
+            // mistake-fix-at, on the same additive terms: it emits after
+            // `better` and as `null` when there is nothing.
+            emit_opt(&mut out, 4, "fix_at", item.fix_at.as_deref());
         }
     }
 
@@ -2792,7 +2880,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             // belongs to a single verb.
             let (rest, no_mistakes) = lift_bare_flag(rest, "no-mistakes");
             run_reflect(
-                parse_shape(&rest, &["wrong", "better", "session-id"])?,
+                parse_shape(&rest, &["wrong", "better", "fix-at", "session-id"])?,
                 no_mistakes,
                 t0,
             )
@@ -2859,7 +2947,8 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // reflection IS lives in [`read_reflection`] and [`Entry::reflection`], with
 // the store.
 //
-//     bee mailbox reflect --wrong <text> --better <text> [--session-id <id>]
+//     bee mailbox reflect --wrong <text> --better <text> --fix-at <layer>
+//                         [--session-id <id>]
 //
 // WHAT IT IS CALLED, AND WHY — CONTEXT.md left the name and the place to the
 // agent's discretion, so the reasons are written down here rather than left to
@@ -2886,8 +2975,15 @@ fn run_mark(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 //
 // FAIL-OPEN like every other append (D10): `record_stop` warns and returns, so
 // a mailbox that cannot be written never turns this into a refusal. The ONLY
-// refusal is D3's — a missing part — and it happens BEFORE anything is
+// refusals are the door's — a missing part (D3), or a `--fix-at` outside
+// mistake-fix-at D1's four layers — and both happen BEFORE anything is
 // written.
+//
+//   * The LAYER rides `--fix-at`, one flag for one required part, exactly as
+//     `--wrong` and `--better` do. It is the third part of one record, not a
+//     classification added afterwards, which is why it is refused at the same
+//     door and never defaulted: a layer nobody named is the empty field D1
+//     exists to end.
 
 fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<ExitCode> {
     let cmd = "mailbox reflect";
@@ -2929,18 +3025,21 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
         return Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0));
     }
 
-    let (wrong, better) =
-        match read_reflection(mark_flag(&parsed, "wrong"), mark_flag(&parsed, "better")) {
-            Ok(parts) => parts,
-            Err(why) => {
-                let msg = format!("bee {cmd}: {why}");
-                return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
-            }
-        };
+    let (wrong, better, fix_at) = match read_reflection(
+        mark_flag(&parsed, "wrong"),
+        mark_flag(&parsed, "better"),
+        mark_flag(&parsed, "fix-at"),
+    ) {
+        Ok(parts) => parts,
+        Err(why) => {
+            let msg = format!("bee {cmd}: {why}");
+            return Some(emit_error(&root, cmd, parsed.json, &msg, t0));
+        }
+    };
 
     let session = crate::verbs::cells::resolve_session_flag_env(mark_flag(&parsed, "session-id"));
     let run = run_id(session.as_deref());
-    let entry = Entry::reflection(&now_iso(), wrong, better);
+    let entry = Entry::reflection(&now_iso(), wrong, better, fix_at);
     record_stop(&root, &run, &entry);
 
     let result = json!({
@@ -2949,6 +3048,7 @@ fn run_reflect(parsed: ParsedArgs, no_mistakes: bool, t0: Instant) -> Option<Exi
         "at": entry.at,
         "what": entry.what,
         "better": entry.better,
+        "fix_at": entry.fix_at,
     });
     let text = format!("Wrote down one mistake for run {run}. It goes in that run's letter.");
     Some(emit_success(&root, cmd, parsed.json, &drift, &result, &text, t0))
@@ -2980,6 +3080,7 @@ mod tests {
                         kind: "found a better route".to_string(),
                     }),
                     better: None,
+                    fix_at: None,
                 },
                 LetterItem {
                     what: "Followed the plan exactly".to_string(),
@@ -2988,6 +3089,7 @@ mod tests {
                     proof: None,
                     departure: None,
                     better: None,
+                    fix_at: None,
                 },
             ],
             needs_you: vec![NeedsYou {
@@ -3011,14 +3113,15 @@ mod tests {
             departure: None,
             needs_you: vec![],
             better: None,
+            fix_at: None,
         }
     }
 
-    /// One reflection entry (letter-reflection D2, D3), built the ONE way the
-    /// verb builds it — through `Entry::reflection`, so a test can never prove
-    /// a shape the command does not produce.
+    /// One reflection entry (letter-reflection D2, D3 + mistake-fix-at D1),
+    /// built the ONE way the verb builds it — through `Entry::reflection`, so
+    /// a test can never prove a shape the command does not produce.
     fn sample_reflection(at: &str, wrong: &str, better: &str) -> Entry {
-        Entry::reflection(at, wrong, better)
+        Entry::reflection(at, wrong, better, "check")
     }
 
     // ── D2: the subject is a validity rule ──────────────────────────────
@@ -4013,29 +4116,81 @@ mod tests {
         assert!(letter.validate().is_ok(), "and it is a valid record");
     }
 
-    /// TRUTH: D3's two parts are both required, and the refusal names the part
-    /// that is missing. Checked at [`read_reflection`], the ONE door — the verb
-    /// is argv plumbing and calls this.
+    /// TRUTH: D3's two parts and mistake-fix-at D1's third are all required,
+    /// and the refusal names the part that is missing. Checked at
+    /// [`read_reflection`], the ONE door — the verb is argv plumbing and calls
+    /// this.
     #[test]
     fn a_reflection_missing_a_part_is_refused_and_the_refusal_names_it() {
-        let both = read_reflection(Some("went wrong"), Some("would be better")).unwrap();
-        assert_eq!(both, ("went wrong", "would be better"));
+        let all = read_reflection(Some("went wrong"), Some("would be better"), Some("check"))
+            .unwrap();
+        assert_eq!(all, ("went wrong", "would be better", "check"));
         // Trimmed on the way through, like every other stored sentence.
-        assert_eq!(read_reflection(Some("  a  "), Some("  b  ")).unwrap(), ("a", "b"));
+        assert_eq!(
+            read_reflection(Some("  a  "), Some("  b  "), Some(" none ")).unwrap(),
+            ("a", "b", "none")
+        );
 
-        for (wrong, better, named) in [
-            (None, Some("would be better"), "--wrong"),
-            (Some("went wrong"), None, "--better"),
-            (Some("   "), Some("would be better"), "--wrong"),
-            (Some("went wrong"), Some("\t"), "--better"),
+        for (wrong, better, fix_at, named) in [
+            (None, Some("would be better"), Some("check"), "--wrong"),
+            (Some("went wrong"), None, Some("check"), "--better"),
+            (Some("went wrong"), Some("would be better"), None, "--fix-at"),
+            (Some("   "), Some("would be better"), Some("check"), "--wrong"),
+            (Some("went wrong"), Some("\t"), Some("check"), "--better"),
+            (Some("went wrong"), Some("would be better"), Some("  "), "--fix-at"),
         ] {
-            let err = read_reflection(wrong, better).unwrap_err();
+            let err = read_reflection(wrong, better, fix_at).unwrap_err();
             assert!(err.contains(named), "the refusal does not name {named}: {err}");
             assert!(err.contains("remedy:"), "a refusal must say what to fix: {err}");
         }
-        // Both missing: BOTH are named, so one fix answers one refusal.
-        let err = read_reflection(None, None).unwrap_err();
-        assert!(err.contains("--wrong") && err.contains("--better"), "{err}");
+        // All three missing: ALL are named, so one fix answers one refusal.
+        let err = read_reflection(None, None, None).unwrap_err();
+        assert!(
+            err.contains("--wrong") && err.contains("--better") && err.contains("--fix-at"),
+            "{err}"
+        );
+    }
+
+    /// TRUTH (mistake-fix-at D1): the refusal a caller with no `--fix-at` gets
+    /// is SELF-SUFFICIENT — it says how many parts a reflection has, lists the
+    /// four layers with what each one means, and ends on a remedy naming all
+    /// three flags. A worker on a new binary whose doctrine still says "two
+    /// parts" recovers from these words alone, in one retry.
+    #[test]
+    fn the_missing_layer_refusal_teaches_the_whole_vocabulary() {
+        let err =
+            read_reflection(Some("went wrong"), Some("would be better"), None).unwrap_err();
+        assert!(err.contains("three required parts"), "it says how many parts: {err}");
+        for layer in FIX_AT_VALUES {
+            assert!(err.contains(layer), "the refusal does not list {layer}: {err}");
+        }
+        for flag in ["--wrong", "--better", "--fix-at"] {
+            assert!(err.contains(flag), "the remedy does not name {flag}: {err}");
+        }
+        assert!(err.contains("remedy:"), "{err}");
+    }
+
+    /// TRUTH (mistake-fix-at D1): the layer vocabulary is CLOSED. A word
+    /// outside it is refused by the same door, and that refusal lists the four
+    /// that are in it — so a caller who guessed recovers without reading a
+    /// file, and no free-text layer ever reaches the store.
+    #[test]
+    fn a_layer_outside_the_vocabulary_is_refused_listing_the_four() {
+        for layer in FIX_AT_VALUES {
+            assert_eq!(
+                read_reflection(Some("a"), Some("b"), Some(layer)).unwrap().2,
+                layer,
+                "{layer} is in the vocabulary"
+            );
+        }
+        for guess in ["hooks", "Check", "test", "architecture|check"] {
+            let err = read_reflection(Some("a"), Some("b"), Some(guess)).unwrap_err();
+            assert!(err.contains(guess), "the refusal quotes what was passed: {err}");
+            for layer in FIX_AT_VALUES {
+                assert!(err.contains(layer), "the refusal does not list {layer}: {err}");
+            }
+            assert!(err.contains("remedy:"), "{err}");
+        }
     }
 
     // ── reflection-becomes-lesson D2: the clean-run answer ───────────────
@@ -4132,34 +4287,80 @@ mod tests {
         assert_eq!(rest.len(), 4);
     }
 
-    /// TRUTH: a recorded mistake reaches the store through the SAME two-part
+    /// TRUTH: a recorded mistake reaches the store through the SAME three-part
     /// door the verb uses, in either shape it was written, and a half-written
     /// one is refused by the words that door hands back.
     #[test]
     fn read_mistake_takes_both_shapes_and_refuses_a_missing_part() {
         let line = Value::String(
-            "Guessed the folder name — Read the path back before deleting anything".to_string(),
+            "Guessed the folder name — Read the path back before deleting anything — check"
+                .to_string(),
         );
         assert_eq!(
             read_mistake(&line).unwrap(),
             (
                 "Guessed the folder name".to_string(),
-                "Read the path back before deleting anything".to_string()
+                "Read the path back before deleting anything".to_string(),
+                "check".to_string()
             )
         );
-        let object = json!({ "wrong": "  Guessed the folder name  ", "better": "Read it first" });
+        let object = json!({
+            "wrong": "  Guessed the folder name  ",
+            "better": "Read it first",
+            "fix_at": " architecture ",
+        });
         assert_eq!(
             read_mistake(&object).unwrap(),
-            ("Guessed the folder name".to_string(), "Read it first".to_string())
+            (
+                "Guessed the folder name".to_string(),
+                "Read it first".to_string(),
+                "architecture".to_string()
+            )
         );
 
         // Half a record, in each shape: refused, and the refusal names the
         // missing part — the same words `read_reflection` hands the verb.
         let err = read_mistake(&Value::String("Guessed the folder name".to_string())).unwrap_err();
-        assert!(err.contains("--better"), "{err}");
+        assert!(err.contains("--better") && err.contains("--fix-at"), "{err}");
         assert!(err.contains("remedy:"), "{err}");
         let err = read_mistake(&json!({ "better": "Read it first" })).unwrap_err();
         assert!(err.contains("--wrong"), "{err}");
+    }
+
+    /// TRUTH (mistake-fix-at D1): a mistake written as two segments is refused
+    /// naming the third part, and a `better` that carries the separator itself
+    /// is refused too — with the reason said out loud, so a writer whose
+    /// `better` swallowed the layer can see which of their own parts was
+    /// eaten instead of reading "add a third part" and adding a fourth.
+    #[test]
+    fn a_two_segment_mistake_line_is_refused_naming_the_third_part() {
+        let two_parts =
+            Value::String("Guessed the folder name — Read the path back first".to_string());
+        let err = read_mistake(&two_parts).unwrap_err();
+        assert!(err.contains("--fix-at"), "the refusal names the third part: {err}");
+        assert!(err.contains("may not itself contain that separator"), "{err}");
+
+        // A `better` carrying the separator eats the layer: refused by the
+        // vocabulary check, with the same sentence about the separator.
+        let greedy = Value::String(
+            "Ran the wrong command — filtered the suite — and missed the case — check".to_string(),
+        );
+        let err = read_mistake(&greedy).unwrap_err();
+        assert!(err.contains("and missed the case — check"), "it quotes what it read: {err}");
+        assert!(err.contains("may not itself contain that separator"), "{err}");
+
+        // The object form has no such limit: it is the shape for a part that
+        // needs the dash.
+        assert_eq!(
+            read_mistake(&json!({
+                "wrong": "Ran the wrong command",
+                "better": "filtered the suite — and missed the case",
+                "fix_at": "check",
+            }))
+            .unwrap()
+            .1,
+            "filtered the suite — and missed the case"
+        );
     }
 
     /// TRUTH: the frontmatter contract only GROWS. A letter filed before the
@@ -4218,6 +4419,8 @@ mod tests {
         assert!(read_back[0].is_reflection());
         assert_eq!(read_back[0].better.as_deref(), Some("Read it first"));
 
+        assert_eq!(read_back[0].fix_at.as_deref(), Some("check"));
+
         // A line appended before the field existed: no `better`, still an entry.
         let mut old = entry.to_value();
         old.as_object_mut().unwrap().remove("better");
@@ -4227,17 +4430,82 @@ mod tests {
         assert_eq!(read_back[1].better, None);
     }
 
+    /// TRUTH (mistake-fix-at D4): the 465 reflection rows written before
+    /// `fix_at` existed are NOT backfilled. A row with no `fix_at` key reads
+    /// back as an entry with `None` — the store's spelling of the `none`
+    /// layer — rather than as a corrupt line the run's whole entry set dies
+    /// on.
+    #[test]
+    fn a_reflection_row_written_before_the_layer_existed_reads_back_as_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entry = sample_reflection("2026-08-25T02:30:00.000Z", "Guessed a path", "Read it first");
+        let mut old = entry.to_value();
+        old.as_object_mut().unwrap().remove("fix_at");
+        append_jsonl(&entries_path(root, "run-a"), &old).unwrap();
+
+        let read_back = read_entries(root, "run-a");
+        assert_eq!(read_back.len(), 1, "the old line is read, not warned away");
+        assert!(read_back[0].is_reflection(), "and it is still a reflection");
+        assert_eq!(read_back[0].fix_at, None);
+        // Every part the old row DID carry is untouched.
+        assert_eq!(read_back[0].what, "Guessed a path");
+        assert_eq!(read_back[0].better.as_deref(), Some("Read it first"));
+    }
+
+    /// TRUTH (mistake-fix-at D1): the layer rides the letter as well as the
+    /// entry row, on the same additive terms `better` took — emitted after
+    /// `better`, `null` on every item that is not a reflection, and read back
+    /// as `None` from a letter filed before the key existed.
+    #[test]
+    fn the_layer_rides_the_letter_frontmatter_and_round_trips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let entries = vec![
+            sample_entry("2026-08-25T01:00:00.000Z", "Wrote the store that keeps these letters"),
+            sample_reflection("2026-08-25T02:00:00.000Z", "Guessed a path", "Read it first"),
+        ];
+        let letter =
+            compose_letter("beehive", "run-one", "2026-08-25T06:00:00.000Z", &entries).unwrap();
+        let text = render_letter(&letter);
+        assert!(text.contains("fix_at: \"check\""), "{text}");
+        assert!(text.contains("fix_at: null"), "the non-reflection item emits null: {text}");
+
+        let path = write_letter(root, &letter).unwrap();
+        let read_back = read_letter(&path).unwrap();
+        let layers: Vec<Option<&str>> =
+            read_back.items.iter().map(|i| i.fix_at.as_deref()).collect();
+        assert!(layers.contains(&Some("check")), "the layer round-trips: {layers:?}");
+
+        // An OLDER letter — no `fix_at` key anywhere — still reads, every item
+        // with `None`.
+        let older = text
+            .replace("    fix_at: null\n", "")
+            .replace("    fix_at: \"check\"\n", "");
+        let old_path = mailbox_dir(root).join("20260825T060000Z-older.md");
+        write_text_atomic(&old_path, &older).unwrap();
+        let old_letter = read_letter(&old_path).unwrap();
+        assert_eq!(old_letter.items.len(), letter.items.len(), "every item still parses");
+        assert!(old_letter.items.iter().all(|i| i.fix_at.is_none()), "a missing key reads as None");
+    }
+
     /// TRUTH: `bee mailbox reflect` builds its entry through the store's own
     /// constructor, so what the verb appends and what the section renders can
     /// never be two different shapes.
     #[test]
     fn the_verb_and_the_section_agree_about_what_a_reflection_is() {
-        let entry = Entry::reflection("2026-08-25T02:30:00.000Z", "  Guessed  a path ", " Read it ");
+        let entry = Entry::reflection(
+            "2026-08-25T02:30:00.000Z",
+            "  Guessed  a path ",
+            " Read it ",
+            " check ",
+        );
         assert_eq!(entry.kind, KIND_REFLECTION);
         assert!(ENTRY_KINDS.contains(&entry.kind.as_str()), "the kind set names it");
         // One line each, the only edit a stored sentence ever gets.
         assert_eq!(entry.what, "Guessed a path");
         assert_eq!(entry.better.as_deref(), Some("Read it"));
+        assert_eq!(entry.fix_at.as_deref(), Some("check"));
         // A reflection edited nothing and proved nothing — empty, never guessed.
         assert!(entry.files.is_empty() && entry.commit.is_none() && entry.proof.is_none());
         assert!(entry.departure.is_none() && entry.needs_you.is_empty());
@@ -4813,6 +5081,7 @@ nested:
             departure: None,
             needs_you: vec![],
             better: None,
+            fix_at: None,
         }
     }
 

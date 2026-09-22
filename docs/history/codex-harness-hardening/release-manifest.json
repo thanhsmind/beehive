@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "9f286157f5b13406aceb9dd7fdf0d71fbec91574090b97cd5efabe9991628558",
+      "sha256": "f50d3a05f0ba765a7b36b16aaad2fdde361a4f8775211e3cb0d8bb1adddfa3df",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -171,7 +171,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/references/promotion.md",
-      "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
+      "sha256": "9115dda3466d78aa73b6c933f19f2b4fc48e8ce9ae1ec2b691071a276235e3d5",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/references/promotion.md"
@@ -892,7 +892,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "9beba0ec820a2f3f6869cb696273fca886b01ecfe2c2a9e4bcd216a5ca57d28b",
+      "sha256": "94aa9ed61c9de54a1aa2da43093bf10e8cceaac2de402f63e4377eb262972090",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -927,7 +927,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/references/promotion.md",
-      "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
+      "sha256": "9115dda3466d78aa73b6c933f19f2b4fc48e8ce9ae1ec2b691071a276235e3d5",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/references/promotion.md"
@@ -1763,7 +1763,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "df413748614954bae51d6ccf44eedb32c9e72cd9123cb078faa8c099b2877526",
+      "sha256": "86d762db55dfd536d1b9264d447aaeee6103485f9037b1975101565bf0eccf0f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1840,7 +1840,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "1aae0a28ddd46c21dc67ec167de6a51678520a88917c79c1b3fa52cfc56002fa",
+      "sha256": "ce3ace59b06c9a1c53e5c50d99c2c68efe366c5dc4b77de05b632b89a4b41b05",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"
@@ -1894,7 +1894,7 @@
     },
     {
       "path": "skills/bee-capturing/references/promotion.md",
-      "sha256": "2693d8ce5c0a37b9e2703847430d7ccc6f7635d6987ee6e08e84f1f198cdbdf8",
+      "sha256": "9115dda3466d78aa73b6c933f19f2b4fc48e8ce9ae1ec2b691071a276235e3d5",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/references/promotion.md"

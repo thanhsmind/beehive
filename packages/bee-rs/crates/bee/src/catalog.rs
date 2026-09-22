@@ -797,7 +797,26 @@ mod tests {
         // the mailbox identity, and `--worker` names a claim owner — none of
         // the three carries "which seat this run answers for", and no existing
         // flag names an inbox target at all. Both are new.
-        const PINNED_FLAG_COUNT: usize = 210;
+        //
+        // 210 -> 211 (mistake-fix-at mfa-1, 2026-09-22): ONE new name,
+        // `--fix-at`, reused unchanged by all three verbs that record a
+        // mistake — `mailbox.reflect`, `cells.cap` and `cells.finish`. It
+        // names the strongest layer that can stop the mistake coming back,
+        // from the closed set architecture | check | doctrine | none, and it
+        // is required wherever a mistake is written (D1, af14e1d6).
+        //
+        // Checked first, the nearest spellings this vocabulary already
+        // carries. `--layer` (backlog.add) is the closest of all and was
+        // rejected on meaning: there it is free text naming a WORKFLOW AREA
+        // (verification, state, hooks), which is where a piece of work sits,
+        // while `--fix-at` names what kind of thing can enforce a correction
+        // — reusing it would make one word mean two concepts one command
+        // apart. `--kind` classifies a record's type (handoff, dispatch,
+        // signal), not the remedy for one. `--better` is the OTHER half of
+        // the same reflection — what to have done instead — and a layer is
+        // not an instead. `--severity` and `--type` (backlog.add) rank and
+        // shape a row; neither says where a fix belongs.
+        const PINNED_FLAG_COUNT: usize = 211;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

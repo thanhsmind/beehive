@@ -144,6 +144,17 @@ Preconditions:
   `control-bee cli -- mailbox reflect --no-mistakes --json`, then
   `control-bee cli -- close --feature demo-note --json`. No entry of `doors[]`
   has `blocking: true`.
+- **A mechanizable mistake files its backlog row at close.** Settle the door
+  with a real reflection instead: `control-bee cli -- mailbox reflect --wrong
+  "ran the wrong test target" --better "read the cell's verify first" --fix-at
+  check --json`, then close. The green tail carries `Filed for "demo-note": 1
+  fix-at row(s) to .bee/backlog.jsonl (0 already there) — bee backlog findings
+  --feature demo-note to read them.`, the payload carries
+  `fix_at_rows: {"filed": 1, "skipped": 0}`, and
+  `control-bee cli -- backlog findings --feature demo-note --json` shows the
+  row with `type: "finding"`, `severity: "P3"` and `layer: "fix-at:check"`.
+  Close a second time: the same line reports `0 fix-at row(s) … (1 already
+  there)` and the backlog grows by nothing.
 - **Merge refusal recovery names re-entry in Pi.** In Pi, when a post-exit
   merge reconstructed on main refuses (due to uncommitted dirt, recorded proof
   debt, dissent debt, or an unapproved uat gate), the session remains on main,
@@ -234,6 +245,14 @@ Preconditions:
   unreachable from the CLI — see the `--no-mistakes` gotcha in
   [cells-and-proof](./cells-and-proof.md) — so `bee mailbox reflect
   --no-mistakes` is what actually settles it.
+- The `Filed for "<feature>"` line is news-only. A feature whose mistakes were
+  all `doctrine`, `none` or absent prints no such line at all, so drive a
+  `check` or `architecture` reflection before asserting on it. The rows are
+  read with `bee backlog findings --feature <feature>`; `bee backlog rank`
+  sinks a P3 finding, so a ranked list is the wrong place to look for them.
+- A backlog file that cannot be written never refuses the close. The tail gains
+  a line saying the fix-at row(s) were not filed and where, and the close stays
+  green — to drive it, make `.bee/backlog.jsonl` unwritable before closing.
 - A green non-dry-run close archives the feature's cells into
   `.bee/cells/archive/<feature>/` and auto-commits `.bee/` bookkeeping. Snapshot
   the cells directory before closing if you need its pre-close contents.

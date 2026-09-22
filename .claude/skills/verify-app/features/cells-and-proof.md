@@ -113,7 +113,10 @@ Preconditions:
 - `bee cells show` reads the shared control plane and refuses inside a granted feature worktree; run it from the main sandbox checkout to inspect cell state.
 - The `--report` value is a JSON **string** with exactly five keys: `outcome`,
   `commit`, `files`, `tests`, `deviations`. An unknown or missing key is refused
-  by name. `mistakes` is an optional sixth.
+  by name. `mistakes` is an optional sixth: an array whose items each carry
+  THREE parts — `"<what went wrong> — <what would have been better> — <fix-at>"`
+  or `{wrong, better, fix_at}`. The fix-at layer is one of `architecture`,
+  `check`, `doctrine`, `none`, and an item without it is refused by name.
 - The command segment of the proof line in `--report` must match the cell's approved
   `verify` command using exact trimmed bytes. Descriptive summaries (e.g.,
   `"all tests pass"`) are rejected.
@@ -126,7 +129,8 @@ Preconditions:
   (`verbs/cells/util.rs:122`), so the cap succeeds and writes **no**
   `trace.no_mistakes`. Verified on a real capped cell. Settle the mistakes
   answer with `bee mailbox reflect --no-mistakes` (bare — that one is a true
-  bare-only flag), or put a `mistakes` array in `--report`.
+  bare-only flag), or put a `mistakes` array in `--report` whose items carry
+  all three parts, the `--fix-at` layer included.
 - A `small`-lane cap refuses without a registered execution worker. `tiny` lanes
   run inline and skip that requirement, and `--inline-reason` is the audited
   escape on the higher lanes.

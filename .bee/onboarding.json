@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.44.0",
   "managed": {
-    "agents_block": "59520beb664fc8667b5bbc52508a330bd812bcfe41f201f4d38d2a39440717ad",
+    "agents_block": "1c86fcbae3469bf553ee4db14c815378a4398110adc5235372ac52ef2d220108",
     "gitignore_block": "f30cb5dd174055c18a3b067f5cb22b6ef6662c4c27357f3347ab26529cc4d117",
     "helpers": {},
     "lib": {},
@@ -38,7 +38,7 @@
       "advisor.md": "a6050c55972ddc090e4c09a711ae26887065b60e8a58fb2349f15154c6bb12ae",
       "gather.md": "6cb0ceeaac9bf833e1826469428cd1efc4308a73ebc1235a9e6aaed39f309b6d",
       "reviewer.md": "12ae690a00e9eb073b2cecd4d9748df38eef44b64eaed51777579717f2d17f28",
-      "worker-cell.md": "1aae0a28ddd46c21dc67ec167de6a51678520a88917c79c1b3fa52cfc56002fa"
+      "worker-cell.md": "ce3ace59b06c9a1c53e5c50d99c2c68efe366c5dc4b77de05b632b89a4b41b05"
     },
     "repo_hooks": {
       ".codex/hooks.json": "b4ecbe18eed3506b7bf3a936aad5ab1f1e61f93379c37257bd26bb90c9b6bd9f"
@@ -81,5 +81,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-09-22T02:39:19.097Z"
+  "updated_at": "2026-09-22T06:18:44.734Z"
 }

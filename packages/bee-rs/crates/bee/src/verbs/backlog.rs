@@ -65,12 +65,12 @@ use std::time::Instant;
 const PBI_STATUSES: [&str; 5] = ["proposed", "in-flight", "parked", "done", "declined"];
 const BACKLOG_STATUSES: [&str; 3] = ["proposed", "in-flight", "done"];
 const BACKLOG_SEVERITIES: [&str; 3] = ["P1", "P2", "P3"];
-const BACKLOG_MAX_TITLE: usize = 200;
+pub(crate) const BACKLOG_MAX_TITLE: usize = 200;
 const BACKLOG_MAX_LAYER: usize = 40;
 const BACKLOG_MAX_STORY: usize = 200;
 const BACKLOG_MAX_COS: usize = 2000;
 
-fn backlog_jsonl_path(root: &Path) -> PathBuf {
+pub(crate) fn backlog_jsonl_path(root: &Path) -> PathBuf {
     root.join(".bee").join("backlog.jsonl")
 }
 
@@ -394,6 +394,51 @@ fn is_finding_row(row: &Value) -> bool {
             .unwrap_or(false)
     };
     hit("kind") || hit("type")
+}
+
+/// The finding row `bee backlog add` appends — the ONE shape any writer uses.
+///
+/// Lifted out of [`run_add`] by mistake-fix-at D2 so `bee close` can file a
+/// fix-at row through the same builder. The key order below is a contract:
+/// the feedback digest and `bee backlog findings` read these rows, and two
+/// builders would be two places for that order to drift. Validation stays
+/// with the VERB (`add_refusal`) — a row built here is already trusted.
+pub(crate) fn backlog_finding_row(
+    ty: &str,
+    title: &str,
+    detail: &str,
+    severity: &str,
+    layer: &str,
+    feature: &str,
+) -> Map<String, Value> {
+    // Row key order: ts, type, title, detail, severity, layer, feature.
+    let mut line = Map::new();
+    line.insert("ts".into(), Value::String(now_iso()));
+    line.insert("type".into(), Value::String(ty.to_string()));
+    line.insert("title".into(), Value::String(title.to_string()));
+    line.insert("detail".into(), Value::String(detail.to_string()));
+    line.insert("severity".into(), Value::String(severity.to_string()));
+    line.insert("layer".into(), Value::String(layer.to_string()));
+    line.insert("feature".into(), Value::String(feature.to_string()));
+    line
+}
+
+/// Is a finding row with exactly this feature, layer and title already on
+/// disk?
+///
+/// mistake-fix-at D2's "the same entry is never filed twice", and the reason
+/// a second `bee close` of the same feature files nothing. A finding row
+/// carries no id, so the three fields ARE its identity; equality is exact on
+/// all three, never fuzzy — a near-match is a different mistake, and the
+/// digest reads `title` verbatim.
+pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool {
+    read_jsonl(&backlog_jsonl_path(root)).rows.iter().any(|row| {
+        if !is_finding_row(row) {
+            return false;
+        }
+        let field = |name: &str| row.get(name).and_then(Value::as_str).unwrap_or("");
+        field("feature") == feature && field("layer") == layer && field("title") == title
+    })
 }
 
 /// matchesBacklogFeature: String(row.feature) whole-token match.
@@ -830,15 +875,7 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
     // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
     let detail = parsed.flags.get("detail").cloned().unwrap_or_default();
     let feature = parsed.flags.get("feature").cloned().unwrap_or_default();
-    // Row key order: ts, type, title, detail, severity, layer, feature.
-    let mut line = Map::new();
-    line.insert("ts".into(), Value::String(now_iso()));
-    line.insert("type".into(), Value::String(ty.to_string()));
-    line.insert("title".into(), Value::String(title.to_string()));
-    line.insert("detail".into(), Value::String(detail));
-    line.insert("severity".into(), Value::String(severity.to_string()));
-    line.insert("layer".into(), Value::String(layer.to_string()));
-    line.insert("feature".into(), Value::String(feature));
+    let line = backlog_finding_row(ty, title, &detail, severity, layer, &feature);
     let path = backlog_jsonl_path(&ctx.root);
     if append_jsonl(&path, &Value::Object(line.clone())).is_err() {
         // The one refusal that cannot promise "nothing was written": the write
@@ -1768,6 +1805,63 @@ mod tests {
     fn write_backlog(root: &Path, lines: &str) {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(backlog_jsonl_path(root), lines).unwrap();
+    }
+
+    // ── the shared finding-row surface (mistake-fix-at D2) ────────────────
+
+    /// TRUTH: the lifted builder writes the SAME seven keys in the same
+    /// order `bee backlog add` always wrote — the order the feedback digest
+    /// and `bee backlog findings` read.
+    #[test]
+    fn backlog_finding_row_keeps_the_seven_keys_in_order() {
+        let row = backlog_finding_row("finding", "t", "d", "P3", "fix-at:check", "demo");
+        let keys: Vec<&str> = row.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["ts", "type", "title", "detail", "severity", "layer", "feature"]);
+        assert_eq!(row["type"].as_str(), Some("finding"));
+        assert_eq!(row["title"].as_str(), Some("t"));
+        assert_eq!(row["detail"].as_str(), Some("d"));
+        assert_eq!(row["severity"].as_str(), Some("P3"));
+        assert_eq!(row["layer"].as_str(), Some("fix-at:check"));
+        assert_eq!(row["feature"].as_str(), Some("demo"));
+        assert!(row["ts"].as_str().is_some_and(|t| !t.is_empty()));
+    }
+
+    /// TRUTH: the dedupe answers on feature, layer and title — all three,
+    /// exactly, and nothing else. A row differing in any one of them is a
+    /// different mistake; a row differing only in `detail`, `severity` or
+    /// `ts` is the same one and is never filed twice.
+    #[test]
+    fn backlog_finding_exists_matches_exactly_and_only_on_the_three_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_backlog(
+            root,
+            r#"{"ts":"2026-01-01T00:00:00.000Z","type":"finding","title":"wrote before reserving","detail":"reserve first","severity":"P1","layer":"fix-at:check","feature":"demo"}"#,
+        );
+
+        // The three fields match, and neither the different severity nor the
+        // different detail nor the ts makes it another row.
+        assert!(backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving"));
+        // Each of the three alone is enough to make it a different row.
+        assert!(!backlog_finding_exists(root, "other", "fix-at:check", "wrote before reserving"));
+        assert!(!backlog_finding_exists(
+            root,
+            "demo",
+            "fix-at:architecture",
+            "wrote before reserving"
+        ));
+        assert!(!backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving."));
+
+        // A pbi row carrying the same three fields is never a finding row.
+        write_backlog(
+            root,
+            r#"{"ts":"t","kind":"pbi","event":"add","id":"p-1","title":"wrote before reserving","feature":"demo","layer":"fix-at:check"}"#,
+        );
+        assert!(!backlog_finding_exists(root, "demo", "fix-at:check", "wrote before reserving"));
+
+        // A store with no backlog file at all answers no, never panics.
+        let empty = tempfile::tempdir().unwrap();
+        assert!(!backlog_finding_exists(empty.path(), "demo", "fix-at:check", "x"));
     }
 
     // ── rank / badges / render ─────────────────────────────────────────────

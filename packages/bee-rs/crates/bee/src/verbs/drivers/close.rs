@@ -299,6 +299,133 @@ fn closing_run_answered_mistakes(root: &Path) -> bool {
     mailbox::read_entries(&control, &run).iter().any(mailbox::Entry::is_mistakes_answer)
 }
 
+// ── mistake-fix-at D2: one backlog row per mechanizable mistake ───────────
+
+/// What the filing pass did, as the tail has to report it.
+struct FixAtRows {
+    /// Rows appended by this close.
+    filed: usize,
+    /// Mistakes whose row was already on disk — the re-close count.
+    skipped: usize,
+    /// FAIL-OPEN (CONTEXT.md, the mailbox rule): a backlog that cannot be
+    /// written warns and never refuses the close. One line, however many
+    /// rows failed, naming the path.
+    warning: Option<String>,
+}
+
+/// One mistake, with the source that has to appear in its row's detail.
+struct Mechanizable {
+    wrong: String,
+    better: String,
+    /// `check` or `architecture` — already filtered.
+    fix_at: String,
+    /// `cell demo-1` or `run <id>`, rendered into the detail as `(from …)`.
+    source: String,
+}
+
+/// Every mistake of this feature that a check or a code change could have
+/// stopped (mistake-fix-at D2, source set per D2a).
+///
+/// TWO sources, because a mistake is recorded in two places and D2 says
+/// "every reflection of the closing feature":
+///  * each capped cell's `trace.mistakes` — walked exactly as
+///    [`mistakes_debt`] walks, archive included, so a cell an earlier close
+///    already retired still counts;
+///  * the closing run's own reflection entries — the same run and control
+///    root [`closing_run_answered_mistakes`] resolves, which is where
+///    `bee mailbox reflect` writes.
+///
+/// `doctrine`, `none` and a missing `fix_at` yield nothing: D4 forbids
+/// backfilling a layer nobody named, and an absent key IS the answer `none`.
+fn mechanizable_mistakes(root: &Path, feature: &str) -> Vec<Mechanizable> {
+    use crate::verbs::mailbox;
+    fn mechanizable(layer: &str) -> bool {
+        matches!(layer.trim(), "check" | "architecture")
+    }
+    let mut out = Vec::new();
+    // Fail-open like the rest of this pass: a walk that would delegate costs
+    // the rows, never the close.
+    for cell in list_cells_including_archive(root, feature, Some("capped")).unwrap_or_default() {
+        let id = vget(&cell, "id").and_then(Value::as_str).unwrap_or("").to_string();
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        let Some(Value::Array(mistakes)) = vget(&trace, "mistakes").cloned() else { continue };
+        for m in mistakes {
+            let field =
+                |name: &str| vget(&m, name).and_then(Value::as_str).unwrap_or("").to_string();
+            let fix_at = field("fix_at");
+            if !mechanizable(&fix_at) {
+                continue;
+            }
+            out.push(Mechanizable {
+                wrong: field("wrong"),
+                better: field("better"),
+                fix_at: fix_at.trim().to_string(),
+                source: format!("cell {id}"),
+            });
+        }
+    }
+    let control = crate::hooks::session_init::control_root_for(root);
+    let run = mailbox::run_id(crate::verbs::cells::resolve_session_flag_env(None).as_deref());
+    for entry in mailbox::read_entries(&control, &run) {
+        if !entry.is_reflection() {
+            continue;
+        }
+        let fix_at = entry.fix_at.clone().unwrap_or_default();
+        if !mechanizable(&fix_at) {
+            continue;
+        }
+        out.push(Mechanizable {
+            // The entry's `what` IS the wrong text: `Entry::reflection` stores
+            // it there verbatim.
+            wrong: entry.what.clone(),
+            better: entry.better.clone().unwrap_or_default(),
+            fix_at: fix_at.trim().to_string(),
+            source: format!("run {run}"),
+        });
+    }
+    out
+}
+
+/// File one backlog row per mechanizable mistake (mistake-fix-at D2).
+///
+/// ONE occurrence is enough — a mistake a check could catch is worth a row
+/// the first time it is seen, which is why this needs none of the lesson
+/// miner's two-run brake. The row is built by `backlog::backlog_finding_row`
+/// and appended by `fsutil::append_jsonl`, the two homes `bee backlog add`
+/// itself uses, so there is no second row shape.
+///
+/// Dedupe is `backlog_finding_exists` on (feature, layer, title) — re-read
+/// per row, which is also what keeps two identical mistakes in ONE close
+/// from filing twice: the first append is on disk before the second is asked
+/// about.
+fn file_fix_at_rows(root: &Path, feature: &str) -> FixAtRows {
+    use crate::verbs::backlog;
+    let mut rows = FixAtRows { filed: 0, skipped: 0, warning: None };
+    let path = backlog::backlog_jsonl_path(root);
+    for m in mechanizable_mistakes(root, feature) {
+        let layer = format!("fix-at:{}", m.fix_at);
+        // The title rides the same `--title` cap `bee backlog add` enforces,
+        // so a filed row is one a human could have filed by hand.
+        let title = crate::textutil::truncate_chars_head(&m.wrong, backlog::BACKLOG_MAX_TITLE);
+        if backlog::backlog_finding_exists(root, feature, &layer, &title) {
+            rows.skipped += 1;
+            continue;
+        }
+        let detail = format!("{} (from {})", m.better, m.source);
+        let row = backlog::backlog_finding_row("finding", &title, &detail, "P3", &layer, feature);
+        match append_jsonl(&path, &Value::Object(row)) {
+            Ok(()) => rows.filed += 1,
+            Err(e) => {
+                rows.warning.get_or_insert(format!(
+                    "Fix-at row(s) for \"{feature}\" were not filed: {} could not be written ({e}) — the mistakes stay on the cells and in the letter.",
+                    path.display()
+                ));
+            }
+        }
+    }
+    rows
+}
+
 /// provenance: cells.mjs scribingDebt(root, {feature}) — the feature-scoped
 /// overrides arm (scribing-integrity si-1), which is the one close uses.
 ///
@@ -2957,6 +3084,18 @@ pub(crate) fn close_handler(
         },
     };
 
+    // ── mistake-fix-at D2: file the fix-at rows ───────────────────────────
+    //
+    // HERE, not earlier: past every refusal above, so a close that stopped at
+    // a door files nothing. Before retirement only because the whole tail
+    // reads better in the order it prints; the walk itself reads the archive
+    // too, so it would survive being moved after it.
+    let fix_at_rows = file_fix_at_rows(root, feature);
+    result.insert(
+        "fix_at_rows".into(),
+        json!({"filed": fix_at_rows.filed, "skipped": fix_at_rows.skipped}),
+    );
+
     // ── retire the feature's cells ────────────────────────────────────────
     //
     // Close is the lifecycle event that MEANS "this feature is done", and
@@ -2990,6 +3129,20 @@ pub(crate) fn close_handler(
             "Cells kept in the active scan: {reason}."
         )),
         Retirement::Off => {}
+    }
+    // Right after the Retired line, in the same voice — and silent when
+    // there was nothing to file, on the same rule the `moved == 0`
+    // retirement takes above: a feature whose mistakes were all `doctrine`,
+    // `none` or absent has no fix-at news, and a line saying "0 (0 already
+    // there)" would be noise on most closes.
+    if fix_at_rows.filed > 0 || fix_at_rows.skipped > 0 {
+        lines.push(format!(
+            "Filed for \"{feature}\": {} fix-at row(s) to .bee/backlog.jsonl ({} already there) — bee backlog findings --feature {feature} to read them.",
+            fix_at_rows.filed, fix_at_rows.skipped
+        ));
+    }
+    if let Some(warning) = &fix_at_rows.warning {
+        lines.push(warning.clone());
     }
     result.insert("retired".into(), retired.value());
 
@@ -3319,8 +3472,10 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         // A green close left nothing outstanding; a close that needed the
         // human's call refused at a door and never reached this line (D13).
         needs_you: Vec::new(),
-        // Only a reflection entry carries letter-reflection's second part.
+        // Only a reflection entry carries letter-reflection's second part
+        // or mistake-fix-at's layer.
         better: None,
+        fix_at: None,
     };
     mailbox::record_close_stop(
         &control,
@@ -5000,6 +5155,152 @@ mod tests {
         );
     }
 
+    // ── mistake-fix-at D2: the fix-at rows filed at close ────────────────
+
+    /// A capped cell whose cap answered with ONE mistake, shaped exactly as
+    /// `bee cells cap --mistake --fix-at` writes it. `fix_at: None` models a
+    /// row written before D1 existed — D4 forbids backfilling those.
+    fn mistake_cell(root: &Path, id: &str, wrong: &str, fix_at: Option<&str>) {
+        let layer = match fix_at {
+            Some(v) => format!(r#","fix_at":"{v}""#),
+            None => String::new(),
+        };
+        w(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(
+                r#"{{"id":"{id}","feature":"demo","status":"capped",
+                "acceptance":"A letter is filed once per run and never twice",
+                "trace":{{"files_changed":["src/one.rs"],
+                "mistakes":[{{"wrong":"{wrong}","better":"say it at the cap"{layer}}}],
+                "report":{{"outcome":"o","commit":"c","files":["src/one.rs"],
+                "tests":"cargo test — green — the touched module","deviations":[]}}}}}}"#
+            ),
+        );
+    }
+
+    fn backlog_rows(root: &Path) -> Vec<Value> {
+        let path = root.join(".bee").join("backlog.jsonl");
+        std::fs::read_to_string(path)
+            .map(|text| {
+                text.lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| serde_json::from_str::<Value>(l).unwrap())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// TRUTH (D2): one occurrence is enough. A green close of a feature whose
+    /// capped cells each recorded a `check` mistake appends exactly one
+    /// backlog row per mistake, and the tail says where to read them.
+    #[test]
+    fn a_green_close_files_one_backlog_row_per_mechanizable_mistake() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        mistake_cell(root, "demo-2", "Ran the whole suite for a one-line doc fix", Some("check"));
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "the cells answered, so nothing stops this close: {text}");
+
+        let rows = backlog_rows(root);
+        assert_eq!(rows.len(), 2, "one row per mechanizable mistake: {rows:?}");
+        for row in &rows {
+            assert_eq!(row["type"], json!("finding"), "{row}");
+            assert_eq!(row["severity"], json!("P3"), "{row}");
+            assert_eq!(row["layer"], json!("fix-at:check"), "{row}");
+            assert_eq!(row["feature"], json!("demo"), "{row}");
+        }
+        // The title is the wrong text; the detail carries the better text and
+        // names the cell it came from.
+        let titles: Vec<&str> = rows.iter().map(|r| r["title"].as_str().unwrap()).collect();
+        assert!(titles.contains(&"Reserved a file after writing it"), "{titles:?}");
+        assert!(rows.iter().any(|r| r["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("(from cell demo-1)")), "{rows:?}");
+
+        assert!(
+            text.contains("Filed for \"demo\": 2 fix-at row(s) to .bee/backlog.jsonl (0 already there) — bee backlog findings --feature demo to read them."),
+            "the tail must name the count, the path and the reader: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 2, "skipped": 0}));
+    }
+
+    /// TRUTH (D2): the same entry is never filed twice. Closing the same
+    /// feature again appends nothing and reports the rows as already there.
+    #[test]
+    fn closing_the_same_feature_again_files_no_second_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        mistake_cell(root, "demo-2", "Ran the whole suite for a one-line doc fix", Some("check"));
+
+        let first = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_result, _text, code) = first else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(backlog_rows(root).len(), 2);
+
+        let second = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = second else { panic!("expected Emit") };
+        assert_eq!(code, 0, "{text}");
+        assert_eq!(backlog_rows(root).len(), 2, "a re-close appended a duplicate row");
+        assert!(
+            text.contains("Filed for \"demo\": 0 fix-at row(s) to .bee/backlog.jsonl (2 already there)"),
+            "the re-close must report them as already there: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 2}));
+    }
+
+    /// TRUTH (D2 + D4): only `check` and `architecture` are mechanizable. A
+    /// `doctrine` mistake stays on the two-run lesson rule, and a mistake
+    /// written before `fix_at` existed is read as `none`, never guessed at.
+    #[test]
+    fn doctrine_and_layerless_mistakes_file_no_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Wrote the summary before the work", Some("doctrine"));
+        mistake_cell(root, "demo-2", "Misread the flag name", None);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0, "{text}");
+        assert!(backlog_rows(root).is_empty(), "nothing mechanizable, nothing filed");
+        assert!(!text.contains("Filed for"), "no news is no line: {text}");
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 0}));
+    }
+
+    /// TRUTH (the fail-open rule): a backlog file that cannot be written
+    /// warns and NEVER changes the close's exit code. Losing a backlog row
+    /// must not cost a feature its close.
+    #[test]
+    fn an_unwritable_backlog_warns_and_the_close_still_passes() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        mistake_cell(root, "demo-1", "Reserved a file after writing it", Some("check"));
+        let backlog = root.join(".bee").join("backlog.jsonl");
+        std::fs::write(&backlog, "").unwrap();
+        std::fs::set_permissions(&backlog, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        std::fs::set_permissions(&backlog, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(code, 0, "an unwritable backlog must never refuse the close: {text}");
+        assert!(
+            text.contains("Fix-at row(s) for \"demo\" were not filed:")
+                && text.contains("backlog.jsonl"),
+            "one warning line naming the path: {text}"
+        );
+        assert_eq!(result["fix_at_rows"], json!({"filed": 0, "skipped": 0}));
+    }
+
     /// TRUTH (the D5 regression): the door reads the FEATURE'S CAPPED CELLS,
     /// never the closing session's own run. Under the default `uat_stop:
     /// "close"` the closing session is the attended orchestrator — a
@@ -5044,6 +5345,7 @@ mod tests {
                 "2026-08-31T01:00:00.000Z",
                 "Capped demo-1 without saying what went wrong",
                 "Answer the mistakes question at the cap, when it is still in hand",
+                "none",
             ),
         );
 
