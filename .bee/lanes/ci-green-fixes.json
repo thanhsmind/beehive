@@ -1,0 +1,173 @@
+{
+  "schema_version": "1.0",
+  "feature": "ci-green-fixes",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"ci-green-fixes\" started at phase \"exploring\" (lane).",
+  "next_action": "Run cells cgf-1 and cgf-2 inline",
+  "created_at": "2026-09-22T11:02:01.125Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-09-22T11:02:01.153Z",
+    "feature": "ci-green-fixes"
+  },
+  "gate_preview": {
+    "feature": "ci-green-fixes",
+    "plan_sha256": "6a442ffa22a71fc64e9c761b883c261d53514399f85f53cab8b7a4e03902c86e",
+    "previewed_at": "2026-09-22T11:02:01.280Z",
+    "cells": [
+      {
+        "id": "cgf-1",
+        "feature": "ci-green-fixes",
+        "title": "Read a Windows delete-pending lock as busy in the split lock",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "cf294aef-36e1-4f09-be18-fbae00cdc964"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In split_lock::try_acquire add a cfg(windows) match arm: Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false), placed after the AlreadyExists arm (per D1). No comment in code; the why is D1. Nothing else changes.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::split_lock",
+        "must_haves": {
+          "truths": [
+            "try_acquire returns Ok(false) on a Windows PermissionDenied and the split_lock tests stay green on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change unix behavior",
+            "Do not widen the arm beyond PermissionDenied"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cgf-2",
+        "feature": "ci-green-fixes",
+        "title": "Poll for the deferred switch in the Pi marker fixture",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4792a92e-2064-48ee-aae3-4f0bf371ac16"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In the embedded harness JS add case \"await_switches\" beside await_messages: poll switches.length until call.count or call.timeout_ms, push step({switches_seen}). Add fn await_switches_step(count) -> Value using positive_wait_ms() beside await_injections_in_vain. In shell_tool_result_captures_marker_and_agent_settled_submits_private_command replace sleep_step(50) with await_switches_step(1) (per D2). Other fixtures unchanged.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts shell_tool_result_captures_marker",
+        "must_haves": {
+          "truths": [
+            "the harness has an await_switches step and the marker fixture uses it with the positive-wait window"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the fixture's assertions",
+            "Do not touch other fixtures"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "ci-green-fixes",
+    "plan_sha256": "6a442ffa22a71fc64e9c761b883c261d53514399f85f53cab8b7a4e03902c86e",
+    "previewed_at": "2026-09-22T11:02:01.280Z",
+    "cells": [
+      {
+        "id": "cgf-1",
+        "feature": "ci-green-fixes",
+        "title": "Read a Windows delete-pending lock as busy in the split lock",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "cf294aef-36e1-4f09-be18-fbae00cdc964"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In split_lock::try_acquire add a cfg(windows) match arm: Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false), placed after the AlreadyExists arm (per D1). No comment in code; the why is D1. Nothing else changes.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::split_lock",
+        "must_haves": {
+          "truths": [
+            "try_acquire returns Ok(false) on a Windows PermissionDenied and the split_lock tests stay green on Linux"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change unix behavior",
+            "Do not widen the arm beyond PermissionDenied"
+          ]
+        },
+        "behavior_change": true
+      },
+      {
+        "id": "cgf-2",
+        "feature": "ci-green-fixes",
+        "title": "Poll for the deferred switch in the Pi marker fixture",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "4792a92e-2064-48ee-aae3-4f0bf371ac16"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In the embedded harness JS add case \"await_switches\" beside await_messages: poll switches.length until call.count or call.timeout_ms, push step({switches_seen}). Add fn await_switches_step(count) -> Value using positive_wait_ms() beside await_injections_in_vain. In shell_tool_result_captures_marker_and_agent_settled_submits_private_command replace sleep_step(50) with await_switches_step(1) (per D2). Other fixtures unchanged.",
+        "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts shell_tool_result_captures_marker",
+        "must_haves": {
+          "truths": [
+            "the harness has an await_switches step and the marker fixture uses it with the positive-wait window"
+          ],
+          "artifacts": [],
+          "key_links": [],
+          "prohibitions": [
+            "Do not change the fixture's assertions",
+            "Do not touch other fixtures"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  }
+}
