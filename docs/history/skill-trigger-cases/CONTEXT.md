@@ -64,9 +64,11 @@ Exact JSON field names beyond `brief`/`expect`/`near`, the test file name, the e
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: the one planning question was settled at planning (skt-1 shipped the ignored cargo test); this section records that, it promises no later action -->
 ### Deferred To Planning
 
 - [x] Settled at planning: the eval is an `#[ignore]` cargo test in the same file as the fence (skt-1).
+<!-- /bee:not-a-deferral -->
 
 ## Out of scope, filed as backlog rows
 
