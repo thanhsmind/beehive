@@ -304,6 +304,18 @@ one type per file, linked where types meet.
   cell id rides the last line of the body as a trailer (`cell: <id>`),
   and the diff carries the numbers.
 <!-- /rule -->
+<!-- rule: agents-no-code-comments -->
+- No comment in code, in any language: not `//`, not `///` or `//!`,
+  not `/* */`, not `#`. The why a comment used to carry has two homes
+  and no third — a `docs/knowledge` concept whose Pointers name the
+  file, or a `bee decisions log` entry; a public item's description
+  lives in the owning concept; a workaround is fixed, or filed with
+  `bee backlog add` and cited from the concept, never from the code.
+  Three exceptions only: a `#!` line, a `SAFETY:` line on an unsafe
+  block, and a license header at the top of a file. Where
+  `no_code_comments` is on, the write guard refuses the write, and the
+  comment baseline reds the suite on any count that rises.
+<!-- /rule -->
 - Write a mistake down the MOMENT you notice it, never composed from
   memory at the end: `bee mailbox reflect --wrong "<what went wrong>"
   --better "<what would have been better>" --fix-at

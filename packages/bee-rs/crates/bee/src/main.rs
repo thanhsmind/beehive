@@ -10,6 +10,7 @@
 // `unsupported command shape` with a non-zero exit instead of a delegation.
 
 mod catalog;
+mod comments;
 mod devtools;
 mod fsutil;
 mod doctor;

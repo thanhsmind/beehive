@@ -16,6 +16,7 @@
   "worktree_first": "on",
   "worktree_cleanup_on_merge": false,
   "uat_stop": "close",
+  "no_code_comments": true,
   "uat_before_merge": false,
   "staging_before_merge": false,
   "team": {

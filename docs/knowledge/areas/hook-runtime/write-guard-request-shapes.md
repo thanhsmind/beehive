@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)", "js-parity-cleanup D3 as corrected by jp-9 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — display caps count characters, but the question-heading limit keeps the platform validator's own counting unit; judge finding bc2e2d44)"]
+  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)", "js-parity-cleanup D3 as corrected by jp-9 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — display caps count characters, but the question-heading limit keeps the platform validator's own counting unit; judge finding bc2e2d44)", "38e323d6 (no-code-comments D1: no comment in a code file, in any language; three exceptions only)", "80ec3cd1 (no-code-comments D2: the ratchet — a committed per-file baseline that only ever goes down)", "0add770d (no-code-comments D2b, touches D2: the baseline is seeded from the per-file maximum over main and every unmerged wt/* branch)", "c2477366 (no-code-comments D3: the write guard refuses a write that adds a comment line to a code file, naming file, line and remedy)", "0ee8248d (no-code-comments D4: the why has two homes — a docs/knowledge concept or a bee decisions log entry — and no third)", "002a935d (no-code-comments D5: the rule lands in packages/bee/AGENTS.block.md and packages/bee/prompts/worker-cell.md)", "69326d15 (no-code-comments D6: removing the existing comments is separate, batched grooming work)", "e3bf4a57 (no-code-comments D7: one config key no_code_comments, default false; this repo sets it true, hosts opt in)"]
   sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/archive/guard-parser-depth/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/archive/js-parity-cleanup/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
@@ -224,6 +224,107 @@ The consequence for tooling: a harness that drives bee against an out-of-tree
 sandbox ships as an executable script invoked by its literal absolute path,
 never as inline compound shell.
 
+## The comment arm and the comment ratchet
+
+No comment may be written in code in this repository. Two layers hold the rule:
+the write guard refuses the write for a hooked agent, and a ratchet test in the
+declared suite goes red when any file's comment count rises above its committed
+baseline (38e323d6, 80ec3cd1, c2477366). The why a comment used to carry has two
+homes and no third — a `docs/knowledge` concept whose Pointers name the file, or
+a `bee decisions log` entry (0ee8248d) — and the rule is stated where agents read
+it, as the marked rule `agents-no-code-comments` (002a935d).
+
+**The switch.** One config key, `no_code_comments` (boolean, default false),
+turns the arm on (e3bf4a57). The arm reads it through the guard's own merged
+config read (`read_config`, `write_guard/store.rs`), so `.bee/config.local.json`
+overlays `.bee/config.json` exactly as every other key. A host that onboards bee
+gets the hook code and the doctrine line and refuses nothing until it sets the
+key — `scripts/` exists in most hosts, and an always-on arm would refuse a host's
+own code the moment it installed bee. The store the key is read FROM follows the
+worktree grant (`hooks/adapter.rs`): a GRANTED feature worktree reads its own
+`.bee/config.json`, so a branch that predates the key is never refused; an
+UNGRANTED worktree reads main's store, so main's key decides for it.
+
+**The code roots.** `under_code_root` owns the path list and nothing else
+repeats it: `packages/bee-rs/crates/<any>/src/**`, `packages/bee/hooks/**`,
+`packages/bee/lib/**`, `scripts/**`, `.bee/verify/**`. A target outside those
+roots is passed over, and so is every `.md`, `.json` and `.toml` inside them —
+the file must also read as code: extension `.rs`, `.sh`, `.bash` or `.py`, or an
+extension-less file whose first line is a `#!` naming sh, bash or python
+(`code_lang`).
+
+**What counts as a comment line.** For Rust: a line whose first non-blank
+characters are `//` — `///` and `//!` doc comments included, because a doc
+comment carries "why" in code just as a plain one does — or `/*`, plus every
+line inside the block it opens. For shell and python: a line whose first
+non-blank character is `#`. Three exceptions are never counted and never
+refused: a `#!` line (on ANY line, because a shell heredoc body carries one
+too), a Rust comment whose text opens with `SAFETY:` on an unsafe block, and a
+license header at the top of a file — a leading comment run holding `Copyright`,
+`SPDX-License-Identifier` or `Licensed under`.
+
+**The request shapes the arm can read.** The arm runs per target, after the
+config guard and before the worktree-first guard, and it skips the `**`
+broad-write sentinel. It reads:
+
+- `Write` — `tool_input.content` is the whole proposed file.
+- `Edit` and `MultiEdit` — `reconstruct_target_text` (`write_guard/main.rs`)
+  rebuilds the WHOLE proposed file from disk plus the replacement, so line
+  numbers, block-comment state, the shebang and the license rule all see the
+  full file rather than a fragment.
+- A `Bash` heredoc whose body is redirected into a code path — `heredoc_writes`
+  (`write_guard/guards.rs`) pairs each body with its `>` or `>>` target, and an
+  append is judged against the file it would extend.
+- `apply_patch` — `apply_patch_added_lines` (`write_guard/detectors.rs`) returns
+  the added lines per `*** Add File:` / `*** Update File:` target, and the arm
+  judges those added lines alone.
+
+It CANNOT read a Bash write with no readable body — a `sed -i`, a `cp`, a
+redirect from a command's output. That shape is allowed through, by design: the
+arm refuses only what it can prove, and the D2 ratchet catches whatever reaches
+the tree anyway.
+
+The comparison is old-versus-new as a multiset of trimmed comment text
+(`added_comment_lines`), so moving a comment, deleting one, or reindenting one
+passes; only a comment that was not there before refuses. The refusal names the
+file and the line, quotes the first 80 characters of the offending line, says
+that `///` and `//!` count too, and gives the remedy in the same message: the
+two homes for the why, the owning concept for a public item's description, and
+`bee backlog add` for a workaround, cited from the concept and never from the
+code (`comment_guard_denial`, `write_guard/main.rs`). It reaches the host as
+exit 2 on stderr like every other write-guard deny.
+
+**The known limitation.** The comment predicate is a line predicate, not a
+parser: a line that STARTS with `//` or `#` inside a string literal counts as a
+comment. One such line exists today
+(`hooks/session_close/html.rs`, a `// expand a project row…` line inside an
+embedded script string). A false red there is fixed by rewriting the string —
+never by an allowlist.
+
+**The ratchet.** `.bee/comment-baseline.json` holds `{"files": {path: count}}`,
+keys `/`-separated on every platform, written sorted from a `BTreeMap` so the
+bytes are identical across runs. `bee dev comment-baseline --check` reports every
+file above its baseline and fails; `--write` lowers and drops entries and REFUSES
+to raise one, naming the file. Both are source-checkout-only verbs. The seed is
+taken once from the per-file MAXIMUM over main and every unmerged `wt/*` branch
+(0add770d), so a sibling feature that merges later cannot push a file above its
+baseline and turn CI red; after those merges, `--write` lowers every entry that
+now sits above the tree. A count that rose from a merge is fixed by deleting the
+merged comment lines, never by raising the entry. The declared suite carries the
+fence as the bin unit test
+`devtools::comment_baseline::tests::every_code_file_is_at_or_below_its_comment_baseline`,
+and the end-to-end refusal as
+`a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr`
+(`tests/hook_contracts.rs`). The baseline and its test are this repository's own
+and never ship to a host.
+
+<!-- bee:not-a-deferral: D6 records the batched cleanup as separate grooming work; nothing here promises a date -->
+The comment lines that already exist stay for now: removing them is separate,
+batched grooming work, module by module, and each batch moves every un-homed why
+into `docs/knowledge` or the decision log before it deletes the comments and
+lowers the baseline (69326d15).
+<!-- /bee:not-a-deferral -->
+
 ## Open Gaps
 
 - An over-long heading containing any non-ASCII character reaches a branch that
@@ -287,3 +388,19 @@ never as inline compound shell.
   `areas/rust-runtime/text-measurement-and-the-two-counting-units.md`. Evidence:
   trace `.bee/cells/archive/js-parity-cleanup/jp-9.json` (full suite 1006 passed, 0 failed, 2026-08-04);
   the finding that produced it is judge decision bc2e2d44.
+
+- Comment arm and ratchet: the code-root, code-file and comment-line predicates
+  plus the added-lines diff live in `packages/bee-rs/crates/bee/src/comments.rs`;
+  the verb, the seed, the lower-only rule and the ratchet test live in
+  `packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs`; the committed
+  counts live in `.bee/comment-baseline.json`. The arm itself is the
+  `no_code_comments` branch of `run_native_with_roots` with
+  `first_added_comment` / `comment_guard_denial`
+  (`packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs`), fed by
+  `reconstruct_target_text` (same file), `heredoc_writes`
+  (`write_guard/guards.rs`) and `apply_patch_added_lines`
+  (`write_guard/detectors.rs`). Tests: the `comment_guard_*` cases in
+  `write_guard/tests.rs`, `a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr`
+  (`tests/hook_contracts.rs`), and the ratchet in `comment_baseline.rs`'s own
+  test module. Provenance: feature `no-code-comments`, cells ncc-1 through ncc-4
+  (`docs/history/no-code-comments/CONTEXT.md`).

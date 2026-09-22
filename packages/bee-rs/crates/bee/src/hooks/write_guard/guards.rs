@@ -571,6 +571,144 @@ pub(crate) fn fence_heredocs(command: &str) -> String {
     out
 }
 
+pub(crate) struct HeredocWrite {
+    pub(crate) target: String,
+    pub(crate) append: bool,
+    pub(crate) body: String,
+}
+
+pub(crate) fn heredoc_writes(command: &str) -> Vec<HeredocWrite> {
+    let chars: Vec<char> = command.chars().collect();
+    let n = chars.len();
+    let mut out: Vec<HeredocWrite> = Vec::new();
+    let mut redirects: Vec<(usize, String, bool)> = Vec::new();
+    let mut pending: Vec<(String, bool, usize)> = Vec::new();
+    let mut segment: usize = 0;
+    let mut i = 0usize;
+
+    while i < n {
+        let ch = chars[i];
+        if ch == '"' || ch == '\'' {
+            let close = chars[i + 1..].iter().position(|&c| c == ch).map(|p| p + i + 1);
+            i = close.map(|e| e + 1).unwrap_or(n);
+            continue;
+        }
+        if ch == '\\' && i + 1 < n {
+            i += 2;
+            continue;
+        }
+        if matches!(ch, ';' | '&' | '|') {
+            segment += 1;
+            i += 1;
+            continue;
+        }
+        if ch == '>' {
+            let mut j = i;
+            while j < n && chars[j] == '>' {
+                j += 1;
+            }
+            let append = j - i > 1;
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let start = j;
+            while j < n
+                && !chars[j].is_whitespace()
+                && !matches!(chars[j], ';' | '&' | '|' | '<' | '>')
+            {
+                j += 1;
+            }
+            if j > start {
+                let word: String = chars[start..j].iter().collect();
+                redirects.push((segment, word.trim_matches(['"', '\'']).to_string(), append));
+            }
+            i = j;
+            continue;
+        }
+        if ch == '<' {
+            let mut run_end = i;
+            while run_end < n && chars[run_end] == '<' {
+                run_end += 1;
+            }
+            if run_end - i != 2 {
+                i = run_end;
+                continue;
+            }
+            let mut j = i + 2;
+            let strip_tabs = chars.get(j) == Some(&'-');
+            if strip_tabs {
+                j += 1;
+            }
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let mut term = String::new();
+            let mut has_term = false;
+            if j < n && (chars[j] == '\'' || chars[j] == '"') {
+                let q = chars[j];
+                let close = chars[j + 1..].iter().position(|&c| c == q).map(|p| p + j + 1);
+                let end = close.unwrap_or(n);
+                term = chars[j + 1..end.min(n)].iter().collect();
+                j = if end < n { end + 1 } else { n };
+                has_term = true;
+            } else {
+                let start = j;
+                while j < n && !chars[j].is_whitespace() && !matches!(chars[j], ';' | '&' | '|') {
+                    j += 1;
+                }
+                if j > start {
+                    term = chars[start..j].iter().collect();
+                    has_term = true;
+                }
+            }
+            i = j;
+            if has_term {
+                pending.push((term, strip_tabs, segment));
+            }
+            continue;
+        }
+        if ch == '\n' {
+            i += 1;
+            for (term, strip_tabs, seg) in std::mem::take(&mut pending) {
+                let mut body = String::new();
+                while i < n {
+                    let line_start = i;
+                    let mut k = i;
+                    while k < n && chars[k] != '\n' {
+                        k += 1;
+                    }
+                    let line: String = chars[line_start..k].iter().collect();
+                    let compare: &str =
+                        if strip_tabs { line.trim_start_matches('\t') } else { &line };
+                    let is_term_line = compare == term;
+                    let ran_out = k >= n;
+                    i = if ran_out { k } else { k + 1 };
+                    if is_term_line {
+                        break;
+                    }
+                    body.push_str(compare);
+                    body.push('\n');
+                    if ran_out {
+                        break;
+                    }
+                }
+                if let Some((_, target, append)) = redirects.iter().rev().find(|(s, _, _)| *s == seg)
+                {
+                    out.push(HeredocWrite {
+                        target: target.clone(),
+                        append: *append,
+                        body,
+                    });
+                }
+            }
+            segment += 1;
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
 // ─── bash target extraction (provenance: guards.mjs extractBashTargets) ────
 
 pub(crate) struct BashTargets {
@@ -1245,5 +1383,70 @@ pub(crate) fn config_governed_change_deny(
     };
 
     diff_governed_views(&normalized, &old_view, &new_view)
+}
+
+#[cfg(test)]
+mod heredoc_write_tests {
+    use super::heredoc_writes;
+
+    fn pairs(command: &str) -> Vec<(String, bool, String)> {
+        heredoc_writes(command)
+            .into_iter()
+            .map(|w| (w.target, w.append, w.body))
+            .collect()
+    }
+
+    #[test]
+    fn a_heredoc_with_a_redirect_target_yields_the_target_and_the_body() {
+        let command = "cat > scripts/x.sh <<'EOF'\n#!/usr/bin/env bash\necho hi\nEOF\n";
+        assert_eq!(
+            pairs(command),
+            vec![(
+                "scripts/x.sh".to_string(),
+                false,
+                "#!/usr/bin/env bash\necho hi\n".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn the_operator_order_does_not_matter_and_append_is_reported() {
+        let command = "cat <<EOF >> scripts/x.sh\necho hi\nEOF\n";
+        assert_eq!(
+            pairs(command),
+            vec![("scripts/x.sh".to_string(), true, "echo hi\n".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_heredoc_without_a_target_and_a_target_without_a_heredoc_yield_nothing() {
+        assert_eq!(pairs("git commit -F - <<'EOF'\nsubject\nEOF\n"), Vec::new());
+        assert_eq!(pairs("echo '# x' > scripts/x.sh\n"), Vec::new());
+    }
+
+    #[test]
+    fn two_heredocs_keep_their_own_targets_and_bodies() {
+        let command = "cat > a.sh <<'A'\nfirst\nA\ncat >> b.sh <<'B'\nsecond\nB\n";
+        assert_eq!(
+            pairs(command),
+            vec![
+                ("a.sh".to_string(), false, "first\n".to_string()),
+                ("b.sh".to_string(), true, "second\n".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unterminated_heredoc_still_reports_what_it_carried() {
+        let command = "cat > scripts/x.sh <<'EOF'\n# note\necho hi\n";
+        assert_eq!(
+            pairs(command),
+            vec![(
+                "scripts/x.sh".to_string(),
+                false,
+                "# note\necho hi\n".to_string()
+            )]
+        );
+    }
 }
 

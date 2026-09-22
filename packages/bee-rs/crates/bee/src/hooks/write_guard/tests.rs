@@ -5631,3 +5631,178 @@ use std::process::ExitCode;
         let e = expect_done(bash("rm *.txt"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
+
+    const CRATE_FILE: &str = "packages/bee-rs/crates/bee/src/x.rs";
+
+    fn comment_fixture(key: Option<bool>) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let cfg = match key {
+            Some(on) => json!({ "no_code_comments": on }),
+            None => json!({}),
+        };
+        std::fs::write(
+            fx.root.join(".bee/config.json"),
+            serde_json::to_string(&cfg).unwrap(),
+        )
+        .unwrap();
+        fx
+    }
+
+    fn seed_file(root: &Path, rel: &str, body: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+
+    fn edit_strings(path: &str, old_string: &str, new_string: &str) -> Value {
+        json!({
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": path,
+                "old_string": old_string,
+                "new_string": new_string
+            }
+        })
+    }
+
+    fn write_tool(path: &str, content: &str) -> Value {
+        json!({ "tool_name": "Write", "tool_input": { "file_path": path, "content": content } })
+    }
+
+    #[test]
+    fn comment_guard_refuses_an_edit_that_adds_a_comment_and_names_every_remedy() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+        let e = expect_done(
+            edit_strings(CRATE_FILE, "fn f() {}", "// note\nfn f() {}"),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("x.rs:1"), "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// note\")"), "{}", e.stderr);
+        assert!(e.stderr.contains("/// or //!"), "{}", e.stderr);
+        assert!(e.stderr.contains("docs/knowledge concept"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee decisions log"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee backlog add"), "{}", e.stderr);
+        assert!(e.stderr.contains("FIX"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_is_silent_without_the_key_and_with_the_key_false() {
+        for key in [None, Some(false)] {
+            let fx = comment_fixture(key);
+            seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+            let e = expect_done(
+                edit_strings(CRATE_FILE, "fn f() {}", "// note\nfn f() {}"),
+                &fx.root,
+            );
+            assert_eq!(e.code, 0, "key={key:?} stderr={}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn comment_guard_allows_a_moved_comment_and_a_deleted_one() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "// a\nfn f() {}\n");
+        let moved = expect_done(
+            edit_strings(CRATE_FILE, "// a\nfn f() {}", "fn f() {}\n// a"),
+            &fx.root,
+        );
+        assert_eq!(moved.code, 0, "{}", moved.stderr);
+        let deleted = expect_done(edit_strings(CRATE_FILE, "// a\n", ""), &fx.root);
+        assert_eq!(deleted.code, 0, "{}", deleted.stderr);
+    }
+
+    #[test]
+    fn comment_guard_allows_a_safety_line_on_unsafe() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\n");
+        let e = expect_done(
+            edit_strings(
+                CRATE_FILE,
+                "fn f() {}",
+                "// SAFETY: the pointer is live\nfn f() {}",
+            ),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_refuses_a_new_file_written_with_a_doc_comment() {
+        let fx = comment_fixture(Some(true));
+        let e = expect_done(
+            write_tool(
+                "packages/bee-rs/crates/bee/src/y.rs",
+                "pub fn y() {}\n/// what y is for\n",
+            ),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("y.rs:2"), "{}", e.stderr);
+        assert!(e.stderr.contains("/// what y is for"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_never_touches_a_non_code_file_or_a_path_outside_the_roots() {
+        let fx = comment_fixture(Some(true));
+        let md = expect_done(
+            write_tool("packages/bee-rs/crates/bee/src/notes.md", "// x\n"),
+            &fx.root,
+        );
+        assert_eq!(md.code, 0, "{}", md.stderr);
+        let docs = expect_done(write_tool("docs/notes/x.rs", "// x\n"), &fx.root);
+        assert_eq!(docs.code, 0, "{}", docs.stderr);
+    }
+
+    #[test]
+    fn comment_guard_reads_a_heredoc_body_and_leaves_an_unreadable_bash_write_alone() {
+        let fx = comment_fixture(Some(true));
+        let denied = expect_done(
+            bash("cat > scripts/x.sh <<'EOF'\n# note\necho hi\nEOF\n"),
+            &fx.root,
+        );
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert!(denied.stderr.contains("scripts/x.sh:1"), "{}", denied.stderr);
+        assert!(denied.stderr.contains("(\"# note\")"), "{}", denied.stderr);
+
+        let shebang_only = expect_done(
+            bash("cat > scripts/x.sh <<'EOF'\n#!/usr/bin/env bash\nEOF\n"),
+            &fx.root,
+        );
+        assert_eq!(shebang_only.code, 0, "{}", shebang_only.stderr);
+
+        let unreadable = expect_done(bash("echo '# x' > scripts/x.sh"), &fx.root);
+        assert_eq!(unreadable.code, 0, "{}", unreadable.stderr);
+    }
+
+    #[test]
+    fn comment_guard_names_the_offending_edit_inside_a_multiedit() {
+        let fx = comment_fixture(Some(true));
+        seed_file(&fx.root, CRATE_FILE, "fn f() {}\nfn g() {}\n");
+        let payload = json!({
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": CRATE_FILE,
+                "edits": [
+                    { "old_string": "fn f() {}", "new_string": "fn f() -> u8 { 1 }" },
+                    { "old_string": "fn g() {}", "new_string": "// why g stays\nfn g() {}" }
+                ]
+            }
+        });
+        let e = expect_done(payload, &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// why g stays\")"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn comment_guard_refuses_an_apply_patch_that_adds_a_comment_by_added_line() {
+        let fx = comment_fixture(Some(true));
+        let e = expect_done(
+            patch("*** Begin Patch\n*** Add File: packages/bee-rs/crates/bee/src/z.rs\n+fn z() {}\n+// why z exists\n*** End Patch"),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("z.rs:added line 2"), "{}", e.stderr);
+        assert!(e.stderr.contains("(\"// why z exists\")"), "{}", e.stderr);
+    }

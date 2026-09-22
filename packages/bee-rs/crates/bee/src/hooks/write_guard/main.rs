@@ -38,6 +38,145 @@ pub(crate) fn first_truthy<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Op
     None
 }
 
+pub(crate) enum ReconstructFail {
+    WriteContent,
+    Unreadable,
+    MissingOldString,
+    MissingNewString,
+    OldStringNotFound,
+    MissingEdits,
+    EmptyEdits,
+    BadEdit,
+    UnsupportedTool,
+}
+
+fn apply_edit(text: &str, old_s: &str, new_s: &str, replace_all: Option<&Value>) -> String {
+    if replace_all.and_then(Value::as_bool).unwrap_or(false) {
+        text.replace(old_s, new_s)
+    } else {
+        text.replacen(old_s, new_s, 1)
+    }
+}
+
+pub(crate) fn reconstruct_target_text(
+    tool_name: &str,
+    tool_input: &Map<String, Value>,
+    root_pb: &Path,
+    rel: &str,
+) -> Result<(String, String), ReconstructFail> {
+    let target = root_pb.join(rel);
+    match tool_name {
+        "Write" => {
+            let Some(content) = tool_input.get("content").and_then(Value::as_str) else {
+                return Err(ReconstructFail::WriteContent);
+            };
+            Ok((
+                std::fs::read_to_string(&target).unwrap_or_default(),
+                content.to_string(),
+            ))
+        }
+        "Edit" => {
+            let Ok(current_text) = std::fs::read_to_string(&target) else {
+                return Err(ReconstructFail::Unreadable);
+            };
+            let Some(old_s) = tool_input.get("old_string").and_then(Value::as_str) else {
+                return Err(ReconstructFail::MissingOldString);
+            };
+            let Some(new_s) = tool_input.get("new_string").and_then(Value::as_str) else {
+                return Err(ReconstructFail::MissingNewString);
+            };
+            if !current_text.contains(old_s) {
+                return Err(ReconstructFail::OldStringNotFound);
+            }
+            let proposed = apply_edit(&current_text, old_s, new_s, tool_input.get("replace_all"));
+            Ok((current_text, proposed))
+        }
+        "MultiEdit" => {
+            let Ok(current_text) = std::fs::read_to_string(&target) else {
+                return Err(ReconstructFail::Unreadable);
+            };
+            let Some(Value::Array(edits)) = tool_input.get("edits") else {
+                return Err(ReconstructFail::MissingEdits);
+            };
+            if edits.is_empty() {
+                return Err(ReconstructFail::EmptyEdits);
+            }
+            let mut proposed = current_text.clone();
+            for edit in edits {
+                let Some(old_s) = edit.get("old_string").and_then(Value::as_str) else {
+                    return Err(ReconstructFail::BadEdit);
+                };
+                let Some(new_s) = edit.get("new_string").and_then(Value::as_str) else {
+                    return Err(ReconstructFail::BadEdit);
+                };
+                if !proposed.contains(old_s) {
+                    return Err(ReconstructFail::BadEdit);
+                }
+                proposed = apply_edit(&proposed, old_s, new_s, edit.get("replace_all"));
+            }
+            Ok((current_text, proposed))
+        }
+        _ => Err(ReconstructFail::UnsupportedTool),
+    }
+}
+
+fn config_reconstruct_denial(fail: &ReconstructFail, rel: &str, tool_name: &str) -> String {
+    let tail = match fail {
+        ReconstructFail::WriteContent => {
+            "missing or invalid content parameter. FIX: use Edit/Write with complete content."
+        }
+        ReconstructFail::Unreadable => {
+            "unable to read on-disk file. FIX: verify the file exists and is readable before editing."
+        }
+        ReconstructFail::MissingOldString => {
+            "missing or invalid old_string. FIX: provide old_string and new_string to Edit."
+        }
+        ReconstructFail::MissingNewString => {
+            "missing or invalid new_string. FIX: provide old_string and new_string to Edit."
+        }
+        ReconstructFail::OldStringNotFound => {
+            "old_string not found in file. FIX: provide exact matching old_string to Edit."
+        }
+        ReconstructFail::MissingEdits => {
+            "missing edits array. FIX: provide edits array to MultiEdit."
+        }
+        ReconstructFail::EmptyEdits => {
+            "edits array is empty. FIX: provide non-empty edits array to MultiEdit."
+        }
+        ReconstructFail::BadEdit => {
+            "missing parameters or target string not found. FIX: provide valid edits array to MultiEdit."
+        }
+        ReconstructFail::UnsupportedTool => {
+            return format!(
+                "bee config guard: \"{}\" cannot be modified via {} — unsupported tool for governed config. FIX: use Edit/Write to edit config files.",
+                rel, tool_name
+            )
+        }
+    };
+    format!(
+        "bee config guard: \"{}\" {} cannot be reconstructed — {}",
+        rel, tool_name, tail
+    )
+}
+
+fn first_added_comment(rel: &str, old: &str, new: &str) -> Option<(String, String)> {
+    let lang = crate::comments::code_lang(rel, new.lines().next().unwrap_or(""))?;
+    let (number, text) = crate::comments::added_comment_lines(lang, old, new).into_iter().next()?;
+    Some((number.to_string(), text))
+}
+
+fn comment_guard_denial(rel: &str, locus: &str, text: &str) -> String {
+    let trimmed: String = text.trim().chars().take(80).collect();
+    format!(
+        "bee comment guard denied this write: {rel}:{locus} adds a comment line (\"{trimmed}\"). \
+This repository keeps no comments in code (no_code_comments) — not //, not /// or //! doc comments, not /* */, not #. \
+FIX: put the why in a docs/knowledge concept whose Pointers name this file, or log it with bee decisions log; \
+a public item's description goes in the owning docs/knowledge concept; \
+a workaround is fixed, or filed with bee backlog add and cited from the concept — never from the code. \
+Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top."
+    )
+}
+
 pub(crate) fn run_native(ctx: &HookContext) -> R<Emit> {
     run_native_with_roots(ctx, &HarnessRoots::detect())
 }
@@ -540,146 +679,120 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         }
                     };
 
-                    if tool_name == "Write" {
-                        let Some(content) = tool_input.get("content").and_then(Value::as_str) else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" Write cannot be reconstructed — missing or invalid content parameter. FIX: use Edit/Write with complete content.",
-                                rel
-                            ));
-                            break;
-                        };
-                        if let Some(new_merged) = merged_with(content) {
-                            if let Some(reason) = config_governed_change_deny(
-                                rel,
-                                old_merged.as_deref(),
-                                &new_merged,
-                            ) {
-                                denial = Some(reason);
+                    let proposed =
+                        match reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel) {
+                            Ok((_, new)) => new,
+                            Err(fail) => {
+                                denial =
+                                    Some(config_reconstruct_denial(&fail, rel, &tool_name));
                                 break;
                             }
-                        }
-                    } else if tool_name == "Edit" {
-                        // Reconstruction reads the file actually being edited —
-                        // never a fallback to the other config file, which
-                        // would apply this edit's strings to bytes that are not
-                        // its target.
-                        let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" Edit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
-                                rel
-                            ));
-                            break;
                         };
-                        let Some(old_s) = tool_input.get("old_string").and_then(Value::as_str) else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" Edit cannot be reconstructed — missing or invalid old_string. FIX: provide old_string and new_string to Edit.",
-                                rel
-                            ));
-                            break;
-                        };
-                        let Some(new_s) = tool_input.get("new_string").and_then(Value::as_str) else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" Edit cannot be reconstructed — missing or invalid new_string. FIX: provide old_string and new_string to Edit.",
-                                rel
-                            ));
-                            break;
-                        };
-                        if !current_text.contains(old_s) {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" Edit cannot be reconstructed — old_string not found in file. FIX: provide exact matching old_string to Edit.",
-                                rel
-                            ));
+                    if let Some(new_merged) = merged_with(&proposed) {
+                        if let Some(reason) =
+                            config_governed_change_deny(rel, old_merged.as_deref(), &new_merged)
+                        {
+                            denial = Some(reason);
                             break;
                         }
-                        let replace_all = tool_input.get("replace_all").and_then(Value::as_bool).unwrap_or(false);
-                        let proposed = if replace_all {
-                            current_text.replace(old_s, new_s)
-                        } else {
-                            current_text.replacen(old_s, new_s, 1)
-                        };
-                        if let Some(new_merged) = merged_with(&proposed) {
-                            if let Some(reason) = config_governed_change_deny(
-                                rel,
-                                old_merged.as_deref(),
-                                &new_merged,
-                            ) {
-                                denial = Some(reason);
-                                break;
-                            }
-                        }
-                    } else if tool_name == "MultiEdit" {
-                        let Ok(mut current_text) = std::fs::read_to_string(root_pb.join(rel)) else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — unable to read on-disk file. FIX: verify the file exists and is readable before editing.",
-                                rel
-                            ));
-                            break;
-                        };
-                        let Some(Value::Array(edits)) = tool_input.get("edits") else {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — missing edits array. FIX: provide edits array to MultiEdit.",
-                                rel
-                            ));
-                            break;
-                        };
-                        if edits.is_empty() {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — edits array is empty. FIX: provide non-empty edits array to MultiEdit.",
-                                rel
-                            ));
-                            break;
-                        }
-                        let mut reconstruct_ok = true;
-                        let old_text_saved = current_text.clone();
-                        for edit in edits {
-                            let Some(old_s) = edit.get("old_string").and_then(Value::as_str) else {
-                                reconstruct_ok = false;
-                                break;
-                            };
-                            let Some(new_s) = edit.get("new_string").and_then(Value::as_str) else {
-                                reconstruct_ok = false;
-                                break;
-                            };
-                            if !current_text.contains(old_s) {
-                                reconstruct_ok = false;
-                                break;
-                            }
-                            let replace_all = edit.get("replace_all").and_then(Value::as_bool).unwrap_or(false);
-                            if replace_all {
-                                current_text = current_text.replace(old_s, new_s);
-                            } else {
-                                current_text = current_text.replacen(old_s, new_s, 1);
-                            }
-                        }
-                        if !reconstruct_ok {
-                            denial = Some(format!(
-                                "bee config guard: \"{}\" MultiEdit cannot be reconstructed — missing parameters or target string not found. FIX: provide valid edits array to MultiEdit.",
-                                rel
-                            ));
-                            break;
-                        }
-                        let _ = &old_text_saved;
-                        if let Some(new_merged) = merged_with(&current_text) {
-                            if let Some(reason) = config_governed_change_deny(
-                                rel,
-                                old_merged.as_deref(),
-                                &new_merged,
-                            ) {
-                                denial = Some(reason);
-                                break;
-                            }
-                        }
-                    } else {
-                        denial = Some(format!(
-                            "bee config guard: \"{}\" cannot be modified via {} — unsupported tool for governed config. FIX: use Edit/Write to edit config files.",
-                            rel, tool_name
-                        ));
-                        break;
                     }
                 }
             }
         }
 
+        if denial.is_none() {
+            let config = read_config(&store_root_pb)?;
+            if config.get("no_code_comments") == Some(&Value::Bool(true)) {
+                let command = match first_truthy(&tool_input, &["command", "cmd"]) {
+                    Some(Value::String(s)) => s.clone(),
+                    _ => String::new(),
+                };
+                let patch = apply_patch_text(&tool_input);
+                for rel in &rel_paths {
+                    if rel == "**" {
+                        continue;
+                    }
+                    let norm = normalize_rel(rel);
+                    if !crate::comments::under_code_root(&norm) {
+                        continue;
+                    }
+                    let mut hit: Option<(String, String)> = None;
+                    if is_apply {
+                        if let Some(patch_text) = patch.as_deref() {
+                            for (target, added) in apply_patch_added_lines(patch_text) {
+                                let Ok(Some(resolved)) =
+                                    canonical_rel_path(&root, &cwd, Some(&Value::String(target)))
+                                else {
+                                    continue;
+                                };
+                                if normalize_rel(&resolved) != norm {
+                                    continue;
+                                }
+                                let first = added.first().map(String::as_str).unwrap_or("");
+                                let Some(lang) = crate::comments::code_lang(&norm, first) else {
+                                    continue;
+                                };
+                                let mut in_block = false;
+                                for (index, line) in added.iter().enumerate() {
+                                    if !crate::comments::is_comment_line(lang, line, &mut in_block)
+                                    {
+                                        continue;
+                                    }
+                                    if crate::comments::is_exception(lang, line, false) {
+                                        continue;
+                                    }
+                                    hit = Some((
+                                        format!("added line {}", index + 1),
+                                        line.trim().to_string(),
+                                    ));
+                                    break;
+                                }
+                                if hit.is_some() {
+                                    break;
+                                }
+                            }
+                        }
+                    } else if is_shell {
+                        for write in heredoc_writes(&command) {
+                            let Ok(Some(resolved)) = canonical_rel_path(
+                                &root,
+                                &cwd,
+                                Some(&Value::String(write.target.clone())),
+                            ) else {
+                                continue;
+                            };
+                            if normalize_rel(&resolved) != norm {
+                                continue;
+                            }
+                            let old = std::fs::read_to_string(root_pb.join(&norm))
+                                .unwrap_or_default();
+                            let new = if write.append {
+                                let mut merged = old.clone();
+                                if !merged.is_empty() && !merged.ends_with('\n') {
+                                    merged.push('\n');
+                                }
+                                merged.push_str(&write.body);
+                                merged
+                            } else {
+                                write.body.clone()
+                            };
+                            hit = first_added_comment(&norm, &old, &new);
+                            if hit.is_some() {
+                                break;
+                            }
+                        }
+                    } else if let Ok((old, new)) =
+                        reconstruct_target_text(&tool_name, &tool_input, &root_pb, rel)
+                    {
+                        hit = first_added_comment(&norm, &old, &new);
+                    }
+                    if let Some((locus, text)) = hit {
+                        denial = Some(comment_guard_denial(&norm, &locus, &text));
+                        break;
+                    }
+                }
+            }
+        }
 
         if denial.is_none() && !rel_paths.is_empty() {
             // The worktree-first guard must judge the same ACTING record
