@@ -254,10 +254,12 @@ govern the working residue of a cell rather than its content.
   `parse_report_flag`, beside the existing `red` arm, over the tuple the
   shared parser returns, and the parser itself is untouched. Closing the
   parser instead would have closed both paths in one edit and made every past
-  feature uncloseable — a migration wearing a validation's clothes. The
-  untouched parser carries a comment saying so, and two read-path fixtures
-  carry a comment marking them as that decision's own evidence, so a later
-  sweep cannot quietly kill the proof.
+  feature uncloseable — a migration wearing a validation's clothes.
+<!-- bee:not-a-deferral: describes the markers that protect an already-shipped decision's fixtures from a comment sweep — shipped state, not a promise to act later -->
+  The untouched parser carries a comment saying so, and two read-path
+  fixtures carry a comment marking them as that decision's own evidence, so a
+  later sweep cannot quietly kill the proof.
+<!-- /bee:not-a-deferral -->
   **An example that shows the refused form teaches the refused form (D5).**
   Every prompt, skill, product-description page, guide page and display string
   that showed `— green —` moved to a qualified value, the worker brief states
