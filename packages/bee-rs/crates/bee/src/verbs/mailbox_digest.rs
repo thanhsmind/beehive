@@ -585,7 +585,18 @@ pub(crate) fn compose_due_digests(root: &Path, now: &str) -> Vec<DigestWritten> 
 //     bullets it wrote about it; D4's "two or more letters" means two or more
 //     RUNS, which is what makes a shape a pattern rather than a bad night.
 //   * FOUR WORDS. "it broke" matches everything. A shape short enough to
-//     collide by accident is a shape that will.
+//     collide by accident is a shape that will. A reflection is braked on its
+//     own sentence, BEFORE its key is built, because the key is a word longer
+//     than the sentence and would carry a three-word complaint straight past.
+//   * THE KEY IS NOT ALWAYS THE LINE (mistake-fix-at D3). A broken bullet and
+//     a departure key on the whole line. A reflection keys on its fix-at layer
+//     plus the first four normalized words of what went wrong — a letter filed
+//     before that layer existed keys as `none` (D4), and nothing is
+//     backfilled. Whole-sentence keys matched ZERO times in a year of
+//     letters: two runs never type the same sentence, and the four words they
+//     start with are the part that recurs. The lesson row pays for it by
+//     saying what it matched on and quoting every run's own sentence, so a
+//     human can still audit a match they did not type.
 //   * ONCE, EVER. Every mined row carries a `shape:<sha-12>` token, and the
 //     pass refuses to log a token that appears in ANY earlier lesson row —
 //     including one the human already superseded. A retired lesson that comes
@@ -619,6 +630,11 @@ const SHAPE_TOKEN_HEX: usize = 12;
 
 /// A shape must be at least this many words. See the "FOUR WORDS" brake above.
 const MIN_SHAPE_WORDS: usize = 4;
+
+/// The layer a reflection filed before `fix_at` existed keys under —
+/// `mailbox::FIX_AT_VALUES`' own word for "no layer worth naming"
+/// (mistake-fix-at D4: old reflections are read as `none`, never backfilled).
+const FIX_AT_ABSENT: &str = "none";
 
 /// A shape must appear in the letters of at least this many DISTINCT runs.
 const MIN_DISTINCT_RUNS: usize = 2;
@@ -716,6 +732,55 @@ fn reflection_what(item: &LetterItem) -> Option<&str> {
     (!what.is_empty()).then_some(what)
 }
 
+/// The layer a reflection keys under: its own, or [`FIX_AT_ABSENT`] when the
+/// letter was filed before the field existed.
+fn fix_at_or_none(fix_at: Option<&str>) -> &str {
+    match fix_at.map(str::trim) {
+        Some(layer) if !layer.is_empty() => layer,
+        _ => FIX_AT_ABSENT,
+    }
+}
+
+/// What a reflection folds under (mistake-fix-at D3): its fix-at layer, then
+/// the first [`MIN_SHAPE_WORDS`] normalized words of what went wrong.
+///
+/// `None` when the sentence is shorter than the brake — taken HERE, on the
+/// sentence, never on the key: the key is a word longer than the sentence it
+/// describes, so a key-side brake would pass exactly the three-word complaints
+/// the brake exists to stop.
+///
+/// The layer is part of the key rather than a filter beside it because two
+/// mistakes that start with the same four words but end at different layers
+/// are two mistakes: one a test can catch, one only prose can carry.
+fn reflection_key(fix_at: Option<&str>, what: &str) -> Option<String> {
+    let normalized = normalize_shape(what);
+    let head: Vec<&str> = normalized.split_whitespace().take(MIN_SHAPE_WORDS).collect();
+    if head.len() < MIN_SHAPE_WORDS {
+        return None;
+    }
+    Some(format!("{} {}", fix_at_or_none(fix_at), head.join(" ")))
+}
+
+/// One line of trouble, ready to fold: the KEY two runs must both produce for
+/// it to be one shape, and the run's own words a lesson would quote.
+///
+/// The two are the same text for a broken bullet and a departure — the whole
+/// line is the key. They differ for a reflection, and `fix_at` is what says
+/// which of the two a shape came from, so the lesson can name the layer it
+/// matched on rather than guess at one.
+struct TroubleLine {
+    key: String,
+    verbatim: String,
+    fix_at: Option<String>,
+}
+
+impl TroubleLine {
+    /// A line whose key is itself.
+    fn whole_line(text: &str) -> Self {
+        Self { key: text.to_string(), verbatim: text.to_string(), fix_at: None }
+    }
+}
+
 /// Every line of ONE letter that reports trouble, in the letter's own words.
 ///
 /// Three sources, and no fourth:
@@ -728,7 +793,8 @@ fn reflection_what(item: &LetterItem) -> Option<&str> {
 ///     `why` is that one run's circumstances and the `kind` is a label from a
 ///     closed set, so neither is a shape.
 ///   * each stored item's reflection, by its `what` (D3) — the sentence naming
-///     what went wrong. NOT the rendered `<what> — better: <better>` bullet:
+///     what went wrong — folded under [`reflection_key`], never under the
+///     whole sentence. NOT the rendered `<what> — better: <better>` bullet:
 ///     the counterfactual is that one run's idea of the fix, so joining it in
 ///     would make the same mistake with a differently worded better fail to
 ///     match, which is the whole thing this source exists to catch.
@@ -737,17 +803,23 @@ fn reflection_what(item: &LetterItem) -> Option<&str> {
 /// of the rendered prose: the items carry their parts apart, so this pass never
 /// has to re-derive a kind or split a bullet on a connective, and can never
 /// disagree with the letter about what it is reading.
-fn trouble_lines(letter: &Letter) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+fn trouble_lines(letter: &Letter) -> Vec<TroubleLine> {
+    let mut out: Vec<TroubleLine> = Vec::new();
     for line in section_lines(&letter.body, SECTION_BROKEN) {
         let text = debullet(&line);
         if !text.is_empty() {
-            out.push(text.to_string());
+            out.push(TroubleLine::whole_line(text));
         }
     }
     for item in &letter.items {
         if let Some(what) = reflection_what(item) {
-            out.push(what.to_string());
+            if let Some(key) = reflection_key(item.fix_at.as_deref(), what) {
+                out.push(TroubleLine {
+                    key,
+                    verbatim: what.to_string(),
+                    fix_at: Some(fix_at_or_none(item.fix_at.as_deref()).to_string()),
+                });
+            }
         }
         let Some(departure) = &item.departure else { continue };
         if !MINED_DEPARTURE_KINDS.iter().any(|k| *k == departure.kind.trim()) {
@@ -755,7 +827,7 @@ fn trouble_lines(letter: &Letter) -> Vec<String> {
         }
         let what = departure.what.trim();
         if !what.is_empty() {
-            out.push(what.to_string());
+            out.push(TroubleLine::whole_line(what));
         }
     }
     out
@@ -764,20 +836,36 @@ fn trouble_lines(letter: &Letter) -> Vec<String> {
 /// One repeated trouble line, with the evidence that makes it one.
 #[derive(Clone, Debug)]
 pub(crate) struct Shape {
-    /// The comparable form — what the token is computed over. Kept beside the
-    /// token so a person debugging a surprising lesson can see the text the
-    /// digest actually matched on, not only its hash.
-    #[allow(dead_code)]
+    /// The comparable form of the KEY — what the token is computed over. Kept
+    /// beside the token so a person debugging a surprising lesson can see the
+    /// text the digest actually matched on, not only its hash.
     pub normalized: String,
     /// The line as a letter actually typed it, first occurrence in filename
     /// order. This is what the decision quotes: the human reads the words their
     /// own run wrote, not bee's flattened copy of them.
     pub verbatim: String,
+    /// What every OTHER run typed for the same key, one per run, in letter
+    /// order. A key shorter than the sentences it matched is only auditable if
+    /// the row shows the sentences: the human reads both runs and judges the
+    /// match themselves (mistake-fix-at D3).
+    pub others: Vec<String>,
+    /// The fix-at layer this shape keyed under, or `None` for a whole-line key
+    /// — a broken bullet or a departure, which name no layer.
+    pub fix_at: Option<String>,
     pub token: String,
     /// The runs whose letters carry it — the threshold is counted on THIS.
     pub runs: BTreeSet<String>,
     /// The letter filenames the decision cites as evidence (D4).
     pub letters: BTreeSet<String>,
+}
+
+impl Shape {
+    /// The four words this shape matched on — its key without the leading
+    /// layer word. Read only where `fix_at` is `Some`: a whole-line key has no
+    /// head, and this would hand back the rest of the line.
+    fn head(&self) -> &str {
+        self.normalized.split_once(' ').map_or("", |(_, head)| head)
+    }
 }
 
 /// The repeated trouble shapes across one period's letters, oldest letter
@@ -792,19 +880,26 @@ pub(crate) fn mine_shapes(letters: &[PathBuf]) -> Vec<Shape> {
     for path in paths {
         let Ok(letter) = read_letter(path) else { continue };
         let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        for line in trouble_lines(&letter) {
-            let normalized = normalize_shape(&line);
+        for trouble in trouble_lines(&letter) {
+            let normalized = normalize_shape(&trouble.key);
             if normalized.split_whitespace().count() < MIN_SHAPE_WORDS {
                 continue;
             }
+            let verbatim = one_line(&trouble.verbatim);
             let shape = by_shape.entry(normalized.clone()).or_insert_with(|| Shape {
                 token: shape_token(&normalized),
                 normalized,
-                verbatim: one_line(&line),
+                verbatim: verbatim.clone(),
+                others: Vec::new(),
+                fix_at: trouble.fix_at.clone(),
                 runs: BTreeSet::new(),
                 letters: BTreeSet::new(),
             });
-            shape.runs.insert(letter.run.clone());
+            // One sentence per RUN, the first one that run typed: a run that
+            // wrote the same key twice is still one run saying it once.
+            if shape.runs.insert(letter.run.clone()) && shape.runs.len() > 1 {
+                shape.others.push(verbatim);
+            }
             shape.letters.insert(name.clone());
         }
     }
@@ -843,18 +938,42 @@ fn spent_tokens(root: &Path) -> BTreeSet<String> {
 /// sentence that says why it is here. Nothing is diagnosed and nothing is
 /// counted — the words inside the quotes belong to the runs that wrote them.
 fn lesson_decision(shape: &Shape) -> String {
-    format!("Separate runs reported the same thing: \"{}\"", shape.verbatim)
+    match shape.fix_at.as_deref() {
+        // A reflection matched on four words, not on the sentence — so the row
+        // says so, in front of the sentence it quotes.
+        Some(layer) => format!(
+            "Separate runs reported the same mistake shape (fix-at {layer}, \"{}…\"): \"{}\"",
+            shape.head(),
+            shape.verbatim
+        ),
+        None => format!("Separate runs reported the same thing: \"{}\"", shape.verbatim),
+    }
 }
 
-/// The rationale: WHICH letters said it (D4's evidence citation) and the stable
-/// token that keeps this shape from ever being logged twice.
+/// The rationale: what the shape MATCHED on with every other run's own words
+/// beside it (mistake-fix-at D3), WHICH letters said it (D4's evidence
+/// citation), and the stable token that keeps this shape from ever being
+/// logged twice.
 fn lesson_rationale(period: &Period, shape: &Shape) -> String {
-    format!(
+    let mut out = String::new();
+    if let Some(layer) = shape.fix_at.as_deref() {
+        out.push_str(&format!(
+            "Matched on fix-at {layer} + the first four words \"{}\"",
+            shape.head()
+        ));
+        if !shape.others.is_empty() {
+            let quoted: Vec<String> = shape.others.iter().map(|o| format!("\"{o}\"")).collect();
+            out.push_str(&format!("; the other letter(s) said: {}", quoted.join(", ")));
+        }
+        out.push_str(". ");
+    }
+    out.push_str(&format!(
         "Read out of the letters folded by the {} digest: {}. Stable id for this wording: {}",
         period.id,
         shape.letters.iter().cloned().collect::<Vec<_>>().join(", "),
         shape.token
-    )
+    ));
+    out
 }
 
 /// D4's pass over ONE composed weekly digest.
@@ -1230,18 +1349,26 @@ mod tests {
     /// stored [`Entry`] values through `compose_letter` — so the items this
     /// miner reads can never drift from the items the store actually files.
     ///
-    /// `reflections` are `(what went wrong, what would have been better)`
-    /// pairs; `clean` appends D2's explicit clean-run answer beside them.
+    /// `reflections` are `(what went wrong, what would have been better,
+    /// fix-at layer)` triples; an EMPTY layer files the item the way a letter
+    /// filed before `fix_at` existed carries it — with no layer at all (D4).
+    /// `clean` appends D2's explicit clean-run answer beside them.
     fn file_answer_letter(
         root: &Path,
         run: &str,
         stamp: &str,
-        reflections: &[(&str, &str)],
+        reflections: &[(&str, &str, &str)],
         clean: bool,
     ) -> PathBuf {
         let mut entries: Vec<Entry> = reflections
             .iter()
-            .map(|(wrong, better)| Entry::reflection(stamp, wrong, better, "none"))
+            .map(|(wrong, better, fix_at)| {
+                let mut entry = Entry::reflection(stamp, wrong, better, fix_at);
+                if fix_at.is_empty() {
+                    entry.fix_at = None;
+                }
+                entry
+            })
             .collect();
         if clean {
             entries.push(Entry::no_mistakes(stamp));
@@ -1253,6 +1380,17 @@ mod tests {
     /// The one mistake two runs both wrote down. Ten words, so no test below is
     /// measuring the four-word brake by accident.
     const REFLECTED: &str = "the vendored binary was stale and refused the new flag";
+
+    /// The SECOND run's words for the same mistake: the same first four words,
+    /// a different tail. Two runs never type the same sentence, which is why
+    /// the whole-sentence key matched nothing (mistake-fix-at D3).
+    const REFLECTED_SAME_HEAD: &str = "The vendored binary was never rebuilt after the merge.";
+
+    /// The token a reflection under `layer` folds to — built through the key
+    /// the miner itself computes, so a fixture can never drift from it.
+    fn reflection_token(layer: Option<&str>, what: &str) -> String {
+        shape_token(&normalize_shape(&reflection_key(layer, what).unwrap()))
+    }
 
     /// The row bee logged for `token` some earlier week, written by hand so a
     /// test does not depend on a first pass to set up the second. `retired`
@@ -1421,14 +1559,14 @@ mod tests {
             root,
             "run-a",
             "2026-08-25T03:15:00.000Z",
-            &[(REFLECTED, "read the binary's version before trusting a flag")],
+            &[(REFLECTED, "read the binary's version before trusting a flag", "none")],
             false,
         );
         file_answer_letter(
             root,
             "run-b",
             "2026-08-26T21:40:00.000Z",
-            &[(REFLECTED, "rebuild and vendor the binary first")],
+            &[(REFLECTED, "rebuild and vendor the binary first", "none")],
             false,
         );
 
@@ -1450,6 +1588,117 @@ mod tests {
         assert!(rationale.contains("20260825T031500Z-run-a.md"), "{rationale}");
         assert!(rationale.contains("20260826T214000Z-run-b.md"), "{rationale}");
         assert!(rationale.contains(&logged[0]), "the token is not cited: {rationale}");
+    }
+
+    #[test]
+    fn two_runs_sharing_a_layer_and_four_words_teach_one_lesson_that_quotes_both() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // The same mistake, typed differently on two nights — the whole
+        // sentences differ, the layer and the first four words do not.
+        file_answer_letter(
+            root,
+            "run-a",
+            "2026-08-25T03:15:00.000Z",
+            &[(REFLECTED, "read the binary's version before trusting a flag", "check")],
+            false,
+        );
+        file_answer_letter(
+            root,
+            "run-b",
+            "2026-08-26T21:40:00.000Z",
+            &[(REFLECTED_SAME_HEAD, "rebuild and vendor the binary first", "check")],
+            false,
+        );
+
+        let (_, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert_eq!(logged.len(), 1, "one layer, one head, two runs: {logged:?}");
+        assert_eq!(logged[0], reflection_token(Some("check"), REFLECTED));
+
+        let rows = lessons(root);
+        let decision = rows[0]["decision"].as_str().unwrap();
+        assert!(decision.contains("fix-at check"), "the lesson hides what it matched on: {decision}");
+        assert!(decision.contains("the vendored binary was"), "the head is not named: {decision}");
+        assert!(decision.contains(REFLECTED), "the first run's own words are not quoted: {decision}");
+
+        let rationale = rows[0]["rationale"].as_str().unwrap();
+        assert!(rationale.contains("fix-at check"), "{rationale}");
+        assert!(rationale.contains("the first four words"), "{rationale}");
+        assert!(
+            rationale.contains(REFLECTED_SAME_HEAD),
+            "the other run's own words are not quoted: {rationale}"
+        );
+        assert!(rationale.contains(&logged[0]), "the token is not cited: {rationale}");
+    }
+
+    #[test]
+    fn the_same_four_words_under_two_layers_is_never_one_lesson() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // One sentence, word for word. Only the layer differs — and a mistake
+        // a test can catch is not the same mistake as one only prose carries.
+        file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "guard it", "check")], false);
+        file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED, "write it down", "doctrine")], false);
+
+        let (written, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert!(!written.is_empty(), "the digest was not filed either: {written:?}");
+        assert!(logged.is_empty(), "two layers were folded into one lesson: {logged:?}");
+        assert!(lessons(root).is_empty());
+    }
+
+    #[test]
+    fn letters_filed_before_the_layer_existed_key_as_none_and_still_mine() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Neither item carries `fix_at` — the 465 reflections D4 refuses to
+        // backfill read exactly like this.
+        file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "check first", "")], false);
+        file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED_SAME_HEAD, "rebuild first", "")], false);
+
+        let (_, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert_eq!(logged.len(), 1, "an old letter stopped mining: {logged:?}");
+        assert_eq!(logged[0], reflection_token(None, REFLECTED), "it did not key as `none`");
+        let rows = lessons(root);
+        let decision = rows[0]["decision"].as_str().unwrap();
+        assert!(decision.contains("fix-at none"), "{decision}");
+    }
+
+    #[test]
+    fn a_reflection_shorter_than_four_words_is_never_a_shape_layer_or_not() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Three words. The layer would push the KEY over the brake, so the
+        // brake has to be taken on the sentence itself.
+        assert!(reflection_key(Some("check"), "it broke again").is_none());
+        file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[("it broke again", "look harder", "check")], false);
+        file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[("it broke again", "look twice", "check")], false);
+
+        let (written, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert!(!written.is_empty(), "the digest was not filed either: {written:?}");
+        assert!(logged.is_empty(), "a three-word complaint became a lesson: {logged:?}");
+    }
+
+    #[test]
+    fn a_token_an_old_whole_sentence_lesson_spent_does_not_block_the_new_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // What the miner spent before mistake-fix-at D3: the digest of the
+        // WHOLE sentence. The new key is a different token, so the old row
+        // cannot silence it.
+        let old = shape_token(&normalize_shape(REFLECTED));
+        seed_spent_lesson(root, &old, false);
+        file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "check first", "check")], false);
+        file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED_SAME_HEAD, "rebuild first", "check")], false);
+
+        let (_, logged) = compose_and_mine(root, WEEK_NOW);
+
+        assert_eq!(logged.len(), 1, "an old whole-sentence token blocked the new key: {logged:?}");
+        assert_ne!(logged[0], old);
+        assert_eq!(lessons(root).len(), 2, "the seeded row and the new one");
     }
 
     #[test]
@@ -1490,9 +1739,9 @@ mod tests {
         for retired in [false, true] {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path();
-            file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "check it first")], false);
-            file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED, "check it first")], false);
-            seed_spent_lesson(root, &shape_token(&normalize_shape(REFLECTED)), retired);
+            file_answer_letter(root, "run-a", "2026-08-25T03:15:00.000Z", &[(REFLECTED, "check it first", "none")], false);
+            file_answer_letter(root, "run-b", "2026-08-26T21:40:00.000Z", &[(REFLECTED, "check it first", "none")], false);
+            seed_spent_lesson(root, &reflection_token(Some("none"), REFLECTED), retired);
 
             let (written, logged) = compose_and_mine(root, WEEK_NOW);
 
