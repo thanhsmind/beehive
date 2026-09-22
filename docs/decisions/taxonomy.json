@@ -593,6 +593,8 @@
     "leader-check-deferral",
     "windows-cfg-unix",
     "fix-first",
-    "windows-json-path"
+    "windows-json-path",
+    "ci-green-fixes",
+    "contract:pi-harness-steps"
   ]
 }
