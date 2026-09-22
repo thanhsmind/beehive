@@ -66,15 +66,17 @@ Exact JSON field names beyond `brief`/`expect`/`near`, the test file name, the e
 
 ### Deferred To Planning
 
-- [ ] Whether the eval runs as an `#[ignore]` cargo test or a script under `scripts/` — either satisfies D6; pick the one the release flow already knows.
+- [x] Settled at planning: the eval is an `#[ignore]` cargo test in the same file as the fence (skt-1).
 
-## Deferred Ideas
+## Out of scope, filed as backlog rows
 
-- Trigger cases for `bee-principle-*` skills — a second fixture keyed on class and flags, judged against `bee orient`'s output, not descriptions.
-- Rewriting descriptions the eval shows are confused — a docs-lane follow-up per skill once the eval has data.
+- Trigger cases for `bee-principle-*` skills — a second fixture keyed on class and flags, judged against `bee orient`'s output, not descriptions (backlog row, 2026-09-23).
+- Rewriting descriptions the eval shows are confused — a docs-lane follow-up per skill once the eval has data (backlog row, 2026-09-23).
 
+<!-- bee:not-a-deferral: template boilerplate describing which sections planning reads; it promises no later action -->
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
+<!-- /bee:not-a-deferral -->

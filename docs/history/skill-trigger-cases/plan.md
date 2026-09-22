@@ -196,4 +196,4 @@ Two cells, one slice.
 
 ## Out of scope
 
-- Cases for principle skills; description rewrites based on eval data (CONTEXT Deferred Ideas).
+- Cases for principle skills; description rewrites based on eval data (both filed as backlog rows, see CONTEXT.md "Out of scope, filed as backlog rows").
