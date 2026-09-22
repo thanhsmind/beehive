@@ -1,0 +1,962 @@
+{
+  "schema_version": "1.0",
+  "feature": "no-code-comments",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"no-code-comments\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-22T06:45:55.548Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": "a new refusal in the write guard hook (public behavior every hooked agent meets), a new test + baseline file + dev verb, two doctrine homes",
+    "updated_at": "2026-09-22T06:46:12.609Z",
+    "feature": "no-code-comments"
+  },
+  "gate_preview": {
+    "feature": "no-code-comments",
+    "plan_sha256": "23cf7e1272596939dda56f01e5ebc4e02ed2f8f6627c82ea1bdb731186359666",
+    "previewed_at": "2026-09-22T07:08:38.233Z",
+    "cells": [
+      {
+        "id": "ncc-1",
+        "feature": "no-code-comments",
+        "title": "Decide what a comment line is, once",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "38e323d6-abc3-4cc7-b533-eb27ef0603ed"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/main.rs"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+          "packages/bee-rs/crates/bee/tests/specs_fence.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "action": "Build the one classifier (per D1). NEW MODULE packages/bee-rs/crates/bee/src/comments.rs, declared in src/main.rs with a `mod comments;` line beside the other top-level modules (rg hit: `mod catalog;`). The module carries NO comments of its own — not `//`, not `///`, not `//!` — the fence will police it. Contents: `pub(crate) fn under_code_root(rel: &str) -> bool` — true for a `/`-separated repo-relative path that is under `packages/bee-rs/crates/<any>/src/`, `packages/bee/hooks/`, `packages/bee/lib/`, `scripts/`, or `.bee/verify/` (spell the crates rule as a prefix `packages/bee-rs/crates/` followed by one segment then `/src/`, never a fixed crate list); `pub(crate) enum Lang { Rust, Shell, Python }`; `pub(crate) fn code_lang(rel: &str, first_line: &str) -> Option<Lang>` by extension (.rs → Rust; .sh/.bash → Shell; .py → Python) or, when the name has no extension, by a `#!` first line containing sh, bash or python; `pub(crate) fn is_comment_line(lang: Lang, line: &str, in_block: &mut bool) -> bool` — Rust: trimmed line starts with `//` (covers `///` and `//!`), or `/*` opens a block that runs until `*/` with every inner line counting; Shell and Python: trimmed line starts with `#`; `pub(crate) fn is_exception(lang: Lang, line: &str, in_leading_block: bool) -> bool` — any line whose trimmed text starts with `#!` (a shebang, on line 1 or inside a heredoc body — scripts/codex-parity-canary-test.sh carries ten of them); a Rust comment whose text after the marker starts with `SAFETY:`; any comment line inside the file's leading comment block when that block contains `Copyright`, `SPDX-License-Identifier` or `Licensed under`; `pub(crate) fn count_comment_lines(lang: Lang, text: &str) -> usize` (comment lines minus exceptions); `pub(crate) fn comment_lines(lang: Lang, text: &str) -> Vec<(usize, String)>` — every counted comment line with its 1-based line number and trimmed content; `pub(crate) fn added_comment_lines(lang: Lang, old: &str, new: &str) -> Vec<(usize, String)>` — the multiset difference of comment_lines(new) minus comment_lines(old) by trimmed content, so a moved or deleted comment yields nothing, each with its line number in new; `pub(crate) fn walk_code_files(root: &Path) -> Vec<(String, Lang)>` — walk the repo under the five roots, skipping directories named target, node_modules or .git (the same skip list tests/instruction_laws.rs uses at `if matches!(name.as_ref(), \"target\" | \"node_modules\" | \".git\") {` — copy it, do not import it: tests cannot be imported), return `/`-normalized repo-relative paths sorted, each with its Lang; `pub(crate) fn repo_root() -> PathBuf` is NOT here — each caller resolves its own root. Document nothing in prose; let names and tests carry the meaning. TESTS, red-first, in a `#[cfg(test)] mod tests` at the bottom: each language's comment detection; `///` and `//!` count; a `/* */` block counts every inner line and closes; `#!` on line 1 and `#!` inside a body do not count; a `SAFETY:` line does not count; a leading license block does not count and a later `Copyright` comment does; a `//` at line start inside a string literal DOES count (assert it, with the note in the test name that it is the documented limitation); added_comment_lines returns nothing for a move and a delete and the right (line, text) for an add; code_lang finds an extension-less bash file by shebang and rejects a `.md`; under_code_root accepts `packages/bee-rs/crates/fleet/src/lib.rs` and rejects `packages/bee-rs/crates/bee/tests/x.rs`, `docs/x.rs` and `.bee/state.json`; walk_code_files on a temp tree returns `/` keys with no `\\` and skips a target/ directory.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee comments::",
+        "must_haves": {
+          "truths": [
+            "comments.rs is the one home of under_code_root, Lang, code_lang, is_comment_line, is_exception, count_comment_lines, comment_lines, added_comment_lines and walk_code_files, and carries no comment line itself",
+            "every #! line, every SAFETY: line and a leading license block are never counted; ///, //!, block inner lines and a string-literal // are counted",
+            "added_comment_lines is empty for a move and a delete and names the line for an add",
+            "walk_code_files returns /-normalized sorted keys under the five roots and skips target, node_modules and .git",
+            "code_lang finds an extension-less shebang file"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/comments.rs",
+              "substantive": "the classifier and its tests, comment-free"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/main.rs",
+              "substantive": "mod comments;"
+            }
+          ],
+          "key_links": [
+            "main.rs declares the module so devtools and hooks can use crate::comments"
+          ],
+          "prohibitions": [
+            "No comment line of any kind in comments.rs",
+            "No allowlist for string literals that look like comments",
+            "No change to any other file"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "ncc-2",
+        "feature": "no-code-comments",
+        "title": "Seed the baseline over every live branch and fence the count",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ncc-1"
+        ],
+        "decisions": [
+          "80ec3cd1-e51d-435c-ba50-570afa701c7c",
+          "0add770d-a748-4b83-810a-493e546d560c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".bee/comment-baseline.json"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "action": "Build the ratchet (per D2, D2b). NEW MODULE packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, comment-free, dispatched from devtools/mod.rs beside `\"release-manifest\" => release_manifest::run(flags),` as `\"comment-baseline\" => comment_baseline::run(flags),` and added to `const SOURCE_CHECKOUT_DEV_VERBS: [&str; 5] = [` (size 5 → 6) so it refuses outside a source checkout like release-manifest does. BASELINE: `.bee/comment-baseline.json` with shape `{\"files\": {\"<rel>\": <count>, ...}}`; `pub(crate) fn baseline_path(root) -> PathBuf`; `load_baseline(root) -> BTreeMap<String, usize>` over `fsutil::read_json` (absent file → empty map); `write_baseline(root, &BTreeMap)` builds the serde_json Map by inserting in BTreeMap order (this crate's serde_json has preserve_order, so sorted insertion IS the sort — the same answer verbs/drivers/close.rs gives at `/// the JSON \\`Map\\` in that already-sorted order`) and writes with `fsutil::write_json_atomic`. COUNTING: `current_counts(root) -> BTreeMap<String, usize>` = comments::walk_code_files + comments::count_comment_lines, keys `/`-normalized. SEED (D2b): when no baseline exists, `--write` seeds from the per-file MAXIMUM over the working tree and every unmerged `wt/*` branch: run `git branch --no-merged main --format=%(refname:short)` from root, and for each branch `git ls-tree -r --name-only <branch>` filtered through comments::under_code_root and comments::code_lang, read each file with `git show <branch>:<path>` and count; print `comment-baseline --write: seeded <n> file(s) from main plus <k> unmerged branch(es) (<names>)`. If git is unavailable or a branch read fails, seed from the working tree only and say so in the output — never silently. VERB: `--check` computes current counts and prints one line `<rel>: <count> comment line(s), baseline <b>` per file whose count exceeds its entry (absent entry → 0), then the two-sentence remedy `bee dev comment-baseline --write lowers a count, never raises one. A count that rose from a merge is fixed by deleting the merged comment lines.`, exit 1; none → `comment-baseline --check: <n> file(s) at or below baseline`, exit 0. `--write` with a baseline present: lower every entry whose count fell, drop entries for files that no longer exist, keep entries above the tree unchanged (they are the in-flight headroom), and REFUSE (exit 1, nothing written) naming every file whose count would rise. Both flags absent → the usage refusal shape release-manifest uses. REGISTRY: add `dev.comment-baseline` to generated/registry_payload.json (hand-edited, decision 3358743e) with properties `check` and `write` reusing the existing names, an example `bee dev comment-baseline --check`, and a description in one paragraph; the catalog pin stays 211 — run the catalog test to prove it. THE RATCHET TEST: in this module's `#[cfg(test)] mod tests`, `every_code_file_is_at_or_below_its_comment_baseline`: resolve the repo root the way tests/specs_fence.rs does (`PathBuf::from(env!(\"CARGO_MANIFEST_DIR\")).ancestors().nth(4)`), load the baseline, compute counts, and assert nothing exceeds, failing with the same per-file lines and the two-sentence remedy. Then RUN `--write` once from the worktree root to seed `.bee/comment-baseline.json` and commit it with the code. TESTS, red-first, in the module: seed from a temp git repo with one unmerged branch carrying an extra comment → the baseline holds the branch's higher count; lower; refuse-to-raise names the file; drop a deleted file; keys carry no backslash; `--check` red text names file, count and baseline and both remedy sentences; the ratchet test itself is green on the seeded tree.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee catalog:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            ".bee/comment-baseline.json exists, sorted, /-keyed, and was seeded from the working tree plus every unmerged wt/* branch; the cap report names the branches and the totals",
+            "bee dev comment-baseline --check exits 0 on the seeded tree and exits 1 naming file, count and baseline plus the two remedy sentences when one comment line is added to a code file",
+            "bee dev comment-baseline --write refuses to raise any count, lowers a count that fell, drops a deleted file and keeps in-flight headroom",
+            "the ratchet test every_code_file_is_at_or_below_its_comment_baseline is green on the seeded tree and red with the same message on a rise",
+            "comment-baseline is in SOURCE_CHECKOUT_DEV_VERBS, dev.comment-baseline is in the registry, PINNED_FLAG_COUNT stays 211, both registry targets are green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs",
+              "substantive": "baseline IO, seed over live branches, --check, --write, the ratchet test, tests; comment-free"
+            },
+            {
+              "path": ".bee/comment-baseline.json",
+              "substantive": "the seeded per-file counts"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "dev.comment-baseline entry"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+              "substantive": "dispatch arm and SOURCE_CHECKOUT_DEV_VERBS entry"
+            }
+          ],
+          "key_links": [
+            "comment_baseline.rs counts only through comments::walk_code_files and comments::count_comment_lines — no second counter",
+            "the ratchet test and --check print the same lines"
+          ],
+          "prohibitions": [
+            "No comment line is removed from any existing file (D6)",
+            "The baseline is never hand-edited; the verb writes it",
+            "No comment line in the new module",
+            "No change to comments.rs or the hook"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "ncc-3",
+        "feature": "no-code-comments",
+        "title": "Refuse a write that adds a comment line to a code file",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ncc-1"
+        ],
+        "decisions": [
+          "c2477366-4b6c-4eca-a3c7-37b2062f12da",
+          "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+          "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md"
+        ],
+        "action": "Add the comment arm to the write guard (per D3, D7, D4). All new code in this cell is comment-free; the ratchet in ncc-2 polices these files, so the proof ends with its test target. SHARED RECONSTRUCTION: extract from the config arm (rg hit: `        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json`) one helper `fn reconstruct_target_text(tool_name: &str, tool_input: &Map<String, Value>, root_pb: &Path, rel: &str) -> Option<(String, String)>` returning (old, new) whole-file text: Write → old = disk or empty, new = `content` (rg hit: `let Some(content) = tool_input.get(\"content\").and_then(Value::as_str) else {`); Edit → old = disk (rg hit: `let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {`), new = `current_text.replacen(old_s, new_s, 1)` (rg hit: that line); MultiEdit → the same fold over `edits` (rg hit: `let Some(Value::Array(edits)) = tool_input.get(\"edits\") else {`); None when the text cannot be reconstructed. Make the config arm call the helper for its own reconstruction so there is one home, keeping its refusals byte-identical (its existing tests prove that). NEW READERS: in guards.rs beside `pub(crate) fn fence_heredocs(command: &str) -> String {`, `pub(crate) fn heredoc_writes(command: &str) -> Vec<(String, String)>` — for each simple command that carries both a heredoc (`<<TAG` / `<<'TAG'` / `<<-TAG`) and a `>`/`>>` redirect target, the (target, body) pair, body = the lines between the operator line and the terminator; nothing for a heredoc with no redirect target or a redirect with no heredoc; in detectors.rs beside `pub(crate) fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {`, `pub(crate) fn apply_patch_added_lines(patch_text: &str) -> Vec<(String, Vec<String>)>` — per `*** Add File:` / `*** Update File:` target, the lines that start with `+` (marker stripped), in order. THE ARM, in main.rs directly after the config arm and only while `denial.is_none()`: read the merged config once here with `read_config(&store_root_pb)?` (the existing read at main.rs:126 is in the read-tool branch and is not reachable) and skip the whole arm unless `config.get(\"no_code_comments\") == Some(&Value::Bool(true))`; for each `rel` in `rel_paths`, skip the `**` sentinel (rg hit: `rel_paths = vec![\"**\".to_string()];`), skip unless `crate::comments::under_code_root(rel)`, then gather candidates: Write/Edit/MultiEdit → `reconstruct_target_text`, lang from `comments::code_lang(rel, first line of new)`, `added = comments::added_comment_lines(lang, &old, &new)`; Bash/exec → for each (target, body) from `heredoc_writes(&command)` whose normalized target equals rel: old = disk or empty, new = body (a `>>` append: new = disk + body), same diff; a Bash write with no readable body (echo, printf, sed, mv, cp) is NOT refused by this arm; apply_patch → for each (target, lines) from `apply_patch_added_lines` whose target equals rel: added = the `+` lines that `comments::is_comment_line` counts and `is_exception` does not, numbered by their position among the added lines (the refusal says `added line <n>`); Delete/Move targets are skipped. On the first non-empty `added`, `denial = Some(...)` with ONE message: `bee comment guard denied this write: <rel>:<line> adds a comment line (\"<trimmed, max 80 chars>\"). This repository keeps no comments in code (no_code_comments) — not //, not /// or //! doc comments, not /* */, not #. FIX: put the why in a docs/knowledge concept whose Pointers name this file, or log it with bee decisions log; a public item's description goes in the owning docs/knowledge concept; a workaround is fixed, or filed with bee backlog add and cited from the concept — never from the code. Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top.` Never refuse a target that is not under a code root or not a code file. TESTS, red-first, in write_guard/tests.rs, using `fn build_fixture(phase: &str, execution_approved: bool) -> Fx {`, a plain `std::fs::write(fx.root.join(\".bee/config.json\"), ...)` carrying `{\"no_code_comments\": true}` (the config-guard tests at tests.rs:313 show the shape), and `fn expect_done(payload: Value, cwd: &Path) -> Emit {`; EVERY fixture string stays an inline one-line `json!`/`\"...\\n...\"` literal — no multi-line raw string whose body line starts with `//` or `#`, or the ratchet counts it. Cases: Edit adding `// note` into packages/bee-rs/crates/bee/src/x.rs (write the file first) → deny with FIX, `x.rs:<line>`, the text `/// or //!`; the same Edit with the key absent → allow, with `false` → allow; Edit whose old_string and new_string carry the same comment moved → allow; Edit that deletes a comment → allow; Write of a new .rs file with a `///` line → deny; Write of a `.md` with `// x` → allow; Write under `docs/` → allow; Bash `cat > scripts/x.sh <<'EOF'` with a `# note` body line → deny, with only a `#!/usr/bin/env bash` body line → allow; Bash `echo '# x' > scripts/x.sh` → allow (unreadable); a `SAFETY:` line → allow; MultiEdit with one offending edit → deny naming it; apply_patch adding a `//` line under the crate → deny naming `added line <n>`; guards.rs unit tests for heredoc_writes (with and without a target, two heredocs, unterminated) and detectors.rs unit tests for apply_patch_added_lines (two targets, a Delete target ignored). In tests/hook_contracts.rs beside `fn a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr() {`: one end-to-end test that the comment deny reaches the host as exit 2 with FIX on stderr.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::write_guard:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline::",
+        "must_haves": {
+          "truths": [
+            "with no_code_comments true, an Edit, Write or MultiEdit that adds a comment line to a file under a code root, a Bash heredoc write into one, and an apply_patch that adds one are refused with a message naming the file, the line, the trimmed line, that /// and //! are comments, the two homes for a why, the home for a public item's description, and the three exceptions",
+            "a moved or deleted comment, a non-code target, a #! line, a SAFETY line, a license header, a Bash write with no readable body, and a repository without the key all pass this arm",
+            "the config arm still emits byte-identical refusals through the shared reconstruction helper",
+            "the deny reaches the host as exit 2 with FIX on stderr",
+            "every other write-guard test stays green and the comment ratchet stays green over the arm's own files"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+              "substantive": "reconstruct_target_text shared by the config arm and the comment arm; the comment arm gated by no_code_comments"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "heredoc_writes with tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+              "substantive": "apply_patch_added_lines with tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "the arm's tests across the five tool shapes and the pass cases, inline fixtures only"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+              "substantive": "one end-to-end deny test"
+            }
+          ],
+          "key_links": [
+            "the arm calls comments::under_code_root, code_lang, added_comment_lines, is_comment_line and is_exception — no second predicate",
+            "the arm sits after the config arm and only while denial is none; config is read once in the write branch"
+          ],
+          "prohibitions": [
+            "No change to any existing refusal's text or order",
+            "No refusal on .md, .json, .toml, docs or .bee state paths, and none on a Bash write whose content the guard cannot see",
+            "No comment line in main.rs, guards.rs, detectors.rs, tests.rs or hook_contracts.rs from this cell; no multi-line fixture whose line starts with // or #"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "ncc-4",
+        "feature": "no-code-comments",
+        "title": "State the rule by id where agents read, record it in the knowledge layer, map it, and switch it on",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "ncc-2",
+          "ncc-3"
+        ],
+        "decisions": [
+          "002a935d-0da1-4ab1-acea-0c208806f31a",
+          "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5",
+          "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+          "69326d15-0a5d-44a4-b63b-c544686d2d61"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "AGENTS.md",
+          ".bee/bin/prompts/worker-cell.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/config.json",
+          ".bee/config-sample.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "action": "Land the rule where agents read it (per D5, D4), record it in the knowledge layer, map it, and switch it on (per D7), with ONE regen; never hand-edit AGENTS.md (it renders from the block). (1) packages/bee/AGENTS.block.md: add a MARKED rule directly before the bullet `- Write a mistake down the MOMENT you notice it` (rg hit: `- Write a mistake down the MOMENT you notice it, never composed from`): `<!-- rule: agents-no-code-comments -->` … `<!-- /rule -->` around one bullet, shaped like the marker at `<!-- rule: agents-one-commit-per-cell -->`: no comment in code, any language — not `//`, `///` or `//!`, not `/* */`, not `#`; the why lives in a docs/knowledge concept whose Pointers name the file, or in bee decisions log; a public item's description lives in the owning docs/knowledge concept; a workaround is fixed or filed with bee backlog add and cited from the concept; the three exceptions (a `#!` line, a `SAFETY:` line on unsafe, a license header at file top); the write guard refuses the write where `no_code_comments` is on and the comment baseline reds the suite. (2) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, section `## AGENTS.md rule homes`: add the row for `agents-no-code-comments` in the shape of the `agents-one-commit-per-cell` row (its home section and spoken line), so tests/rule_index_parity.rs finds the id in all three places. (3) packages/bee/prompts/worker-cell.md: extend the craft bullet (rg hit: `- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it.`) with one sentence: no comments in code — the why goes to docs/knowledge or bee decisions log, a public item's description to its concept; the guard refuses the rest. (4) docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md: add a section for the comment arm and the ratchet — the config key and that a granted worktree reads its own config while an ungranted one reads main's; the code roots (Pointers: packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, .bee/comment-baseline.json); what a comment line is per language and the three exceptions; the refusal shape and which tool shapes it reads (Write, Edit, MultiEdit, a Bash heredoc with a redirect target, apply_patch added lines) and which it cannot (a Bash write with no readable body); the string-literal limitation; the baseline's seed over unmerged branches (D2b), `--check`/`--write`, the ratchet test name; cite 38e323d6, 80ec3cd1, 0add770d, c2477366, 0ee8248d, 002a935d, 69326d15, e3bf4a57 in the frontmatter decisions list. Write the D6 sentence about the existing comments inside a fenced `<!-- bee:not-a-deferral: D6 records the batched cleanup as separate grooming work; nothing here promises a date --> … <!-- /bee:not-a-deferral -->` block so bee close's doc-deferral door does not stop on it. (5) .bee/verify/verify-app/features/comment-guard.md, modeled on cells-and-proof.md: what it is, how a user reaches it (an Edit adding `// x` to a .rs under a code root with the key on; `bee dev comment-baseline --check`), how to drive it with control-bee (set no_code_comments true in the sandbox's .bee/config.json via `control-bee put`, then run the hook with a crafted Edit payload the way tests/hook_contracts.rs does, or drive the refusal from a hooked session; run `control-bee cli -- dev comment-baseline --check` — note it refuses outside a source checkout, so the verb is driven from the source root, not the sandbox), gotchas (string-literal counting; hosts default off; an ungranted worktree reads main's key; the baseline never rises and a merge-caused rise is fixed by deleting the merged lines); add its row to README.md (rg hit: `- [Cells and the proof line](./cells-and-proof.md) covers adding, claiming and`). (6) .bee/config.json: add `\"no_code_comments\": true` beside `uat_stop`; .bee/config-sample.json: the key with `false`, nothing else. (7) Run `.bee/bin/bee dev regen` ONCE from the worktree root; stage by explicit path list — every listed file plus every rendered copy regen touched (skill mirrors of the feature map, .bee-render.json files, .bee/onboarding.json) — and check `git status` for packages/bee-rs/crates/bee/.bee/logs before the commit; never stage that log. Do NOT reinstall .bee/bin/bee. PROOF: after the regen, run the verify's test targets and checks; read back the rendered AGENTS.md rule and quote it in the cap report (`green:live`).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && rg -q no_code_comments packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md .bee/verify/verify-app/features/comment-guard.md .bee/config.json && rg -q agents-no-code-comments docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md AGENTS.md",
+        "must_haves": {
+          "truths": [
+            "AGENTS.block.md carries the marked rule agents-no-code-comments with the two homes, the API-doc home and the three exceptions; AGENTS.md's rendered block matches and the rule-index row exists (parity and rule-index tests green)",
+            "worker-cell.md's craft bullet states the ban and the homes; the vendored copy matches (skew test green)",
+            "write-guard-request-shapes.md records the arm, the readable and unreadable tool shapes, the ratchet, the seed rule and the eight decision ids, with the D6 sentence fenced as not-a-deferral (pointer-integrity green)",
+            "comment-guard.md exists and README.md lists it",
+            ".bee/config.json sets no_code_comments true; config-sample.json shows the key false",
+            "release-manifest --check is green after one regen and the test-timings log was never staged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "the marked rule"
+            },
+            {
+              "path": "AGENTS.md",
+              "substantive": "the rendered block — written by regen"
+            },
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+              "substantive": "the rule-index row"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the craft bullet's no-comment sentence"
+            },
+            {
+              "path": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+              "substantive": "the comment arm and ratchet section with decision ids"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/comment-guard.md",
+              "substantive": "the feature file"
+            },
+            {
+              "path": ".bee/config.json",
+              "substantive": "no_code_comments: true"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md's block equals the rendered template; the rule id is in the block, the render and the index",
+            "the concept's Pointers name comments.rs, comment_baseline.rs and .bee/comment-baseline.json",
+            "release-manifest.json is refreshed in the same commit"
+          ],
+          "prohibitions": [
+            "No hand edit of AGENTS.md or any mirrored copy",
+            "No Rust edits; no reinstall of .bee/bin/bee",
+            "No other config key changes",
+            "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl is never staged"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust changes in comments.rs, devtools, the write guard"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride each code cell"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "required",
+          "role": "docs",
+          "reason": "D5 homes, the rule index, the knowledge concept, the feature map, the config flip"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a narrow fact lookup during execution",
+          "reason": "cheap reader"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the slice judge over behavior_change cells, or the user invokes bee-reviewing",
+          "reason": "verification of capped cells; independent review stays user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: precedent for every part"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-22T07:09:04.474Z",
+    "feature": "no-code-comments",
+    "newest_decision_id": "0add770d-a748-4b83-810a-493e546d560c",
+    "plan_sha256": "23cf7e1272596939dda56f01e5ebc4e02ed2f8f6627c82ea1bdb731186359666",
+    "advisor": "plan-step hat wave: hat-facts-gaps, hat-alternatives, hat-user-impact (opus)",
+    "digest_head": "# no-code-comments — plan-step hat wave synthesis\n\nThree seats (hat-facts-gaps, hat-alternatives, hat-user-impact), opened\n2026-09-22 under decision f02e89ab, over CONTEXT.md D1–D7 and plan.md\nrevision 1. Synthesized by the leader; plan.md revision 2 carries the\nresult. All three seats returned inside the ceiling; no seat dropped.\n\nPLAN CHECK\nWork: no-code-comments, single slice, cells ncc-1..ncc-4 (revision 2; revision 1 had three)\n\nSTRUCTURE\nBLOCKERS (all resolved in revision 2):\n- crate bee h"
+  },
+  "approved_cell_packet": {
+    "feature": "no-code-comments",
+    "plan_sha256": "23cf7e1272596939dda56f01e5ebc4e02ed2f8f6627c82ea1bdb731186359666",
+    "previewed_at": "2026-09-22T07:08:38.233Z",
+    "cells": [
+      {
+        "id": "ncc-1",
+        "feature": "no-code-comments",
+        "title": "Decide what a comment line is, once",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "38e323d6-abc3-4cc7-b533-eb27ef0603ed"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/main.rs"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
+          "packages/bee-rs/crates/bee/tests/specs_fence.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "action": "Build the one classifier (per D1). NEW MODULE packages/bee-rs/crates/bee/src/comments.rs, declared in src/main.rs with a `mod comments;` line beside the other top-level modules (rg hit: `mod catalog;`). The module carries NO comments of its own — not `//`, not `///`, not `//!` — the fence will police it. Contents: `pub(crate) fn under_code_root(rel: &str) -> bool` — true for a `/`-separated repo-relative path that is under `packages/bee-rs/crates/<any>/src/`, `packages/bee/hooks/`, `packages/bee/lib/`, `scripts/`, or `.bee/verify/` (spell the crates rule as a prefix `packages/bee-rs/crates/` followed by one segment then `/src/`, never a fixed crate list); `pub(crate) enum Lang { Rust, Shell, Python }`; `pub(crate) fn code_lang(rel: &str, first_line: &str) -> Option<Lang>` by extension (.rs → Rust; .sh/.bash → Shell; .py → Python) or, when the name has no extension, by a `#!` first line containing sh, bash or python; `pub(crate) fn is_comment_line(lang: Lang, line: &str, in_block: &mut bool) -> bool` — Rust: trimmed line starts with `//` (covers `///` and `//!`), or `/*` opens a block that runs until `*/` with every inner line counting; Shell and Python: trimmed line starts with `#`; `pub(crate) fn is_exception(lang: Lang, line: &str, in_leading_block: bool) -> bool` — any line whose trimmed text starts with `#!` (a shebang, on line 1 or inside a heredoc body — scripts/codex-parity-canary-test.sh carries ten of them); a Rust comment whose text after the marker starts with `SAFETY:`; any comment line inside the file's leading comment block when that block contains `Copyright`, `SPDX-License-Identifier` or `Licensed under`; `pub(crate) fn count_comment_lines(lang: Lang, text: &str) -> usize` (comment lines minus exceptions); `pub(crate) fn comment_lines(lang: Lang, text: &str) -> Vec<(usize, String)>` — every counted comment line with its 1-based line number and trimmed content; `pub(crate) fn added_comment_lines(lang: Lang, old: &str, new: &str) -> Vec<(usize, String)>` — the multiset difference of comment_lines(new) minus comment_lines(old) by trimmed content, so a moved or deleted comment yields nothing, each with its line number in new; `pub(crate) fn walk_code_files(root: &Path) -> Vec<(String, Lang)>` — walk the repo under the five roots, skipping directories named target, node_modules or .git (the same skip list tests/instruction_laws.rs uses at `if matches!(name.as_ref(), \"target\" | \"node_modules\" | \".git\") {` — copy it, do not import it: tests cannot be imported), return `/`-normalized repo-relative paths sorted, each with its Lang; `pub(crate) fn repo_root() -> PathBuf` is NOT here — each caller resolves its own root. Document nothing in prose; let names and tests carry the meaning. TESTS, red-first, in a `#[cfg(test)] mod tests` at the bottom: each language's comment detection; `///` and `//!` count; a `/* */` block counts every inner line and closes; `#!` on line 1 and `#!` inside a body do not count; a `SAFETY:` line does not count; a leading license block does not count and a later `Copyright` comment does; a `//` at line start inside a string literal DOES count (assert it, with the note in the test name that it is the documented limitation); added_comment_lines returns nothing for a move and a delete and the right (line, text) for an add; code_lang finds an extension-less bash file by shebang and rejects a `.md`; under_code_root accepts `packages/bee-rs/crates/fleet/src/lib.rs` and rejects `packages/bee-rs/crates/bee/tests/x.rs`, `docs/x.rs` and `.bee/state.json`; walk_code_files on a temp tree returns `/` keys with no `\\` and skips a target/ directory.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee comments::",
+        "must_haves": {
+          "truths": [
+            "comments.rs is the one home of under_code_root, Lang, code_lang, is_comment_line, is_exception, count_comment_lines, comment_lines, added_comment_lines and walk_code_files, and carries no comment line itself",
+            "every #! line, every SAFETY: line and a leading license block are never counted; ///, //!, block inner lines and a string-literal // are counted",
+            "added_comment_lines is empty for a move and a delete and names the line for an add",
+            "walk_code_files returns /-normalized sorted keys under the five roots and skips target, node_modules and .git",
+            "code_lang finds an extension-less shebang file"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/comments.rs",
+              "substantive": "the classifier and its tests, comment-free"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/main.rs",
+              "substantive": "mod comments;"
+            }
+          ],
+          "key_links": [
+            "main.rs declares the module so devtools and hooks can use crate::comments"
+          ],
+          "prohibitions": [
+            "No comment line of any kind in comments.rs",
+            "No allowlist for string literals that look like comments",
+            "No change to any other file"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      },
+      {
+        "id": "ncc-2",
+        "feature": "no-code-comments",
+        "title": "Seed the baseline over every live branch and fence the count",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ncc-1"
+        ],
+        "decisions": [
+          "80ec3cd1-e51d-435c-ba50-570afa701c7c",
+          "0add770d-a748-4b83-810a-493e546d560c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          ".bee/comment-baseline.json"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md"
+        ],
+        "action": "Build the ratchet (per D2, D2b). NEW MODULE packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, comment-free, dispatched from devtools/mod.rs beside `\"release-manifest\" => release_manifest::run(flags),` as `\"comment-baseline\" => comment_baseline::run(flags),` and added to `const SOURCE_CHECKOUT_DEV_VERBS: [&str; 5] = [` (size 5 → 6) so it refuses outside a source checkout like release-manifest does. BASELINE: `.bee/comment-baseline.json` with shape `{\"files\": {\"<rel>\": <count>, ...}}`; `pub(crate) fn baseline_path(root) -> PathBuf`; `load_baseline(root) -> BTreeMap<String, usize>` over `fsutil::read_json` (absent file → empty map); `write_baseline(root, &BTreeMap)` builds the serde_json Map by inserting in BTreeMap order (this crate's serde_json has preserve_order, so sorted insertion IS the sort — the same answer verbs/drivers/close.rs gives at `/// the JSON \\`Map\\` in that already-sorted order`) and writes with `fsutil::write_json_atomic`. COUNTING: `current_counts(root) -> BTreeMap<String, usize>` = comments::walk_code_files + comments::count_comment_lines, keys `/`-normalized. SEED (D2b): when no baseline exists, `--write` seeds from the per-file MAXIMUM over the working tree and every unmerged `wt/*` branch: run `git branch --no-merged main --format=%(refname:short)` from root, and for each branch `git ls-tree -r --name-only <branch>` filtered through comments::under_code_root and comments::code_lang, read each file with `git show <branch>:<path>` and count; print `comment-baseline --write: seeded <n> file(s) from main plus <k> unmerged branch(es) (<names>)`. If git is unavailable or a branch read fails, seed from the working tree only and say so in the output — never silently. VERB: `--check` computes current counts and prints one line `<rel>: <count> comment line(s), baseline <b>` per file whose count exceeds its entry (absent entry → 0), then the two-sentence remedy `bee dev comment-baseline --write lowers a count, never raises one. A count that rose from a merge is fixed by deleting the merged comment lines.`, exit 1; none → `comment-baseline --check: <n> file(s) at or below baseline`, exit 0. `--write` with a baseline present: lower every entry whose count fell, drop entries for files that no longer exist, keep entries above the tree unchanged (they are the in-flight headroom), and REFUSE (exit 1, nothing written) naming every file whose count would rise. Both flags absent → the usage refusal shape release-manifest uses. REGISTRY: add `dev.comment-baseline` to generated/registry_payload.json (hand-edited, decision 3358743e) with properties `check` and `write` reusing the existing names, an example `bee dev comment-baseline --check`, and a description in one paragraph; the catalog pin stays 211 — run the catalog test to prove it. THE RATCHET TEST: in this module's `#[cfg(test)] mod tests`, `every_code_file_is_at_or_below_its_comment_baseline`: resolve the repo root the way tests/specs_fence.rs does (`PathBuf::from(env!(\"CARGO_MANIFEST_DIR\")).ancestors().nth(4)`), load the baseline, compute counts, and assert nothing exceeds, failing with the same per-file lines and the two-sentence remedy. Then RUN `--write` once from the worktree root to seed `.bee/comment-baseline.json` and commit it with the code. TESTS, red-first, in the module: seed from a temp git repo with one unmerged branch carrying an extra comment → the baseline holds the branch's higher count; lower; refuse-to-raise names the file; drop a deleted file; keys carry no backslash; `--check` red text names file, count and baseline and both remedy sentences; the ratchet test itself is green on the seeded tree.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee catalog:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            ".bee/comment-baseline.json exists, sorted, /-keyed, and was seeded from the working tree plus every unmerged wt/* branch; the cap report names the branches and the totals",
+            "bee dev comment-baseline --check exits 0 on the seeded tree and exits 1 naming file, count and baseline plus the two remedy sentences when one comment line is added to a code file",
+            "bee dev comment-baseline --write refuses to raise any count, lowers a count that fell, drops a deleted file and keeps in-flight headroom",
+            "the ratchet test every_code_file_is_at_or_below_its_comment_baseline is green on the seeded tree and red with the same message on a rise",
+            "comment-baseline is in SOURCE_CHECKOUT_DEV_VERBS, dev.comment-baseline is in the registry, PINNED_FLAG_COUNT stays 211, both registry targets are green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs",
+              "substantive": "baseline IO, seed over live branches, --check, --write, the ratchet test, tests; comment-free"
+            },
+            {
+              "path": ".bee/comment-baseline.json",
+              "substantive": "the seeded per-file counts"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "dev.comment-baseline entry"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+              "substantive": "dispatch arm and SOURCE_CHECKOUT_DEV_VERBS entry"
+            }
+          ],
+          "key_links": [
+            "comment_baseline.rs counts only through comments::walk_code_files and comments::count_comment_lines — no second counter",
+            "the ratchet test and --check print the same lines"
+          ],
+          "prohibitions": [
+            "No comment line is removed from any existing file (D6)",
+            "The baseline is never hand-edited; the verb writes it",
+            "No comment line in the new module",
+            "No change to comments.rs or the hook"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "ncc-3",
+        "feature": "no-code-comments",
+        "title": "Refuse a write that adds a comment line to a code file",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "ncc-1"
+        ],
+        "decisions": [
+          "c2477366-4b6c-4eca-a3c7-37b2062f12da",
+          "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+          "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "packages/bee-rs/crates/bee/tests/hook_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/comments.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md"
+        ],
+        "action": "Add the comment arm to the write guard (per D3, D7, D4). All new code in this cell is comment-free; the ratchet in ncc-2 polices these files, so the proof ends with its test target. SHARED RECONSTRUCTION: extract from the config arm (rg hit: `        // crkg-1: config-role-key-guard arm over .bee/config.json and .bee/config.local.json`) one helper `fn reconstruct_target_text(tool_name: &str, tool_input: &Map<String, Value>, root_pb: &Path, rel: &str) -> Option<(String, String)>` returning (old, new) whole-file text: Write → old = disk or empty, new = `content` (rg hit: `let Some(content) = tool_input.get(\"content\").and_then(Value::as_str) else {`); Edit → old = disk (rg hit: `let Ok(current_text) = std::fs::read_to_string(root_pb.join(rel)) else {`), new = `current_text.replacen(old_s, new_s, 1)` (rg hit: that line); MultiEdit → the same fold over `edits` (rg hit: `let Some(Value::Array(edits)) = tool_input.get(\"edits\") else {`); None when the text cannot be reconstructed. Make the config arm call the helper for its own reconstruction so there is one home, keeping its refusals byte-identical (its existing tests prove that). NEW READERS: in guards.rs beside `pub(crate) fn fence_heredocs(command: &str) -> String {`, `pub(crate) fn heredoc_writes(command: &str) -> Vec<(String, String)>` — for each simple command that carries both a heredoc (`<<TAG` / `<<'TAG'` / `<<-TAG`) and a `>`/`>>` redirect target, the (target, body) pair, body = the lines between the operator line and the terminator; nothing for a heredoc with no redirect target or a redirect with no heredoc; in detectors.rs beside `pub(crate) fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {`, `pub(crate) fn apply_patch_added_lines(patch_text: &str) -> Vec<(String, Vec<String>)>` — per `*** Add File:` / `*** Update File:` target, the lines that start with `+` (marker stripped), in order. THE ARM, in main.rs directly after the config arm and only while `denial.is_none()`: read the merged config once here with `read_config(&store_root_pb)?` (the existing read at main.rs:126 is in the read-tool branch and is not reachable) and skip the whole arm unless `config.get(\"no_code_comments\") == Some(&Value::Bool(true))`; for each `rel` in `rel_paths`, skip the `**` sentinel (rg hit: `rel_paths = vec![\"**\".to_string()];`), skip unless `crate::comments::under_code_root(rel)`, then gather candidates: Write/Edit/MultiEdit → `reconstruct_target_text`, lang from `comments::code_lang(rel, first line of new)`, `added = comments::added_comment_lines(lang, &old, &new)`; Bash/exec → for each (target, body) from `heredoc_writes(&command)` whose normalized target equals rel: old = disk or empty, new = body (a `>>` append: new = disk + body), same diff; a Bash write with no readable body (echo, printf, sed, mv, cp) is NOT refused by this arm; apply_patch → for each (target, lines) from `apply_patch_added_lines` whose target equals rel: added = the `+` lines that `comments::is_comment_line` counts and `is_exception` does not, numbered by their position among the added lines (the refusal says `added line <n>`); Delete/Move targets are skipped. On the first non-empty `added`, `denial = Some(...)` with ONE message: `bee comment guard denied this write: <rel>:<line> adds a comment line (\"<trimmed, max 80 chars>\"). This repository keeps no comments in code (no_code_comments) — not //, not /// or //! doc comments, not /* */, not #. FIX: put the why in a docs/knowledge concept whose Pointers name this file, or log it with bee decisions log; a public item's description goes in the owning docs/knowledge concept; a workaround is fixed, or filed with bee backlog add and cited from the concept — never from the code. Exceptions: a #! line, a SAFETY: line on unsafe, a license header at file top.` Never refuse a target that is not under a code root or not a code file. TESTS, red-first, in write_guard/tests.rs, using `fn build_fixture(phase: &str, execution_approved: bool) -> Fx {`, a plain `std::fs::write(fx.root.join(\".bee/config.json\"), ...)` carrying `{\"no_code_comments\": true}` (the config-guard tests at tests.rs:313 show the shape), and `fn expect_done(payload: Value, cwd: &Path) -> Emit {`; EVERY fixture string stays an inline one-line `json!`/`\"...\\n...\"` literal — no multi-line raw string whose body line starts with `//` or `#`, or the ratchet counts it. Cases: Edit adding `// note` into packages/bee-rs/crates/bee/src/x.rs (write the file first) → deny with FIX, `x.rs:<line>`, the text `/// or //!`; the same Edit with the key absent → allow, with `false` → allow; Edit whose old_string and new_string carry the same comment moved → allow; Edit that deletes a comment → allow; Write of a new .rs file with a `///` line → deny; Write of a `.md` with `// x` → allow; Write under `docs/` → allow; Bash `cat > scripts/x.sh <<'EOF'` with a `# note` body line → deny, with only a `#!/usr/bin/env bash` body line → allow; Bash `echo '# x' > scripts/x.sh` → allow (unreadable); a `SAFETY:` line → allow; MultiEdit with one offending edit → deny naming it; apply_patch adding a `//` line under the crate → deny naming `added line <n>`; guards.rs unit tests for heredoc_writes (with and without a target, two heredocs, unterminated) and detectors.rs unit tests for apply_patch_added_lines (two targets, a Delete target ignored). In tests/hook_contracts.rs beside `fn a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr() {`: one end-to-end test that the comment deny reaches the host as exit 2 with FIX on stderr.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee hooks::write_guard:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test hook_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee devtools::comment_baseline::",
+        "must_haves": {
+          "truths": [
+            "with no_code_comments true, an Edit, Write or MultiEdit that adds a comment line to a file under a code root, a Bash heredoc write into one, and an apply_patch that adds one are refused with a message naming the file, the line, the trimmed line, that /// and //! are comments, the two homes for a why, the home for a public item's description, and the three exceptions",
+            "a moved or deleted comment, a non-code target, a #! line, a SAFETY line, a license header, a Bash write with no readable body, and a repository without the key all pass this arm",
+            "the config arm still emits byte-identical refusals through the shared reconstruction helper",
+            "the deny reaches the host as exit 2 with FIX on stderr",
+            "every other write-guard test stays green and the comment ratchet stays green over the arm's own files"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+              "substantive": "reconstruct_target_text shared by the config arm and the comment arm; the comment arm gated by no_code_comments"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+              "substantive": "heredoc_writes with tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+              "substantive": "apply_patch_added_lines with tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+              "substantive": "the arm's tests across the five tool shapes and the pass cases, inline fixtures only"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+              "substantive": "one end-to-end deny test"
+            }
+          ],
+          "key_links": [
+            "the arm calls comments::under_code_root, code_lang, added_comment_lines, is_comment_line and is_exception — no second predicate",
+            "the arm sits after the config arm and only while denial is none; config is read once in the write branch"
+          ],
+          "prohibitions": [
+            "No change to any existing refusal's text or order",
+            "No refusal on .md, .json, .toml, docs or .bee state paths, and none on a Bash write whose content the guard cannot see",
+            "No comment line in main.rs, guards.rs, detectors.rs, tests.rs or hook_contracts.rs from this cell; no multi-line fixture whose line starts with // or #"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "ncc-4",
+        "feature": "no-code-comments",
+        "title": "State the rule by id where agents read, record it in the knowledge layer, map it, and switch it on",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "ncc-2",
+          "ncc-3"
+        ],
+        "decisions": [
+          "002a935d-0da1-4ab1-acea-0c208806f31a",
+          "0ee8248d-a4c5-4a7d-8d84-c0184b0c70f5",
+          "e3bf4a57-6779-4ca2-895d-f03f9b720c1d",
+          "69326d15-0a5d-44a4-b63b-c544686d2d61"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "AGENTS.md",
+          ".bee/bin/prompts/worker-cell.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          ".bee/verify/verify-app/features/README.md",
+          ".bee/config.json",
+          ".bee/config-sample.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/no-code-comments/CONTEXT.md",
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          ".bee/verify/verify-app/features/comment-guard.md",
+          "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+        ],
+        "action": "Land the rule where agents read it (per D5, D4), record it in the knowledge layer, map it, and switch it on (per D7), with ONE regen; never hand-edit AGENTS.md (it renders from the block). (1) packages/bee/AGENTS.block.md: add a MARKED rule directly before the bullet `- Write a mistake down the MOMENT you notice it` (rg hit: `- Write a mistake down the MOMENT you notice it, never composed from`): `<!-- rule: agents-no-code-comments -->` … `<!-- /rule -->` around one bullet, shaped like the marker at `<!-- rule: agents-one-commit-per-cell -->`: no comment in code, any language — not `//`, `///` or `//!`, not `/* */`, not `#`; the why lives in a docs/knowledge concept whose Pointers name the file, or in bee decisions log; a public item's description lives in the owning docs/knowledge concept; a workaround is fixed or filed with bee backlog add and cited from the concept; the three exceptions (a `#!` line, a `SAFETY:` line on unsafe, a license header at file top); the write guard refuses the write where `no_code_comments` is on and the comment baseline reds the suite. (2) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md, section `## AGENTS.md rule homes`: add the row for `agents-no-code-comments` in the shape of the `agents-one-commit-per-cell` row (its home section and spoken line), so tests/rule_index_parity.rs finds the id in all three places. (3) packages/bee/prompts/worker-cell.md: extend the craft bullet (rg hit: `- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it.`) with one sentence: no comments in code — the why goes to docs/knowledge or bee decisions log, a public item's description to its concept; the guard refuses the rest. (4) docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md: add a section for the comment arm and the ratchet — the config key and that a granted worktree reads its own config while an ungranted one reads main's; the code roots (Pointers: packages/bee-rs/crates/bee/src/comments.rs, packages/bee-rs/crates/bee/src/devtools/comment_baseline.rs, .bee/comment-baseline.json); what a comment line is per language and the three exceptions; the refusal shape and which tool shapes it reads (Write, Edit, MultiEdit, a Bash heredoc with a redirect target, apply_patch added lines) and which it cannot (a Bash write with no readable body); the string-literal limitation; the baseline's seed over unmerged branches (D2b), `--check`/`--write`, the ratchet test name; cite 38e323d6, 80ec3cd1, 0add770d, c2477366, 0ee8248d, 002a935d, 69326d15, e3bf4a57 in the frontmatter decisions list. Write the D6 sentence about the existing comments inside a fenced `<!-- bee:not-a-deferral: D6 records the batched cleanup as separate grooming work; nothing here promises a date --> … <!-- /bee:not-a-deferral -->` block so bee close's doc-deferral door does not stop on it. (5) .bee/verify/verify-app/features/comment-guard.md, modeled on cells-and-proof.md: what it is, how a user reaches it (an Edit adding `// x` to a .rs under a code root with the key on; `bee dev comment-baseline --check`), how to drive it with control-bee (set no_code_comments true in the sandbox's .bee/config.json via `control-bee put`, then run the hook with a crafted Edit payload the way tests/hook_contracts.rs does, or drive the refusal from a hooked session; run `control-bee cli -- dev comment-baseline --check` — note it refuses outside a source checkout, so the verb is driven from the source root, not the sandbox), gotchas (string-literal counting; hosts default off; an ungranted worktree reads main's key; the baseline never rises and a merge-caused rise is fixed by deleting the merged lines); add its row to README.md (rg hit: `- [Cells and the proof line](./cells-and-proof.md) covers adding, claiming and`). (6) .bee/config.json: add `\"no_code_comments\": true` beside `uat_stop`; .bee/config-sample.json: the key with `false`, nothing else. (7) Run `.bee/bin/bee dev regen` ONCE from the worktree root; stage by explicit path list — every listed file plus every rendered copy regen touched (skill mirrors of the feature map, .bee-render.json files, .bee/onboarding.json) — and check `git status` for packages/bee-rs/crates/bee/.bee/logs before the commit; never stage that log. Do NOT reinstall .bee/bin/bee. PROOF: after the regen, run the verify's test targets and checks; read back the rendered AGENTS.md rule and quote it in the cap report (`green:live`).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity --test rule_index_parity --test pointer_integrity --test instruction_laws && .bee/bin/bee dev release-manifest --check && rg -q no_code_comments packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md .bee/verify/verify-app/features/comment-guard.md .bee/config.json && rg -q agents-no-code-comments docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md AGENTS.md",
+        "must_haves": {
+          "truths": [
+            "AGENTS.block.md carries the marked rule agents-no-code-comments with the two homes, the API-doc home and the three exceptions; AGENTS.md's rendered block matches and the rule-index row exists (parity and rule-index tests green)",
+            "worker-cell.md's craft bullet states the ban and the homes; the vendored copy matches (skew test green)",
+            "write-guard-request-shapes.md records the arm, the readable and unreadable tool shapes, the ratchet, the seed rule and the eight decision ids, with the D6 sentence fenced as not-a-deferral (pointer-integrity green)",
+            "comment-guard.md exists and README.md lists it",
+            ".bee/config.json sets no_code_comments true; config-sample.json shows the key false",
+            "release-manifest --check is green after one regen and the test-timings log was never staged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "the marked rule"
+            },
+            {
+              "path": "AGENTS.md",
+              "substantive": "the rendered block — written by regen"
+            },
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+              "substantive": "the rule-index row"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "the craft bullet's no-comment sentence"
+            },
+            {
+              "path": "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+              "substantive": "the comment arm and ratchet section with decision ids"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/comment-guard.md",
+              "substantive": "the feature file"
+            },
+            {
+              "path": ".bee/config.json",
+              "substantive": "no_code_comments: true"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md's block equals the rendered template; the rule id is in the block, the render and the index",
+            "the concept's Pointers name comments.rs, comment_baseline.rs and .bee/comment-baseline.json",
+            "release-manifest.json is refreshed in the same commit"
+          ],
+          "prohibitions": [
+            "No hand edit of AGENTS.md or any mirrored copy",
+            "No Rust edits; no reinstall of .bee/bin/bee",
+            "No other config key changes",
+            "packages/bee-rs/crates/bee/.bee/logs/timings.jsonl is never staged"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust changes in comments.rs, devtools, the write guard"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride each code cell"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "required",
+          "role": "docs",
+          "reason": "D5 homes, the rule index, the knowledge concept, the feature map, the config flip"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a narrow fact lookup during execution",
+          "reason": "cheap reader"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the slice judge over behavior_change cells, or the user invokes bee-reviewing",
+          "reason": "verification of capped cells; independent review stays user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: precedent for every part"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  }
+}
