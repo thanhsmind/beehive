@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"host-packaging-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 75fd2ed; reload the product and test \"host-packaging-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane host-packaging-gaps\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-22T01:55:32.468Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: host-packaging-gaps",
+    "asked_at": "2026-09-22T02:22:49.429Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -526,15 +531,6 @@
         },
         "verify": "bash -n scripts/install.sh && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test installer_contracts && .bee/bin/bee dev release-manifest --check"
       }
-    ]
-  },
-  "merge_ready": {
-    "since": "2026-09-22T02:18:08.300Z",
-    "branch": "wt/host-packaging-gaps",
-    "worktree_id": "beehive--wt--host-packaging-gaps",
-    "uat": "pending",
-    "blocked_by": [
-      "doc-deferral"
     ]
   }
 }
