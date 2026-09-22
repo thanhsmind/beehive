@@ -567,6 +567,11 @@
     "plan-hat-wave",
     "leader-check-door",
     "leader-check",
-    "finding-recheck"
+    "finding-recheck",
+    "contract:pi-doctor-host-freshness",
+    "contract:onboard-pi-team",
+    "contract:runtime-pi-value",
+    "contract:release-targets",
+    "contract:pi-doctor-no-pane-transport"
   ]
 }
