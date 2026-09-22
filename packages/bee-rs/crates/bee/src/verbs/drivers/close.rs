@@ -5278,6 +5278,7 @@ mod tests {
     /// TRUTH (the fail-open rule): a backlog file that cannot be written
     /// warns and NEVER changes the close's exit code. Losing a backlog row
     /// must not cost a feature its close.
+    #[cfg(unix)]
     #[test]
     fn an_unwritable_backlog_warns_and_the_close_still_passes() {
         use std::os::unix::fs::PermissionsExt;
