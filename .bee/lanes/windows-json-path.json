@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"windows-json-path\" — feature is closed.",
   "created_at": "2026-09-22T10:47:16.812Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Run Windows trước bị hủy vì tôi push thêm commit. Giờ chờ run mới nhất trên commit cuối (`33a25eeef`). Không push gì nữa cho tới khi xong.",
+    "asked_at": "2026-09-22T10:49:34.665Z",
+    "session": "aff5297e-0798-4b11-88d0-789832ebce95"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",
