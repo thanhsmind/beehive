@@ -596,6 +596,7 @@
     "windows-json-path",
     "ci-green-fixes",
     "contract:pi-harness-steps",
-    "contract:live-proof-locator"
+    "contract:live-proof-locator",
+    "live-proof-evidence"
   ]
 }
