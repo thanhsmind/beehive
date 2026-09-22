@@ -1,0 +1,963 @@
+{
+  "schema_version": "1.0",
+  "feature": "mistake-fix-at",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"mistake-fix-at\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-09-22T05:07:00.413Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 12,
+    "rationale": "12 product files after scouting: mailbox.rs, catalog.rs, registry_payload.json, handlers_close.rs, finish_support.rs, close.rs, backlog.rs, mailbox_digest.rs, AGENTS.md, AGENTS.block.md, worker-cell.md, promotion.md",
+    "updated_at": "2026-09-22T05:14:41.612Z",
+    "feature": "mistake-fix-at"
+  },
+  "gate_preview": {
+    "feature": "mistake-fix-at",
+    "plan_sha256": "905b0ff9b43d02c889618f79afdad58e53ba5f7d808a1e00b6010bfd212cf360",
+    "previewed_at": "2026-09-22T05:34:20.087Z",
+    "cells": [
+      {
+        "id": "mfa-1",
+        "feature": "mistake-fix-at",
+        "title": "Name the fix-at layer on every mistake record, at the verb and at the cap",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "af14e1d6-6c5e-4034-b257-0401bd0e0a1f",
+          "5c43da33-0b88-4dab-9faa-891a57a74e24"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "action": "Give every mistake record its fix-at layer (per D1), at the verb and at the cap, as the data shape the rest of the feature reads. DATA SHAPE, in verbs/mailbox.rs: add one vocabulary constant `pub(crate) const FIX_AT_VALUES: [&str; 4] = [\"architecture\", \"check\", \"doctrine\", \"none\"]` beside `KIND_REFLECTION`; add `pub fix_at: Option<String>` to `Entry` and to `LetterItem` (rg hit, twice: `    pub better: Option<String>,`), emitted AFTER `better` in both `to_value` sites (rg hit, twice: `            \"better\": self.better,`) and in the letter frontmatter (rg hit: `            emit_opt(&mut out, 4, \"better\", item.better.as_deref());`), parsed with `opt_string(m, \"fix_at\")` at both `from_value` sites (rg hit, twice: `            better: opt_string(m, \"better\"),`) so a row or letter without the key reads `None` (per D4: old rows are `none`). Change `Entry::reflection` (rg hit: `    pub(crate) fn reflection(at: &str, wrong: &str, better: &str) -> Self {`) to take `fix_at: &str` and store it; `Entry::to_item` carries it. THE DOOR: extend `read_reflection` (rg hit: `pub(crate) fn read_reflection<'a>(`) to take a third `fix_at: Option<&str>` and return three parts. Rewrite its one refusal string (rg hit: `\"a reflection has two required parts, and it is missing {} (D3) — remedy: pass --wrong (what went wrong) and --better (what would have been better), each with text.\",`) so it is self-sufficient for a cold worker or a host on a new binary with old doctrine: say a reflection has THREE required parts, name exactly the missing flag(s), list the four values `architecture | check | doctrine | none` with a five-word gloss each (architecture: a code change makes it impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard), and give the remedy naming all three flags. A `--fix-at` outside the vocabulary is refused by a second string listing the four values and the remedy. Extend `read_mistake` (rg hit: `pub(crate) fn read_mistake(v: &Value) -> Result<(String, String), String> {`) to read the third part as a third ` — ` segment of the string form (split the first TWO separators only, so a `better` may not itself contain the separator — say so in the refusal) or a `fix_at` key of the object form, returning three parts through the same door. In `run_reflect` (rg hit: `    let entry = Entry::reflection(&now_iso(), wrong, better);`) read `--fix-at` via `mark_flag(&parsed, \"fix-at\")`, pass it through the door, store it, and add `fix_at` to the success JSON. THE CAP, in verbs/cells/handlers_close.rs: add `\"fix-at\"` to `CAP_FLAGS` and bump its size literal (rg hit: `pub(crate) const CAP_FLAGS: [&str; 15] = [`); add `pub(crate) fix_at: Option<String>` to `CapFlags` beside `mistake` (rg hit: `    pub(crate) mistake: Option<String>,`), parsed in `cap_flags_from` with `opt_string_flag(flags, \"fix-at\")` beside the `mistake` read; define `pub(crate) struct Mistake { pub wrong: String, pub better: String, pub fix_at: String }` and make `MistakesAnswer::Recorded(Vec<Mistake>)`; in `read_mistakes_answer` (rg hit: `pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR<MistakesAnswer> {`) build the object form `{wrong, better, fix_at}` from `--mistake` plus `f.fix_at` before handing it to `mailbox::read_mistake`, so a `--mistake` with no `--fix-at` is refused by the door naming `--fix-at`; each report `mistakes` item goes through `read_mistake` as it is; dedupe on all three fields. Write `fix_at` as the third key of each `trace.mistakes` object (rg hit: `                            .map(|(wrong, better)| json!({ \"wrong\": wrong, \"better\": better }))`) and pass it to `mailbox::Entry::reflection` in `record_cap_in_mailbox` (rg hit: `                    &mailbox::Entry::reflection(&utc_now(), wrong, better),`). `cells finish` shares this parse site (`run_cap(finish: bool, …)`), so no second site exists. In verbs/cells/finish_support.rs update the `mistakes` refusal text (rg hit: `must be an array — one entry per mistake`) to spell the three parts `<what went wrong> — <what would have been better> — <fix-at>`. COMPILE-FIX ONLY, no behavior: the test caller in verbs/drivers/close.rs (rg hit: `            &crate::verbs::mailbox::Entry::reflection(`) and the test helper in verbs/mailbox_digest.rs (rg hit: `.map(|(wrong, better)| Entry::reflection(stamp, wrong, better))`) pass `\"none\"`; touch nothing else in those two files. CATALOG AND REGISTRY: in catalog.rs add the `fix-at` flag to `mailbox reflect`, `cells cap` and `cells finish` following the entry shape the existing `no-mistakes` flag uses, and bump `PINNED_FLAG_COUNT` from 210 to 211 with a dated comment in the block above it (rg hit: `        const PINNED_FLAG_COUNT: usize = 210;`) saying the one new name is `fix-at`, reused by all three verbs; `--fix-at` takes a value, so `FLAG_ALONE_BOOLEANS` is untouched. In generated/registry_payload.json (hand-edited here, decision 3358743e): add `fix-at` to the `properties` of `mailbox.reflect`, `cells.cap` and `cells.finish`, its description naming the four values and that it is required with --wrong/--better or --mistake; change the `mailbox.reflect` description's 'A reflection has TWO required parts' to three. FEATURE MAP: in .bee/verify/verify-app/features/cells-and-proof.md, the `--no-mistakes` gotcha's clause `or put a \\`mistakes\\` array in \\`--report\\`` and the `mistakes is an optional sixth` line now say each item has three parts and name `--fix-at`. TESTS, red-first, in mailbox.rs's test module beside `a_reflection_missing_a_part_is_refused_and_the_refusal_names_it`: a reflection missing `--fix-at` is refused and the text names `--fix-at`, contains all four values and the word `remedy`; a value outside the vocabulary is refused listing the four; `read_mistake` takes the three-segment string and the object key; an entry row without `fix_at` reads back `None`; a letter round-trips `fix_at`. In handlers_close.rs beside `a_half_written_mistake_is_refused_by_the_two_part_door`: a cap with `--mistake` and no `--fix-at` is refused naming it; a cap with `--fix-at check` writes `trace.mistakes[0].fix_at == \"check\"` and the mailbox entry carries the same; a report item with only two segments is refused naming the third; an empty `mistakes` array and `--no-mistakes` still record the clean run. Where an existing test asserts the two-part text, extend it to the three-part text rather than deleting it. Do NOT reinstall .bee/bin/bee in this cell: the vendored binary stays the old build until the post-merge step.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish_support && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            "bee mailbox reflect --wrong x --better y is refused; the refusal names --fix-at, lists architecture, check, doctrine, none, and states the remedy with all three flags",
+            "bee mailbox reflect --wrong x --better y --fix-at check appends an entry row whose last key is fix_at with value check, and the letter item carries it",
+            "bee cells cap --mistake \"a — b\" without --fix-at is refused naming --fix-at; with --fix-at check it writes trace.mistakes[0] as {wrong, better, fix_at} and one mailbox reflection entry with fix_at check",
+            "a --report mistakes item \"a — b — architecture\" and {\"wrong\":\"a\",\"better\":\"b\",\"fix_at\":\"architecture\"} both record fix_at architecture; a two-segment item is refused naming the third part",
+            "an entry row, a letter item and a trace.mistakes object written before this change parse with fix_at None; --no-mistakes and an empty mistakes array are unchanged",
+            "PINNED_FLAG_COUNT is 211 and the pin test is green; registry_payload.json lists fix-at on mailbox.reflect, cells.cap and cells.finish and both registry test targets are green",
+            "cells-and-proof.md's cap gotchas say three parts and name --fix-at"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+              "substantive": "FIX_AT_VALUES, fix_at on Entry and LetterItem, three-part read_reflection with a self-sufficient refusal, three-part read_mistake, run_reflect reading --fix-at, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+              "substantive": "CAP_FLAGS with fix-at, CapFlags.fix_at, Mistake struct, three-part MistakesAnswer, trace.mistakes with fix_at, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+              "substantive": "three-part refusal text for the mistakes key"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "fix-at declared on the three verbs; PINNED_FLAG_COUNT 211 with reason"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "fix-at property on mailbox.reflect, cells.cap, cells.finish; three-part description"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+              "substantive": "cap gotchas naming the three parts and --fix-at"
+            }
+          ],
+          "key_links": [
+            "run_reflect and read_mistakes_answer both end at read_reflection — the three-part rule has one home",
+            "record_cap_in_mailbox passes fix_at into Entry::reflection; LetterItem.fix_at is emitted after better and parsed back"
+          ],
+          "prohibitions": [
+            "No change to filing, arming, recovery or digest composition; close.rs and mailbox_digest.rs change only at the two named test callers",
+            "The letter frontmatter, the entry row and trace.mistakes only grow: every existing key keeps its name, order and shape",
+            "The --report contract keeps its five required keys; mistakes stays optional and array-shaped",
+            "--no-mistakes keeps its meaning and its refusal when paired with --wrong/--better",
+            "No reinstall of .bee/bin/bee"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-2",
+        "feature": "mistake-fix-at",
+        "title": "File one backlog row per mechanizable mistake at close",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "mfa-1"
+        ],
+        "decisions": [
+          "6e79d14e-7961-4a3f-b0a2-c9d9af288c07"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+        ],
+        "affects_skills": [
+          "skills/bee-capturing/references/promotion.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md"
+        ],
+        "action": "At close, file one backlog row for every mechanizable mistake of the closing feature (per D2, source set per the D2a decision). In verbs/backlog.rs: make `backlog_jsonl_path` `pub(crate)` (rg hit: `fn backlog_jsonl_path(root: &Path) -> PathBuf {`); lift ONLY the seven-key row builder out of `run_add` (rg hit: `fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {`) into `pub(crate) fn backlog_finding_row(ty: &str, title: &str, detail: &str, severity: &str, layer: &str, feature: &str) -> Map<String, Value>` that keeps the exact key order and carries its comment (rg hit: `    // Row key order: ts, type, title, detail, severity, layer, feature.`), and have `run_add` call it — the append stays `fsutil::append_jsonl` (rg hit: `    if append_jsonl(&path, &Value::Object(line.clone())).is_err() {`); add `pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool` as a fold over `read_jsonl(&backlog_jsonl_path(root)).rows` filtered by `is_finding_row` (rg hit: `fn is_finding_row(row: &Value) -> bool {`) with exact equality on the three fields. In verbs/drivers/close.rs, in the green tail AFTER the headline (rg hit: `    let headline = format!(\"Tests GREEN for \\\"{feature}\\\" — {}\", proof_door_detail(&proof));`) and BEFORE retirement (rg hit: `    let retired = auto_archive_on_close(root, feature);`): collect the feature's mistakes from two sources — each capped cell's `trace.mistakes` objects, walked with `list_cells_including_archive(root, feature, Some(\"capped\"))` exactly as `mistakes_debt` walks (rg hit: `pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {`), and the closing run's own reflection entries, resolved the way `closing_run_answered_mistakes` resolves the run and control root (rg hit: `fn closing_run_answered_mistakes(root: &Path) -> bool {`). For each whose `fix_at` is `check` or `architecture`: title = the wrong text truncated to `BACKLOG_MAX_TITLE` characters, detail = the better text plus ` (from cell <id>)` or ` (from run <run>)`, severity `P3`, layer `fix-at:<value>`, type `finding`, feature = the closing feature; skip when `backlog_finding_exists` says so; never file for `doctrine`, `none`, or a missing fix_at. Count filed and skipped; add `fix_at_rows: {\"filed\": N, \"skipped\": M}` to the close result JSON; print ONE text line in the tail's voice, placed right after the Retired line (rg hit: `\"Retired \\\"{feature}\\\": {moved} cell(s) moved out of the active scan (bee cells unarchive --feature {feature} to reverse).\"`): `Filed for \"{feature}\": {N} fix-at row(s) to .bee/backlog.jsonl ({M} already there) — bee backlog findings --feature {feature} to read them.` Fail-open: a write error prints one warning line naming the path and never changes the exit code. TESTS, red-first, in close.rs's test module beside `close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes` (reuse `init_bee_repo` and the `capped_cell` fixture shape, giving the cells `trace.mistakes` objects with `fix_at`): two capped cells each carrying one `check` mistake → exactly two rows with `layer: fix-at:check`, `type: finding`, `severity: P3`, `feature` set, and the close exits 0 with the Filed line naming the feature; the same close run again → zero new rows and the line says 2 already there; a `doctrine` mistake and a mistake with no `fix_at` file nothing; a read-only .bee/backlog.jsonl → close still exits 0 and prints the warning. Add one backlog.rs test that `backlog_finding_row` yields the seven keys in order and one that `backlog_finding_exists` matches exactly and only on the three fields.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog",
+        "must_haves": {
+          "truths": [
+            "a green close of a feature with two check mistakes appends exactly two rows to .bee/backlog.jsonl, each with type finding, severity P3, layer fix-at:check, feature set to the closing feature",
+            "the close text carries one line starting Filed for \"<feature>\": that names the count, the path, the already-there count and the bee backlog findings command, placed after the Retired line",
+            "running the same close again appends zero rows and reports them as already there",
+            "doctrine and none mistakes and mistakes with no fix_at file no row",
+            "an unwritable backlog file prints one warning and the close exit code is unchanged",
+            "bee backlog add still writes the seven keys in the same order"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+              "substantive": "fix-at row filing in the green tail before retirement, result field, tail-voice text line, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+              "substantive": "backlog_finding_row lifted out of run_add, backlog_finding_exists fold, pub(crate) backlog_jsonl_path, tests"
+            }
+          ],
+          "key_links": [
+            "close.rs appends with fsutil::append_jsonl through backlog::backlog_finding_row — no second row shape",
+            "the walk reuses list_cells_including_archive with Some(\"capped\") so archived cells count"
+          ],
+          "prohibitions": [
+            "No new blocking door: the mistakes door's refusal and remedy text are unchanged",
+            "No write before the green tail — a refused close files nothing",
+            "The backlog row key order and the four required fields are unchanged"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-3",
+        "feature": "mistake-fix-at",
+        "title": "Key the weekly lesson miner by layer and first four words, and say so in the lesson",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "mfa-1"
+        ],
+        "decisions": [
+          "9173fbd2-4453-476c-9502-d86290ae5513"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md"
+        ],
+        "action": "Change what the weekly lesson miner keys a reflection on (per D3), and make the lesson row say what matched. In verbs/mailbox_digest.rs change `trouble_lines` (rg hit: `fn trouble_lines(letter: &Letter) -> Vec<String> {`) to return `Vec<(String, String)>` = (key, verbatim). For a broken-or-unfinished bullet and a departure line, key and verbatim are both the whole line as today. For a reflection item (rg hit: `fn reflection_what(item: &LetterItem) -> Option<&str> {`): apply the four-word brake to the normalized `what` FIRST (rg hit: `const MIN_SHAPE_WORDS: usize = 4;`) and skip a shorter one; then key = `<fix_at> <first four words of normalize_shape(what)>` where `fix_at` is the item's `fix_at` or `none` when the letter carries none (per D4), and verbatim = the whole `what`. In `mine_shapes` (rg hit: `let normalized = normalize_shape(&line);`) normalize and tokenize the KEY, store the first letter's verbatim as `Shape.verbatim`, and add `others: Vec<String>` to `Shape` holding the verbatim of every other run that matched (one per run, letter order); the brake in `mine_shapes` stays for the non-reflection lines. Change `lesson_decision` (rg hit: `fn lesson_decision(shape: &Shape) -> String {`) so a reflection lesson reads `Separate runs reported the same mistake shape (fix-at <layer>, \"<head>…\"): \"<verbatim>\"` and a non-reflection lesson keeps today's text; change `lesson_rationale` (rg hit: `fn lesson_rationale(period: &Period, shape: &Shape) -> String {`) to add, before the letters citation, `Matched on fix-at <layer> + the first four words \"<head>\"; the other letter(s) said: \"<verbatim B>\"[, \"<verbatim C>\"]` for a reflection shape; the `Stable id for this wording: <token>` tail stays, since `spent_tokens` reads it (rg hit: `if word.starts_with(SHAPE_TOKEN_PREFIX) {`). Update the header comment block above `LESSON_TAG` (the 'FOUR WORDS' and 'ONLY trouble' brakes) to state the reflection key. TESTS, red-first, beside `one_reflection_shape_in_two_runs_becomes_exactly_one_cited_lesson` (extend `file_answer_letter` or add a sibling that writes `fix_at` on the item): two runs with reflections `check` + the same four-word head and different tails → exactly one lesson whose decision names `check` and the head and quotes run A's sentence, and whose rationale quotes run B's sentence; the same head under `check` vs `doctrine` → no lesson; two letters without `fix_at` and the same head → one lesson keyed `none`; a reflection whose `what` has three words → skipped even with a layer; a broken bullet still keys on its whole line and `one_broken_shape_in_two_runs_becomes_exactly_one_cited_lesson` stays green. Confirm by test that a token spent by an old whole-sentence lesson row does not block the new key.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest",
+        "must_haves": {
+          "truths": [
+            "two distinct runs whose reflections share fix_at and the first four normalized words of wrong yield exactly one lesson-tagged decision",
+            "that decision names the layer and the four-word head and quotes the first run's sentence; its rationale quotes the other run's sentence and keeps the shape token",
+            "the same head under two different fix_at values yields no lesson",
+            "letters filed before fix_at existed are keyed as none and still mine",
+            "a reflection shorter than four normalized words never becomes a shape, layer or not",
+            "broken-or-unfinished bullets and departures keep the whole-line key and their existing tests stay green; the once-ever token rule and the two-run rule are unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+              "substantive": "trouble_lines returns (key, verbatim); reflection key = fix_at + four-word head with the brake on the what; Shape.others; lesson_decision and lesson_rationale name the key and quote the other run; header comment; tests"
+            }
+          ],
+          "key_links": [
+            "trouble_lines reads LetterItem.fix_at that mfa-1 added — the miner never reads the entries store",
+            "spent_tokens still finds the token in the rationale"
+          ],
+          "prohibitions": [
+            "No fuzzy matching, stemming or stop-word removal",
+            "The no-mistakes answer is still never mined",
+            "Digest composition and filing are untouched"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-4",
+        "feature": "mistake-fix-at",
+        "title": "Teach the three homes, the promotion tree, the knowledge layer and the close recipe the fix-at line",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "mfa-1",
+          "mfa-2",
+          "mfa-3"
+        ],
+        "decisions": [
+          "5c43da33-0b88-4dab-9faa-891a57a74e24",
+          "402cf686-9c6a-44a0-9f68-95f2592c9cec",
+          "6e79d14e-7961-4a3f-b0a2-c9d9af288c07",
+          "9173fbd2-4453-476c-9502-d86290ae5513"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "AGENTS.md",
+          ".bee/bin/prompts/worker-cell.md",
+          "skills/bee-capturing/references/promotion.md",
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "skills/bee-capturing/references/promotion.md",
+          "docs/knowledge/areas/human-mailbox/overview.md"
+        ],
+        "affects_skills": [
+          "skills/bee-capturing/references/promotion.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md"
+        ],
+        "action": "Land the fix-at instruction in the three homes D4 names through their two SOURCES, then sync the state layer to the behavior mfa-1..mfa-3 landed, with ONE regen. AGENTS.md's bee block (between `<!-- BEE:START -->` and `<!-- BEE:END -->`) is a RENDER of packages/bee/AGENTS.block.md — onboarding reads the template from disk (`agents_block_template: templates_dir.join(\"AGENTS.block.md\")` in onboard/source.rs) — so never hand-edit AGENTS.md. (1) packages/bee/AGENTS.block.md, the bullet starting `- Write a mistake down the MOMENT you notice it` (rg hit: `  memory at the end: \\`bee mailbox reflect --wrong \"<what went wrong>\"`): add `--fix-at <architecture|check|doctrine|none>` to the reflect command; define the four words in one sentence each (architecture: a code change makes the mistake impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard); add the tie-break sentence: pick the strongest layer someone would actually build now — a known and accepted state is `doctrine`, a mistake nobody would guard against is `none`; state that the flag is required; extend the cap spelling to `--mistake \"<wrong> — <better>\" --fix-at <layer>`. (2) packages/bee/prompts/worker-cell.md: in the Result-form paragraph change `mistakes carries one entry per mistake you made, each in TWO parts` to THREE parts with the third named `<fix-at>`, the four values listed and the tie-break in one clause; update the fenced JSON example (rg hit: `\"mistakes\": [\"<what went wrong> — <what would have been better>\", \"...\"]`) to `\"<what went wrong> — <what would have been better> — <fix-at>\"`; update the closing parenthetical's `bee mailbox reflect` spelling to include `--fix-at <layer>`. (3) skills/bee-capturing/references/promotion.md, the Promotion Decision Tree step 1 (rg hit: `1. Seen twice (review finding, user correction, repeated deviation)`): add the closing feature's fix-at reflections as an input — read from the capped cells' trace.mistakes and the run's letter — and state per D5 that a `check`/`architecture` reflection already has its backlog row from close (`bee backlog findings --feature <feature>`), may be taken in-feature as a tiny cell that ships the check (then mark that row done with the reason), and otherwise stands for grooming; a `doctrine` reflection routes through steps 3–4 unchanged; `none` is not promoted. Keep the rest of the tree byte-for-byte. (4) docs/knowledge/areas/human-mailbox/overview.md: extend the `reflection` row of the entry-kind table (rg hit: `| **reflection** |`) with the required fix-at part and its four values; extend rule 15 (rg hit: `15. **Lesson mining reads only trouble**`) to state the reflection key is fix-at plus the first four normalized words of `what`, the brake on the `what`, and that the lesson row names the key and quotes the other run; add one rule after 16 stating the close-time filing of D2 (one P3 `finding` row, layer `fix-at:<value>`, never twice, fail-open, source set per D2a, the Filed line and its command); add decision ids af14e1d6, 6e79d14e, 9173fbd2, 5c43da33, 402cf686 and d1d83be7 (D2a) to the frontmatter decisions list. (5) .bee/verify/verify-app/features/worktree-and-close.md: add the close text line `Filed for \"<feature>\": …` and the backlog rows to the drive recipe and the gotchas. (6) Run `.bee/bin/bee dev regen` ONCE from the worktree root: render-skill-trees mirrors promotion.md into .claude/skills, .agents/skills and .claude-plugin/skills; onboard --apply re-renders the block into AGENTS.md and copies the prompt to .bee/bin/prompts/worker-cell.md from the on-disk template (`read_text_if_exists(&engine.templates_prompts_dir.join(name))` in onboard/plan.rs); release-manifest --write refreshes docs/history/codex-harness-hardening/release-manifest.json. Commit every listed file plus the three mirrored promotion.md copies. Do NOT reinstall .bee/bin/bee: the dispatcher's own copy of the prompt is compiled into the binary (`include_str!` in drivers/prompt.rs), so `bee dispatch prepare` in a checkout whose vendored binary is old will report prompt skew from now until the post-merge reinstall on main — that is expected and named in the plan; this cell is last so no dispatch follows it inside the wave. PROOF: the skew test target `verbs::drivers::tests` (it holds `every_template_carries_the_original_request_block_and_matches_disk`) green, `--test agents_block_render_parity` green, `.bee/bin/bee dev release-manifest --check` green, `diff -q` silent for all three promotion.md mirrors, `rg -q fix-at` on the block, the prompt, promotion.md and overview.md; read back the rendered AGENTS.md bullet and .bee/bin/prompts/worker-cell.md line 65 and quote them in the cap report (`green:live`).",
+        "verify": ".bee/bin/bee dev regen && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check && diff -q skills/bee-capturing/references/promotion.md .claude-plugin/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .claude/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .agents/skills/bee-capturing/references/promotion.md && rg -q fix-at packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md skills/bee-capturing/references/promotion.md docs/knowledge/areas/human-mailbox/overview.md .bee/verify/verify-app/features/worktree-and-close.md",
+        "must_haves": {
+          "truths": [
+            "packages/bee/AGENTS.block.md's reflect bullet names --fix-at, the four values, the tie-break, and that it is required; AGENTS.md carries the same bullet as its rendered block and the block parity test is green",
+            "packages/bee/prompts/worker-cell.md's Result form spells the three-part mistake line and lists the four values; .bee/bin/prompts/worker-cell.md matches it and the skew test is green",
+            "promotion.md step 1 names fix-at reflections as an input and states the check/architecture and doctrine routes per D5; the three mirrored copies equal the source",
+            "overview.md's reflection row names the required fix-at part, rule 15 names the new key and the honest lesson row, a rule states the close-time row filing, and the decisions list carries the six ids",
+            "worktree-and-close.md drives the Filed line",
+            ".bee/bin/bee dev release-manifest --check is green after one regen"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "the reflect bullet with --fix-at, the four values, the tie-break, the cap spelling"
+            },
+            {
+              "path": "AGENTS.md",
+              "substantive": "the rendered bee block carrying that bullet — written by regen, never by hand"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "three-part mistakes line in prose and in the JSON example"
+            },
+            {
+              "path": ".bee/bin/prompts/worker-cell.md",
+              "substantive": "the regen copy of the prompt"
+            },
+            {
+              "path": "skills/bee-capturing/references/promotion.md",
+              "substantive": "step 1 extended with fix-at reflections and the D5 routes"
+            },
+            {
+              "path": "docs/knowledge/areas/human-mailbox/overview.md",
+              "substantive": "reflection row, rule 15, the close-filing rule, decisions list"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/worktree-and-close.md",
+              "substantive": "close recipe drives the Filed line"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md's block equals the rendered template — regen reports no agents_block drift afterwards",
+            "overview.md cites the decision ids so bee close's routing door finds them homed",
+            "release-manifest.json is refreshed in the same commit; the skill mirrors are regenerated, never hand-edited"
+          ],
+          "prohibitions": [
+            "No hand edit of AGENTS.md or of any mirrored skill copy",
+            "No edit to promotion.md outside step 1",
+            "No new knowledge file — one fact, one home",
+            "No Rust edits; no reinstall of .bee/bin/bee"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust changes in mailbox, cells, close, digest, backlog, catalog"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride each code cell; a test-only repair cell would use this role"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "required",
+          "role": "docs",
+          "reason": "D4 homes, promotion.md, knowledge overview, feature map"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a narrow fact lookup during execution",
+          "reason": "cheap reader"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage in this feature"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes bee-reviewing",
+          "reason": "independent review is user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit in this feature"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: one shape, precedent in repo"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-09-22T05:34:22.017Z",
+    "feature": "mistake-fix-at",
+    "newest_decision_id": "d1d83be7-3455-4e67-a13e-3a7af5054465",
+    "plan_sha256": "905b0ff9b43d02c889618f79afdad58e53ba5f7d808a1e00b6010bfd212cf360",
+    "advisor": "plan-step hat wave: hat-facts-gaps, hat-alternatives, hat-user-impact (opus)",
+    "digest_head": "# mistake-fix-at — plan-step hat wave synthesis\n\nThree seats (hat-facts-gaps, hat-alternatives, hat-user-impact), opened\n2026-09-22 under decision 2ad8669e, over CONTEXT.md D1–D5 and plan.md\nrevision 1. Synthesized by the leader; plan.md revision 2 carries the\nresult. Budget: all three seats returned inside the 10-minute ceiling; no\nseat dropped.\n\nPLAN CHECK\nWork: mistake-fix-at, single slice, cells mfa-1..mfa-4 (revision 2; revision 1 had six)\n\nSTRUCTURE\nBLOCKERS (all resolved in revision 2):\n-"
+  },
+  "approved_cell_packet": {
+    "feature": "mistake-fix-at",
+    "plan_sha256": "905b0ff9b43d02c889618f79afdad58e53ba5f7d808a1e00b6010bfd212cf360",
+    "previewed_at": "2026-09-22T05:34:20.087Z",
+    "cells": [
+      {
+        "id": "mfa-1",
+        "feature": "mistake-fix-at",
+        "title": "Name the fix-at layer on every mistake record, at the verb and at the cap",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "af14e1d6-6c5e-4034-b257-0401bd0e0a1f",
+          "5c43da33-0b88-4dab-9faa-891a57a74e24"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "packages/bee-rs/crates/bee/src/catalog.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/cells-and-proof.md"
+        ],
+        "action": "Give every mistake record its fix-at layer (per D1), at the verb and at the cap, as the data shape the rest of the feature reads. DATA SHAPE, in verbs/mailbox.rs: add one vocabulary constant `pub(crate) const FIX_AT_VALUES: [&str; 4] = [\"architecture\", \"check\", \"doctrine\", \"none\"]` beside `KIND_REFLECTION`; add `pub fix_at: Option<String>` to `Entry` and to `LetterItem` (rg hit, twice: `    pub better: Option<String>,`), emitted AFTER `better` in both `to_value` sites (rg hit, twice: `            \"better\": self.better,`) and in the letter frontmatter (rg hit: `            emit_opt(&mut out, 4, \"better\", item.better.as_deref());`), parsed with `opt_string(m, \"fix_at\")` at both `from_value` sites (rg hit, twice: `            better: opt_string(m, \"better\"),`) so a row or letter without the key reads `None` (per D4: old rows are `none`). Change `Entry::reflection` (rg hit: `    pub(crate) fn reflection(at: &str, wrong: &str, better: &str) -> Self {`) to take `fix_at: &str` and store it; `Entry::to_item` carries it. THE DOOR: extend `read_reflection` (rg hit: `pub(crate) fn read_reflection<'a>(`) to take a third `fix_at: Option<&str>` and return three parts. Rewrite its one refusal string (rg hit: `\"a reflection has two required parts, and it is missing {} (D3) — remedy: pass --wrong (what went wrong) and --better (what would have been better), each with text.\",`) so it is self-sufficient for a cold worker or a host on a new binary with old doctrine: say a reflection has THREE required parts, name exactly the missing flag(s), list the four values `architecture | check | doctrine | none` with a five-word gloss each (architecture: a code change makes it impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard), and give the remedy naming all three flags. A `--fix-at` outside the vocabulary is refused by a second string listing the four values and the remedy. Extend `read_mistake` (rg hit: `pub(crate) fn read_mistake(v: &Value) -> Result<(String, String), String> {`) to read the third part as a third ` — ` segment of the string form (split the first TWO separators only, so a `better` may not itself contain the separator — say so in the refusal) or a `fix_at` key of the object form, returning three parts through the same door. In `run_reflect` (rg hit: `    let entry = Entry::reflection(&now_iso(), wrong, better);`) read `--fix-at` via `mark_flag(&parsed, \"fix-at\")`, pass it through the door, store it, and add `fix_at` to the success JSON. THE CAP, in verbs/cells/handlers_close.rs: add `\"fix-at\"` to `CAP_FLAGS` and bump its size literal (rg hit: `pub(crate) const CAP_FLAGS: [&str; 15] = [`); add `pub(crate) fix_at: Option<String>` to `CapFlags` beside `mistake` (rg hit: `    pub(crate) mistake: Option<String>,`), parsed in `cap_flags_from` with `opt_string_flag(flags, \"fix-at\")` beside the `mistake` read; define `pub(crate) struct Mistake { pub wrong: String, pub better: String, pub fix_at: String }` and make `MistakesAnswer::Recorded(Vec<Mistake>)`; in `read_mistakes_answer` (rg hit: `pub(crate) fn read_mistakes_answer(id: &str, f: &CapFlags, report: &Value) -> MR<MistakesAnswer> {`) build the object form `{wrong, better, fix_at}` from `--mistake` plus `f.fix_at` before handing it to `mailbox::read_mistake`, so a `--mistake` with no `--fix-at` is refused by the door naming `--fix-at`; each report `mistakes` item goes through `read_mistake` as it is; dedupe on all three fields. Write `fix_at` as the third key of each `trace.mistakes` object (rg hit: `                            .map(|(wrong, better)| json!({ \"wrong\": wrong, \"better\": better }))`) and pass it to `mailbox::Entry::reflection` in `record_cap_in_mailbox` (rg hit: `                    &mailbox::Entry::reflection(&utc_now(), wrong, better),`). `cells finish` shares this parse site (`run_cap(finish: bool, …)`), so no second site exists. In verbs/cells/finish_support.rs update the `mistakes` refusal text (rg hit: `must be an array — one entry per mistake`) to spell the three parts `<what went wrong> — <what would have been better> — <fix-at>`. COMPILE-FIX ONLY, no behavior: the test caller in verbs/drivers/close.rs (rg hit: `            &crate::verbs::mailbox::Entry::reflection(`) and the test helper in verbs/mailbox_digest.rs (rg hit: `.map(|(wrong, better)| Entry::reflection(stamp, wrong, better))`) pass `\"none\"`; touch nothing else in those two files. CATALOG AND REGISTRY: in catalog.rs add the `fix-at` flag to `mailbox reflect`, `cells cap` and `cells finish` following the entry shape the existing `no-mistakes` flag uses, and bump `PINNED_FLAG_COUNT` from 210 to 211 with a dated comment in the block above it (rg hit: `        const PINNED_FLAG_COUNT: usize = 210;`) saying the one new name is `fix-at`, reused by all three verbs; `--fix-at` takes a value, so `FLAG_ALONE_BOOLEANS` is untouched. In generated/registry_payload.json (hand-edited here, decision 3358743e): add `fix-at` to the `properties` of `mailbox.reflect`, `cells.cap` and `cells.finish`, its description naming the four values and that it is required with --wrong/--better or --mistake; change the `mailbox.reflect` description's 'A reflection has TWO required parts' to three. FEATURE MAP: in .bee/verify/verify-app/features/cells-and-proof.md, the `--no-mistakes` gotcha's clause `or put a \\`mistakes\\` array in \\`--report\\`` and the `mistakes is an optional sixth` line now say each item has three parts and name `--fix-at`. TESTS, red-first, in mailbox.rs's test module beside `a_reflection_missing_a_part_is_refused_and_the_refusal_names_it`: a reflection missing `--fix-at` is refused and the text names `--fix-at`, contains all four values and the word `remedy`; a value outside the vocabulary is refused listing the four; `read_mistake` takes the three-segment string and the object key; an entry row without `fix_at` reads back `None`; a letter round-trips `fix_at`. In handlers_close.rs beside `a_half_written_mistake_is_refused_by_the_two_part_door`: a cap with `--mistake` and no `--fix-at` is refused naming it; a cap with `--fix-at check` writes `trace.mistakes[0].fix_at == \"check\"` and the mailbox entry carries the same; a report item with only two segments is refused naming the third; an empty `mistakes` array and `--no-mistakes` still record the clean run. Where an existing test asserts the two-part text, extend it to the three-part text rather than deleting it. Do NOT reinstall .bee/bin/bee in this cell: the vendored binary stays the old build until the post-merge step.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee handlers_close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee finish_support && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts --test registry_dispatch",
+        "must_haves": {
+          "truths": [
+            "bee mailbox reflect --wrong x --better y is refused; the refusal names --fix-at, lists architecture, check, doctrine, none, and states the remedy with all three flags",
+            "bee mailbox reflect --wrong x --better y --fix-at check appends an entry row whose last key is fix_at with value check, and the letter item carries it",
+            "bee cells cap --mistake \"a — b\" without --fix-at is refused naming --fix-at; with --fix-at check it writes trace.mistakes[0] as {wrong, better, fix_at} and one mailbox reflection entry with fix_at check",
+            "a --report mistakes item \"a — b — architecture\" and {\"wrong\":\"a\",\"better\":\"b\",\"fix_at\":\"architecture\"} both record fix_at architecture; a two-segment item is refused naming the third part",
+            "an entry row, a letter item and a trace.mistakes object written before this change parse with fix_at None; --no-mistakes and an empty mistakes array are unchanged",
+            "PINNED_FLAG_COUNT is 211 and the pin test is green; registry_payload.json lists fix-at on mailbox.reflect, cells.cap and cells.finish and both registry test targets are green",
+            "cells-and-proof.md's cap gotchas say three parts and name --fix-at"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/mailbox.rs",
+              "substantive": "FIX_AT_VALUES, fix_at on Entry and LetterItem, three-part read_reflection with a self-sufficient refusal, three-part read_mistake, run_reflect reading --fix-at, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+              "substantive": "CAP_FLAGS with fix-at, CapFlags.fix_at, Mistake struct, three-part MistakesAnswer, trace.mistakes with fix_at, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+              "substantive": "three-part refusal text for the mistakes key"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+              "substantive": "fix-at declared on the three verbs; PINNED_FLAG_COUNT 211 with reason"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "fix-at property on mailbox.reflect, cells.cap, cells.finish; three-part description"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/cells-and-proof.md",
+              "substantive": "cap gotchas naming the three parts and --fix-at"
+            }
+          ],
+          "key_links": [
+            "run_reflect and read_mistakes_answer both end at read_reflection — the three-part rule has one home",
+            "record_cap_in_mailbox passes fix_at into Entry::reflection; LetterItem.fix_at is emitted after better and parsed back"
+          ],
+          "prohibitions": [
+            "No change to filing, arming, recovery or digest composition; close.rs and mailbox_digest.rs change only at the two named test callers",
+            "The letter frontmatter, the entry row and trace.mistakes only grow: every existing key keeps its name, order and shape",
+            "The --report contract keeps its five required keys; mistakes stays optional and array-shaped",
+            "--no-mistakes keeps its meaning and its refusal when paired with --wrong/--better",
+            "No reinstall of .bee/bin/bee"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-2",
+        "feature": "mistake-fix-at",
+        "title": "File one backlog row per mechanizable mistake at close",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "mfa-1"
+        ],
+        "decisions": [
+          "6e79d14e-7961-4a3f-b0a2-c9d9af288c07"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+        ],
+        "affects_skills": [
+          "skills/bee-capturing/references/promotion.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md"
+        ],
+        "action": "At close, file one backlog row for every mechanizable mistake of the closing feature (per D2, source set per the D2a decision). In verbs/backlog.rs: make `backlog_jsonl_path` `pub(crate)` (rg hit: `fn backlog_jsonl_path(root: &Path) -> PathBuf {`); lift ONLY the seven-key row builder out of `run_add` (rg hit: `fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {`) into `pub(crate) fn backlog_finding_row(ty: &str, title: &str, detail: &str, severity: &str, layer: &str, feature: &str) -> Map<String, Value>` that keeps the exact key order and carries its comment (rg hit: `    // Row key order: ts, type, title, detail, severity, layer, feature.`), and have `run_add` call it — the append stays `fsutil::append_jsonl` (rg hit: `    if append_jsonl(&path, &Value::Object(line.clone())).is_err() {`); add `pub(crate) fn backlog_finding_exists(root: &Path, feature: &str, layer: &str, title: &str) -> bool` as a fold over `read_jsonl(&backlog_jsonl_path(root)).rows` filtered by `is_finding_row` (rg hit: `fn is_finding_row(row: &Value) -> bool {`) with exact equality on the three fields. In verbs/drivers/close.rs, in the green tail AFTER the headline (rg hit: `    let headline = format!(\"Tests GREEN for \\\"{feature}\\\" — {}\", proof_door_detail(&proof));`) and BEFORE retirement (rg hit: `    let retired = auto_archive_on_close(root, feature);`): collect the feature's mistakes from two sources — each capped cell's `trace.mistakes` objects, walked with `list_cells_including_archive(root, feature, Some(\"capped\"))` exactly as `mistakes_debt` walks (rg hit: `pub(crate) fn mistakes_debt(root: &Path, feature: &str) -> D<DebtSummary> {`), and the closing run's own reflection entries, resolved the way `closing_run_answered_mistakes` resolves the run and control root (rg hit: `fn closing_run_answered_mistakes(root: &Path) -> bool {`). For each whose `fix_at` is `check` or `architecture`: title = the wrong text truncated to `BACKLOG_MAX_TITLE` characters, detail = the better text plus ` (from cell <id>)` or ` (from run <run>)`, severity `P3`, layer `fix-at:<value>`, type `finding`, feature = the closing feature; skip when `backlog_finding_exists` says so; never file for `doctrine`, `none`, or a missing fix_at. Count filed and skipped; add `fix_at_rows: {\"filed\": N, \"skipped\": M}` to the close result JSON; print ONE text line in the tail's voice, placed right after the Retired line (rg hit: `\"Retired \\\"{feature}\\\": {moved} cell(s) moved out of the active scan (bee cells unarchive --feature {feature} to reverse).\"`): `Filed for \"{feature}\": {N} fix-at row(s) to .bee/backlog.jsonl ({M} already there) — bee backlog findings --feature {feature} to read them.` Fail-open: a write error prints one warning line naming the path and never changes the exit code. TESTS, red-first, in close.rs's test module beside `close_refuses_a_feature_whose_capped_cell_never_answered_about_mistakes` (reuse `init_bee_repo` and the `capped_cell` fixture shape, giving the cells `trace.mistakes` objects with `fix_at`): two capped cells each carrying one `check` mistake → exactly two rows with `layer: fix-at:check`, `type: finding`, `severity: P3`, `feature` set, and the close exits 0 with the Filed line naming the feature; the same close run again → zero new rows and the line says 2 already there; a `doctrine` mistake and a mistake with no `fix_at` file nothing; a read-only .bee/backlog.jsonl → close still exits 0 and prints the warning. Add one backlog.rs test that `backlog_finding_row` yields the seven keys in order and one that `backlog_finding_exists` matches exactly and only on the three fields.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee drivers::close && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog",
+        "must_haves": {
+          "truths": [
+            "a green close of a feature with two check mistakes appends exactly two rows to .bee/backlog.jsonl, each with type finding, severity P3, layer fix-at:check, feature set to the closing feature",
+            "the close text carries one line starting Filed for \"<feature>\": that names the count, the path, the already-there count and the bee backlog findings command, placed after the Retired line",
+            "running the same close again appends zero rows and reports them as already there",
+            "doctrine and none mistakes and mistakes with no fix_at file no row",
+            "an unwritable backlog file prints one warning and the close exit code is unchanged",
+            "bee backlog add still writes the seven keys in the same order"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+              "substantive": "fix-at row filing in the green tail before retirement, result field, tail-voice text line, tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+              "substantive": "backlog_finding_row lifted out of run_add, backlog_finding_exists fold, pub(crate) backlog_jsonl_path, tests"
+            }
+          ],
+          "key_links": [
+            "close.rs appends with fsutil::append_jsonl through backlog::backlog_finding_row — no second row shape",
+            "the walk reuses list_cells_including_archive with Some(\"capped\") so archived cells count"
+          ],
+          "prohibitions": [
+            "No new blocking door: the mistakes door's refusal and remedy text are unchanged",
+            "No write before the green tail — a refused close files nothing",
+            "The backlog row key order and the four required fields are unchanged"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-3",
+        "feature": "mistake-fix-at",
+        "title": "Key the weekly lesson miner by layer and first four words, and say so in the lesson",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "mfa-1"
+        ],
+        "decisions": [
+          "9173fbd2-4453-476c-9502-d86290ae5513"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md"
+        ],
+        "action": "Change what the weekly lesson miner keys a reflection on (per D3), and make the lesson row say what matched. In verbs/mailbox_digest.rs change `trouble_lines` (rg hit: `fn trouble_lines(letter: &Letter) -> Vec<String> {`) to return `Vec<(String, String)>` = (key, verbatim). For a broken-or-unfinished bullet and a departure line, key and verbatim are both the whole line as today. For a reflection item (rg hit: `fn reflection_what(item: &LetterItem) -> Option<&str> {`): apply the four-word brake to the normalized `what` FIRST (rg hit: `const MIN_SHAPE_WORDS: usize = 4;`) and skip a shorter one; then key = `<fix_at> <first four words of normalize_shape(what)>` where `fix_at` is the item's `fix_at` or `none` when the letter carries none (per D4), and verbatim = the whole `what`. In `mine_shapes` (rg hit: `let normalized = normalize_shape(&line);`) normalize and tokenize the KEY, store the first letter's verbatim as `Shape.verbatim`, and add `others: Vec<String>` to `Shape` holding the verbatim of every other run that matched (one per run, letter order); the brake in `mine_shapes` stays for the non-reflection lines. Change `lesson_decision` (rg hit: `fn lesson_decision(shape: &Shape) -> String {`) so a reflection lesson reads `Separate runs reported the same mistake shape (fix-at <layer>, \"<head>…\"): \"<verbatim>\"` and a non-reflection lesson keeps today's text; change `lesson_rationale` (rg hit: `fn lesson_rationale(period: &Period, shape: &Shape) -> String {`) to add, before the letters citation, `Matched on fix-at <layer> + the first four words \"<head>\"; the other letter(s) said: \"<verbatim B>\"[, \"<verbatim C>\"]` for a reflection shape; the `Stable id for this wording: <token>` tail stays, since `spent_tokens` reads it (rg hit: `if word.starts_with(SHAPE_TOKEN_PREFIX) {`). Update the header comment block above `LESSON_TAG` (the 'FOUR WORDS' and 'ONLY trouble' brakes) to state the reflection key. TESTS, red-first, beside `one_reflection_shape_in_two_runs_becomes_exactly_one_cited_lesson` (extend `file_answer_letter` or add a sibling that writes `fix_at` on the item): two runs with reflections `check` + the same four-word head and different tails → exactly one lesson whose decision names `check` and the head and quotes run A's sentence, and whose rationale quotes run B's sentence; the same head under `check` vs `doctrine` → no lesson; two letters without `fix_at` and the same head → one lesson keyed `none`; a reflection whose `what` has three words → skipped even with a layer; a broken bullet still keys on its whole line and `one_broken_shape_in_two_runs_becomes_exactly_one_cited_lesson` stays green. Confirm by test that a token spent by an old whole-sentence lesson row does not block the new key.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee mailbox_digest",
+        "must_haves": {
+          "truths": [
+            "two distinct runs whose reflections share fix_at and the first four normalized words of wrong yield exactly one lesson-tagged decision",
+            "that decision names the layer and the four-word head and quotes the first run's sentence; its rationale quotes the other run's sentence and keeps the shape token",
+            "the same head under two different fix_at values yields no lesson",
+            "letters filed before fix_at existed are keyed as none and still mine",
+            "a reflection shorter than four normalized words never becomes a shape, layer or not",
+            "broken-or-unfinished bullets and departures keep the whole-line key and their existing tests stay green; the once-ever token rule and the two-run rule are unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/mailbox_digest.rs",
+              "substantive": "trouble_lines returns (key, verbatim); reflection key = fix_at + four-word head with the brake on the what; Shape.others; lesson_decision and lesson_rationale name the key and quote the other run; header comment; tests"
+            }
+          ],
+          "key_links": [
+            "trouble_lines reads LetterItem.fix_at that mfa-1 added — the miner never reads the entries store",
+            "spent_tokens still finds the token in the rationale"
+          ],
+          "prohibitions": [
+            "No fuzzy matching, stemming or stop-word removal",
+            "The no-mistakes answer is still never mined",
+            "Digest composition and filing are untouched"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "mfa-4",
+        "feature": "mistake-fix-at",
+        "title": "Teach the three homes, the promotion tree, the knowledge layer and the close recipe the fix-at line",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "mfa-1",
+          "mfa-2",
+          "mfa-3"
+        ],
+        "decisions": [
+          "5c43da33-0b88-4dab-9faa-891a57a74e24",
+          "402cf686-9c6a-44a0-9f68-95f2592c9cec",
+          "6e79d14e-7961-4a3f-b0a2-c9d9af288c07",
+          "9173fbd2-4453-476c-9502-d86290ae5513"
+        ],
+        "files": [
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "AGENTS.md",
+          ".bee/bin/prompts/worker-cell.md",
+          "skills/bee-capturing/references/promotion.md",
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/mistake-fix-at/CONTEXT.md",
+          "packages/bee/AGENTS.block.md",
+          "packages/bee/prompts/worker-cell.md",
+          "skills/bee-capturing/references/promotion.md",
+          "docs/knowledge/areas/human-mailbox/overview.md"
+        ],
+        "affects_skills": [
+          "skills/bee-capturing/references/promotion.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/human-mailbox/overview.md",
+          ".bee/verify/verify-app/features/worktree-and-close.md"
+        ],
+        "action": "Land the fix-at instruction in the three homes D4 names through their two SOURCES, then sync the state layer to the behavior mfa-1..mfa-3 landed, with ONE regen. AGENTS.md's bee block (between `<!-- BEE:START -->` and `<!-- BEE:END -->`) is a RENDER of packages/bee/AGENTS.block.md — onboarding reads the template from disk (`agents_block_template: templates_dir.join(\"AGENTS.block.md\")` in onboard/source.rs) — so never hand-edit AGENTS.md. (1) packages/bee/AGENTS.block.md, the bullet starting `- Write a mistake down the MOMENT you notice it` (rg hit: `  memory at the end: \\`bee mailbox reflect --wrong \"<what went wrong>\"`): add `--fix-at <architecture|check|doctrine|none>` to the reflect command; define the four words in one sentence each (architecture: a code change makes the mistake impossible; check: a test, hook, guard or doctor row catches it; doctrine: only prose can carry it; none: a one-off nobody would guard); add the tie-break sentence: pick the strongest layer someone would actually build now — a known and accepted state is `doctrine`, a mistake nobody would guard against is `none`; state that the flag is required; extend the cap spelling to `--mistake \"<wrong> — <better>\" --fix-at <layer>`. (2) packages/bee/prompts/worker-cell.md: in the Result-form paragraph change `mistakes carries one entry per mistake you made, each in TWO parts` to THREE parts with the third named `<fix-at>`, the four values listed and the tie-break in one clause; update the fenced JSON example (rg hit: `\"mistakes\": [\"<what went wrong> — <what would have been better>\", \"...\"]`) to `\"<what went wrong> — <what would have been better> — <fix-at>\"`; update the closing parenthetical's `bee mailbox reflect` spelling to include `--fix-at <layer>`. (3) skills/bee-capturing/references/promotion.md, the Promotion Decision Tree step 1 (rg hit: `1. Seen twice (review finding, user correction, repeated deviation)`): add the closing feature's fix-at reflections as an input — read from the capped cells' trace.mistakes and the run's letter — and state per D5 that a `check`/`architecture` reflection already has its backlog row from close (`bee backlog findings --feature <feature>`), may be taken in-feature as a tiny cell that ships the check (then mark that row done with the reason), and otherwise stands for grooming; a `doctrine` reflection routes through steps 3–4 unchanged; `none` is not promoted. Keep the rest of the tree byte-for-byte. (4) docs/knowledge/areas/human-mailbox/overview.md: extend the `reflection` row of the entry-kind table (rg hit: `| **reflection** |`) with the required fix-at part and its four values; extend rule 15 (rg hit: `15. **Lesson mining reads only trouble**`) to state the reflection key is fix-at plus the first four normalized words of `what`, the brake on the `what`, and that the lesson row names the key and quotes the other run; add one rule after 16 stating the close-time filing of D2 (one P3 `finding` row, layer `fix-at:<value>`, never twice, fail-open, source set per D2a, the Filed line and its command); add decision ids af14e1d6, 6e79d14e, 9173fbd2, 5c43da33, 402cf686 and d1d83be7 (D2a) to the frontmatter decisions list. (5) .bee/verify/verify-app/features/worktree-and-close.md: add the close text line `Filed for \"<feature>\": …` and the backlog rows to the drive recipe and the gotchas. (6) Run `.bee/bin/bee dev regen` ONCE from the worktree root: render-skill-trees mirrors promotion.md into .claude/skills, .agents/skills and .claude-plugin/skills; onboard --apply re-renders the block into AGENTS.md and copies the prompt to .bee/bin/prompts/worker-cell.md from the on-disk template (`read_text_if_exists(&engine.templates_prompts_dir.join(name))` in onboard/plan.rs); release-manifest --write refreshes docs/history/codex-harness-hardening/release-manifest.json. Commit every listed file plus the three mirrored promotion.md copies. Do NOT reinstall .bee/bin/bee: the dispatcher's own copy of the prompt is compiled into the binary (`include_str!` in drivers/prompt.rs), so `bee dispatch prepare` in a checkout whose vendored binary is old will report prompt skew from now until the post-merge reinstall on main — that is expected and named in the plan; this cell is last so no dispatch follows it inside the wave. PROOF: the skew test target `verbs::drivers::tests` (it holds `every_template_carries_the_original_request_block_and_matches_disk`) green, `--test agents_block_render_parity` green, `.bee/bin/bee dev release-manifest --check` green, `diff -q` silent for all three promotion.md mirrors, `rg -q fix-at` on the block, the prompt, promotion.md and overview.md; read back the rendered AGENTS.md bullet and .bee/bin/prompts/worker-cell.md line 65 and quote them in the cap report (`green:live`).",
+        "verify": ".bee/bin/bee dev regen && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers::tests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test agents_block_render_parity && .bee/bin/bee dev release-manifest --check && diff -q skills/bee-capturing/references/promotion.md .claude-plugin/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .claude/skills/bee-capturing/references/promotion.md && diff -q skills/bee-capturing/references/promotion.md .agents/skills/bee-capturing/references/promotion.md && rg -q fix-at packages/bee/AGENTS.block.md AGENTS.md packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md skills/bee-capturing/references/promotion.md docs/knowledge/areas/human-mailbox/overview.md .bee/verify/verify-app/features/worktree-and-close.md",
+        "must_haves": {
+          "truths": [
+            "packages/bee/AGENTS.block.md's reflect bullet names --fix-at, the four values, the tie-break, and that it is required; AGENTS.md carries the same bullet as its rendered block and the block parity test is green",
+            "packages/bee/prompts/worker-cell.md's Result form spells the three-part mistake line and lists the four values; .bee/bin/prompts/worker-cell.md matches it and the skew test is green",
+            "promotion.md step 1 names fix-at reflections as an input and states the check/architecture and doctrine routes per D5; the three mirrored copies equal the source",
+            "overview.md's reflection row names the required fix-at part, rule 15 names the new key and the honest lesson row, a rule states the close-time row filing, and the decisions list carries the six ids",
+            "worktree-and-close.md drives the Filed line",
+            ".bee/bin/bee dev release-manifest --check is green after one regen"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/AGENTS.block.md",
+              "substantive": "the reflect bullet with --fix-at, the four values, the tie-break, the cap spelling"
+            },
+            {
+              "path": "AGENTS.md",
+              "substantive": "the rendered bee block carrying that bullet — written by regen, never by hand"
+            },
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "three-part mistakes line in prose and in the JSON example"
+            },
+            {
+              "path": ".bee/bin/prompts/worker-cell.md",
+              "substantive": "the regen copy of the prompt"
+            },
+            {
+              "path": "skills/bee-capturing/references/promotion.md",
+              "substantive": "step 1 extended with fix-at reflections and the D5 routes"
+            },
+            {
+              "path": "docs/knowledge/areas/human-mailbox/overview.md",
+              "substantive": "reflection row, rule 15, the close-filing rule, decisions list"
+            },
+            {
+              "path": ".bee/verify/verify-app/features/worktree-and-close.md",
+              "substantive": "close recipe drives the Filed line"
+            }
+          ],
+          "key_links": [
+            "AGENTS.md's block equals the rendered template — regen reports no agents_block drift afterwards",
+            "overview.md cites the decision ids so bee close's routing door finds them homed",
+            "release-manifest.json is refreshed in the same commit; the skill mirrors are regenerated, never hand-edited"
+          ],
+          "prohibitions": [
+            "No hand edit of AGENTS.md or of any mirrored skill copy",
+            "No edit to promotion.md outside step 1",
+            "No new knowledge file — one fact, one home",
+            "No Rust edits; no reinstall of .bee/bin/bee"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust changes in mailbox, cells, close, digest, backlog, catalog"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride each code cell; a test-only repair cell would use this role"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "required",
+          "role": "docs",
+          "reason": "D4 homes, promotion.md, knowledge overview, feature map"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "a narrow fact lookup during execution",
+          "reason": "cheap reader"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage in this feature"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes bee-reviewing",
+          "reason": "independent review is user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit in this feature"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: one shape, precedent in repo"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-09-22T06:22:18.026Z",
+    "branch": "wt/mistake-fix-at",
+    "worktree_id": "beehive--wt--mistake-fix-at",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt",
+      "doc-deferral"
+    ]
+  }
+}

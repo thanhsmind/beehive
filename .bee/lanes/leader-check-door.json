@@ -14,5 +14,10 @@
   "next_action": "bee close finished \"leader-check-door\" — feature is closed.",
   "created_at": "2026-09-21T02:02:21.977Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Pi is installed with mise. I check the newest version.",
+    "asked_at": "2026-09-22T05:11:08.312Z",
+    "session": "3c518a76-2597-4cd7-ad06-d6b48bd6668f"
+  }
 }

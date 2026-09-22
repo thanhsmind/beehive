@@ -572,6 +572,12 @@
     "contract:onboard-pi-team",
     "contract:runtime-pi-value",
     "contract:release-targets",
-    "contract:pi-doctor-no-pane-transport"
+    "contract:pi-doctor-no-pane-transport",
+    "mistake-fix-at",
+    "reflection",
+    "stop-the-bleeding",
+    "lesson-mining",
+    "capturing",
+    "housekeeping"
   ]
 }
