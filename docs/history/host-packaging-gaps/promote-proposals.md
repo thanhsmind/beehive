@@ -13,7 +13,7 @@ bee:
   id: host-packaging-gaps-delivery
   lifecycle: active
   required_context: [docs/history/host-packaging-gaps/CONTEXT.md, docs/history/host-packaging-gaps/plan.md]
-  sources: [docs/history/host-packaging-gaps/CONTEXT.md, docs/history/host-packaging-gaps/plan.md, .bee/cells/hpg-1.json, .bee/cells/hpg-2.json, .bee/cells/hpg-3.json, .bee/cells/hpg-4.json]
+  sources: [docs/history/host-packaging-gaps/CONTEXT.md, docs/history/host-packaging-gaps/plan.md, .bee/cells/archive/host-packaging-gaps/hpg-1.json, .bee/cells/archive/host-packaging-gaps/hpg-2.json, .bee/cells/archive/host-packaging-gaps/hpg-3.json, .bee/cells/archive/host-packaging-gaps/hpg-4.json]
 ---
 
 # host-packaging-gaps — Delivery
@@ -65,7 +65,7 @@ timestamp: 2026-09-22
 bee:
   id: host-packaging-gaps-hpg-1-pitfall
   lifecycle: draft
-  sources: [.bee/cells/hpg-1.json]
+  sources: [.bee/cells/archive/host-packaging-gaps/hpg-1.json]
   polarity: pitfall
 ---
 
@@ -75,7 +75,7 @@ bee:
 
 Pi doctor freshness reads .bee/onboarding.json in hosts with an installer remedy; Pi transport is ok with no multiplexer when every team.pi slot is a no-pane Pi agent
 
-## Recorded evidence (verbatim from .bee/cells/hpg-1.json)
+## Recorded evidence (verbatim from .bee/cells/archive/host-packaging-gaps/hpg-1.json)
 
 - **deviation** — host unknown-row detail now names both .bee/onboarding.json and the plugin manifest instead of only the manifest — a host reads both files now, so the old text would mislead — found a better route
 
@@ -93,7 +93,7 @@ timestamp: 2026-09-22
 bee:
   id: host-packaging-gaps-hpg-2-pitfall
   lifecycle: draft
-  sources: [.bee/cells/hpg-2.json]
+  sources: [.bee/cells/archive/host-packaging-gaps/hpg-2.json]
   polarity: pitfall
 ---
 
@@ -103,7 +103,7 @@ bee:
 
 Onboarding writes team.pi + herding.agents.pi, adds them once to existing configs, and accepts --runtime pi
 
-## Recorded evidence (verbatim from .bee/cells/hpg-2.json)
+## Recorded evidence (verbatim from .bee/cells/archive/host-packaging-gaps/hpg-2.json)
 
 - **deviation** — team.pi is built in default_config by mapping team.claude instead of an 18-entry literal — one source for names, order and descriptions, so the tables cannot drift — found a better route
 - **deviation** — docs/product-description/verification/areas.md rows ONBD-05/ONBD-06 still quote the old runtime message; that file is outside this cell, left for the orchestrator — something else had to be fixed first
@@ -123,7 +123,7 @@ timestamp: 2026-09-22
 bee:
   id: host-packaging-gaps-hpg-3-pitfall
   lifecycle: draft
-  sources: [.bee/cells/hpg-3.json]
+  sources: [.bee/cells/archive/host-packaging-gaps/hpg-3.json]
   polarity: pitfall
 ---
 
@@ -133,7 +133,7 @@ bee:
 
 Installers accept runtime pi, and install.sh gains the macOS and ARM Linux asset map, a shasum fallback and a smoke-run fallback
 
-## Recorded evidence (verbatim from .bee/cells/hpg-3.json)
+## Recorded evidence (verbatim from .bee/cells/archive/host-packaging-gaps/hpg-3.json)
 
 - **deviation** — Fixed a literal backslash-n on the assert-recheck line of scripts/install.sh (it passed a stray 'n' argument instead of continuing the line) — found while editing the same file; harmless today because assert-recheck ignores args — something else had to be fixed first
 - **deviation** — install.ps1 needed no probe/plugin-loop edits: its existing -in @('codex','both') / -notin @($rt,'both') checks already skip pi; only ValidateSet, refusal, the plugin-distribution call and the banner changed — the plan was wrong about a fact
@@ -152,7 +152,7 @@ timestamp: 2026-09-22
 bee:
   id: host-packaging-gaps-hpg-4-pitfall
   lifecycle: draft
-  sources: [.bee/cells/hpg-4.json]
+  sources: [.bee/cells/archive/host-packaging-gaps/hpg-4.json]
   polarity: pitfall
 ---
 
@@ -162,7 +162,7 @@ bee:
 
 Release matrix builds five native targets with a sed version read; release.sh expects >= 5 binaries
 
-## Recorded evidence (verbatim from .bee/cells/hpg-4.json)
+## Recorded evidence (verbatim from .bee/cells/archive/host-packaging-gaps/hpg-4.json)
 
 - **deviation** — followed the plan
 - **deviation** — header comment changed from 'Builds the two binaries' to 'Builds the binaries' — the count was no longer true — something else had to be fixed first

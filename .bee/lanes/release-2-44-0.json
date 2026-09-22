@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-44-0",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"release-2-44-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Run scripts/release.sh 2.44.0 under the deployment permit.",
+  "next_action": "bee close finished \"release-2-44-0\" — feature is closed.",
   "created_at": "2026-09-22T02:38:31.208Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
