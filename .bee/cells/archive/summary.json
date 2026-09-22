@@ -1418,5 +1418,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-09-22T15:13:25.164Z"
+  },
+  "skill-trigger-cases": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T23:45:01.563Z"
   }
 }

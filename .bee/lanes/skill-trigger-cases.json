@@ -5,7 +5,7 @@
   "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": true,
+    "shape": false,
     "execution": true,
     "review": false,
     "uat": false
@@ -13,7 +13,7 @@
   "summary": "Feature \"skill-trigger-cases\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 350c126; capture what settled, then bee close --feature skill-trigger-cases.",
   "created_at": "2026-09-22T15:58:57.212Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -27,7 +27,7 @@
   "gate_preview": {
     "feature": "skill-trigger-cases",
     "plan_sha256": "e72aaba531c06a1bf2fba993ade7fe76e150d08920bb7c01296428564cd31c71",
-    "previewed_at": "2026-09-22T16:22:38.885Z",
+    "previewed_at": "2026-09-22T23:44:34.874Z",
     "cells": [
       {
         "id": "skt-1",

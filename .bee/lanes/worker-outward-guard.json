@@ -553,5 +553,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-09-22T23:42:30.199Z",
+    "branch": "wt/worker-outward-guard",
+    "worktree_id": "beehive--wt--worker-outward-guard",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
