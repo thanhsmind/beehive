@@ -1,0 +1,156 @@
+{
+  "id": "wog-2",
+  "feature": "worker-outward-guard",
+  "title": "Name the worker-outward key, its allowlist and its refusal in the docs and the verify map",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "58925048-fe36-4a5f-8342-09f1f6afb9cb",
+    "293cdfe5-33ef-41c0-a164-41f13bd0d12a",
+    "1b8955e5-d9e3-4865-ac10-ca10b92bf3c7"
+  ],
+  "files": [
+    "docs/config-reference.md",
+    "docs/07-contracts.md",
+    "docs/handbook/register.md",
+    "docs/product-description/foundations/guards.md",
+    ".bee/verify/verify-app/features/worker-outward-guard.md",
+    ".bee/verify/verify-app/features/README.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/worker-outward-guard/CONTEXT.md",
+    "docs/config-reference.md",
+    "docs/07-contracts.md",
+    ".bee/verify/verify-app/features/semantic-role-routing.md",
+    ".bee/verify/verify-app/features/README.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Five edits, then the regen chain. Write every sentence through bee-technical-writing. (1) docs/config-reference.md — in the `guards` row (the line starting `| \\`guards\\` | \\`idle_gate\\` (\\`false\\` disables the idle intake gate)`), add ` · \\`worker_outward\\` (\\`false\\` disables the worker-outward guard — see the section below)` after the idle_gate clause and ` · worker-outward guard on` in the defaults cell; then, beside the existing `### guards.memory_root (GH #71)` section, add `### guards.worker_outward` (the ONE prose home of the allowlist) saying: inside any linked git worktree — bee-granted or not — the write guard refuses, in every phase, `git push` in every spelling, every `gh` command except these reads: `pr view|list|status|checks|diff`, `run list|view|watch|download`, `issue view|list`, `release view|list|download`, `repo view`, `workflow list|view`, `search …`, `cache list`, `label list`, `status`, `auth status`, `api` with an explicit GET (`-f`/`-F` fields allowed then) and `api graphql` with no `mutation`; and a nested `claude`/`codex`/`pi`/`opencode` launch unless it is the command `bee dispatch prepare` returned (a configured `models.*.command` prefix, or `codex exec` with a read-only sandbox). Say that this refuses a human in their own worktree too; that the key is read from the MAIN checkout's `.bee/config.json` and the worktree's tracked copy is not read; that `bee` is never judged; that a `gh` alias is refused; and that the guard judges command lines, not script contents. (2) docs/07-contracts.md — do NOT put it under checkWrite; add a sibling bullet group `checkGitBashCommand(root, state, command, cwd, …)` → judges shell requests (Bash / codex exec), not file writes, with one bullet: `outward (worker-outward-guard D1-D11): cwd resolves to a linked-valid worktree → deny \\`git push\\`, any \\`gh\\` form outside the read-only list, and an unsanctioned nested agent launch, in every phase; the refusal leads with the remedy for its form. Default-on; disable per repo via \\`config.guards.worker_outward: false\\` in the MAIN checkout. The list and the gotchas live in config-reference.md § guards.worker_outward.` (3) docs/handbook/register.md — the `guards` row (`| \\`guards\\` | write-guard tuning: \\`idle_gate\\`, \\`max_read_lines\\` |`) adds `, \\`worker_outward\\``. (4) docs/product-description/foundations/guards.md — the Configuration sentence naming `guards.idle_gate` adds `\\`guards.worker_outward\\`` to its list; no other change. (5) .bee/verify/verify-app/features/worker-outward-guard.md — a new feature file of about 60 lines in the four-section shape of semantic-role-routing.md: what it is (the three refused forms, the read list by pointer to config-reference, the main-checkout opt-out, the door exemption); how a user reaches it (a Bash tool call from a session whose cwd is a `bee worktree new` worktree — a human in their own worktree included); how to drive it with control-bee (launch a sandbox, `control-bee cli -- worktree new --feature demo`, then craft a PreToolUse write-guard payload whose `cwd` is the worktree path per the README's `VERIFY_CWD` convention and `command` is `git push origin main`, expect exit 2 and text containing `bee worktree merge`; `gh pr view 1` → exit 0; `claude -p x` → exit 2 and text containing `bee dispatch prepare`; write `{\"guards\":{\"worker_outward\":false}}` into the SANDBOX MAIN root's .bee/config.json, rerun `git push origin main`, expect exit 0); gotchas (`git push --dry-run` is refused; heredoc bodies are not judged; `echo git push` is refused; the worktree's own config copy is not read; a `gh` alias is refused; `bee herding run` still opens a pane). Add one index line for it in .bee/verify/verify-app/features/README.md in the existing list style. Then run `.bee/bin/bee dev regen` so the rendered copies of the verify tree under .claude/, .agents/ and .opencode/ match (regen output is not a hand edit), and commit the refreshed copies plus docs/history/codex-harness-hardening/release-manifest.json with the rest. Prove: `.bee/bin/bee dev release-manifest --check` green and `rg -l worker_outward docs/config-reference.md docs/07-contracts.md docs/handbook/register.md docs/product-description/foundations/guards.md` printing four paths. One commit, subject in imperative mood, trailer `cell: wog-2`.",
+  "must_haves": {
+    "truths": [
+      "docs/config-reference.md has a guards.worker_outward section that lists every allowed gh read, the door exemption, the main-checkout opt-out and the gotchas, and its guards row points there",
+      "docs/07-contracts.md carries the outward rule under a shell-request bullet, not under checkWrite, and points at the config section for the list",
+      "docs/handbook/register.md and docs/product-description/foundations/guards.md name worker_outward beside idle_gate",
+      "the verify map has a worker-outward-guard feature file of about 60 lines with a drivable refusal recipe that places the opt-out in the sandbox main root, plus an index line",
+      "bee dev release-manifest --check is green and rg finds worker_outward in the four docs"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/config-reference.md",
+        "substantive": "the guards row clause and the ### guards.worker_outward section"
+      },
+      {
+        "path": ".bee/verify/verify-app/features/worker-outward-guard.md",
+        "substantive": "the four-section feature file with the drivable recipe"
+      }
+    ],
+    "key_links": [
+      "docs/history/worker-outward-guard/CONTEXT.md D5, D6, D10 and D11 are the words the docs must match",
+      "wog-1 is the behavior the feature file drives; the recipe asserts only substrings D5 locks"
+    ],
+    "prohibitions": [
+      "No hand edit under .claude/, .agents/ or .opencode/ — those come from bee dev regen",
+      "No edit to AGENTS.md or any skill",
+      "No second copy of the allowlist outside config-reference.md",
+      "No new claim about behavior wog-1 does not implement"
+    ]
+  },
+  "verify": ".bee/bin/bee dev release-manifest --check && rg -l worker_outward docs/config-reference.md docs/07-contracts.md docs/handbook/register.md docs/product-description/foundations/guards.md",
+  "status": "capped",
+  "trace": {
+    "worker": "w-wog-2",
+    "outcome": "guards.worker_outward is named in the four docs, with the read-only list and the gotchas in config-reference.md and a drivable feature file in the verify map",
+    "files_changed": [
+      "docs/config-reference.md",
+      "docs/07-contracts.md",
+      "docs/handbook/register.md",
+      "docs/product-description/foundations/guards.md",
+      ".bee/verify/verify-app/features/worker-outward-guard.md",
+      ".bee/verify/verify-app/features/README.md"
+    ],
+    "deviations": [
+      "committed the regen-written .bee/onboarding.json timestamp line instead of reverting it — the concurrent-worker guard refuses a tree-wide restore while a sibling worker is live, and hand-editing bee state is not allowed — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T23:35:10.733Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell: the manifest parity check and the four-path pointer check are the cell verify command; no code changed, so no test module applies",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && rg -l worker_outward docs/config-reference.md docs/07-contracts.md docs/handbook/register.md docs/product-description/foundations/guards.md",
+    "claimed_at": "2026-09-22T23:27:02.162Z",
+    "mistakes": [
+      {
+        "wrong": "tried a tree-wide checkout of .bee/onboarding.json to drop a timestamp-only change while a sibling worker was live, and the concurrent-worker guard refused it",
+        "better": "should have gone straight to a path-scoped commit and left the shared tree alone",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "guards.worker_outward documented: config-reference.md carries the guards-row clause and the new section (three refused forms, the full gh read list, the door exemption, the main-checkout opt-out, the gotchas); 07-contracts.md carries the outward bullet under a new checkGitBashCommand group, not checkWrite; register.md and product-description/foundations/guards.md name the key beside idle_gate; .bee/verify/verify-app/features/worker-outward-guard.md is a four-section feature file with the hook-payload recipe, plus an index line in features/README.md; bee dev regen refreshed the .claude/.agents/.opencode copies",
+      "commit": "b22b0bf9b0bf9ef49cf9f3e16fc9f863714c2cd5",
+      "files": [
+        "docs/config-reference.md",
+        "docs/07-contracts.md",
+        "docs/handbook/register.md",
+        "docs/product-description/foundations/guards.md",
+        ".bee/verify/verify-app/features/worker-outward-guard.md",
+        ".bee/verify/verify-app/features/README.md",
+        ".claude/skills/verify-app/features/worker-outward-guard.md",
+        ".claude/skills/verify-app/features/README.md",
+        ".agents/skills/verify-app/features/worker-outward-guard.md",
+        ".agents/skills/verify-app/features/README.md",
+        ".opencode/skills/verify-app/features/worker-outward-guard.md",
+        ".opencode/skills/verify-app/features/README.md",
+        ".bee/onboarding.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && rg -l worker_outward docs/config-reference.md docs/07-contracts.md docs/handbook/register.md docs/product-description/foundations/guards.md — green:static — docs-only cell: the manifest parity check and the four-path pointer check are the cell verify command; no code changed, so no test module applies",
+      "deviations": [
+        "committed the regen-written .bee/onboarding.json timestamp line instead of reverting it — the concurrent-worker guard refuses a tree-wide restore while a sibling worker is live, and hand-editing bee state is not allowed — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "tried a tree-wide checkout of .bee/onboarding.json to drop a timestamp-only change while a sibling worker was live, and the concurrent-worker guard refused it — should have gone straight to a path-scoped commit and left the shared tree alone — check"
+      ],
+      "baseline": "on the base commit the manifest check was green (376 files match) and the rg pointer check printed no path and exited 1"
+    },
+    "baseline": "on the base commit the manifest check was green (376 files match) and the rg pointer check printed no path and exited 1",
+    "warnings": [
+      "advisory: this cap's commit changes 345 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs/config-reference.md has a guards.worker_outward section that lists every allowed gh read, the door exemption, the main-checkout opt-out and the gotchas, and its guards row points there",
+            "artifact": "docs/config-reference.md"
+          },
+          {
+            "requirement": "docs/07-contracts.md carries the outward rule under a shell-request bullet, not under checkWrite, and points at the config section for the list",
+            "artifact": "docs/07-contracts.md"
+          },
+          {
+            "requirement": "docs/handbook/register.md and docs/product-description/foundations/guards.md name worker_outward beside idle_gate",
+            "artifact": "docs/handbook/register.md"
+          },
+          {
+            "requirement": "the verify map has a worker-outward-guard feature file of about 60 lines with a drivable refusal recipe that places the opt-out in the sandbox main root, plus an index line",
+            "artifact": ".bee/verify/verify-app/features/worker-outward-guard.md"
+          },
+          {
+            "requirement": "bee dev release-manifest --check is green and rg finds worker_outward in the four docs",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-09-22T23:45:02.254Z",
+        "recorded_by": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

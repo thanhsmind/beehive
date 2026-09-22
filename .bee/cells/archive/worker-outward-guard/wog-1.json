@@ -1,0 +1,174 @@
+{
+  "id": "wog-1",
+  "feature": "worker-outward-guard",
+  "title": "Refuse push, GitHub writes and unsanctioned agent launches from a linked worktree",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "e4167310-5453-41e0-a089-a99ef7dc4f8c",
+    "277edc8f-0875-4dbd-841f-593ed237486d",
+    "58925048-fe36-4a5f-8342-09f1f6afb9cb",
+    "293cdfe5-33ef-41c0-a164-41f13bd0d12a",
+    "1b8955e5-d9e3-4865-ac10-ca10b92bf3c7",
+    "54598ac5-c324-4179-bdc8-b3debda9de09",
+    "a272f698-ec16-4c30-92b6-610ed08568c2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/worker-outward-guard/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Steps in order; per D1-D11 in docs/history/worker-outward-guard/CONTEXT.md.\n\n1. RED FIRST — tests. In packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs, beside the linked-worktree matrix (the fixture `fn build_linked(valid: bool) -> Linked {`, which writes `\"phase\": \"swarming\", \"mode\": \"high-risk\", \"feature\": \"worktree-isolation\",` with execution approved), add a test group `worker_outward`. Helper: run a Bash payload `{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":<cmd>}}` with cwd = lx.work_root (see `run_payload`). DENY (exit 2, stderr contains `bee worker-outward guard denied`): `git push origin main`; `git push --dry-run`; `git -C /tmp/x push`; `git status && git push`; `sh -c \"git push\"`; `echo git push` (the git finder scans every token — pin it); `gh pr create --fill`; `gh pr merge 12`; `gh pr checkout 12`; `gh api -X POST repos/o/r/issues`; `gh api -XPOST repos/o/r/issues`; `gh api --method=POST repos/o/r/issues`; `gh api repos/o/r/issues -f title=x` (no explicit GET); `gh api graphql -f query='mutation { x }'`; `gh api --input body.json repos/o/r`; `gh auth token`; `gh v` (an alias token); `claude -p \"hi\"`; `codex exec x`; `pi --mode rpc`; `opencode run`; `npx claude -p x`; `npx -y claude -p x`; `env FOO=1 claude -p x`; `sudo claude`; `timeout 60 claude -p x`; `( gh pr create )`; and one payload `{\"tool_name\":\"exec\",\"tool_input\":{\"cmd\":\"git push\"}}` (codex shape). ALLOW (exit 0): `gh pr view 12`; `gh -R o/r pr list`; `gh pr list --search \"x\"`; `gh run list`; `gh run download 5`; `gh workflow view ci.yml`; `gh search prs x`; `gh api repos/o/r`; `gh api -X GET search/issues -f q=x`; `gh api --method GET search/issues -F q=x`; `gh api graphql -f query='query { x }'`; `gh auth status`; `bee dispatch prepare --runtime claude --kind cell --json`; `bee herding run --role x`; `bash scripts/release.sh 1.0.0`; `git status`; `pip install x`; `python pi.py`; `echo gh pr create`; `cat <<EOF\\ngit push\\nEOF` (heredoc body is fenced — pin it); `codex exec --sandbox read-only --ephemeral --cd /x -`; `codex exec -s read-only -`; and, with the MAIN root's .bee/config.json carrying `{\"models\":{\"claude\":{\"cli-x\":{\"kind\":\"cli\",\"command\":\"opencode run --quiet\"}}}}`, `opencode run --quiet extra args` (D10a prefix). OPT-OUT: with the MAIN root's .bee/config.json carrying `{\"guards\":{\"worker_outward\":false}}`, `git push origin main`, `gh pr create --fill` and `claude -p x` exit 0; with the same key written only into the WORKTREE's .bee/config.json they still exit 2 (D11). TRUNCATION (D11): a command nesting `sh -c` past the tokenizer depth bound that ends in `git push` exits 2; the same nest ending in `ls` exits 0 with the existing gap line. MAIN BYTE-IDENTICAL (D7): on `build_fixture(\"swarming\", true)` with cwd = fx.root, `git push origin main`, `gh pr create --fill`, `claude -p x` exit 0 with empty stderr; on `build_git_fixture(\"idle\")`, `git push origin main` still exits 2 with `never exempted`. PRECEDENCE: on build_linked(true) with phase rewritten to idle in the main store, `git push` exits 2 with the outward text. LINKED-INVALID: `build_linked(false)`, `git push` → the existing WORKTREE_LINK_INVALID text, unchanged. Run `cargo test --release … hooks::write_guard` and watch the new deny tests fail (exit 0 today) before writing any guard code.\n\n2. main.rs — at the shell call site `if let Some(WV::Deny(reason)) = check_git_bash_command(`, pass one new argument `ctx.worktree_resolution` (a `&str`); nothing else in main.rs changes.\n\n3. checks.rs — extend `pub(crate) fn check_git_bash_command(` with the `worktree_resolution: &str` parameter and, directly after `let invocations = find_git_invocations(&deep.tokens);` and BEFORE `if invocations.is_empty() {`, insert `if let Some(v) = outward_arm(root, control_root_override, worktree_resolution, &fenced, &deep, &invocations, emit)? { return Ok(Some(v)); }`. Write `fn outward_arm(...) -> R<Option<WV>>` in checks.rs: return Ok(None) unless worktree_resolution == \"linked-valid\". Resolve the control root as the git check does (control_root_override, else the main root). If deep.truncated: D11 — over deep.tokens, deny when any git invocation's subcommand is push, or any token's basename (after the D10c skip set) is gh, claude, codex, pi or opencode; otherwise push_gap and return Ok(None). Else split deep.tokens on `is_separator` into segments; for each segment find the head by skipping tokens equal to env, npx, bunx, sudo, nohup, command, exec, `(`, `{`, `!`, any token matching `^[A-Za-z_][A-Za-z0-9_]*=`, any token starting with `-`, and `timeout` plus its following numeric token (D10c). Classify, in order: (a) push — any invocation in `invocations` with subcommand == Some(\"push\") (per D2); (b) gh — head basename `gh`: skip leading global flags (`-R`/`--repo` and its value, `--hostname` and its value, any other `-`-token) then take (sub, rest) and allow when `gh_read_only_form(sub, rest)` is true, else deny (per D3, D10b); (c) launch — head basename in {claude, codex, pi, opencode}: allow when the segment joined with single spaces starts with any `models.<rt>.<name>.command` string found in the control root's config (kind cli), or when head is codex, rest[0] is exec and rest contains `--sandbox` followed by `read-only`, or `-s` followed by `read-only` (per D10a); else deny (per D4). Only when a form is about to deny, read the config through `read_config(control_root)` and return Ok(None) when `guards.worker_outward == Some(&Value::Bool(false))` (copy the idle_gate read: `Some(g) if truthy(g) && g.get(\"idle_gate\") == Some(&Value::Bool(false))`). Write `fn gh_read_only_form(sub: &str, rest: &[String]) -> bool` beside `fn idle_gate_safe_form(sub: &str, rest: &[String]) -> bool {`, one arm per verb: pr → view|list|status|checks|diff; run → list|view|watch|download; issue → view|list; release → view|list|download; repo → view; workflow → list|view; search → any; cache → list; label → list; status → true; auth → status; api → false when any token is `--input`; when rest[0] == \"graphql\": true unless any token equals `mutation` or a token's value contains the word `mutation`; otherwise true only when a method token is present and reads GET case-insensitively (`-X GET`, `-XGET`, `--method GET`, `--method=GET`) or no `-f`/`-F`/`--field`/`--raw-field` token is present and no method token is present (a bare GET); false when a method other than GET is present. Deny text per form, built by `outward_fix_line(form, worktree_id)` (step 4): push → `bee worker-outward guard denied <tool>: \\`git push\\` is outward-facing and is never exempted inside a linked worktree, regardless of what it would push.`; gh → `bee worker-outward guard denied <tool>: \\`gh <sub> <verb>\\` writes to GitHub or moves the checkout, and a linked worktree never does either. Reads still run here: <the allowlist rendered from one const>.`; launch → `bee worker-outward guard denied <tool>: \\`<head>\\` starts another agent, and a worker runs exactly the one cell it was handed — starting helpers is the leader's.` where <tool> is the payload's tool name (Bash or exec).\n\n4. paths.rs — beside `pub(crate) fn intake_fix_line() -> String {` add `pub(crate) fn outward_fix_line(form: OutwardForm, worktree_id: Option<&str>) -> String` (define `pub(crate) enum OutwardForm { Push, Gh, Launch }` beside it). Push: `FIX: if you are executing a cell, stop here and report the push as blocked — your leader lands the work. To land it yourself, run \\`bee worktree merge --id <id>\\` from the MAIN checkout; a release goes through \\`scripts/release.sh <version>\\` from main.`. Gh: `FIX: open the pull request or make the GitHub write from the MAIN checkout, or land the branch with \\`bee worktree merge --id <id>\\` from main; releases and their GitHub writes go through \\`scripts/release.sh\\` from main.`. Launch: `FIX: run \\`bee dispatch prepare --runtime <rt> --kind cell|gather|reviewer|advisor --json\\` and then run exactly the tool and payload it returns; \\`bee\\` itself is never judged by this guard.`. Every form ends with the shared clause: ` Last resort, repo-level opt-out: set guards.worker_outward to false in the MAIN checkout's .bee/config.json (plain JSON; delete the key to re-enable) — the copy inside this worktree is not read.`. `<id>` is the real id from `derive_current_worktree(root)` (hook_local.rs) when it resolves, else the literal `<worktree-id>`.\n\n5. Run `cargo test --release … hooks::write_guard`; every test in step 1 green, every pre-existing test green. NO COMMENTS of any form in the code you add (no_code_comments is on; the ratchet reds the suite if the count rises). One commit, subject in imperative mood, trailer `cell: wog-1`.",
+  "must_haves": {
+    "truths": [
+      "from a linked-valid worktree at phase swarming, every DENY command in step 1 exits 2 with a text that names the form's own remedy, the worktree id, guards.worker_outward and the MAIN checkout's .bee/config.json",
+      "from the same worktree every ALLOW command in step 1 exits 0, including the dispatch door's codex exec read-only line and a configured cli command prefix",
+      "guards.worker_outward=false in the MAIN root's .bee/config.json restores exit 0 for all three forms; the same key in the worktree's copy changes nothing",
+      "on tokenizer truncation a push or a gh/agent basename exits 2 and a harmless nest exits 0 with the gap line",
+      "from the main checkout at phase swarming, git push, gh pr create and claude -p exit 0 with empty stderr, and the idle-main git push refusal text is unchanged",
+      "a codex-shaped exec payload with cmd is judged exactly like Bash with command",
+      "the linked-invalid denial text is unchanged",
+      "the write-guard test module is green under cargo test --release"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "substantive": "outward_arm inside check_git_bash_command, gh_read_only_form beside idle_gate_safe_form"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+        "substantive": "OutwardForm and outward_fix_line with the per-form remedy and the shared main-checkout opt-out clause"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "the worker_outward test group: deny, allow, opt-out, truncation, main byte-identical, precedence, codex-shape, linked-invalid"
+      }
+    ],
+    "key_links": [
+      "main.rs passes ctx.worktree_resolution into check_git_bash_command at the existing shell call site",
+      "docs/history/worker-outward-guard/CONTEXT.md D1-D11 are the locked rules"
+    ],
+    "prohibitions": [
+      "No change to the idle-gate arm, the gc-2 arm, the staging arm, or any main-checkout verdict",
+      "No second fence or tokenize pass",
+      "No edit outside the four listed files",
+      "No code comment of any form",
+      "No judgment of the bee command word"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks::write_guard",
+  "status": "capped",
+  "trace": {
+    "worker": "wog-1-w1",
+    "outcome": "The write guard refuses git push, GitHub writes and nested agent launches from a linked-valid worktree in every phase",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "The deny text reads \"denied this shell command\" instead of naming the payload tool (Bash/exec) — the plan locks main.rs to ONE new argument and the tool name is not otherwise reachable in checks.rs; threading a second cosmetic signal through main.rs is the layered signal the craft rule refuses — found a better route",
+      "The worktree id comes from derive_current_worktree(cwd), not (root) — root is the store root, which is the MAIN root for an ungranted linked worktree, so deriving from root would never resolve a real id there — the plan was wrong about a fact",
+      "The launch refusal names the linked worktree id in its first sentence — the plan text for the Launch FIX names no id, but must_have truth 1 requires every deny to name the worktree id — hit an unforeseen obstacle",
+      "The truncation scan splits each opaque token on whitespace before running find_git_invocations — at depth 5 the hidden payload survives as ONE token (\"git push\"), so a token-level basename scan alone would have allowed it — the plan was wrong about a fact",
+      "The cli-command exemption reads config key \"team\" first, then \"models\" — read_config folds models into team (fold_team_key), so a models-only lookup never matched — the plan was wrong about a fact",
+      "outward_arm takes no &fenced argument — nothing in it reads the fenced text; the deep tokens are enough — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T23:42:30.170Z",
+    "behavior_change": false,
+    "verification_evidence": "270 write_guard tests incl. the 9 new worker_outward ones; also ran hooks:: (655 green) and devtools::comment_baseline (9 green); the rest of the declared suite was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks::write_guard",
+    "claimed_at": "2026-09-22T23:27:56.198Z",
+    "mistakes": [
+      {
+        "wrong": "I wrote checks.rs and paths.rs before the tests, against the cell RED-FIRST step 1",
+        "better": "I recovered the red by restoring the three files from HEAD and running the new tests (6 of 9 failed, every deny arm exit 0), then restoring my work; writing the tests first would have cost nothing",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "outward_arm in checks.rs refuses push/gh-write/agent-launch from a linked-valid worktree; OutwardForm+outward_fix_line in paths.rs carry the per-form remedy and the MAIN-checkout opt-out; 9 worker_outward tests in tests.rs cover deny, allow, opt-out, truncation, main byte-identical, precedence, codex shape and linked-invalid",
+      "commit": "8e1490509",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks::write_guard — green:unit — 270 write_guard tests incl. the 9 new worker_outward ones; also ran hooks:: (655 green) and devtools::comment_baseline (9 green); the rest of the declared suite was not run",
+      "deviations": [
+        "The deny text reads \"denied this shell command\" instead of naming the payload tool (Bash/exec) — the plan locks main.rs to ONE new argument and the tool name is not otherwise reachable in checks.rs; threading a second cosmetic signal through main.rs is the layered signal the craft rule refuses — found a better route",
+        "The worktree id comes from derive_current_worktree(cwd), not (root) — root is the store root, which is the MAIN root for an ungranted linked worktree, so deriving from root would never resolve a real id there — the plan was wrong about a fact",
+        "The launch refusal names the linked worktree id in its first sentence — the plan text for the Launch FIX names no id, but must_have truth 1 requires every deny to name the worktree id — hit an unforeseen obstacle",
+        "The truncation scan splits each opaque token on whitespace before running find_git_invocations — at depth 5 the hidden payload survives as ONE token (\"git push\"), so a token-level basename scan alone would have allowed it — the plan was wrong about a fact",
+        "The cli-command exemption reads config key \"team\" first, then \"models\" — read_config folds models into team (fold_team_key), so a models-only lookup never matched — the plan was wrong about a fact",
+        "outward_arm takes no &fenced argument — nothing in it reads the fenced text; the deep tokens are enough — found a better route"
+      ],
+      "mistakes": [
+        "I wrote checks.rs and paths.rs before the tests, against the cell RED-FIRST step 1 — I recovered the red by restoring the three files from HEAD and running the new tests (6 of 9 failed, every deny arm exit 0), then restoring my work; writing the tests first would have cost nothing — doctrine"
+      ],
+      "baseline": "On HEAD (base code) the same filter ran red: 6 of 9 worker_outward tests failed — every deny command exited 0"
+    },
+    "baseline": "On HEAD (base code) the same filter ran red: 6 of 9 worker_outward tests failed — every deny command exited 0",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "from a linked-valid worktree at phase swarming, every DENY command in step 1 exits 2 with a text that names the form's own remedy, the worktree id, guards.worker_outward and the MAIN checkout's .bee/config.json",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "from the same worktree every ALLOW command in step 1 exits 0, including the dispatch door's codex exec read-only line and a configured cli command prefix",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "guards.worker_outward=false in the MAIN root's .bee/config.json restores exit 0 for all three forms; the same key in the worktree's copy changes nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+          },
+          {
+            "requirement": "on tokenizer truncation a push or a gh/agent basename exits 2 and a harmless nest exits 0 with the gap line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+          },
+          {
+            "requirement": "from the main checkout at phase swarming, git push, gh pr create and claude -p exit 0 with empty stderr, and the idle-main git push refusal text is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "a codex-shaped exec payload with cmd is judged exactly like Bash with command",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+          },
+          {
+            "requirement": "the linked-invalid denial text is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+          },
+          {
+            "requirement": "the write-guard test module is green under cargo test --release",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T23:44:17.880Z",
+        "recorded_by": "b3005d2a-e5d3-46c3-9a25-c7a61dc164f3",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
