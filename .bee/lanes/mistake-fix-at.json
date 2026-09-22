@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "mistake-fix-at",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"mistake-fix-at\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature mistake-fix-at",
+  "next_action": "bee close finished \"mistake-fix-at\" — feature is closed.",
   "created_at": "2026-09-22T05:07:00.413Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

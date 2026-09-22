@@ -123,12 +123,18 @@ rule).
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: both questions were resolved during planning and execution; the lines record the answer, they promise nothing later -->
 ### Deferred To Planning
 
 - [x] Whether the D3 key change needs a migration note for the once-ever token rule — resolved in planning (plan.md claim 25) and proven by mfa-3's test `a_token_an_old_whole_sentence_lesson_spent_does_not_block_the_new_key`: old tokens digest the whole sentence, new tokens digest layer+head, so no old token collides and no migration note is needed.
 - [x] The cheapest proof for D2 — landed as mfa-2's tests `a_green_close_files_one_backlog_row_per_mechanizable_mistake` and `closing_the_same_feature_again_files_no_second_row`.
 
+<!-- /bee:not-a-deferral -->
+
+<!-- bee:not-a-deferral: out-of-scope ideas; each cites the registered trigger that would fire it, nothing is promised without one -->
 ## Deferred Ideas
 
 - Backfill triage of the 465 existing reflections into fix-at layers by a reader agent — out of scope (D4). Trigger `grooming-asks-for-the-fix-at-layers-of-t__5c43da33` fires it when grooming asks for that history.
 - A `bee doctor` row that counts `fix-at:check` backlog rows older than N days — the "stop the bleeding" debt meter. Trigger `more-than-20-backlog-rows-with-layer-fix__6e79d14e` fires it when those rows pile up.
+
+<!-- /bee:not-a-deferral -->
