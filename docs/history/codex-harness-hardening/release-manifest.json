@@ -1763,7 +1763,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "86d762db55dfd536d1b9264d447aaeee6103485f9037b1975101565bf0eccf0f",
+      "sha256": "06ccc74eb156c2057e9937a0e953d7fcb088e476f7891ac686291cf3e07322f5",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1840,7 +1840,7 @@
     },
     {
       "path": "packages/bee/prompts/worker-cell.md",
-      "sha256": "ce3ace59b06c9a1c53e5c50d99c2c68efe366c5dc4b77de05b632b89a4b41b05",
+      "sha256": "12ef03baccaa60c8266fe4e5e1ff26a2cb003188307e1ad89d33c9c9ada8a075",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/prompts/worker-cell.md"

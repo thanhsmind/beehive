@@ -77,6 +77,9 @@ required state, commands, and observable proof.
   recording its route, and approving the merged and named gates.
 - [Cells and the proof line](./cells-and-proof.md) covers adding, claiming and
   capping a cell, and the red-proof refusal that is bee's core promise.
+- [Comment guard and ratchet](./comment-guard.md) covers the write refusal that
+  stops a comment reaching a code file, the `no_code_comments` key that switches
+  it on, and the baseline verb that only ever lowers a count.
 - [Worktree and close](./worktree-and-close.md) covers creating a feature
   worktree, merging it back, and the close doors.
 - [Semantic role routing](./semantic-role-routing.md) covers plan-time role

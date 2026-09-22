@@ -230,6 +230,11 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-herding/references/role-dispatch.md`
     - `skills/bee-hive/SKILL.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
+- `agents-no-code-comments` (AGENTS.md § Care for the session):
+  spoken: write no comment in code — the why goes to a docs/knowledge concept or the decision log
+  - applied_at:
+    - `docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md`
+    - `packages/bee/prompts/worker-cell.md`
 - `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
   spoken: one commit per cell — imperative subject, and the cell id on the last line of the body
   - applied_at:
