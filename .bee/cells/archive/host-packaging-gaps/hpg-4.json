@@ -1,0 +1,119 @@
+{
+  "id": "hpg-4",
+  "feature": "host-packaging-gaps",
+  "title": "Build macOS and ARM Linux binaries in the release",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "320fcad4-af38-4ab4-a120-9509c30d2e86"
+  ],
+  "files": [
+    ".github/workflows/release-binaries.yml",
+    "scripts/release.sh"
+  ],
+  "read_first": [
+    "docs/history/host-packaging-gaps/CONTEXT.md",
+    ".github/workflows/release-binaries.yml",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D4 (store 320fcad4), the CI half. (1) .github/workflows/release-binaries.yml matrix (`target: x86_64-unknown-linux-gnu`, `target: x86_64-pc-windows-msvc`): add three rows in the same shape (os, target, built, asset): `macos-latest` / `aarch64-apple-darwin` / `bee` / `bee-aarch64-apple-darwin`; `macos-15-intel` / `x86_64-apple-darwin` / `bee` / `bee-x86_64-apple-darwin`; `ubuntu-22.04-arm` / `aarch64-unknown-linux-gnu` / `bee` / `bee-aarch64-unknown-linux-gnu` (22.04, not 24.04, so the binary needs glibc 2.35, not 2.39). Every row builds natively, so the 'Check the binary reports the tag's version' step still runs the built binary on all five; keep it for all. In that step replace `got=\"$(node -e 'process.stdout.write(require(\"./.claude-plugin/plugin.json\").version)')\"` with a sed read that needs no interpreter, the same pattern scripts/install.sh already uses: `sed -n 's/.*\"version\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' .claude-plugin/plugin.json | head -n 1` (it must work under Git Bash on windows-latest too). Leave the publish job (it already globs `bee-*` into SHA256SUMS and the upload) and `fail-fast: false` as they are. (2) scripts/release.sh `[ \"$BIN_COUNT\" -ge 2 ]`: expect >= 5 and update the message's number. Do not touch scripts/install.sh — another cell owns it.",
+  "must_haves": {
+    "truths": [
+      "the release matrix builds five targets, each on a native runner, each version-checked by running the built binary",
+      "the version check uses no node or python",
+      "release.sh refuses a release with fewer than five bee-* binaries"
+    ],
+    "artifacts": [
+      {
+        "path": ".github/workflows/release-binaries.yml",
+        "substantive": "five-row matrix, sed version read"
+      },
+      {
+        "path": "scripts/release.sh",
+        "substantive": "binary count of five"
+      }
+    ],
+    "key_links": [
+      "asset names are bee-aarch64-apple-darwin, bee-x86_64-apple-darwin, bee-aarch64-unknown-linux-gnu, exactly what scripts/install.sh maps to"
+    ],
+    "prohibitions": [
+      "No cross-compiled target that skips the run-the-binary check",
+      "No change to the publish job's SHA256SUMS or upload logic",
+      "No edit to scripts/install.sh"
+    ]
+  },
+  "verify": "bash -n scripts/release.sh && python3 -c \"import yaml;d=yaml.safe_load(open('.github/workflows/release-binaries.yml'));print(len(d['jobs']['build']['strategy']['matrix']['include']))\"",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hpg-4",
+    "outcome": "Release matrix builds five native targets with a sed version read; release.sh expects >= 5 binaries",
+    "files_changed": [
+      ".github/workflows/release-binaries.yml",
+      "scripts/release.sh"
+    ],
+    "deviations": [
+      "followed the plan",
+      "header comment changed from 'Builds the two binaries' to 'Builds the binaries' — the count was no longer true — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T02:12:01.559Z",
+    "behavior_change": false,
+    "verification_evidence": "cell verify printed 5 matrix rows; sed version read run locally returned 2.43.0; actionlint not installed so not run; the new runners have not run in CI yet",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+    "verify_command": "bash -n scripts/release.sh && python3 -c \"import yaml;d=yaml.safe_load(open('.github/workflows/release-binaries.yml'));print(len(d['jobs']['build']['strategy']['matrix']['include']))\"",
+    "claimed_at": "2026-09-22T02:09:04.946Z",
+    "mistakes": [
+      {
+        "wrong": "first git commit put cell: hpg-4 above the Co-Authored-By line so it was not the last body line",
+        "better": "should have ordered the trailers before the first commit instead of amending"
+      }
+    ],
+    "report": {
+      "outcome": "release-binaries.yml build matrix has 5 native rows (added macos-latest/aarch64-apple-darwin, macos-15-intel/x86_64-apple-darwin, ubuntu-22.04-arm/aarch64-unknown-linux-gnu; assets bee-<target>); version check step reads plugin.json with sed (no node) and still runs the built binary on every row; release.sh BIN_COUNT check now -ge 5; publish job untouched; install.sh untouched",
+      "commit": "db6a8d498",
+      "files": [
+        ".github/workflows/release-binaries.yml",
+        "scripts/release.sh"
+      ],
+      "tests": "bash -n scripts/release.sh && python3 -c \"import yaml;d=yaml.safe_load(open('.github/workflows/release-binaries.yml'));print(len(d['jobs']['build']['strategy']['matrix']['include']))\" — green:static — cell verify printed 5 matrix rows; sed version read run locally returned 2.43.0; actionlint not installed so not run; the new runners have not run in CI yet",
+      "deviations": [
+        "followed the plan",
+        "header comment changed from 'Builds the two binaries' to 'Builds the binaries' — the count was no longer true — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "first git commit put cell: hpg-4 above the Co-Authored-By line so it was not the last body line — should have ordered the trailers before the first commit instead of amending"
+      ],
+      "baseline": "on base the same verify printed 2"
+    },
+    "baseline": "on base the same verify printed 2",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the release matrix builds five targets, each on a native runner, each version-checked by running the built binary",
+            "artifact": ".github/workflows/release-binaries.yml"
+          },
+          {
+            "requirement": "the version check uses no node or python",
+            "artifact": ".github/workflows/release-binaries.yml"
+          },
+          {
+            "requirement": "release.sh refuses a release with fewer than five bee-* binaries",
+            "artifact": "scripts/release.sh"
+          }
+        ],
+        "recorded_at": "2026-09-22T02:12:27.072Z",
+        "recorded_by": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

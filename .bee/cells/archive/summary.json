@@ -1373,5 +1373,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-09-21T23:22:31.561Z"
+  },
+  "host-packaging-gaps": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-09-22T02:24:57.266Z"
   }
 }

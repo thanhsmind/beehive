@@ -1,0 +1,140 @@
+{
+  "id": "hpg-1",
+  "feature": "host-packaging-gaps",
+  "title": "Judge Pi doctor rows by what a host really has",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "cd9b1a60-26fc-4508-95cd-d32e30809f7a",
+    "974a2285-cfc4-4dea-b838-184d1386465f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "read_first": [
+    "docs/history/host-packaging-gaps/CONTEXT.md",
+    "docs/history/host-packaging-gaps/plan.md",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Two Pi doctor rows in packages/bee-rs/crates/bee/src/doctor.rs judge a host by facts it does not have. Fix both; leave every claude/codex row and the source-checkout path byte-identical. (A) Freshness, per D1 (store cd9b1a60). In `fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {` the host path (`if !is_source_checkout && !is_pi {` then `let Some(source_version) = read_source_release_version(root) else {`) reads only `.claude-plugin/plugin.json`, which a host never has, so it is unknown and the Pi verdict is BLOCKED. When `is_source_checkout` is false: read the expected version from `<root>/.bee/onboarding.json` field `bee_version` FIRST (a real host record: `{\"schema_version\": \"1.0\", \"bee_version\": \"2.43.0\", ...}`; `bee_version` may be null — treat null or absent as missing), and fall back to the plugin manifest only if onboarding.json gives nothing; neither → unknown, as today. Add the reader beside `fn read_source_release_version(root: &Path) -> Option<String> {`. In the host case every row that carries a remedy (the too-old row, the mismatch row, the probe-failed unknown row) names the installer as the fix, never cargo and never `bee onboard --apply` (onboard does not replace .bee/bin/bee): e.g. `FIX: re-run the bee installer in this repo: curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y`. The mismatch detail names `.bee/onboarding.json` as the source in the host case. `const REMEDY: &str = \"FIX: cargo build --release ...` stays for the source checkout. (B) Transport, per D5 (store 974a2285). `rows.push(pi_herding_transport_row_with_env(root, env));` always demands HERDR or TMUX, yet a Pi agent on runtime pi dispatches with `--no-pane` (prepare.rs: `if runtime == \"pi\" && agent.as_deref().is_some_and(|name| is_pi_agent(&cfg, name)) {`) and that runner needs no multiplexer (herding/run.rs: `// no pane multiplexer is needed.`). In `fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Row {`, first read the merged config (`crate::state::read_config_raw(root)`, the same deep-merged view the dispatcher reads; fold team/models with `crate::verbs::drivers::fold_team_key` on a clone). If `team.pi` is an object with at least one slot and EVERY slot is `{\"kind\":\"herding\",\"agent\":<name>}` where `crate::verbs::drivers::prepare::is_pi_agent(&cfg, name)` (make it reachable if its visibility needs a nudge; do not copy its logic) is true, return ok with a detail like `every team.pi role runs a Pi process with --no-pane; no pane multiplexer is needed`. Otherwise (no team.pi, an empty one, or any slot that is not a no-pane Pi agent) keep today's probe unchanged. RED FIRST in doctor/tests.rs, using the `fn pi_repo(` fixture (its last parameter is the config text) and a written `.bee/onboarding.json`: (1) host, no plugin manifest, onboarding.json bee_version equal to the binary's version → freshness ok; (2) host, different bee_version → not_ok, detail names `.bee/onboarding.json` and the installer, not cargo; (3) host with both files disagreeing → onboarding.json wins; (4) config whose team.pi slots all use an agent `[\"pi\"]` and env with no HERDR/TMUX vars → transport ok and all six rows ok; (5) same but one slot uses a non-pi agent → transport not_ok with today's `HERDR_ENV is not set` text. Watch each fail for the reported reason, then fix. `pi_doctor_ready_case`, `pi_doctor_reports_missing_pane` (config None) and the assertion `\"missing plugin manifest must report unknown\"` must stay green unchanged. Then update docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md: the Pi bullet's sentence 'Binary freshness checks the release version against `.claude-plugin/plugin.json` in both source and host repositories' becomes the host rule above, and its transport sentence gains the no-pane rule.",
+  "must_haves": {
+    "truths": [
+      "a Pi host whose binary matches .bee/onboarding.json bee_version reports binary_freshness ok",
+      "a Pi host whose binary differs reports not_ok naming .bee/onboarding.json and the installer",
+      "a Pi host with neither file still reports unknown",
+      "no host-path remedy mentions cargo",
+      "a config whose every team.pi slot is a no-pane Pi agent reports herding_transport ok with no HERDR or TMUX variables",
+      "a config with any non-Pi team.pi slot, or no team.pi, keeps the HERDR/TMUX check"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "onboarding.json reader for the host freshness path, host remedy text, no-pane branch in the Pi transport row"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "substantive": "five new Pi tests: freshness match, mismatch, precedence; transport all-pi, mixed"
+      }
+    ],
+    "key_links": [
+      "the transport row uses prepare.rs is_pi_agent, the same test dispatch uses to add --no-pane"
+    ],
+    "prohibitions": [
+      "No change to claude or codex doctor rows",
+      "Do not drop either Pi row or make it optional",
+      "Do not edit the existing no-manifest or missing-pane assertions"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hpg-1",
+    "outcome": "Pi doctor freshness reads .bee/onboarding.json in hosts with an installer remedy; Pi transport is ok with no multiplexer when every team.pi slot is a no-pane Pi agent",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+      "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+    ],
+    "deviations": [
+      "host unknown-row detail now names both .bee/onboarding.json and the plugin manifest instead of only the manifest — a host reads both files now, so the old text would mislead — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T02:15:58.166Z",
+    "behavior_change": false,
+    "verification_evidence": "38 doctor tests pass incl. the 5 new ones by name and the unchanged pi_doctor_ready_case, missing_pane, absent_cases; run without the PATH prefix because cargo already resolves to ~/.cargo/bin/cargo; filtered to doctor, the only module touched",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+    "claimed_at": "2026-09-22T02:09:04.169Z",
+    "mistakes": [
+      {
+        "wrong": "the first commit message put the cell trailer above the Co-Authored-By line, so it was not the last line",
+        "better": "write the attribution line above the cell trailer from the start"
+      }
+    ],
+    "report": {
+      "outcome": "Pi doctor freshness reads .bee/onboarding.json in hosts (doctor.rs read_onboarded_version, binary_freshness_row_impl HOST_REMEDY); Pi transport ok with no multiplexer when every team.pi slot is a no-pane Pi agent (doctor.rs every_pi_slot_runs_no_pane, using drivers::is_pi_agent and fold_team_key); five tests pi_host_freshness_* and pi_transport_* in doctor/tests.rs; knowledge doc Pi bullet updated",
+      "commit": "f5e1bc906d330a6ae045e63cc73e0bcea796228d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor — green:unit — 38 doctor tests pass incl. the 5 new ones by name and the unchanged pi_doctor_ready_case, missing_pane, absent_cases; run without the PATH prefix because cargo already resolves to ~/.cargo/bin/cargo; filtered to doctor, the only module touched",
+      "deviations": [
+        "host unknown-row detail now names both .bee/onboarding.json and the plugin manifest instead of only the manifest — a host reads both files now, so the old text would mislead — found a better route"
+      ],
+      "mistakes": [
+        "the first commit message put the cell trailer above the Co-Authored-By line, so it was not the last line — write the attribution line above the cell trailer from the start"
+      ],
+      "baseline": "on base the 4 new positive tests failed red for the reported reasons (plugin.json missing gives unknown; manifest 9.9.9 wins; HERDR_ENV is not set); the mixed-slot guard test passed as expected"
+    },
+    "baseline": "on base the 4 new positive tests failed red for the reported reasons (plugin.json missing gives unknown; manifest 9.9.9 wins; HERDR_ENV is not set); the mixed-slot guard test passed as expected",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a Pi host whose binary matches .bee/onboarding.json bee_version reports binary_freshness ok",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "a Pi host whose binary differs reports not_ok naming .bee/onboarding.json and the installer",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "a Pi host with neither file still reports unknown",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "no host-path remedy mentions cargo",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "a config whose every team.pi slot is a no-pane Pi agent reports herding_transport ok with no HERDR or TMUX variables",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "a config with any non-Pi team.pi slot, or no team.pi, keeps the HERDR/TMUX check",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T02:16:23.962Z",
+        "recorded_by": "6b8694b6-f141-42bc-bb57-01f903640b0e",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
