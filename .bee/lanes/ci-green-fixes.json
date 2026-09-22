@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"ci-green-fixes\" — feature is closed.",
   "created_at": "2026-09-22T11:02:01.125Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-09-22T11:35:32.604Z",
+    "session": "aff5297e-0798-4b11-88d0-789832ebce95"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",

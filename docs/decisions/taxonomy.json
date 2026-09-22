@@ -595,6 +595,7 @@
     "fix-first",
     "windows-json-path",
     "ci-green-fixes",
-    "contract:pi-harness-steps"
+    "contract:pi-harness-steps",
+    "contract:live-proof-locator"
   ]
 }
