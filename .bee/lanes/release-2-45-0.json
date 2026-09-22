@@ -5,8 +5,8 @@
   "phase": "exploring",
   "approved_gates": {
     "context": false,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
@@ -199,5 +199,181 @@
     "rationale": null,
     "updated_at": "2026-09-22T10:25:54.711Z",
     "feature": "release-2-45-0"
+  },
+  "approved_cell_packet": {
+    "feature": "release-2-45-0",
+    "plan_sha256": "7415dbfd362517b18944bb82c7a5e08db229b1304aa748ddbec20c9b7e24353b",
+    "previewed_at": "2026-09-22T10:25:54.800Z",
+    "cells": [
+      {
+        "id": "rel450-1",
+        "feature": "release-2-45-0",
+        "title": "Publish release 2.45.0 through the sanctioned script",
+        "lane": "tiny",
+        "role": "deploy",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          ".claude-plugin/plugin.json",
+          ".codex-plugin/plugin.json",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/release-2-45-0/CONTEXT.md",
+          "scripts/release.sh"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Run `scripts/release.sh 2.45.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.45.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+        "verify": "bash scripts/release.sh 2.45.0 && bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "both plugin manifests report 2.45.0",
+            "tag v2.45.0 exists locally and on the remote",
+            "the GitHub release for v2.45.0 carries the binaries and SHA256SUMS",
+            "the script printed its final OK line"
+          ],
+          "artifacts": [
+            {
+              "path": ".claude-plugin/plugin.json",
+              "substantive": "version 2.45.0"
+            },
+            {
+              "path": ".codex-plugin/plugin.json",
+              "substantive": "version 2.45.0"
+            }
+          ],
+          "key_links": [
+            "the pushed tag is what triggers release-binaries.yml"
+          ],
+          "prohibitions": [
+            "Do not hand-walk bump, tag or push",
+            "Do not skip the test gate"
+          ]
+        },
+        "behavior_change": false
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "deployment",
+          "classification": "required",
+          "role": "deploy",
+          "reason": "This lane exists to publish 2.45.0; the deploy role owns the release permit."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The plan is this one page and needs no planning dispatch."
+        },
+        {
+          "stage": "implementation",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "No source changes: the release publishes what main already holds."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "The script's own test gate runs the declared suite before tagging."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "No documentation changes ride this release."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Nothing to survey; the preconditions are the script's own."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No narrow fact lookup is needed."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job here has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked and was not requested."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "No high-risk consult is owed for a publish."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No competing designs; there is one sanctioned command."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "No competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "No competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Tiny lane: no hat wave."
+        }
+      ]
+    }
   }
 }
