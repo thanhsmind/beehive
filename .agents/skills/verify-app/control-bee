@@ -30,7 +30,7 @@
 #   control-bee cleanup               remove the sandbox; KEEP the evidence
 #
 # Environment:
-#   VERIFY_HOME   root for runs and evidence (default ${TMPDIR:-/tmp}/bee-verify)
+#   VERIFY_HOME   root for runs and evidence (default ${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify)
 #   VERIFY_RUN    run id (default: written by `launch`, read from the pointer file)
 
 set -euo pipefail
@@ -40,7 +40,7 @@ REPO="$(cd "$SKILL_DIR/../../.." && pwd)"
 MANIFEST="$REPO/packages/bee-rs/Cargo.toml"
 PLUGIN_JSON="$REPO/.claude-plugin/plugin.json"
 
-VERIFY_HOME="${VERIFY_HOME:-${TMPDIR:-/tmp}/bee-verify}"
+VERIFY_HOME="${VERIFY_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify}"
 RUN_POINTER="$VERIFY_HOME/current-run"
 
 die() { printf 'control-bee: %s\n' "$*" >&2; exit 1; }

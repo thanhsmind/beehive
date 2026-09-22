@@ -63,9 +63,9 @@ Paths (override `VERIFY_HOME` to move them all):
 
 | What | Where |
 |---|---|
-| Sandbox repo | `${TMPDIR:-/tmp}/bee-verify/run/<run-id>/repo` |
-| Evidence | `${TMPDIR:-/tmp}/bee-verify/evidence/<run-id>` |
-| Run pointer | `${TMPDIR:-/tmp}/bee-verify/current-run` |
+| Sandbox repo | `${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify/run/<run-id>/repo` |
+| Evidence | `${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify/evidence/<run-id>` |
+| Run pointer | `${XDG_STATE_HOME:-$HOME/.local/state}/bee-verify/current-run` |
 
 Teardown is `control-bee cleanup` (see Cleanup).
 

@@ -16,6 +16,9 @@ refused outright, so "done" can never mean "I said so".
   result segment is a CLOSED set — `green:live`, `green:unit`, `green:static`
   (`cells/finish_support.rs:81-89`). A bare `green` is refused on write; the
   read path stays tolerant of caps recorded before that rule.
+- `cell-cap-live-evidence` refuses a `green:live` cap whose scope reason names no
+  evidence locator (a run URL, an absolute path, or a path containing
+  `evidence/`); the refusal names the three shapes.
 - `cell-cap-proof-match` refuses a cap whose proof line command does not match the
   approved cell verification command (`verify`). Descriptive proof prose is
   refused before disk writes. On success, trace records four structured fields:
@@ -75,6 +78,14 @@ Preconditions:
 - **A green proof line caps it.** Re-run the same command with the result segment
   changed to `green:unit`. The payload reports `status: "capped"` and
   `trace.report.tests` holding the proof line verbatim.
+- **A `green:live` proof line with no evidence locator is refused.** Run
+  `control-bee cli -- cells cap --id demo-note-1 --files NOTE.md --report '{"outcome":"note added","commit":"<sha>","files":["NOTE.md"],"tests":"test -f NOTE.md — green:live — checked","deviations":[]}' --json`.
+  The `.exit` file holds a non-zero code and the payload's `error` contains
+  `names no evidence locator`. The message names the three locator shapes.
+- **A `green:live` proof line that names the evidence dir caps it.** Read the
+  evidence dir from `control-bee paths`. Re-run the same command with the reason
+  segment changed to `checked, evidence $VERIFY_HOME/evidence/<run-id>`, the
+  path written out in full. The payload reports `status: "capped"`.
 - **A bare `green` is NOT accepted.** Run it once with the result segment as
   plain `green`. The `.exit` file holds `1` and the payload's `error` reads
   `result segment is "green" — a cap records HOW the change was shown to work`,
