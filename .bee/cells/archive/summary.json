@@ -1413,5 +1413,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-09-22T11:05:07.732Z"
+  },
+  "live-proof-evidence": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-22T15:13:25.164Z"
   }
 }

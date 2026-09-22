@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "live-proof-evidence",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"live-proof-evidence\" started at phase \"exploring\".",
+  "next_action": "Invoke bee-swarming.",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat door for live-proof-evidence: test the new green:live refusal on main, then bee gate --name uat --approved true",
+    "asked_at": "2026-09-22T14:58:55.236Z",
+    "session": "b65d59c2-0be2-4aa1-858f-1f6b2ba30ee9"
+  },
+  "created_at": "2026-09-22T14:37:25.143Z"
+}
