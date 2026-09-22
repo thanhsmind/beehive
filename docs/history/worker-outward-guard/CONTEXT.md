@@ -36,6 +36,8 @@ a silent edit.
 | D7 | Deny-more only: for every request judged from the main checkout, the verdict and its text are byte-identical before and after. A test proves it, as decision 41a67ee2 did. | — |
 | D8 | Red before green: the first test shows `git push`, a writing `gh`, and `claude -p` allowed from an executing-phase linked-worktree fixture, and goes green only when the guard refuses them. | bee-principle-red-before-green. |
 | D9 | The codex belt carries the same three refusals under the existing parity gate (`docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md`); a difference is named, never silent. | — |
+| D10 | Amends the matching rules of D2–D4 after the hat wave (decision 293cdfe5): (a) a launch is exempt when the command starts with a cli command configured under `models.<runtime>.<name>.command` in the MAIN checkout's config, or is `codex exec` carrying `--sandbox read-only` / `-s read-only` — the shapes `bee dispatch prepare` itself returns; (b) the gh read-only list also admits `workflow list\|view`, `search <any>`, `run download`, `release download`, `cache list`, `label list`, `status`, `api` with `-f/-F/--field/--raw-field` when GET is explicit (glued or `=`-joined), and `api graphql` when no token is `mutation`; `--input` is always refused; a glued `-XPOST`/`--method=POST` is a method; leading gh global flags (`-R/--repo <v>`, `--hostname <v>`) are skipped; (c) the command head is found after skipping `env`, `NAME=value`, `npx`, `bunx`, `sudo`, `nohup`, `command`, `exec`, `timeout <n>`, any token starting with `-`, and `(` `{` `!`; (d) the scope is any linked-valid worktree, granted or not, and the docs say so. | The door returned a command D4 refused (`prepare.rs:2462-2463`); four spellings slipped the written rules. |
+| D11 | Decision 1b8955e5: on tokenizer truncation the outward arm does not delegate — it scans the flat fenced tokens and refuses on a push invocation or a `gh`/agent basename, else records the gap and allows. The opt-out is read from the MAIN checkout's `.bee/config.json` (the control root) and every refusal says the worktree's own tracked copy is not read. Each refusal names the current worktree id and leads with the remedy for its own form (a cell worker stops and reports blocked; a human lands from main). At idle inside a linked worktree the outward text takes precedence over the intake text. | A delegate is exit 0 with the whole call unguarded (`hooks/mod.rs:62-71`); the config file exists in every worktree but only main's is read (`adapter.rs:344`). |
 
 ### Agent's Discretion
 
@@ -78,8 +80,8 @@ Where the check lives inside `write_guard/` (a new check in `checks.rs` or a sib
 
 ### Deferred To Planning
 
-- [ ] Does `ctx.worktree_resolution` distinguish a linked worktree from a nested or foreign checkout well enough for D1, or does D1 need the grant ledger? — read `main.rs:209` and its resolver.
-- [ ] Which pi extension belt file mirrors D9 for the third runtime — check the parity coverage gate.
+- [x] `linked-valid` is grant-independent (`adapter.rs:150-190`); D10(d) locks the scope as any linked worktree, and `merge.rs:699` drops the grant while a merged worktree is kept, so the grant ledger would have unguarded exactly the wrong set.
+- [x] D9 needs no belt edit: `.pi/extensions/bee-guard.ts:414` and `.opencode/plugins/bee-guard.ts:282` hand their shell tool to this guard as `tool_name: "Bash"` (hat wave, 2026-09-22).
 
 ## Deferred Ideas
 
