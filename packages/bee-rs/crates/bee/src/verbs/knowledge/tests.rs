@@ -884,6 +884,7 @@ use std::time::Instant;
             deviation: Some("  dev-flag-line  ".to_string()),
             override_reason: String::new(),
             mistake: None,
+            fix_at: None,
             no_mistakes: false,
             session_flag: None,
             force_ownership: false,

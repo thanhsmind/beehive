@@ -208,7 +208,7 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
         None | Some(Value::Array(_)) => {}
         _ => {
             return Err(Fail::Thrown(
-                "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better>\"; an empty array states that this cell hit none.".to_string(),
+                "cells finish: --report key \"mistakes\" must be an array — one entry per mistake, each \"<what went wrong> — <what would have been better> — <fix-at>\" (fix-at is one of architecture | check | doctrine | none) or {wrong, better, fix_at}; an empty array states that this cell hit none.".to_string(),
             ))
         }
     }

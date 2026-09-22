@@ -486,6 +486,7 @@ mod tests {
             departure: None,
             needs_you: vec![],
             better: None,
+            fix_at: None,
         }
     }
 

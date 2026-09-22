@@ -942,6 +942,7 @@ mod tests {
                 proof: None,
                 departure: None,
                 better: None,
+                fix_at: None,
             }],
             needs_you: Vec::new(),
             body: format!(
@@ -1217,6 +1218,7 @@ mod tests {
                 proof: None,
                 departure,
                 better: None,
+                fix_at: None,
             }],
             needs_you: Vec::new(),
             body,
@@ -1239,7 +1241,7 @@ mod tests {
     ) -> PathBuf {
         let mut entries: Vec<Entry> = reflections
             .iter()
-            .map(|(wrong, better)| Entry::reflection(stamp, wrong, better))
+            .map(|(wrong, better)| Entry::reflection(stamp, wrong, better, "none"))
             .collect();
         if clean {
             entries.push(Entry::no_mistakes(stamp));

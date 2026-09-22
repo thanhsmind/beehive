@@ -3319,8 +3319,10 @@ fn record_feature_close_in_mailbox(root: &Path, feature: &str, usage_line: Optio
         // A green close left nothing outstanding; a close that needed the
         // human's call refused at a door and never reached this line (D13).
         needs_you: Vec::new(),
-        // Only a reflection entry carries letter-reflection's second part.
+        // Only a reflection entry carries letter-reflection's second part
+        // or mistake-fix-at's layer.
         better: None,
+        fix_at: None,
     };
     mailbox::record_close_stop(
         &control,
@@ -5044,6 +5046,7 @@ mod tests {
                 "2026-08-31T01:00:00.000Z",
                 "Capped demo-1 without saying what went wrong",
                 "Answer the mistakes question at the cap, when it is still in hand",
+                "none",
             ),
         );
 
