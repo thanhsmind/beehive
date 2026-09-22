@@ -592,6 +592,7 @@
     "rehomed-why",
     "leader-check-deferral",
     "windows-cfg-unix",
-    "fix-first"
+    "fix-first",
+    "windows-json-path"
   ]
 }
