@@ -851,6 +851,13 @@ for (const call of spec.calls) {
       results.push(step({ messages_seen: messages.length }));
       continue;
     }
+    case "await_switches": {
+      const want = call.count ?? 1;
+      const deadline = Date.now() + (call.timeout_ms ?? 10000);
+      while (switches.length < want && Date.now() < deadline) await sleep(25);
+      results.push(step({ switches_seen: switches.length }));
+      continue;
+    }
     case "snapshot": {
       let entries = null;
       try { entries = fs.readdirSync(call.path).sort(); } catch { entries = null; }
@@ -1342,6 +1349,10 @@ fn await_injections(count: usize) -> Value {
 /// looked and declined, never that it had not looked yet.
 fn await_injections_in_vain(count: usize) -> Value {
     json!({"kind": "await_messages", "count": count, "timeout_ms": quiet_wait_ms()})
+}
+
+fn await_switches_step(count: usize) -> Value {
+    json!({"kind": "await_switches", "count": count, "timeout_ms": positive_wait_ms()})
 }
 
 fn sleep_step(ms: u64) -> Value {
@@ -5182,7 +5193,7 @@ fn shell_tool_result_captures_marker_and_agent_settled_submits_private_command()
                 }),
             ),
             advisory_call("agent_settled", &main_path, "sess-marker-1", json!({})),
-            sleep_step(50),
+            await_switches_step(1),
         ],
     );
 
