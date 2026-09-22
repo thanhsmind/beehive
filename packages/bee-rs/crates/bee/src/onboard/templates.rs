@@ -11,9 +11,12 @@
 // ledger, so a single byte of drift here is a C2 break. The unit tests at the
 // bottom pin the shapes the Node script asserts on.
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 pub const ONBOARDING_SCHEMA_VERSION: &str = "1.0";
+/// host-packaging-gaps D2: the `.bee/onboarding.json` flag recording that the
+/// Pi role table was offered, so a user who deletes it is never re-offered.
+pub const PI_TEAM_OFFERED_KEY: &str = "pi_team_offered";
 pub const MARKER_START: &str = "<!-- BEE:START -->";
 pub const MARKER_END: &str = "<!-- BEE:END -->";
 pub const GITIGNORE_MARKER_START: &str = "# BEE:START";
@@ -159,11 +162,12 @@ pub fn default_state() -> Value {
 /// # Herding
 ///
 /// Ships a working skeleton: `agent_command` names a registry entry, and
-/// `agents` defines four common configurations. A repo without herdr/tmux
+/// `agents` defines five common configurations (four claude, one bare `pi`
+/// that `team.pi` points at). A repo without herdr/tmux
 /// can ignore this block — it only activates when a slot resolves to
 /// `{kind: "herding"}`.
 pub fn default_config() -> Value {
-    json!({
+    let mut config = json!({
         "hooks": {
             "session-init": true,
             "prompt-context": true,
@@ -249,10 +253,29 @@ pub fn default_config() -> Value {
                     "haiku",
                     "--permission-mode",
                     "bypassPermissions"
-                ]
+                ],
+                // host-packaging-gaps D2: bare `pi` runs the user's own Pi
+                // default model — bee picks no provider or model.
+                "pi": ["pi"]
             }
         }
-    })
+    });
+    // host-packaging-gaps D2: `team.pi` mirrors `team.claude` role for role —
+    // same names, order and descriptions — each a herding slot on agent `pi`.
+    // Derived, so the two tables cannot drift apart.
+    let pi: Map<String, Value> = config["team"]["claude"]
+        .as_object()
+        .expect("team.claude is an object literal")
+        .iter()
+        .map(|(role, slot)| {
+            (role.clone(), json!({ "kind": "herding", "agent": "pi", "description": slot["description"] }))
+        })
+        .collect();
+    config["team"]
+        .as_object_mut()
+        .expect("team is an object literal")
+        .insert("pi".into(), Value::Object(pi));
+    config
 }
 
 /// onboard_bee.mjs runtimeFiles (computePlan step 2, l. 3079–3085): the
@@ -502,6 +525,12 @@ mod tests {
         // Herding skeleton is present.
         assert!(v["herding"]["agent_command"].as_str().is_some());
         assert!(v["herding"]["agents"].as_object().is_some());
+        // host-packaging-gaps D2: a bare `pi` agent — no provider, no model.
+        assert_eq!(v["herding"]["agents"]["pi"], json!(["pi"]));
+        let agent_names: Vec<&str> =
+            v["herding"]["agents"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(agent_names, vec!["claude-sonnet", "claude-opus", "claude-fable", "claude-haiku", "pi"]);
+        assert_eq!(v["herding"]["agent_command"], "claude-sonnet");
     }
 
     /// The full role table is now shipped — all roles bee asks for, plus the
@@ -545,6 +574,12 @@ mod tests {
         for name in ["code", "read", "extraction", "generation"] {
             assert!(v["team"]["codex"][name].is_null(), "codex.{name} must stay null");
         }
+
+        // host-packaging-gaps D2: pi mirrors claude's names, in order, after codex.
+        let team_keys: Vec<&str> = v["team"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(team_keys, vec!["claude", "codex", "pi"]);
+        let pi_names: Vec<&str> = v["team"]["pi"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(pi_names, claude_names, "pi");
     }
 
     /// Every claude role ships with a description so `bee models show` is
@@ -565,6 +600,13 @@ mod tests {
             assert!(
                 obj.get("description").and_then(Value::as_str).is_some_and(|d| !d.is_empty()),
                 "claude.{name} ships no description"
+            );
+            // host-packaging-gaps D2: the same role's pi slot is a herding
+            // slot on agent `pi` carrying claude's description.
+            assert_eq!(
+                v["team"]["pi"][name],
+                json!({ "kind": "herding", "agent": "pi", "description": obj["description"] }),
+                "pi.{name}"
             );
         }
     }

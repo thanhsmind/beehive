@@ -382,6 +382,9 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     let _ = write_file_atomic(&target, content.as_bytes());
                 }
             }
+            "add_pi_team" => {
+                add_pi_team(&target, item["table"].as_str().unwrap_or("team"));
+            }
             "create_dir" => {
                 let _ = std::fs::create_dir_all(&target);
             }
@@ -737,6 +740,16 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             &bee_version.as_ref().map(|v| json!(v)).unwrap_or(Value::Null),
         ),
     );
+    // host-packaging-gaps D2: once offered — added to an existing config, or
+    // written into a fresh one — the Pi table is never offered again.
+    let pi_team_offered = previous.get(T::PI_TEAM_OFFERED_KEY) == Some(&Value::Bool(true))
+        || applied.iter().any(|i| {
+            i["action"] == "add_pi_team"
+                || (i["action"] == "create_runtime_file" && i["path"] == ".bee/config.json")
+        });
+    if pi_team_offered {
+        payload.insert(T::PI_TEAM_OFFERED_KEY.into(), json!(true));
+    }
     let created_at = match previous.get("created_at") {
         Some(v) if is_truthy(v) => v.clone(),
         _ => json!(utc_now()),
@@ -761,6 +774,49 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             "skipped": skipped_skills,
         }),
     }))
+}
+
+/// host-packaging-gaps D2: add the default Pi table (derived from
+/// `default_config()`) under `table`, and `herding.agents.pi`, each only when
+/// absent — no existing key is changed, reordered or removed. The file keeps
+/// its indent unit and line ending. Unparseable or non-object: left alone.
+fn add_pi_team(target: &Path, table: &str) {
+    let text = read_text_if_exists(target);
+    let Ok(Value::Object(mut config)) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    let defaults = T::default_config();
+    let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+        return;
+    };
+    roster.entry("pi").or_insert_with(|| defaults["team"]["pi"].clone());
+    if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut() {
+        if let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
+            agents.entry("pi").or_insert_with(|| defaults["herding"]["agents"]["pi"].clone());
+        }
+    }
+    let mut out = jsjson::stringify_pretty(&Value::Object(config));
+    // JSON strings hold no raw newline, so re-indenting line by line is safe.
+    let indent = text
+        .lines()
+        .map(|l| &l[..l.len() - l.trim_start().len()])
+        .find(|ws| !ws.is_empty())
+        .unwrap_or("  ");
+    if indent != "  " {
+        out = out
+            .lines()
+            .map(|l| {
+                let body = l.trim_start_matches(' ');
+                format!("{}{body}", indent.repeat((l.len() - body.len()) / 2))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+    out.push('\n');
+    if text.contains("\r\n") {
+        out = out.replace('\n', "\r\n");
+    }
+    let _ = write_file_atomic(target, out.as_bytes());
 }
 
 fn is_truthy(v: &Value) -> bool {

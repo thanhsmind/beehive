@@ -581,6 +581,30 @@ pub fn compute_verify_skill_items(repo_root: &Path) -> Vec<Value> {
 
 // ── computePlan ────────────────────────────────────────────────────────────
 
+/// host-packaging-gaps D2: the roster key (`team`, or the legacy `models`)
+/// that should gain the default Pi table, or None. None when: the offer is
+/// already recorded (a deleted table stays deleted); the tracked config is
+/// absent, unparseable or not an object; it has neither a `team` nor a
+/// `models` object (named narrowing: nothing to extend); or the MERGED view
+/// (config.local.json overlay included) already has `team.pi`. `team` wins
+/// over `models`, as fold_team_key does.
+fn pi_team_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<&'static str> {
+    if onboarding.and_then(|o| o.get(T::PI_TEAM_OFFERED_KEY)) == Some(&Value::Bool(true)) {
+        return None;
+    }
+    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
+    let tracked = tracked.as_object()?;
+    let table = match tracked.get("team") {
+        Some(team) => team.is_object().then_some("team")?,
+        None => tracked.get("models").filter(|m| m.is_object()).map(|_| "models")?,
+    };
+    let merged = crate::state::read_config_raw(repo_root);
+    if merged.get("team").and_then(|t| t.get("pi")).is_some() {
+        return None;
+    }
+    Some(table)
+}
+
 pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ComputedPlan {
     let mut plan: Vec<Value> = Vec::new();
     let codex_hybrid = opts.plugin_source && hw::runtime_covers_codex(&opts.runtime);
@@ -672,8 +696,19 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         }
     }
 
-    // 3. vendored helpers + lib (copy when missing or drifted)
     let onboarding = read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"));
+
+    // 2b. host-packaging-gaps D2: offer the Pi role table ONCE to an existing
+    // config that lacks it — the only step that edits a present config.json.
+    if let Some(table) = pi_team_target(repo_root, onboarding.as_ref()) {
+        let mut m = Map::new();
+        m.insert("action".into(), json!("add_pi_team"));
+        m.insert("path".into(), json!(".bee/config.json"));
+        m.insert("table".into(), json!(table));
+        plan.push(Value::Object(m));
+    }
+
+    // 3. vendored helpers + lib (copy when missing or drifted)
     for name in list_template_helpers(engine) {
         let source = read_text_if_exists(&engine.templates_dir.join(&name));
         let target = repo_root.join(".bee").join("bin").join(&name);

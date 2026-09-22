@@ -50,7 +50,7 @@ stateDiagram-v2
 
 ### Invoke
 
-`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
+`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|pi|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
 
 Two things are settled before any work:
 
@@ -63,7 +63,7 @@ Two things are settled before any work:
 
 The paths that answer without touching the host:
 
-- **A parse error.** `Unknown argument: --bogus`, or `--runtime must be claude, codex, or both (got: X)`. Both are printed as `{"error": "<message>"}` on **stdout** and exit 1 — even without `--json`.
+- **A parse error.** `Unknown argument: --bogus`, or `--runtime must be claude, codex, pi, or both (got: X)`. Both are printed as `{"error": "<message>"}` on **stdout** and exit 1 — even without `--json`.
 - **No source checkout visible.** The refusal names the invocation root it searched, the template path it did not find, the `--repo-root` candidate if one was passed, and two ways forward: run from inside a bee checkout, or re-run the installer one-liner. Under `--json` it carries `status: "blocked_no_engine"` and `kind: "engine_not_found"` so the installer can branch on it. This is the refusal a plain host repo meets: with no bee checkout on the machine, onboarding cannot be re-run from inside the host.
 - **A check run.** Always exit 0 — including when the status is a `blocked_*` one. Reporting is not failing.
 
@@ -98,7 +98,7 @@ CLAUDE.md                     the @AGENTS.md import section
 .gitignore                    managed block between # BEE:START / # BEE:END
 .bee/onboarding.json          the ledger
 .bee/state.json               phase idle, gates false
-.bee/config.json              six hooks on, gate_bypass false, team.claude / team.codex
+.bee/config.json              six hooks on, gate_bypass false, team.claude / team.codex / team.pi
 .bee/config-sample.json       the annotated copy of bee's own sample
 .bee/reservations.json        {"reservations": []}
 .bee/decisions.jsonl          empty
@@ -153,7 +153,7 @@ Columns: before and after the first plan item is written (a check run never reac
 
 **Gates and approval.** None recorded. Onboarding is outside the [gate](../foundations/gates.md) chain entirely: it needs no approval to run, approves nothing, and its own consent moment — "the check reports changes, may I apply?" — is a plain question to the human.
 
-**The store and history.** Onboarding *creates* the store and then stays out of it: `state.json`, `config.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`, and the `cells/` and `logs/` directories are create-if-missing and never rewritten. The one store file it owns outright is the ledger, rewritten on every apply. See [the store](../foundations/store.md).
+**The store and history.** Onboarding *creates* the store and then stays out of it: `state.json`, `config.json`, `reservations.json`, `decisions.jsonl`, `backlog.jsonl`, and the `cells/` and `logs/` directories are create-if-missing and never rewritten (one exception: the one-time Pi role table added to `config.json`, under Configuration below). The one store file it owns outright is the ledger, rewritten on every apply. See [the store](../foundations/store.md).
 
 **Worktrees and containment.** The target root and the source checkout are resolved separately, and the source is bounded at the first `.git` so an ancestor outside the repository can never become the template source. A worktree-local coordination store from an older layout is migrated into the main one as a plan item — and a conflict there outranks every other refusal. See [worktrees](../foundations/worktrees.md).
 
@@ -169,7 +169,7 @@ Columns: before and after the first plan item is written (a check run never reac
 
 `bee status` carries the same fact with detail: `onboarding.installed`, `bee_version`, `plugin_version`, a `drift` boolean, and a `drift_detail` list naming each managed file that changed, went `(missing)`, or appeared `(extra)`. The report only reports — bringing a drifted host back is an apply run. See [status](../observability/status.md).
 
-**Configuration.** Onboarding seeds `.bee/config.json` once and never edits it again. It *reads* config to resolve each agent file's model from `team.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
+**Configuration.** Onboarding seeds `.bee/config.json` once and edits it at most once more. The seed carries a Pi role table: `team.pi` names every `team.claude` role as a herding slot on agent `pi`, and `herding.agents.pi` is `["pi"]` — plain `pi` on the user's own Pi default model. An existing config with a `team` (or legacy `models`) object and no `team.pi` in the merged view gains those two keys once, each only if absent, with every other key, the indent and the line ending kept; the ledger records the offer as `pi_team_offered`, so a deleted table is never re-added. A config with neither roster key is left alone. It *reads* config to resolve each agent file's model from `team.<runtime>`, to decide the host shell for the PowerShell section, and to detect the statusline opt-out. It also *proposes*: a host with no `commands.setup/start/test` recorded gets a notice listing detected candidates with the instruction to confirm them with the human and write only confirmed values — never to invent them. Stale keys are warned about, never rewritten: a leftover top-level `advisor`, and a retired `commands.verify` (with a sharper warning when no `commands.test` exists at all). A host with git-tracked files that the managed ignore block cannot silence gets the exact `git rm -r --cached` line to fix it. See [configuration](../cross-cutting/configuration.md).
 
 **Output modes and exit codes.** Check run: exit 0 always, including `blocked_*`. Apply run: exit 0 on success, exit 1 on any blocked preflight (zero mutations). Parse errors and the no-source refusal exit 1. No timing line on any path.
 
