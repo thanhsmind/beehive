@@ -42,6 +42,7 @@
 // byte-for-byte. Failure shapes that can be detected BEFORE any output (a
 // symlink in the skill source, a missing input tree) return None instead.
 
+mod comment_baseline;
 mod hook_manifests;
 mod install_support;
 mod jspath;
@@ -61,7 +62,8 @@ use std::process::ExitCode;
 /// returns None without it. `statusline` is deliberately absent: it renders a
 /// HOST repo's status line and works anywhere, so guarding it would refuse a
 /// call that succeeds today.
-const SOURCE_CHECKOUT_DEV_VERBS: [&str; 5] = [
+const SOURCE_CHECKOUT_DEV_VERBS: [&str; 6] = [
+    "comment-baseline",
     "render-skill-trees",
     "render-prompt",
     "release-manifest",
@@ -97,6 +99,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "render-prompt" => prompts::run(flags),
         "statusline" => statusline::run(flags),
         "release-manifest" => release_manifest::run(flags),
+        "comment-baseline" => comment_baseline::run(flags),
         "plugin-distribution" => plugin_distribution::run(flags),
         "install-support" => install_support::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
