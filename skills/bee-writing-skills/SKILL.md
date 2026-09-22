@@ -36,6 +36,7 @@ CREATION-LOG.md template: `references/creation-log-template.md`.
 
 - [ ] YAML frontmatter starts on line 1 (`---`); `name` hyphen-case with the `bee-` prefix, matches the directory exactly
 - [ ] `description`: one purpose clause, then "Use when..." triggers — NEVER a workflow/step summary (agents follow the description and skip the body); third person, ≤1024 chars
+- [ ] Trigger cases: a new or renamed skill adds at least 3 briefs that open it and 2 near misses that must not, to `packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json` (`brief`/`expect`/`near`; a brief never names its skill) — the suite's `skill_triggers` test refuses a skill with none; `BEE_SKILL_TRIGGER_EVAL="claude -p" cargo test --test skill_triggers -- --ignored` asks a real agent (per skill-trigger-cases D7)
 - [ ] `metadata.version: '0.1'`, `metadata.ecosystem: bee`, `metadata.dependencies` mapping or `[]` (never a YAML array of objects — `references/checklist-examples.md` ("Dependency metadata style"))
 - [ ] Information density, not length: overflow to exactly one level of `references/`; a body line earns its place only by changing agent behavior — a line that doesn't belongs in `references/`
 - [ ] Prose follows the instruction-spec standard — imperative rules, trigger framing, constraint first, one word one meaning, token economy: `references/prompt-style.md` ("The seven laws"); edits to existing skills also honor its frozen-heading and protocol-vocabulary guardrails
