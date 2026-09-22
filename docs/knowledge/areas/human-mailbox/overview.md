@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [human-mailbox]
   required_context: []
-  decisions: ["LR1 5dbdb0e2 (the letter gains a Mistakes & reflection section, after Broken-or-unfinished, dropped when empty — amends D7's section set)", "LR2 b8291876 (its only source is the reflection entry kind, appended by the agent through bee mailbox reflect; the composing pass never authors one)", "LR3 ba9f06a4 (a reflection entry has two required parts: what went wrong, and what would have been better)", "LR4 bb73e821 (lesson mining sources unchanged; reflection entries are not mined)", "D1 303488de (bee owns the mailbox data and the code that emits it, and nothing above it)", "D2 e3618e3b (a readable subject is a validity rule, not a formatting preference)", "D3 1b079912 (one markdown file per letter with typed frontmatter; no JSON twin, no index stream)", "D4 1d56c1d2 (append at every clean stop; compose when the run ends)", "D5 e9cb4c15 (a departure has three required parts and a closed kind set)", "D6 2009bc71 (read state is a field bee owns; the inbox flips it by calling a bee command)", "D7 b94381e5 (five nightly sections, empty ones dropped; architecture/behaviour/usage only in the close letter)", "D8 1c7a9d87 (sentences written at the moment of the event; the composing pass may never author a fact)", "D9 d970d6fc (every session appends; only an unattended run files)", "D10 1fb69f4b (the explicit no-departure statement is enforced only while armed)", "D11 349f25d8 (one letter maps to one run, never one night)", "D12 05b5f964 (a run that died gets its letter from the next session; no scheduler)", "D13 c3ece144 (each needs-your-call item carries a stable id and names what it blocks)", "D14 a6475e2c (the feature-close letter is in scope; a weekly digest is not — superseded in effect by letter-digest LD1/LD3)", "D17 1660158a (bee and the consuming project are separate; bee never writes another project's tree)", "LD1 b610a1dc (the mailbox stays files; daily and weekly digests are files beside the letters)", "LD2 aedb5be9 (every bee close files its close letter at the moment of close, attended included)", "LD3 dbbe0778 (the next session composes a finished period's missing digest; no scheduler)", "LD4 b343870b (the weekly fold auto-logs repeat error shapes as decisions tagged lesson)", "RBL D1 db562f26 (a run may not end its work without an explicit mistakes answer; the close door refuses without one)", "RBL D2 a240362a (the explicit clean-run answer is its own stored entry kind, never rendered as a mistake and never mined)", "RBL D3 0872f328 (lesson mining reads reflection entries as a trouble source, by their what alone; the clean-run answer is never mined — supersedes LR4 bb73e821)", "RBL D5 20fe96d3 (the answer is recorded per cell and the close door walks the feature's capped cells, never the closing session's run)", "RBL D6 7760339d (the feedback digest reports the clean-run-to-reflection ratio; a witness, never a guard)"]
+  decisions: ["LR1 5dbdb0e2 (the letter gains a Mistakes & reflection section, after Broken-or-unfinished, dropped when empty — amends D7's section set)", "LR2 b8291876 (its only source is the reflection entry kind, appended by the agent through bee mailbox reflect; the composing pass never authors one)", "LR3 ba9f06a4 (a reflection entry has two required parts: what went wrong, and what would have been better)", "LR4 bb73e821 (lesson mining sources unchanged; reflection entries are not mined)", "D1 303488de (bee owns the mailbox data and the code that emits it, and nothing above it)", "D2 e3618e3b (a readable subject is a validity rule, not a formatting preference)", "D3 1b079912 (one markdown file per letter with typed frontmatter; no JSON twin, no index stream)", "D4 1d56c1d2 (append at every clean stop; compose when the run ends)", "D5 e9cb4c15 (a departure has three required parts and a closed kind set)", "D6 2009bc71 (read state is a field bee owns; the inbox flips it by calling a bee command)", "D7 b94381e5 (five nightly sections, empty ones dropped; architecture/behaviour/usage only in the close letter)", "D8 1c7a9d87 (sentences written at the moment of the event; the composing pass may never author a fact)", "D9 d970d6fc (every session appends; only an unattended run files)", "D10 1fb69f4b (the explicit no-departure statement is enforced only while armed)", "D11 349f25d8 (one letter maps to one run, never one night)", "D12 05b5f964 (a run that died gets its letter from the next session; no scheduler)", "D13 c3ece144 (each needs-your-call item carries a stable id and names what it blocks)", "D14 a6475e2c (the feature-close letter is in scope; a weekly digest is not — superseded in effect by letter-digest LD1/LD3)", "D17 1660158a (bee and the consuming project are separate; bee never writes another project's tree)", "LD1 b610a1dc (the mailbox stays files; daily and weekly digests are files beside the letters)", "LD2 aedb5be9 (every bee close files its close letter at the moment of close, attended included)", "LD3 dbbe0778 (the next session composes a finished period's missing digest; no scheduler)", "LD4 b343870b (the weekly fold auto-logs repeat error shapes as decisions tagged lesson)", "RBL D1 db562f26 (a run may not end its work without an explicit mistakes answer; the close door refuses without one)", "RBL D2 a240362a (the explicit clean-run answer is its own stored entry kind, never rendered as a mistake and never mined)", "RBL D3 0872f328 (lesson mining reads reflection entries as a trouble source, by their what alone; the clean-run answer is never mined — supersedes LR4 bb73e821)", "RBL D5 20fe96d3 (the answer is recorded per cell and the close door walks the feature's capped cells, never the closing session's run)", "RBL D6 7760339d (the feedback digest reports the clean-run-to-reflection ratio; a witness, never a guard)", "MFA D1 af14e1d6 (a reflection has a third required part, --fix-at, from architecture | check | doctrine | none)", "MFA D2 6e79d14e (at bee close every check/architecture reflection files one P3 finding backlog row, layer fix-at:<value>, never twice)", "MFA D2a d1d83be7 (the close-time source set is the feature's capped cells' trace.mistakes plus the closing run's own entries)", "MFA D3 9173fbd2 (the lesson miner keys a reflection by fix-at plus the first four normalized words of what, not by the whole sentence)", "MFA D4 5c43da33 (the fix-at instruction lands in the three doctrine homes; old reflections read as none, never backfilled)", "MFA D5 402cf686 (the promotion tree reads the closing feature's fix-at reflections at step 1)"]
   sources: ["docs/history/human-mailbox/CONTEXT.md (the locked decisions)", "docs/history/human-mailbox/plan.md (four phases, strictly ordered)", "docs/discovery/human-mailbox/MAP.md (the discovery map and its 14 tickets)", "cells hm-1..hm-10 (four slices, merged 2026-08-25/26)"]
   authoritative_for: "human-mailbox: the letter record, when it is filed, and the one command a consumer may call"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/mailbox.rs]
@@ -59,7 +59,7 @@ follows from that.
 | **armed** | The mailbox is on for this run, so it will file a letter and the explicit-departure rule is enforced. Arming needs both the checkout's own configuration and the owner's enable marker: the configuration alone only says a checkout *can* run unattended. |
 | **departure** | A recorded difference between what the plan said and what was done, in three required parts — what was done differently, why, and which kind — with kind drawn from a closed set of four. |
 | **plan-followed statement** | The explicit declaration that a unit followed its plan. Recorded separately from departures, so that a statement meaning *nothing happened* can never be mined as though it were a lesson. |
-| **reflection** | An entry kind the agent appends the moment it notices a mistake, or at the run-end look-back, via `bee mailbox reflect --wrong <what went wrong> --better <what would have been better>` (LR2). Both parts are required; a missing part refuses the append (LR3). It renders as the letter's "Mistakes & reflection" section, between Broken-or-unfinished and Needs-your-call, dropped when empty (LR1); a reflection never appears in Done and never becomes the subject — a mistake is not a thing the run did. Lesson mining reads it as a trouble source, by its `what` alone (RBL D3 `0872f328`, superseding LR4). |
+| **reflection** | An entry kind the agent appends the moment it notices a mistake, or at the run-end look-back, via `bee mailbox reflect --wrong <what went wrong> --better <what would have been better> --fix-at <layer>` (LR2, MFA D1 `af14e1d6`). All three parts are required; a missing one refuses the append (LR3). The layer is the strongest thing that stops the mistake coming back, from a closed set: `architecture` (a code change makes it impossible), `check` (a test, hook, guard or doctor row catches it), `doctrine` (only prose can carry it), `none` (a one-off nobody would guard); a word outside that set refuses at the same door, and a row written before the layer existed reads as `none`, never backfilled (MFA D4). It renders as the letter's "Mistakes & reflection" section, between Broken-or-unfinished and Needs-your-call, dropped when empty (LR1); a reflection never appears in Done and never becomes the subject — a mistake is not a thing the run did. Lesson mining reads it as a trouble source, by its `what` alone (RBL D3 `0872f328`, superseding LR4). |
 <!-- bee:not-a-deferral: "a later session" names which session files the letter, shipped recovery behaviour, not a deferred task -->
 | **unfinished letter** | A letter filed by a later session for a run that went silent, marked plainly as such and naming the moment the run last recorded anything. |
 <!-- /bee:not-a-deferral -->
@@ -163,25 +163,44 @@ scheduler being introduced to watch for this.
     departures, never plan-followed statements, never the clean-run answer. A
     mined decision carries `source: "agent"` and only what its cited letters
     say (D8). A digest or lesson failure never refuses the work that
-    triggered it.
+    triggered it. A reflection keys by its fix-at layer plus the first four
+    normalized words of its `what` (MFA D3 `9173fbd2`) — the four-word brake
+    applies to the `what` before the key is built, a letter carrying no
+    `fix_at` keys as `none`, and two different layers never fold together.
+    The lesson names the key it matched on and quotes the other letter's own
+    sentence, so a reader can see what the two runs actually said.
 16. **A reflection is mined by its `what`, never by its rendered bullet**
     (RBL D3). The bullet joins the two stored parts as
     `<what> — better: <better>`; tokenizing that join would make the same
     mistake with a differently worded counterfactual fail to match. The item
     carries its parts apart, so the miner reads the part that recurs and
     leaves the run's own idea of the fix out of the shape.
-17. **The clean-run answer is excluded structurally, never by its wording**
+17. **A mechanizable mistake becomes a backlog row at close, on its first
+    occurrence** (MFA D2 `6e79d14e`, scoped by D2a `d1d83be7`). Past every
+    close door, each reflection whose fix-at is `check` or `architecture`
+    files exactly one row: type `finding`, severity `P3`, layer
+    `fix-at:<value>`, title the `wrong` text, detail the `better` text plus
+    the cell or run it came from. The source set is the feature's capped
+    cells' `trace.mistakes` (archive included) and the closing run's own
+    entries — nothing else carries a feature. The same row is never filed
+    twice: (feature, layer, title) is re-read per row. `doctrine` and `none`
+    file nothing and stay on the two-run lesson rule. The close then says
+    `Filed for "<feature>": N fix-at row(s) to .bee/backlog.jsonl (M already
+    there) — bee backlog findings --feature <feature> to read them.`, and
+    stays silent when there is no news. A backlog that cannot be written
+    warns and never refuses the close.
+18. **The clean-run answer is excluded structurally, never by its wording**
     (RBL D2/D3). It is the one mistakes-answer entry that carries no
     `better`, and that absence is what keeps it out of the miner — the same
     shape test the letter composer uses, so a re-worded sentence cannot slip
     past a string match that never existed.
-18. **The collapse of the answer is measured, not assumed** (RBL D6):
+19. **The collapse of the answer is measured, not assumed** (RBL D6):
     `bee feedback digest` counts the caps that answered clean against the
     caps that recorded a real reflection, from the cell traces the cap
     already writes, and reports both numbers and their ratio in its object
     and on its printed line. It is a WITNESS, never a guard — it refuses
     nothing, drops nothing, and scores nothing.
-19. **A feature close demands the mistakes answer, and asks the CELLS, not
+20. **A feature close demands the mistakes answer, and asks the CELLS, not
     the run** (RBL D1, D5). The close refuses while any capped cell of the
     feature carries neither a reflection nor the clean-run answer, and names
     those cells. It reads the feature's capped cell traces, never the closing
@@ -192,7 +211,7 @@ scheduler being introduced to watch for this.
     NOT armed-gated, because a feature close files its letter
     unconditionally (LD2), and it runs with the other blocking doors, before
     any write, so a refused close appends no entry and files no letter.
-20. **The cap is the one writer, and it fills two sinks** (RBL D5). One
+21. **The cap is the one writer, and it fills two sinks** (RBL D5). One
     reading of the reported values lands both the cell trace the door reads
     and the mailbox entry the letter renders, so the two can never disagree
     about what a run answered. The cap itself adds no refusal of its own.

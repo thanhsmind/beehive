@@ -306,12 +306,20 @@ one type per file, linked where types meet.
 <!-- /rule -->
 - Write a mistake down the MOMENT you notice it, never composed from
   memory at the end: `bee mailbox reflect --wrong "<what went wrong>"
-  --better "<what would have been better>"`. Name a concrete thing in
+  --better "<what would have been better>" --fix-at
+  <architecture|check|doctrine|none>`. Name a concrete thing in
   the first part — a file, a command, or something you saw — never
-  "the approach". A cap answers the same question for its own cell
-  (`--mistake "<wrong> — <better>"`, or `--no-mistakes` when it hit
-  none), and `bee close` refuses a feature whose capped cells never
-  answered: silence and a clean run must not read alike.
+  "the approach". The layer is required and names what stops the
+  mistake coming back: `architecture` — a code change makes the
+  mistake impossible; `check` — a test, hook, guard or doctor row
+  catches it; `doctrine` — only prose can carry it; `none` — a one-off
+  nobody would guard. Pick the strongest layer someone would actually
+  build now: a known and accepted state is `doctrine`, and a mistake
+  nobody would guard against is `none`. A cap answers the same
+  question for its own cell (`--mistake "<wrong> — <better>" --fix-at
+  <layer>`, or `--no-mistakes` when it hit none), and `bee close`
+  refuses a feature whose capped cells never answered: silence and a
+  clean run must not read alike.
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the
