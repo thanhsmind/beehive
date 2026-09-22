@@ -82,6 +82,9 @@ required state, commands, and observable proof.
   it on, and the baseline verb that only ever lowers a count.
 - [Worktree and close](./worktree-and-close.md) covers creating a feature
   worktree, merging it back, and the close doors.
+- [Worker outward guard](./worker-outward-guard.md) covers the push, the GitHub
+  write and the nested agent launch refused inside a linked worktree, and the
+  `guards.worker_outward` key that turns them off.
 - [Semantic role routing](./semantic-role-routing.md) covers plan-time role
   assignment, dispatch stage and role enforcement, structured cell rerouting,
   and release deploy authorization.

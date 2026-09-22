@@ -372,7 +372,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
-| `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · `800` · no memory root |
+| `guards` | `idle_gate` (`false` disables the idle intake gate) · `worker_outward` (`false` disables the worker-outward guard — see the section below) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · worker-outward guard on · `800` · no memory root |
 | `cells_archive_on_close` | whether a green `bee close` retires the feature's cells into `.bee/cells/archive/<feature>/`, out of the scan path `status`/`orient` parse on every call. Only fires when every one of the feature's cells is capped or dropped; reverse with `bee cells unarchive --feature <f>`. Set `false` for a repo whose own tooling reads `.bee/cells/*.json` by path | `true` |
 | `ship_visibility` | how finished work is surfaced — `"off"` or `"draft-pr"`. An unrecognized value normalizes to `"off"` and says so once, by name | `"off"` |
 | `worktree_first` | code-touching feature work lives in its own worktree and the write guard refuses feature edits made in the main checkout; the exact string `"off"` disables that refusal — see [specs/worktree-first.md](specs/worktree-first.md) | on |
@@ -383,6 +383,41 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
 | `doc_viewer` | opt-in URL prefix for a local doc viewer (e.g. mdview) — `base_url` + `project` join as `<base_url>/p/<project>/<repo-relative-path>`, so the agent gives a clickable URL instead of a bare path — see below | unset ⇒ bare paths |
 | `herding` | `agent_command` / `control_command` — the runtime adapter for `bee herding run`/`--continue` (one external agent as a cell-execution worker), `bee herding interrupt`, `bee herding cancel`, `bee herding wave`, and `bee herding control-loop`; both keys are optional and independent. Canonical doc, not duplicated here: [skills/bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md) | absent ⇒ today's `claude` spawn, unchanged |
+
+### `guards.worker_outward` — the three commands a worktree never runs
+
+Inside any linked git worktree — one `bee worktree new` created, granted or not — the write guard
+refuses three outward-facing shell commands, in every phase. The location decides, not the caller:
+a human working in their own worktree is refused exactly as an execution worker is.
+
+1. **`git push`**, in every spelling the guard resolves a git invocation from (`git -C <path> push`,
+   a wrapper, a compound line). `--dry-run` is a push too.
+2. **Every `gh` command** except these reads: `pr view|list|status|checks|diff`,
+   `run list|view|watch|download`, `issue view|list`, `release view|list|download`, `repo view`,
+   `workflow list|view`, `search <anything>`, `cache list`, `label list`, `status`, `auth status`,
+   `api` with an explicit GET (`-f`/`-F` fields are allowed then), and `api graphql` with no
+   `mutation` in the query. A verb that is not on this list is refused, and so is a `gh` alias —
+   the guard cannot read what an alias expands to.
+3. **A nested agent launch** — `claude`, `codex`, `pi` or `opencode` as the command word, through
+   `env`, `npx`, `bunx`, `sudo`, `nohup` or `timeout` too. The one exemption is the command
+   `bee dispatch prepare` itself returns: a line starting with a configured
+   `models.<runtime>.<name>.command`, or `codex exec` carrying `--sandbox read-only` / `-s read-only`.
+   `bee` is never judged, so `bee herding run` still opens its pane agent.
+
+Every refusal leads with the remedy for its own form: land through `bee worktree merge` from the
+main checkout, push and write to GitHub through `scripts/release.sh` from main, and start a helper
+through `bee dispatch prepare`. A cell worker stops and reports the command as blocked.
+
+```jsonc
+// .bee/config.json in the MAIN checkout — the worktree's own tracked copy is NOT read
+{ "guards": { "worker_outward": false } }
+```
+
+The key is read from the main checkout because the worktree is the place being guarded. Setting it
+inside the worktree changes nothing, and every refusal says so.
+
+The guard judges command lines, not files. A script that contains a push runs; the line that ran the
+script is what the guard saw.
 
 ### `guards.memory_root` (GH #71) — letting the agent keep its own memory
 

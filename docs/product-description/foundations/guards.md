@@ -95,7 +95,7 @@ The guards are instantaneous deciders — there is no extended phase to interrup
 
 **What the human sees.** A red or refusal line is never silenced. The privacy marker is routed to the human verbatim; model-guard repairs announce themselves to both parties.
 
-**Configuration.** Per-hook toggles (`hooks.<name>: false`), `guards.idle_gate`, `guards.auto_isolate`, `guards.max_read_lines`, `worktree_first` — each named in its guard's own deny.
+**Configuration.** Per-hook toggles (`hooks.<name>: false`), `guards.idle_gate`, `guards.worker_outward`, `guards.auto_isolate`, `guards.max_read_lines`, `worktree_first` — each named in its guard's own deny.
 
 **Output modes and exit codes.** Deny = exit 2 with stderr text; warn = exit 0 with attached context; repair = exit 0 with rewritten input; undecidable = exit 0 with a stderr line.
 
