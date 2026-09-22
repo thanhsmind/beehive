@@ -54,6 +54,43 @@ pub(crate) fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {
     targets
 }
 
+pub(crate) fn apply_patch_added_lines(patch_text: &str) -> Vec<(String, Vec<String>)> {
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
+    let mut current: Option<(String, Vec<String>)> = None;
+    for line in patch_text.split('\n') {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        if let Some(after_stars) = line.strip_prefix("***") {
+            let after_ws = after_stars.trim_start_matches(js_is_ws);
+            if after_ws.len() != after_stars.len() {
+                let mut opened: Option<String> = None;
+                for verb in ["Add File", "Update File"] {
+                    let Some(rest) = after_ws.strip_prefix(verb) else { continue };
+                    let Some(rest) = rest.strip_prefix(':') else { continue };
+                    let target = js_trim(rest);
+                    if !target.is_empty() {
+                        opened = Some(target.to_string());
+                    }
+                    break;
+                }
+                if let Some(done) = current.take() {
+                    out.push(done);
+                }
+                current = opened.map(|target| (target, Vec::new()));
+                continue;
+            }
+        }
+        if let Some((_, added)) = current.as_mut() {
+            if let Some(rest) = line.strip_prefix('+') {
+                added.push(rest.to_string());
+            }
+        }
+    }
+    if let Some(done) = current.take() {
+        out.push(done);
+    }
+    out
+}
+
 // ─── agent-name inference (provenance: bee-write-guard.mjs inferAgentName) ─
 
 pub(crate) fn is_word_char(c: char) -> bool {
@@ -316,4 +353,30 @@ pub(crate) fn flush(emit: Emit, source: Option<&str>) -> Outcome {
         let _ = std::io::stderr().write_all(emit.stderr.as_bytes());
     }
     Outcome::Done(ExitCode::from(emit.code))
+}
+
+#[cfg(test)]
+mod apply_patch_added_line_tests {
+    use super::apply_patch_added_lines;
+
+    #[test]
+    fn two_targets_each_keep_their_own_added_lines_in_order() {
+        let patch = "*** Begin Patch\n*** Add File: src/a.rs\n+// one\n+fn a() {}\n*** Update File: src/b.rs\n@@\n fn b() {}\n-let x = 1;\n+let x = 2;\n*** End Patch\n";
+        assert_eq!(
+            apply_patch_added_lines(patch),
+            vec![
+                (
+                    "src/a.rs".to_string(),
+                    vec!["// one".to_string(), "fn a() {}".to_string()]
+                ),
+                ("src/b.rs".to_string(), vec!["let x = 2;".to_string()]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_delete_or_move_target_carries_no_added_lines() {
+        let patch = "*** Begin Patch\n*** Delete File: src/a.rs\n*** Move to: src/c.rs\n+not mine\n*** End Patch\n";
+        assert_eq!(apply_patch_added_lines(patch), Vec::new());
+    }
 }

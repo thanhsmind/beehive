@@ -458,6 +458,35 @@ fn a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
 }
 
 #[test]
+fn a_comment_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
+    let fx = fixture();
+    std::fs::write(
+        fx.root.join(".bee").join("config.json"),
+        "{\"no_code_comments\": true}\n",
+    )
+    .unwrap();
+    let rel = "packages/bee-rs/crates/bee/src/x.rs";
+    let target = fx.root.join(rel);
+    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+    std::fs::write(&target, "fn f() {}\n").unwrap();
+    let input = serde_json::json!({
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": rel,
+            "old_string": "fn f() {}",
+            "new_string": "// note\nfn f() {}"
+        },
+        "cwd": fx.root.to_string_lossy(),
+    })
+    .to_string();
+    let out = run_hook("write-guard", input.as_bytes(), &fx.root);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(stdout(&out).is_empty(), "a deny writes its reason to stderr, not stdout");
+    assert!(stderr(&out).contains("FIX"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("bee comment guard"), "{}", stderr(&out));
+}
+
+#[test]
 fn a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr() {
     let fx = fixture();
     let input = serde_json::json!({
