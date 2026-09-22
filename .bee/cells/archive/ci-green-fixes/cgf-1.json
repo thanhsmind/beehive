@@ -1,0 +1,80 @@
+{
+  "id": "cgf-1",
+  "feature": "ci-green-fixes",
+  "title": "Read a Windows delete-pending lock as busy in the split lock",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "cf294aef-36e1-4f09-be18-fbae00cdc964"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In split_lock::try_acquire add a cfg(windows) match arm: Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false), placed after the AlreadyExists arm (per D1). No comment in code; the why is D1. Nothing else changes.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::split_lock",
+  "must_haves": {
+    "truths": [
+      "try_acquire returns Ok(false) on a Windows PermissionDenied and the split_lock tests stay green on Linux"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "Do not change unix behavior",
+      "Do not widen the arm beyond PermissionDenied"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Windows delete-pending split lock reads as busy and is retried",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+    ],
+    "deviations": [
+      "sync-ack: one cfg(windows) match arm in the split lock; no herding behavior on unix and no skill text changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-22T11:03:41.805Z",
+    "behavior_change": true,
+    "verification_evidence": "the module's tests on Linux, where the new arm is compiled out; the Windows path is proven only by the verify-windows CI job after the push",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "aff5297e-0798-4b11-88d0-789832ebce95",
+    "verify_command": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::split_lock",
+    "claimed_at": "2026-09-22T11:02:01.526Z",
+    "sync_ack": "one cfg(windows) match arm in the split lock; no herding behavior on unix and no skill text changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "try_acquire maps a Windows PermissionDenied from create_new to busy so a delete-pending lock is retried instead of erroring",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::split_lock — green:unit — the module's tests on Linux, where the new arm is compiled out; the Windows path is proven only by the verify-windows CI job after the push",
+      "deviations": [],
+      "commit": "01cce4208"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "try_acquire returns Ok(false) on a Windows PermissionDenied and the split_lock tests stay green on Linux",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+          }
+        ],
+        "recorded_at": "2026-09-22T11:03:41.845Z",
+        "recorded_by": "aff5297e-0798-4b11-88d0-789832ebce95",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
