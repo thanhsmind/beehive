@@ -353,8 +353,8 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
 // over grant state anymore; `--show`, `--set`, and every lane are native in
 // every repo.
 
-pub(crate) const ROUTE_CLASS_VALUES: [&str; 8] =
-    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike", "perf"];
+pub(crate) const ROUTE_CLASS_VALUES: [&str; 9] =
+    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike", "perf", "content"];
 const ROUTE_LANE_VALUES: [&str; 6] =
     ["docs", "tiny", "small", "spike", "standard", "high-risk"];
 // psa-1 (D2, decision 1593e365) added "perf" as the eighth class. SAFETY
