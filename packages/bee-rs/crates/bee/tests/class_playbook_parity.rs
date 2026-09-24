@@ -14,9 +14,9 @@
 //
 // Two things are pinned here, both directions of the same map:
 //
-//   1. Every value in `ROUTE_CLASS_VALUES` has exactly one `### <class>`
-//      section under `## Class playbooks`.
-//   2. Every `### ` section under that heading names a real class value.
+//   1. Every value in `ROUTE_CLASS_VALUES` has exactly one `<class>.md` file
+//      in `skills/bee-planning/playbooks/`.
+//   2. Every `.md` file in that directory names a real class value.
 //
 // Shape, deliberately: pure filesystem, std only, and NOTHING imported from the
 // bee crate — the model is `route_class_parity.rs`, whose header explains why.
@@ -33,11 +33,7 @@ use std::path::PathBuf;
 /// The single home of the class vocabulary.
 const WORKFLOWS_RS: &str = "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs";
 
-/// The single home of the playbooks.
-const PLAYBOOKS_MD: &str = "skills/bee-planning/references/planning-reference.md";
-
-/// The heading that opens the playbook set. The section runs to the next `## `.
-const PLAYBOOKS_HEADING: &str = "## Class playbooks";
+const PLAYBOOKS_DIR: &str = "skills/bee-planning/playbooks";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(4).unwrap().to_path_buf()
@@ -91,30 +87,26 @@ fn const_str_array(src: &str, name: &str) -> Vec<String> {
     values
 }
 
-/// The `### ` section names under `## Class playbooks`, in document order,
-/// duplicates kept — telling one section from two is this fence's job.
 fn playbook_names() -> Vec<String> {
-    let text = read(PLAYBOOKS_MD);
-    let at = text.find(&format!("\n{PLAYBOOKS_HEADING}\n")).unwrap_or_else(|| {
+    let dir = std::fs::read_dir(repo_root().join(PLAYBOOKS_DIR)).unwrap_or_else(|e| {
         panic!(
-            "the heading {PLAYBOOKS_HEADING:?} is gone from {PLAYBOOKS_MD}.\n\nThat heading is \
-             where the playbooks live and where a plan is told to cite them. FIX: restore it, or \
-             point this fence at wherever the playbooks now live."
+            "the directory {PLAYBOOKS_DIR:?} cannot be read: {e}.\n\nThat directory is where the \
+             playbooks live and where a plan is told to cite them. FIX: restore it, or point this \
+             fence at wherever the playbooks now live."
         )
-    }) + 1;
-    let body = &text[at + PLAYBOOKS_HEADING.len()..];
-    let end = body.find("\n## ").map(|i| i + 1).unwrap_or(body.len());
+    });
 
-    let names: Vec<String> = body[..end]
-        .lines()
-        .filter_map(|l| l.strip_prefix("### "))
-        .map(|n| n.trim().to_string())
+    let names: Vec<String> = dir
+        .map(|entry| entry.unwrap_or_else(|e| panic!("cannot read an entry of {PLAYBOOKS_DIR}: {e}")))
+        .filter_map(|entry| {
+            entry.file_name().to_str().and_then(|n| n.strip_suffix(".md")).map(str::to_string)
+        })
         .collect();
 
     assert!(
         !names.is_empty(),
-        "no `### ` section sits under {PLAYBOOKS_HEADING:?} in {PLAYBOOKS_MD}, so this fence \
-         would pass on an empty playbook set"
+        "no `<class>.md` file sits in {PLAYBOOKS_DIR:?}, so this fence would pass on an empty \
+         playbook set"
     );
     names
 }
@@ -133,8 +125,7 @@ fn every_route_class_has_exactly_one_playbook() {
         .collect();
     assert!(
         missing.is_empty(),
-        "route class(es) [{}] have no `### <class>` section under {PLAYBOOKS_HEADING:?} in \
-         {PLAYBOOKS_MD}.\n\nA plan routed to one of those classes is told to cite a playbook that \
+        "route class(es) [{}] have no `<class>.md` file in {PLAYBOOKS_DIR:?}.\n\nA plan routed to one of those classes is told to cite a playbook that \
          does not exist, so it cites nothing and the gap never shows up as a red.\n\nFIX: write \
          the missing playbook(s) in the voice of the ones already there — numbered ACTION steps, \
          then a closing line naming the thing that is NOT a result. Deleting the class from \
@@ -150,9 +141,9 @@ fn every_route_class_has_exactly_one_playbook() {
         .collect();
     assert!(
         duplicated.is_empty(),
-        "route class(es) [{}] carry MORE THAN ONE `### <class>` section in {PLAYBOOKS_MD}.\n\n\
+        "route class(es) [{}] carry MORE THAN ONE `<class>.md` file in {PLAYBOOKS_DIR:?}.\n\n\
          A class with two playbooks has none: a plan citing \"the\" playbook by name does not say \
-         which steps it followed. FIX: merge them into one section.",
+         which steps it followed. FIX: merge them into one file.",
         duplicated.into_iter().collect::<Vec<_>>().join(" ")
     );
 }
@@ -166,10 +157,10 @@ fn every_playbook_names_a_real_route_class() {
         playbook_names().into_iter().filter(|n| !classes.contains(n)).collect();
     assert!(
         orphans.is_empty(),
-        "playbook section(s) [{}] under {PLAYBOOKS_HEADING:?} in {PLAYBOOKS_MD} name no value in \
-         `ROUTE_CLASS_VALUES` ({WORKFLOWS_RS}).\n\nNo route can reach those steps, so nobody \
-         reads them and nobody notices when they rot.\n\nFIX: rename the section to the class it \
-         means, add the class to the constant, or delete the section.",
+        "playbook file(s) [{}] in {PLAYBOOKS_DIR:?} name no value in `ROUTE_CLASS_VALUES` \
+         ({WORKFLOWS_RS}).\n\nNo route can reach those steps, so nobody reads them and nobody \
+         notices when they rot.\n\nFIX: rename the file to the `<class>.md` it means, add the \
+         class to the constant, or delete the file.",
         orphans.join(" ")
     );
 }
