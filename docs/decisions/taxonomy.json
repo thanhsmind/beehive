@@ -599,6 +599,11 @@
     "contract:live-proof-locator",
     "live-proof-evidence",
     "contract:worker-outward-guard",
-    "contract:skill-trigger-cases"
+    "contract:skill-trigger-cases",
+    "playbooks",
+    "bee-hive",
+    "non-code",
+    "generality",
+    "contract:route-class-content"
   ]
 }

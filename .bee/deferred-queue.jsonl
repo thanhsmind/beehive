@@ -726,3 +726,21 @@
 {"ts":"2026-09-22T23:45:01.564Z","event":"add","id":"18015752-91e4-4692-9432-314d1b1ccb50","kind":"promote","feature":"skill-trigger-cases","cells":[],"areas":[],"files":["docs/history/skill-trigger-cases/promote-proposals.md"],"reason":"Promote proposal for \"skill-trigger-cases\" awaiting apply — docs/history/skill-trigger-cases/promote-proposals.md."}
 {"ts":"2026-09-22T23:45:02.242Z","event":"add","id":"2bc6494d-86b1-465e-9f21-8f832eb49b7f","kind":"worktree-cleanup","feature":"worker-outward-guard","cells":[],"areas":[],"files":["/home/thanhsmind/Projects/goglbe/beehive--wt--worker-outward-guard"],"reason":"Worktree beehive--wt--worker-outward-guard (branch wt/worker-outward-guard) merged into main at a05e1b07d5e6420094a216d58e32fcf9f8c346e4 and kept per default (D1) — remove it with `bee worktree prune`."}
 {"ts":"2026-09-22T23:57:52.829Z","event":"add","id":"cd278f37-7da0-46bf-9bc4-d82d01edf16c","kind":"promote","feature":"worker-outward-guard","cells":[],"areas":[],"files":["docs/history/worker-outward-guard/promote-proposals.md"],"reason":"Promote proposal for \"worker-outward-guard\" awaiting apply — docs/history/worker-outward-guard/promote-proposals.md."}
+{"ts":"2026-09-23T09:34:25.571Z","event":"complete","id":"d71b5e7d-e3d9-4203-8907-289693afe636"}
+{"ts":"2026-09-23T09:34:25.571Z","event":"complete","id":"62db86b5-236a-440c-b9ba-b3d7315fe621"}
+{"ts":"2026-09-23T09:34:26.066Z","event":"complete","id":"30c3821f-f0c1-45cf-be16-d24ac84d9d95"}
+{"ts":"2026-09-23T09:34:26.066Z","event":"complete","id":"c0a75eda-b019-45ba-94ac-020e0f7297bf"}
+{"ts":"2026-09-23T09:34:26.517Z","event":"complete","id":"25ca2443-f507-44e1-a30a-105b26138121"}
+{"ts":"2026-09-23T09:34:26.866Z","event":"complete","id":"c18690f1-a063-46d3-a7a8-76975d45556a"}
+{"ts":"2026-09-23T09:34:27.225Z","event":"complete","id":"23c366db-14fd-4e5d-baa6-a55e90cb04ac"}
+{"ts":"2026-09-23T09:34:27.589Z","event":"complete","id":"4cd60ba1-9a03-43dd-9e54-1d36cdffa462"}
+{"ts":"2026-09-23T09:34:28.228Z","event":"complete","id":"1b763651-d338-454e-9b40-ea8c523f751b"}
+{"ts":"2026-09-23T09:34:28.228Z","event":"complete","id":"e8d847d2-4b29-4bdb-81ee-809d24857819"}
+{"ts":"2026-09-23T09:34:28.612Z","event":"complete","id":"0b1b406e-c638-46ae-a7bb-d5069187f2ee"}
+{"ts":"2026-09-23T09:34:28.996Z","event":"complete","id":"5981388b-4a4f-4287-9fe7-82feecbfc48c"}
+{"ts":"2026-09-23T09:34:28.996Z","event":"complete","id":"4e62aa8f-2568-4f7f-bb40-f39f3514f285"}
+{"ts":"2026-09-23T09:34:29.477Z","event":"complete","id":"ae6c0190-e425-4908-9884-c98f8b438dde"}
+{"ts":"2026-09-23T09:34:29.864Z","event":"complete","id":"acadca18-1f1d-410f-8b4b-b8ac436c5e3b"}
+{"ts":"2026-09-23T09:34:30.255Z","event":"complete","id":"036356e7-49fd-49e2-823e-b940826633c5"}
+{"ts":"2026-09-23T09:34:30.255Z","event":"complete","id":"3e119561-bf1c-4851-98ec-41a9a73aa5e4"}
+{"ts":"2026-09-24T16:17:00.132Z","event":"add","id":"e980da5a-977f-4749-a33d-8eca3d60753d","kind":"scribe","feature":"bee-playbooks","cells":["bpb-2"],"areas":[],"files":["docs/history/bee-playbooks/migration-note.md","docs/history/codex-harness-hardening/release-manifest.json","docs/product-description/goal.md","docs/product-description/lifecycle/planning.md","docs/product-description/verification/lifecycle.md","packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs","packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs","skills/bee-hive/references/scout-and-ticks.md","skills/bee-planning/references/planning-reference.md"],"reason":"Scribing debt: 1 capped behavior_change cell(s) for \"bee-playbooks\" with no scribing/compounding record since capping."}
