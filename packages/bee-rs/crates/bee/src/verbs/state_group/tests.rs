@@ -1900,7 +1900,7 @@ use std::time::Instant;
             Ok(_) => panic!("expected a refusal"),
         };
         assert!(message.starts_with(
-            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs, refactor, research, release, spike, perf)"
+            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs, refactor, research, release, spike, perf, content)"
         ));
         // psa-1: the line above is pinned on the FULL legal set, ending in the
         // eighth class "perf". The refusal message is the contract a caller
@@ -1955,7 +1955,6 @@ use std::time::Instant;
     /// pattern route_set_end_to_end_* already uses.)
     #[test]
     fn route_set_accepts_perf_as_the_eighth_class() {
-        assert_eq!(ROUTE_CLASS_VALUES.len(), 8);
         assert_eq!(ROUTE_CLASS_VALUES[7], "perf");
 
         let tmp = tmp_root();
@@ -2002,6 +2001,49 @@ use std::time::Instant;
         assert!(
             !message.contains("--class \"perf\""),
             "class perf must be accepted: {message}"
+        );
+    }
+
+    #[test]
+    fn route_set_accepts_content_as_the_ninth_class() {
+        assert_eq!(ROUTE_CLASS_VALUES.len(), 9);
+        assert_eq!(ROUTE_CLASS_VALUES[8], "content");
+
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(start_default(root, root, "feat-content", Some("standard"), "shaping", None, &[], &[]));
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+
+        let f = route_flags(&[("class", "content"), ("lane", "docs"), ("flags", ""), ("files", "1")]);
+        let mut route = match ok(validate_route_set_flags(&f)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route.get("class"), Some(&json!("content")));
+        assert_eq!(route.get("lane"), Some(&json!("docs")));
+
+        let feature = target.record().get("feature").cloned().unwrap();
+        route.insert("feature".into(), feature);
+        let mut record = target.record().clone();
+        record.insert("route".into(), Value::Object(route));
+        ok(write_state(root, &record));
+
+        let shown = ok(resolve_mutation_target(root, None, "route show", true));
+        let stored = shown.record().get("route").cloned().unwrap();
+        assert_eq!(jget(&stored, "class"), Some(&json!("content")));
+
+        let as_lane = route_flags(&[("class", "content"), ("lane", "content"), ("flags", ""), ("files", "1")]);
+        let message = match ok(validate_route_set_flags(&as_lane)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal: content must never be a legal lane"),
+        };
+        assert!(
+            message.contains("--lane \"content\" (must be one of docs, tiny, small, spike, standard, high-risk)"),
+            "message: {message}"
+        );
+        assert!(
+            !message.contains("--class \"content\""),
+            "class content must be accepted: {message}"
         );
     }
 

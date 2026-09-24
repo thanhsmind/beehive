@@ -254,7 +254,8 @@ restates them.
 the target case, then freeze it. Report the median of several runs. Set the
 stop rule before the first attempt: the target reached, plus a minimum
 number of attempts. Log one row per attempt. Revert an attempt that does
-not clear the noise. Never loosen the stop rule.
+not clear the noise. Never loosen the stop rule. A plateau is not a stop —
+it means pivot the hypothesis, not give up.
 
 "It feels faster" is not a result (per D2, decision `1593e365`).
 
@@ -388,6 +389,26 @@ A spike that becomes the implementation was never a spike.
 
 Proof line: the decision id the answer was logged under, and the
 observation of each variant.
+
+### content
+
+1. Name the audience, and the ONE claim or fact the piece puts at risk,
+   before you write a line.
+2. Draft.
+3. Check the draft against the project's OWN style, fact, or brand rule when
+   the project has documented one — cite that rule by its path. When it has
+   none, do a second read and write down what that read checked: the claim
+   from step 1, each fact against its source, and the tone for the audience.
+4. Ship.
+
+This playbook names no tool or skill: it is read in every host repo, and a
+check only one host has would break in the rest (per D6, decision
+`8fd45bbb`).
+
+Proof line: the artifact checked against the project's own
+style/fact/brand rule when the project has one (name it), otherwise a
+documented second read naming what was checked —
+`<check> — <result> — <scope reason>`.
 
 ## Cell quality rules
 
