@@ -63,8 +63,10 @@ the `content` class's steps is planning's, bounded by D2, D4, D6.
   pstack's actual playbook catalog (not just the mechanism-level xia sweep),
   and pave the way for non-code projects (content for a marketing team,
   image/video generation) using a playbook-plus-skill combined shape. Image
+  <!-- bee:not-a-deferral: names the user's own words about a possible future direction; not a promise this feature or bee will act on it -->
   and video generation are named as a *future* direction, not a concrete
   ask for this slice (see Deferred Ideas).
+  <!-- /bee:not-a-deferral -->
 
 ## Existing Code Context
 
@@ -121,6 +123,7 @@ the `content` class's steps is planning's, bounded by D2, D4, D6.
 
 None.
 
+<!-- bee:not-a-deferral: this section is CONTEXT.md's standard template naming what planning must still investigate — the investigation happened during planning (see plan.md's Open Questions), not a promise bee itself will act on these later -->
 ### Deferred To Planning
 
 - [ ] Which specific pstack playbooks (of the 22) the D5 gap check should
@@ -131,7 +134,9 @@ None.
       existing lane-classification logic (which already exempts non-code-
       touching work via the `docs` lane) unchanged — investigate `workflows.rs`'s
       lane-vs-class handling before assuming either way.
+<!-- /bee:not-a-deferral -->
 
+<!-- bee:not-a-deferral: this section records already-made scope decisions (what is deliberately out of this slice) and, where a bee backlog add row is named, that row was already added by cell bpb-3 — not an open promise for bee to act on later -->
 ## Deferred Ideas
 
 - Marketing and sales as their own route-classes (distinct from `content`) —
@@ -144,6 +149,7 @@ None.
 - Any genuine code-side gap the D5 research artifact finds that is judged
   too large or too speculative for this slice — named in the artifact and
   backlogged, never silently dropped (AGENTS.md split-never-shrink).
+<!-- /bee:not-a-deferral -->
 
 ## Handoff Note
 
