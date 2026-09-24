@@ -1,0 +1,81 @@
+{
+  "id": "bpb-3",
+  "feature": "bee-playbooks",
+  "title": "Write the pstack-playbook gap-check research artifact and backlog the deferred gaps",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "docs/history/research/pstack-playbooks-gap-check.md"
+  ],
+  "read_first": [
+    "docs/history/research/pstack-xia.md:1-30"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Write docs/history/research/pstack-playbooks-gap-check.md, frontmatter `artifact_contract: bee-research/v1`, `topic: pstack-playbooks-gap-check`, `depth: standard`, today's date, following pstack-xia.md's section shape (Bottom Line / Findings / Inference). Body: one row per pstack poteto-mode playbook (all 22, listed in skills/poteto-mode/SKILL.md's own \"Playbooks\" section at the pinned commit already used by pstack-xia.md), each with: the playbook name, a one-line purpose, a verdict (one of: covered-stronger, covered-adequately, deliberate-non-match, genuine-gap-deferred, genuine-gap-closed), and a bee-side anchor (file:line or skill name) backing the verdict — never a verdict with no anchor. Use exactly these verdicts, derived this session from a full read of all 22 files against bee's class playbooks (planning-reference.md) and skill catalog: investigation=covered-adequately (research class, planning-reference.md:302-313); perf-issue=covered-adequately (perf class, planning-reference.md:244-262); hillclimb=genuine-gap-closed (the plateau-pivot sentence bpb-2 adds to planning-reference.md's perf section); runtime-forensics=covered-adequately (research class's live-runtime subsection, planning-reference.md:315-318); trace-forensics=genuine-gap-deferred (no artifact-parsing/sqlite/symbol-resolution depth exists; bee's own repo is a Rust CLI with no captured-profile tooling today); feature=covered-stronger (feature class, planning-reference.md:326-339, plus AGENTS.md's own dispatch mandate); refactoring=covered-stronger (refactor class, planning-reference.md:286-300); prototype=covered-stronger (spike class, planning-reference.md:371-390); visual-parity=deliberate-non-match (no design-parity surface in this repo); authoring-a-skill=covered-stronger (skills/bee-writing-skills/SKILL.md, its Iron Law and RED/GREEN/REFACTOR/VALIDATE cycle); eval=genuine-gap-deferred (skills/bee-evolving/SKILL.md exists but has no blind-judge protocol; a real methodology change, out of this slice); babysit=covered-adequately (skills/bee-herding/SKILL.md's route role); shipping=covered-adequately (bee-herding's merge role plus bee worktree merge's proof check); autonomous-run=covered-adequately (AGENTS.md \"Act. Don't ask.\" plus herding's dispatch loop); orchestrate=covered-adequately (bee-herding dispatch plus bee-swarming's worker-brief contract); autopilot-full=deliberate-non-match (no Graphite/owner-per-PR concept in bee); autopilot-stack=deliberate-non-match (no Graphite stacked-PR concept in bee); session-pickup=covered-stronger (AGENTS.md's HANDOFF.json plus `bee state handoff adopt`); pause-safely=covered-stronger (same HANDOFF.json mechanism, AGENTS.md \"Care for the session\"); multi-phase-plan=covered-adequately (planning-reference.md's \"Phase plan vs epic map\" section); worktree-cleanup=covered-stronger (`bee worktree prune`, automatic rather than manual); opening-a-pr=covered-adequately, by deliberate design difference (scout-and-ticks.md's ship_visibility draft-pr default is the opposite of pstack's never-draft rule — name this as a considered divergence, not a gap). After the table, add two `bee backlog add` calls (run them, do not just describe them) recording the two genuine-gap-deferred items: `.bee/bin/bee backlog add --type debt --severity P3 --layer eval-blind-judge --title \"pstack-playbooks-gap-check: bee-evolving needs a blind-judge protocol like pstack's eval playbook\" --feature bee-playbooks --detail \"pstack's eval playbook blinds the judge to model identity and strips eval vocabulary from candidate-visible paths; bee-evolving's Gate A/B has neither. See docs/history/research/pstack-playbooks-gap-check.md.\"` and `.bee/bin/bee backlog add --type debt --severity P3 --layer trace-forensics-depth --title \"pstack-playbooks-gap-check: no captured-artifact (sqlite/symbol-resolution) research depth for trace forensics\" --feature bee-playbooks --detail \"pstack's trace-forensics playbook parses a pre-captured profiling artifact into sqlite and resolves symbols; bee's research class has no equivalent depth. No current need in this Rust-CLI repo. See docs/history/research/pstack-playbooks-gap-check.md.\"`.",
+  "must_haves": {
+    "truths": [
+      "The artifact lists all 22 pstack playbooks, each with exactly one verdict and one bee-side anchor",
+      "bee backlog list carries the two new entries with layer values eval-blind-judge and trace-forensics-depth"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/research/pstack-playbooks-gap-check.md",
+        "substantive": "22-row verdict table/list with anchors, bee-research/v1 frontmatter"
+      }
+    ],
+    "key_links": [
+      "Each genuine-gap-deferred verdict in the artifact is backed by a matching bee backlog add row"
+    ],
+    "prohibitions": [
+      "No verdict recorded without a bee-side anchor or an explicit not-applicable reason",
+      "No new class, playbook, or code change proposed inside this artifact itself — findings only"
+    ]
+  },
+  "trace": {
+    "worker": "w-bpb-3b",
+    "outcome": "Confirmed pstack playbook gap-check artifact (23 anchored verdicts) and two deferred-gap backlog rows from eb7bd2e96",
+    "files_changed": [
+      "docs/history/research/pstack-playbooks-gap-check.md"
+    ],
+    "deviations": [
+      "Row 23 Bug fix added: pinned pstack SKILL.md lines 112-140 list 23 playbooks, plan counted 22",
+      "sync-ack: sibling-cell skill edits on branch, none in eb7bd2e96",
+      "sync-ack: bpb-3 commit eb7bd2e96 touches no skills/** path; the named skill files were changed by sibling cells bpb-1/bpb-2 on the same branch"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-24T16:09:38.563Z",
+    "behavior_change": false,
+    "verification_evidence": "docs cell: artifact presence plus backlog linkage (2 rows)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "9992550a-eb0d-44ea-bf71-42308ac761c8",
+    "verify_command": "test -f docs/history/research/pstack-playbooks-gap-check.md && rg -c pstack-playbooks-gap-check .bee/backlog.jsonl",
+    "claimed_at": "2026-09-24T16:08:43.931Z",
+    "verified_at": null,
+    "baseline": null,
+    "sync_ack": "bpb-3 commit eb7bd2e96 touches no skills/** path; the named skill files were changed by sibling cells bpb-1/bpb-2 on the same branch",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Confirmed gap-check artifact and two backlog rows from eb7bd2e96",
+      "commit": "eb7bd2e96",
+      "files": [
+        "docs/history/research/pstack-playbooks-gap-check.md"
+      ],
+      "tests": "test -f docs/history/research/pstack-playbooks-gap-check.md && rg -c pstack-playbooks-gap-check .bee/backlog.jsonl — green:static — docs cell: artifact presence plus backlog linkage (2 rows)",
+      "deviations": [
+        "Row 23 Bug fix added: pinned pstack SKILL.md lines 112-140 list 23 playbooks, plan counted 22",
+        "sync-ack: sibling-cell skill edits on branch, none in eb7bd2e96"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "verify": "test -f docs/history/research/pstack-playbooks-gap-check.md && rg -c pstack-playbooks-gap-check .bee/backlog.jsonl"
+}

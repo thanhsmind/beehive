@@ -1,0 +1,101 @@
+{
+  "id": "bpb-1",
+  "feature": "bee-playbooks",
+  "title": "Name playbook in AGENTS.md's pointer index",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "AGENTS.md"
+  ],
+  "read_first": [
+    "AGENTS.md:350-362"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In AGENTS.md's `## Deep contracts` section, insert one clause into the existing pointer-index sentence (per D2). Current text at AGENTS.md:355-357: `bypass mode; § Progress ticks; § Judgment contract; § Goal-check\njudge tier; § Concurrency law in full; § Delegation contract;\n§ Hat wave (the plan-step consult, single home); § Blind lanes and\nconvergence; worktrees; plus the worker contract`. Insert, after `convergence;` and before `worktrees;`, the clause: `the class-bound playbook each route class cites (`bee-planning/references/planning-reference.md`, \"Class playbooks\");` so the sentence reads `...convergence; the class-bound playbook each route class cites (`bee-planning/references/planning-reference.md`, \"Class playbooks\"); worktrees; plus the worker contract...`. Do not touch any other line, section, or file. Do not restate the playbook's steps or format here — this is a pointer only, per D3 (no verbatim copying).",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md names the class-bound playbook procedure and points at planning-reference.md's \"Class playbooks\" section, in one clause"
+    ],
+    "artifacts": [
+      {
+        "path": "AGENTS.md",
+        "substantive": "Deep contracts section's pointer sentence gains the one playbook clause; no other line changes"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md § Deep contracts references skills/bee-planning/references/planning-reference.md (\"Class playbooks\")"
+    ],
+    "prohibitions": [
+      "No other AGENTS.md section changes",
+      "No new file created",
+      "No restatement of the playbook steps themselves in AGENTS.md"
+    ]
+  },
+  "trace": {
+    "worker": "w-bpb-1",
+    "outcome": "AGENTS.md Deep contracts pointer sentence names the class-bound playbook and points at planning-reference.md Class playbooks (AGENTS.md:357-358)",
+    "files_changed": [
+      "AGENTS.md"
+    ],
+    "deviations": [
+      "Wrapped the inserted clause across two new lines inside the same sentence instead of one long line — keeps the paragraph line width; no other line changed — found a better route",
+      "Capped with --sync-ack for rule agents-capture-line-at-close — the edit is a Deep contracts pointer only, the rule text is untouched — the plan was wrong about a fact",
+      "sync-ack: edit is one pointer clause in the Deep contracts index; the agents-capture-line-at-close rule text is untouched, so its applied_at files need no change"
+    ],
+    "friction": null,
+    "capped_at": "2026-09-24T16:04:59.256Z",
+    "behavior_change": false,
+    "verification_evidence": "docs pointer check, the cell verify",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "9992550a-eb0d-44ea-bf71-42308ac761c8",
+    "verify_command": "rg -n \"class-bound playbook\" AGENTS.md && rg -n \"## Class playbooks\" skills/bee-planning/references/planning-reference.md",
+    "claimed_at": "2026-09-24T16:02:19.709Z",
+    "sync_ack": "edit is one pointer clause in the Deep contracts index; the agents-capture-line-at-close rule text is untouched, so its applied_at files need no change",
+    "mistakes": [
+      {
+        "wrong": "commit without a pathspec was refused by the concurrent-worker guard",
+        "better": "make the commit path-scoped from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "AGENTS.md:357-358 Deep contracts sentence gains the one class-bound playbook clause pointing at bee-planning/references/planning-reference.md Class playbooks",
+      "commit": "b25ddf452",
+      "files": [
+        "AGENTS.md"
+      ],
+      "tests": "rg -n \"class-bound playbook\" AGENTS.md && rg -n \"## Class playbooks\" skills/bee-planning/references/planning-reference.md — green:static — docs pointer check, the cell verify",
+      "deviations": [
+        "Wrapped the inserted clause across two new lines inside the same sentence instead of one long line — keeps the paragraph line width; no other line changed — found a better route",
+        "Capped with --sync-ack for rule agents-capture-line-at-close — the edit is a Deep contracts pointer only, the rule text is untouched — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "commit without a pathspec was refused by the concurrent-worker guard — make the commit path-scoped from the start — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "AGENTS.md names the class-bound playbook procedure and points at planning-reference.md's \"Class playbooks\" section, in one clause",
+            "artifact": "AGENTS.md"
+          }
+        ],
+        "recorded_at": "2026-09-24T16:16:18.741Z",
+        "recorded_by": "9992550a-eb0d-44ea-bf71-42308ac761c8",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "verify": "rg -n \"class-bound playbook\" AGENTS.md && rg -n \"## Class playbooks\" skills/bee-planning/references/planning-reference.md"
+}
