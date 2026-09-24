@@ -12,6 +12,7 @@ never a generation timestamp or any other wall-clock value.
 
 - [agent-model-unpin/](agent-model-unpin/index.md) — 1 concept(s)
 - [awaiting-human/](awaiting-human/index.md) — 1 concept(s)
+- [bee-playbooks/](bee-playbooks/index.md) — 1 concept(s)
 - [class-playbooks/](class-playbooks/index.md) — 1 concept(s)
 - [close-usage-record/](close-usage-record/index.md) — 1 concept(s)
 - [close-usage-summary/](close-usage-summary/index.md) — 1 concept(s)
