@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "bee-playbooks",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,13 +11,8 @@
     "uat": false
   },
   "summary": "Bring bee's class-playbook system to first-class vocabulary; add a content route-class for non-code work",
-  "next_action": "capture complete; awaiting user uat",
+  "next_action": "bee close finished \"bee-playbooks\" — feature is closed.",
+  "created_at": "2026-09-24T15:42:52.138Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: bee-playbooks",
-    "asked_at": "2026-09-24T16:36:45.388Z",
-    "session": "9992550a-eb0d-44ea-bf71-42308ac761c8"
-  },
-  "created_at": "2026-09-24T15:42:52.138Z"
+  "waiting_on": null
 }
