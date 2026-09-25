@@ -217,7 +217,7 @@ capability or risk areas explain the work more honestly than a timeline —
 the high-risk default, with feasibility proof named per epic. Never force
 2–4 phases onto work that is really one slice.
 
-## Class playbooks
+## Playbooks
 
 Each playbook binds one **route class** — the value `bee route --set --class`
 records (`bee-hive/references/scout-and-ticks.md` ("Route record")). It does
@@ -226,189 +226,34 @@ NOT bind the cell-level `change_class` enum
 different taxonomy that overlaps this one on `bugfix` and `refactor` only — a
 cell's `change_class` never selects a playbook.
 
-**How a plan uses one (per D1, decision `132551fb`).** The plan **cites** its
-class's playbook by name and anchor — this file, `("Class playbooks")`, plus
-the playbook name — and never transcribes the steps into `plan.md`. The steps
-live here, in one home, and are read here; a copied list goes stale and can be
-satisfied by transcription. A step that does not apply stays VISIBLE and
-carries its recorded reason — "named deviation is the system working"
-(`AGENTS.md` ("Judgment and deviation")). A skipped step is never a refusal:
-nothing in this section blocks anything.
+Every route class has one playbook file, at
+`skills/bee-planning/playbooks/<class>.md`:
+
+- [perf](../playbooks/perf.md)
+- [bugfix](../playbooks/bugfix.md)
+- [refactor](../playbooks/refactor.md)
+- [research](../playbooks/research.md)
+- [feature](../playbooks/feature.md)
+- [docs](../playbooks/docs.md)
+- [release](../playbooks/release.md)
+- [spike](../playbooks/spike.md)
+- [content](../playbooks/content.md)
+
+**How a plan uses one (per D1, decision `132551fb`; file location per
+playbook-file-split, decision `bed1853c`).** The plan **cites** its class's
+playbook by path — `skills/bee-planning/playbooks/<class>.md` — and never
+transcribes the steps into `plan.md`. The steps live in that file, in one
+home, and are read there; a copied list goes stale and can be satisfied by
+transcription. A step that does not apply stays VISIBLE and carries its
+recorded reason — "named deviation is the system working" (`AGENTS.md`
+("Judgment and deviation")). A skipped step is never a refusal: nothing in a
+playbook blocks anything.
 
 **Which principles a class routes.** `bee orient` names them in the session
 preamble, read from the `## Principle homes` section of
 `docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md`.
 Those `classes:` lines are the one home of that mapping; a playbook never
 restates them.
-
-### perf
-
-1. Capture a baseline with the real command or trace, and record the number.
-2. State the hypothesis — a mechanism the baseline shows. First ask whether
-   the slow path must exist at all: a deleted path beats a faster one.
-3. Change ONE thing.
-4. Re-measure the same way, with the same command.
-5. Keep the win, discard the loss, and record BOTH numbers.
-
-**When the ask is a sustained metric target.** Prove the harness separates
-the target case, then freeze it. Report the median of several runs. Set the
-stop rule before the first attempt: the target reached, plus a minimum
-number of attempts. Log one row per attempt. Revert an attempt that does
-not clear the noise. Never loosen the stop rule. A plateau is not a stop —
-it means pivot the hypothesis, not give up.
-
-"It feels faster" is not a result (per D2, decision `1593e365`).
-
-Proof line: the baseline, the after, the delta, the command, and the
-artifact path.
-
-### bugfix
-
-1. Reproduce the symptom on the real interface.
-2. Watch that reproduction FAIL before the fix. This step's rule already has a
-   home — `bee-swarming/references/worker-details.md:33-35`
-   ("red-before-green is craft, applied by judgment and enforced by review,
-   not by flags"). Read it there; it is deliberately not copied here, so a
-   cold execution worker never has to open a planning reference.
-3. Find the mechanism, not the symptom — trace the bad value back to where
-   it was made (`bee-principle-crash-site-versus-fault-site`).
-4. Fix the mechanism.
-5. Re-run the same reproduction, on the same interface. An inconclusive run,
-   or a run on a different surface, is not a pass.
-
-**When the cause is not known.** List the candidate causes. Each pass, test
-the split that removes the most candidates, with runtime evidence, not a
-reading of the code (`.bee/expertise/tests.md` ("Instrument before
-guessing")). Revert every edit that a refuted hypothesis motivated. A
-one-line fix whose cause is already known keeps the short path.
-
-Proof line: the reproduction's output, red and then green, verbatim.
-
-### refactor
-
-1. Record existing behavior FIRST — a characterization test, a snapshot, or an
-   equivalence script. A type check or a lint is not a record.
-2. Prove that record green on the UNCHANGED tree.
-3. Change structure in small steps.
-4. The record stays green at every step.
-5. A behavior change is not a refactor — it is a separate cell.
-6. Subtract first: an early cell deletes dead code and one-caller wrappers.
-7. An API move migrates every caller and deletes the old API in the same
-   slice; then search strings and docs for the old name.
-8. Never edit the record, the harness, or the baseline to make a step green.
-9. Keep the diff only if it lowers what a reader must hold in mind.
-
-Proof line: the record, green before the change and green after it.
-
-### research
-
-1. Read-only: the outcome is an account, never a diff.
-2. Trace the runtime path, not just the file list.
-3. Name every source searched that came up EMPTY.
-4. End with anchors a reader can open — `path:line`, or the command that ran.
-5. A question that chooses between alternatives ends in a recommendation and
-   a tradeoffs table. An answer that leads to a change re-routes to `bugfix`
-   or `feature`.
-
-Both flows have ONE home: `bee-researching/references/trace-and-provenance.md`
-— § "Trace" for step 2, § "Provenance sweep" for step 3.
-
-**When the symptom is live at runtime.** Capture a real profile or trace.
-Reduce it through a gather dispatch (`bee dispatch prepare --kind gather`).
-Confirm the reduction with one instrumented run, and map it to `path:line`.
-Without a before-and-after pair, label the cause a hypothesis.
-
-This is the investigation route (per D3, decision `f1ffa7bd`): the existing
-`research` class, no new route and no new lane. Nothing yet ENFORCES step 1 —
-read-only is craft here, not a guard (backlog `p-69bee217`).
-
-Proof line: the account's anchors, each one opened or run.
-
-### feature
-
-1. Name the DATA shape first — the record the feature turns on, before any
-   verb, flag or screen reads it.
-2. Build a walking skeleton end to end, with no stub left on that path.
-3. Build the CURRENT slice only; headline the rest and leave it out of the
-   cells.
-4. Prove the user-visible path, not only the unit sitting under it.
-5. Sync `docs/knowledge/` in the SAME change when behavior moves — it is the
-   state layer, not a write-up.
-
-A green unit behind a path nobody can walk is not a result.
-
-Proof line: the user-visible path driven, with its evidence (`green:live`).
-
-### docs
-
-1. Read what the bundle already holds for the area before writing a line.
-2. Extend the document that owns the area; a near-duplicate filed beside it
-   splits one truth into two that drift apart.
-3. Decide which side is wrong — the doc or the code — and fix THAT one.
-4. Resolve every path and command you write: open it, or run it.
-5. Prove with parity and pointer checks, not with tests.
-6. Name what is still uncovered.
-
-A second document saying the same thing is not coverage.
-
-Proof line: the parity or pointer check that ran, and its output.
-
-### release
-
-1. Run the repo's release script end to end — in bee, `scripts/release.sh
-   <VERSION>`. The script IS the release; a hand-walked checklist is a step
-   that gets skipped.
-2. Let the declared suite run BEFORE anything is tagged. Skipping it is a flag
-   you own out loud, never a quiet shortcut.
-3. Wait for the script's final `OK` line — tag pushed, release CI green,
-   published assets verified.
-4. Re-run the same version when a run dies mid-flight; the script is
-   idempotent and picks the release back up.
-
-A release commit without that `OK` line is not a release.
-
-Proof line: the script's final `OK` line, verbatim.
-
-### spike
-
-1. Write the question as a YES/NO before you start.
-2. Timebox it, and say the box out loud.
-3. Keep the throwaway under `.bee/spikes/<feature>/` — the ANSWER is the
-   deliverable, the code is not (the shape body is named above, under "Shape
-   bodies by mode").
-4. Record the answer with `bee decisions log`, then DELETE the spike.
-5. When the question is which of several variants, build each variant under
-   `.bee/spikes/<feature>/` behind one switcher, each variant labelled.
-   Observe each variant on the real surface: drive it with the project's own
-   verification skill when the project has one, otherwise log or print the
-   thing you are deciding. The observation is the proof, not an assertion.
-   The answer that step 4 records names the chosen variant. When the design
-   space is open, add one variant the ask did not name.
-
-A spike that becomes the implementation was never a spike.
-
-Proof line: the decision id the answer was logged under, and the
-observation of each variant.
-
-### content
-
-1. Name the audience, and the ONE claim or fact the piece puts at risk,
-   before you write a line.
-2. Draft.
-3. Check the draft against the project's OWN style, fact, or brand rule when
-   the project has documented one — cite that rule by its path. When it has
-   none, do a second read and write down what that read checked: the claim
-   from step 1, each fact against its source, and the tone for the audience.
-4. Ship.
-
-This playbook names no tool or skill: it is read in every host repo, and a
-check only one host has would break in the rest (per D6, decision
-`8fd45bbb`).
-
-Proof line: the artifact checked against the project's own
-style/fact/brand rule when the project has one (name it), otherwise a
-documented second read naming what was checked —
-`<check> — <result> — <scope reason>`.
 
 ## Cell quality rules
 

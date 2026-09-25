@@ -31,7 +31,7 @@ bee/
       references/onboarding.md
       references/go-mode.md
     bee-shaping/     SKILL.md + references/{shaping-reference.md, gray-area-probes.md, context-template.md, mini-brief-template.md, implement-plan-template.md, walkthrough-template.md} — Explore, Qualify, Lock, and Brief in one front door
-    bee-planning/    SKILL.md + references/{planning-reference.md, edge-dimensions.md} — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)
+    bee-planning/    SKILL.md + references/{planning-reference.md, edge-dimensions.md} + playbooks/{perf,bugfix,refactor,research,feature,docs,release,spike,content}.md — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)
     bee-swarming/    SKILL.md + references/{swarming-reference.md, worker-details.md} — orchestrator + "Execute" worker contract
     bee-reviewing/   SKILL.md + references/reviewing-reference.md
     bee-capturing/   SKILL.md + references/{area-spec.md, citations.md, promotion.md} — Scribe + Compound

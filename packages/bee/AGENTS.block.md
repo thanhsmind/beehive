@@ -348,7 +348,7 @@ bypass mode; § Progress ticks; § Judgment contract; § Goal-check
 judge tier; § Concurrency law in full; § Delegation contract;
 § Hat wave (the plan-step consult, single home); § Blind lanes and
 convergence; the class-bound playbook each route class cites
-(`bee-planning/references/planning-reference.md`, "Class playbooks");
+(`bee-planning/references/planning-reference.md`, "Playbooks");
 worktrees; plus the worker contract
 in `bee-swarming` ("Execute") — including native-Codex subagent tending on
 a Codex runtime — the capture discipline in

@@ -1,0 +1,96 @@
+[
+  {
+    "id": "pfs-1",
+    "feature": "playbook-file-split",
+    "title": "Move class playbooks into one file per class; rewrite the parity fence",
+    "lane": "standard",
+    "role": "code",
+    "status": "open",
+    "deps": [],
+    "decisions": ["D1", "D2", "D3", "D5"],
+    "files": [
+      "skills/bee-planning/playbooks/perf.md",
+      "skills/bee-planning/playbooks/bugfix.md",
+      "skills/bee-planning/playbooks/refactor.md",
+      "skills/bee-planning/playbooks/research.md",
+      "skills/bee-planning/playbooks/feature.md",
+      "skills/bee-planning/playbooks/docs.md",
+      "skills/bee-planning/playbooks/release.md",
+      "skills/bee-planning/playbooks/spike.md",
+      "skills/bee-planning/playbooks/content.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs"
+    ],
+    "read_first": [
+      "skills/bee-planning/references/planning-reference.md:220-412",
+      "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs:1-175"
+    ],
+    "affects_skills": ["skills/bee-planning"],
+    "affects_specs": [],
+    "regen_obligation_ack": "Regen deferred to pfs-2 (this cell's dependent): pfs-2 also touches skills/ (AGENTS.block.md, SKILL.md, scout-and-ticks.md) and runs the full bee dev regen + release-manifest --check chain once, after both cells' skills/ edits have landed, per this plan's Discovery section (one regen call covers both cells' writes).",
+    "action": "STEP 1 — create 9 new files under skills/bee-planning/playbooks/, one per route class. Each file's content is: a level-1 heading `# <class>` (the bare class name, e.g. `# perf`), a blank line, then the CURRENT body of that class's `### <class>` subsection in planning-reference.md copied VERBATIM (every numbered step, every bolded sub-paragraph, every proof-line paragraph) with no rewording — only the heading level changes (### becomes #, at the top of the new file; the old ### line itself is not copied, since the new file's own H1 replaces it). The 9 source spans in planning-reference.md are: perf 244-263, bugfix 265-285, refactor 287-301, research 303-325, feature 327-340, docs 342-354, release 356-370, spike 372-391, content 393-411 (each span runs from the line after its own ### heading to the line before the next ### or ## heading; copy through the final Proof line paragraph inclusive). STEP 2 — in planning-reference.md, delete the ENTIRE existing section from line 220 (`## Class playbooks`) through line 412 (the blank line before `## Cell quality rules` at 413), and replace it with the new, shorter '## Playbooks' section: the same route-class-vs-change_class paragraph, an added short list linking each of the 9 new files by class name, the 'How a plan uses one' paragraph updated to cite by file path instead of file+anchor (citing decision 132551fb for the citation rule and this feature's own decision bed1853c for the file location), and the unchanged 'Which principles a class routes' paragraph — full text supplied in this cell's must_haves.artifacts entry for planning-reference.md. Leave everything at and after `## Cell quality rules` untouched. STEP 3 — rewrite packages/bee-rs/crates/bee/tests/class_playbook_parity.rs: replace the two constants `PLAYBOOKS_MD` (line 37) and `PLAYBOOKS_HEADING` (line 40) with one constant `PLAYBOOKS_DIR: &str = \"skills/bee-planning/playbooks\";`. Replace the `playbook_names()` function (lines 96-120) with a function of the same name and return type that: resolves `repo_root().join(PLAYBOOKS_DIR)`, calls `std::fs::read_dir` on it (panicking with a FIX-style message naming PLAYBOOKS_DIR if the directory is missing or unreadable, mirroring the existing panic style in this file), collects every entry whose file name ends in `.md`, strips the `.md` suffix to get the class name, and returns the Vec<String> of names. Update every remaining panic message in the file that mentions `{PLAYBOOKS_HEADING:?}` or the `### <class>`-section wording to instead reference `{PLAYBOOKS_DIR:?}` and a `<class>.md` file, keeping the same FIX-style guidance shape (do not soften or shorten the guidance text, only swap the noun). The duplicate-name check inside `every_route_class_has_exactly_one_playbook` becomes structurally unreachable on a real filesystem (two files cannot share one name) — keep it only if it still typechecks cheaply against the new Vec<String>, otherwise delete exactly that duplicate-check block and its assertion, nothing else. Do not change `WORKFLOWS_RS`, `const_str_array`, or either `#[test]` function's name or its two assertions' structure — only what each assertion iterates over changes (directory entries instead of `### ` lines within one heading's span).",
+    "must_haves": {
+      "truths": [
+        "skills/bee-planning/playbooks/ contains exactly 9 files: perf.md, bugfix.md, refactor.md, research.md, feature.md, docs.md, release.md, spike.md, content.md",
+        "each new file's numbered steps and proof-line paragraph are byte-identical in substance to the old ### <class> section it replaced (only the heading level changed)",
+        "planning-reference.md contains a '## Playbooks' heading and no longer contains a '## Class playbooks' heading anywhere",
+        "class_playbook_parity.rs's two tests (every_route_class_has_exactly_one_playbook, every_playbook_names_a_real_route_class) still exist by name and both pass against the new directory shape"
+      ],
+      "artifacts": [
+        {"path": "skills/bee-planning/playbooks/perf.md", "substantive": "the perf class's full step list and proof-line rule, verbatim"},
+        {"path": "skills/bee-planning/references/planning-reference.md", "substantive": "old '## Class playbooks' section (lines 220-412) replaced by a '## Playbooks' section reading: route-class-vs-change_class paragraph (unchanged) + 'Every route class has one playbook file, at `skills/bee-planning/playbooks/<class>.md`:' + a markdown link list of all 9 classes to their files + 'How a plan uses one (per D1, decision `132551fb`; file location per playbook-file-split, decision `bed1853c`).' paragraph (cites by path, never transcribes steps, names 'named deviation is the system working') + the unchanged 'Which principles a class routes' paragraph"},
+        {"path": "packages/bee-rs/crates/bee/tests/class_playbook_parity.rs", "substantive": "PLAYBOOKS_DIR constant and a directory-reading playbook_names(), the two existing #[test] functions unchanged in name and both green"}
+      ],
+      "key_links": ["class_playbook_parity.rs's playbook_names() reads skills/bee-planning/playbooks/, not planning-reference.md"],
+      "prohibitions": ["No step, sub-paragraph, or proof-line text dropped or reworded during the move", "No change to ROUTE_CLASS_VALUES or workflows.rs", "No change to any file outside this cell's files list", "class_playbook_parity.rs's two #[test] function names are unchanged"]
+    },
+    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true},
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test class_playbook_parity && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
+  },
+  {
+    "id": "pfs-2",
+    "feature": "playbook-file-split",
+    "title": "Point every citer at the new anchor; regen",
+    "lane": "standard",
+    "role": "docs",
+    "status": "open",
+    "deps": ["pfs-1"],
+    "decisions": ["D2", "D4", "D6"],
+    "files": [
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/02-architecture.md",
+      "docs/04-skills-spec.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "packages/bee/AGENTS.block.md:348-353",
+      "skills/bee-planning/SKILL.md:42-47",
+      "skills/bee-hive/references/scout-and-ticks.md:33-37",
+      "docs/02-architecture.md:34",
+      "docs/04-skills-spec.md:63"
+    ],
+    "affects_skills": ["skills/bee-planning", "skills/bee-hive"],
+    "affects_specs": [],
+    "action": "In each of the 3 real citers, change ONLY the quoted anchor text from `\"Class playbooks\"` to `\"Playbooks\"` — do not touch surrounding wording. (1) packages/bee/AGENTS.block.md:351 — current text `(`bee-planning/references/planning-reference.md`, \"Class playbooks\");` becomes `(`bee-planning/references/planning-reference.md`, \"Playbooks\");`. (2) skills/bee-planning/SKILL.md:45 — current text `anchor — `references/planning-reference.md` (\"Class playbooks\") — never by` becomes `anchor — `references/planning-reference.md` (\"Playbooks\") — never by`. (3) skills/bee-hive/references/scout-and-ticks.md:36 — current text `` `bee-planning/references/planning-reference.md` (\"Class playbooks\") `` becomes `` `bee-planning/references/planning-reference.md` (\"Playbooks\") ``. Do NOT touch scout-and-ticks.md line 34 (the `` `class` ∈ `` line — route_class_parity.rs parses it) or line 35. Then, in the two living docs, add a `playbooks/` mention beside the existing reference-file list: (4) docs/02-architecture.md:34 — append `+ playbooks/{perf,bugfix,refactor,research,feature,docs,release,spike,content}.md` into the existing `references/{...}` clause on that line, before the ` — also owns` clause, changing nothing else on the line. (5) docs/04-skills-spec.md:63 — append `, `playbooks/<class>.md` (one file per route class, per the \"Playbooks\" pointer)` to the end of the existing **References:** sentence, before its final period, changing nothing else on the line. Then run, in order: `.bee/bin/bee dev regen` (renders AGENTS.md from AGENTS.block.md, re-renders any mirrored skill trees, and updates docs/history/codex-harness-hardening/release-manifest.json), then `.bee/bin/bee dev release-manifest --check` to confirm it is clean. Finally, run `rg -n \"Class playbooks\" .` across the whole repo (excluding docs/history/**, docs/knowledge/**, docs/decisions/**, and docs/discovery/** — those are historical/decision records, per CONTEXT.md's Integration Points, and are never edited by this feature) and confirm zero hits outside those excluded trees.",
+    "must_haves": {
+      "truths": [
+        "AGENTS.md (post-regen) and packages/bee/AGENTS.block.md both quote \"Playbooks\", not \"Class playbooks\"",
+        "skills/bee-planning/SKILL.md and skills/bee-hive/references/scout-and-ticks.md both quote \"Playbooks\"",
+        "scout-and-ticks.md line 34's `class ∈` list is byte-for-byte unchanged",
+        "rg -n \"Class playbooks\" across the repo, excluding docs/history/**, docs/knowledge/**, docs/decisions/**, docs/discovery/**, returns zero hits",
+        "bee dev release-manifest --check reports clean"
+      ],
+      "artifacts": [
+        {"path": "packages/bee/AGENTS.block.md", "substantive": "Deep contracts pointer sentence quotes \"Playbooks\""},
+        {"path": "docs/02-architecture.md", "substantive": "bee-planning repository-layout line names playbooks/"},
+        {"path": "docs/04-skills-spec.md", "substantive": "bee-planning References line names playbooks/<class>.md"}
+      ],
+      "key_links": ["AGENTS.md is regenerated from AGENTS.block.md after the edit, not hand-edited"],
+      "prohibitions": ["No hand-edit of the generated AGENTS.md file directly", "No change to scout-and-ticks.md line 34", "No edit to any file under docs/history/**, docs/knowledge/**, docs/decisions/**, or docs/discovery/**"]
+    },
+    "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": false},
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test agents_block_render_parity --test route_class_parity && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml"
+  }
+]
