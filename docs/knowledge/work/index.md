@@ -75,6 +75,7 @@ never a generation timestamp or any other wall-clock value.
 - [pi-worker-surface/](pi-worker-surface/index.md) — 1 concept(s)
 - [pi-worktree-session-relocation/](pi-worktree-session-relocation/index.md) — 1 concept(s)
 - [plan-conflicts-scope/](plan-conflicts-scope/index.md) — 1 concept(s)
+- [playbook-file-split/](playbook-file-split/index.md) — 1 concept(s)
 - [proactive-leader-intake/](proactive-leader-intake/index.md) — 1 concept(s)
 - [proof-strength-and-expiry/](proof-strength-and-expiry/index.md) — 1 concept(s)
 - [pstack-adoption/](pstack-adoption/index.md) — 1 concept(s)

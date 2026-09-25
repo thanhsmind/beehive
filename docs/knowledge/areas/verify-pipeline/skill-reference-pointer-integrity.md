@@ -115,6 +115,16 @@ run on every verification, not once at authoring time.
   cue to search elsewhere. Resolution is deterministic; guessing would hide the error.
 - **A pointer whose target exists in a rendered projection but not in the source** is a finding: the
   source is the truth, and the projection is downstream of it.
+- **A citation written inside a `skills/**` document that already spells its own leading `skills/`
+  segment resolves one level too deep.** The Rust checker treats every citation found inside
+  `skills/**` as relative to the `skills/` root and re-prepends `skills/` itself; a citation that
+  already includes that segment (e.g. `` `skills/bee-planning/references/foo.md` `` written inside
+  another file under `skills/`) resolves to `skills/skills/...` and fails as a missing target, even
+  though the real file exists one directory up from where the check looked. Write such a citation
+  relative to `skills/` with no leading `skills/` segment instead. Found and fixed live
+  (`playbook-file-split` cell pfs-1's defect, caught by cell pfs-2's own verify, 2026-09-25) —
+  the citation being moved was `skills/bee-planning/playbooks/spike.md`'s cross-reference to
+  `bee-planning/references/planning-reference.md`.
 
 - **A finding that cannot fail a build is a finding that gets stepped over.** The advisory
   sibling's *reachability* check misread a two-heading citation for as long as that citation had
