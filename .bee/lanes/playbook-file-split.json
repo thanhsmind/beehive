@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"playbook-file-split\" started at phase \"exploring\".",
-  "next_action": "Invoke bee close.",
+  "next_action": "Merged into main at 29ebf62; reload the product and test \"playbook-file-split\", then either approve uat (\"bee gate --name uat --approved true --lane playbook-file-split\") or fix it in the worktree and merge again.",
   "created_at": "2026-09-24T23:19:44.508Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: playbook-file-split",
+    "asked_at": "2026-09-25T00:14:43.833Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "gate_preview": {
     "feature": "playbook-file-split",
     "plan_sha256": "2757323592db23a2a4c9bb857daa753b22b7e28a8dab753867640bc8b492f9cb",
@@ -602,18 +607,6 @@
     "rationale": null,
     "updated_at": "2026-09-24T23:54:47.754Z",
     "feature": "playbook-file-split"
-  },
-  "merge_ready": {
-    "since": "2026-09-25T00:02:10.285Z",
-    "branch": "wt/playbook-file-split",
-    "worktree_id": "beehive--wt--playbook-file-split",
-    "uat": "pending",
-    "blocked_by": [
-      "judge-debt",
-      "leader-check",
-      "routing",
-      "doc-deferral"
-    ]
   },
   "last_scribing_run": {
     "feature": "playbook-file-split",
