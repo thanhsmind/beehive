@@ -42,7 +42,7 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
 That same step cites the matched class playbook into plan.md by name and
-anchor — `references/planning-reference.md` ("Class playbooks") — never by
+anchor — `references/planning-reference.md` ("Playbooks") — never by
 copying its steps.
 A code-touching route's next action includes creating the feature worktree
 and opening the session there (rule: agents-worktree-first). Code truth changes only in the feature worktree, the
