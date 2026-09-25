@@ -1433,5 +1433,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-09-24T22:41:29.528Z"
+  },
+  "playbook-file-split": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-09-25T01:14:40.480Z"
   }
 }

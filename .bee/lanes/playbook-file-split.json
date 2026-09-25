@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"playbook-file-split\" started at phase \"exploring\".",
-  "next_action": "Merged into main at 29ebf62; reload the product and test \"playbook-file-split\", then either approve uat (\"bee gate --name uat --approved true --lane playbook-file-split\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee close.",
   "created_at": "2026-09-24T23:19:44.508Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: playbook-file-split",
-    "asked_at": "2026-09-25T00:14:43.833Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "gate_preview": {
     "feature": "playbook-file-split",
     "plan_sha256": "2757323592db23a2a4c9bb857daa753b22b7e28a8dab753867640bc8b492f9cb",
