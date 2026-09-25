@@ -604,6 +604,11 @@
     "bee-hive",
     "non-code",
     "generality",
-    "contract:route-class-content"
+    "contract:route-class-content",
+    "bee-planning",
+    "route-class",
+    "doc-structure",
+    "contract:playbook-per-class-file",
+    "playbook-file-split"
   ]
 }
