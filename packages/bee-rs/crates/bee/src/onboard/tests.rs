@@ -613,48 +613,128 @@ fn a_source_checkout_with_no_opencode_plugin_plans_nothing_for_it() {
 #[test]
 fn pi_guard_extension_installs_idempotently_and_repairs_drift() {
     let fx = fixture();
-    write(&fx.root.join(".pi").join("extensions").join("bee-guard.ts"), "// pi guard v1\n");
+    write(&fx.root.join(".pi").join("extensions").join("bee-guard").join("index.ts"), "index v1\n");
+    write(&fx.root.join(".pi").join("extensions").join("bee-guard").join("state.ts"), "state v1\n");
 
     let p = plan(&fx, &[]);
-    assert_eq!(paths_for(&p, "plan", "copy_pi_extension"), vec![".pi/extensions/bee-guard.ts"]);
+    assert_eq!(
+        paths_for(&p, "plan", "copy_pi_extension"),
+        vec![".pi/extensions/bee-guard/index.ts", ".pi/extensions/bee-guard/state.ts"]
+    );
 
     let a = apply(&fx, &[]);
     assert_eq!(a["status"], "applied");
     assert_eq!(
-        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard.ts"))
+        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard").join("index.ts"))
             .unwrap(),
-        "// pi guard v1\n"
+        "index v1\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard").join("state.ts"))
+            .unwrap(),
+        "state v1\n"
     );
 
-    // IDEMPOTENT: a settled repo plans and applies nothing further.
     let p2 = plan(&fx, &[]);
     assert!(!actions(&p2, "plan").contains(&"copy_pi_extension".to_string()));
+    assert!(!actions(&p2, "plan").contains(&"create_dir".to_string()));
     let a2 = apply(&fx, &[]);
     assert!(!actions(&a2, "applied").contains(&"copy_pi_extension".to_string()));
 
-    // DRIFT: a hand-edited extension file is repaired on the next apply — the
-    // belt is an ENFORCEMENT surface, so a tampered copy is never left in
-    // place, exactly as the OpenCode plugin above.
-    write(&fx.repo.join(".pi").join("extensions").join("bee-guard.ts"), "tampered\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard").join("state.ts"), "tampered\n");
     let p3 = plan(&fx, &[]);
-    assert_eq!(paths_for(&p3, "plan", "copy_pi_extension"), vec![".pi/extensions/bee-guard.ts"]);
+    assert_eq!(paths_for(&p3, "plan", "copy_pi_extension"), vec![".pi/extensions/bee-guard/state.ts"]);
     apply(&fx, &[]);
     assert_eq!(
-        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard.ts"))
+        std::fs::read_to_string(fx.repo.join(".pi").join("extensions").join("bee-guard").join("state.ts"))
             .unwrap(),
-        "// pi guard v1\n"
+        "state v1\n"
     );
 }
 
 #[test]
 fn a_source_checkout_with_no_pi_extension_plans_nothing_for_it() {
-    // The ordinary fixture() never writes .pi/extensions/ under fx.root —
-    // this is the "not every source checkout carries it yet" case, and it
-    // must stay silent rather than erroring or fabricating a directory.
     let fx = fixture();
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard.ts"), "legacy\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard").join("orphan.ts"), "orphan\n");
     let p = plan(&fx, &[]);
     assert!(!actions(&p, "plan").contains(&"copy_pi_extension".to_string()));
-    assert!(!fx.repo.join(".pi").join("extensions").exists());
+    assert!(!actions(&p, "plan").contains(&"remove_pi_extension".to_string()));
+    assert!(fx.repo.join(".pi").join("extensions").join("bee-guard.ts").exists());
+}
+
+#[test]
+fn onboard_removes_legacy_single_file_before_copying_folder() {
+    let fx = fixture();
+    write(&fx.root.join(".pi").join("extensions").join("bee-guard").join("index.ts"), "index v1\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard.ts"), "legacy\n");
+
+    let p = plan(&fx, &[]);
+    let items = p["plan"].as_array().unwrap();
+    let legacy_remove_idx = items.iter().position(|i| i["action"] == "remove_pi_extension" && i["path"] == ".pi/extensions/bee-guard.ts");
+    assert!(legacy_remove_idx.is_some());
+    let first_copy_idx = items.iter().position(|i| i["action"] == "copy_pi_extension");
+    assert!(first_copy_idx.is_some());
+    assert!(legacy_remove_idx.unwrap() < first_copy_idx.unwrap());
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert!(!fx.repo.join(".pi").join("extensions").join("bee-guard.ts").exists());
+    assert!(fx.repo.join(".pi").join("extensions").join("bee-guard").join("index.ts").exists());
+}
+
+#[test]
+fn onboard_prunes_unshipped_ts_in_guard_folder_and_preserves_non_ts() {
+    let fx = fixture();
+    write(&fx.root.join(".pi").join("extensions").join("bee-guard").join("index.ts"), "index v1\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard").join("index.ts"), "index v1\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard").join("old.ts"), "old\n");
+    write(&fx.repo.join(".pi").join("extensions").join("bee-guard").join("notes.md"), "notes\n");
+
+    let p = plan(&fx, &[]);
+    assert_eq!(
+        paths_for(&p, "plan", "remove_pi_extension"),
+        vec![".pi/extensions/bee-guard/old.ts"]
+    );
+
+    apply(&fx, &[]);
+    assert!(!fx.repo.join(".pi").join("extensions").join("bee-guard").join("old.ts").exists());
+    assert!(fx.repo.join(".pi").join("extensions").join("bee-guard").join("notes.md").exists());
+    assert!(fx.repo.join(".pi").join("extensions").join("bee-guard").join("index.ts").exists());
+
+    let p2 = plan(&fx, &[]);
+    assert_eq!(p2["plan"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn remove_pi_extension_arm_refuses_out_of_scope_paths() {
+    let fx = fixture();
+    let outside = fx.repo.join("outside.ts");
+    write(&outside, "survive\n");
+
+    let engine = Engine::from_plugin_root(fx.root.clone());
+    let opts = Options {
+        repo_hooks: false,
+        claude_md: false,
+        global_skills: false,
+        sync_skills: false,
+        force_downgrade: false,
+        plugin_source: false,
+        statusline: false,
+        runtime: "all".into(),
+    };
+    let mut computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
+    computed.plan.push(json!({"action": "remove_pi_extension", "path": ".pi/extensions/../outside.ts"}));
+    computed.plan.push(json!({"action": "remove_pi_extension", "path": ".pi/extensions/bee-guard/sub/foo.ts"}));
+
+    let outcome = super::apply::apply_computed_plan(&engine, &fx.repo, &opts, computed);
+    if let ApplyOutcome::Ok(ok) = outcome {
+        assert!(!ok.applied.iter().any(|i| i["action"] == "remove_pi_extension"));
+    }
+    assert!(outside.exists());
+    assert!(super::apply::remove_pi_extension_admissible(".pi/extensions/bee-guard.ts"));
+    assert!(super::apply::remove_pi_extension_admissible(".pi/extensions/bee-guard/index.ts"));
+    assert!(!super::apply::remove_pi_extension_admissible(".pi/extensions/../outside.ts"));
 }
 
 /// (relative path, content) for every file under a repo, sorted.

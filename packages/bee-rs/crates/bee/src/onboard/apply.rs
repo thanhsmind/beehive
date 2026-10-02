@@ -78,6 +78,19 @@ fn remove_helper_admissible(rel: &str) -> bool {
         && posix_dirname(rel) == ".bee/bin"
 }
 
+pub(crate) fn remove_pi_extension_admissible(rel: &str) -> bool {
+    if rel.contains("..") {
+        return false;
+    }
+    if rel == ".pi/extensions/bee-guard.ts" {
+        return true;
+    }
+    if let Some(rest) = rel.strip_prefix(".pi/extensions/bee-guard/") {
+        return !rest.is_empty() && rest.ends_with(".ts") && !rest.contains('/') && rest != ".ts";
+    }
+    false
+}
+
 /// JS `path.dirname` on the POSIX-shaped `item.path` strings this script
 /// constructs itself.
 fn posix_dirname(p: &str) -> &str {
@@ -186,6 +199,16 @@ fn utc_now() -> String {
 }
 
 pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOutcome {
+    let computed = compute_plan(engine, repo_root, opts);
+    apply_computed_plan(engine, repo_root, opts, computed)
+}
+
+pub fn apply_computed_plan(
+    engine: &Engine,
+    repo_root: &Path,
+    opts: &Options,
+    computed: ComputedPlan,
+) -> ApplyOutcome {
     let ComputedPlan {
         mut plan,
         bee_version,
@@ -195,7 +218,7 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
         skill_sync,
         codex_hybrid,
         worktree_migration,
-    } = compute_plan(engine, repo_root, opts);
+    } = computed;
 
     // 1. worktree-migration preflight — ALL-OR-NOTHING.
     if !worktree_migration.conflicts.is_empty() {
@@ -482,15 +505,22 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 );
             }
             "copy_pi_extension" => {
-                // pi-support D1: source is this checkout's OWN
-                // `.pi/extensions/` tree, not a `packages/bee/` template
-                // (see Engine::pi_extension_dir) — the same vendoring the
-                // OpenCode plugin arm above does.
-                let name = posix_basename(rel);
+                let rel_path = rel.strip_prefix(".pi/extensions/").unwrap_or(rel);
                 let _ = write_file_atomic(
                     &target,
-                    read_text_if_exists(&engine.pi_extension_dir.join(name)).as_bytes(),
+                    read_text_if_exists(&join_rel(&engine.pi_extension_dir, rel_path)).as_bytes(),
                 );
+            }
+            "remove_pi_extension" => {
+                if !remove_pi_extension_admissible(rel) {
+                    eprintln!("refusing to remove {rel}: outside Pi extension scope");
+                    continue;
+                }
+                if let Err(err) = std::fs::remove_file(&target) {
+                    if err.kind() != std::io::ErrorKind::NotFound {
+                        eprintln!("failed to remove {}: {err}", target.display());
+                    }
+                }
             }
             "copy_statusline" => {
                 let name = posix_basename(rel);
@@ -865,6 +895,20 @@ mod tests {
         assert!(ok(".bee/expertise/tests/patterns/differential-testing.md"));
         assert!(!ok(".bee/expertise/../bin/bee.mjs"));
         assert!(!ok(".bee/bin/lib/state.mjs"));
+    }
+
+    #[test]
+    fn remove_pi_extension_scope_guard_accepts_exact_targets_and_refuses_escapes() {
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard.ts"));
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard/index.ts"));
+        assert!(remove_pi_extension_admissible(".pi/extensions/bee-guard/commands.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/../outside.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/../outside.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/sub/foo.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/other.ts"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/notes.md"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/"));
+        assert!(!remove_pi_extension_admissible(".pi/extensions/bee-guard/.ts"));
     }
 
     #[test]
