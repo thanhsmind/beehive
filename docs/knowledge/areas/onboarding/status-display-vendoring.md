@@ -236,6 +236,6 @@ All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
   (`codex_user_config_path()`, `codex_statusline_missing()`,
   `codex_statusline_next_text()`), `src/onboard/plan.rs:679-680` (the
   `ensure_codex_statusline` action — `~/.codex/config.toml`, never repoRoot-joined).
-- Pi active-branch status: `.pi/extensions/bee-guard.ts` owns aggregation and
+- Pi active-branch status: `.pi/extensions/bee-guard/` (module `model-usage.ts`, entry `index.ts`) owns aggregation and
   lifecycle refresh. `tests/pi_plugin_contracts.rs` drives the real extension
   through restore, completed-turn, branch-change, and empty-branch cases.

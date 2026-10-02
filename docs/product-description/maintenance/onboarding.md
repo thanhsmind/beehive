@@ -112,6 +112,7 @@ CLAUDE.md                     the @AGENTS.md import section
 .claude/agents/bee-*.md       the four worker agent files, model resolved from config
 .opencode/agent/bee-*.md      the same four, OpenCode frontmatter
 .opencode/plugins/bee-guard.ts
+.pi/extensions/bee-guard/      the Pi extension directory (entry index.ts; onboard removes legacy .pi/extensions/bee-guard.ts on upgrade)
 docs/history/learnings/critical-patterns.md
 docs/specs/reading-map.md     create-only skeleton
 docs/specs/system-overview.md create-only skeleton
@@ -119,7 +120,7 @@ docs/specs/system-overview.md create-only skeleton
 
 One thing is **not** installed: the binary. `.bee/bin/bee` is machine-local, ignored by the managed block, and put there by the install script or by hand. No plan action writes it, and the removal action that cleans retired helpers out of `.bee/bin/` is explicitly guarded to reject `bee` and `bee.exe`, so a routine onboard can never delete the binary it is running from.
 
-With `--repo-hooks` — which the install script passes by default — `.claude/settings.json` also gains bee's hook rows (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, SubagentStop, PreCompact, Stop, Notification, SessionEnd), with a `.bak` copy taken first, foreign entries preserved verbatim, and stale bee entries replaced rather than stacked. `.codex/hooks.json` gets the Codex projection of the same set unless the repo owns its own catalog. Each wired command probes `.bee/bin/bee`, then the main checkout's copy through git, and if neither exists prints `bee: hook binary missing (.bee/bin/bee)` and exits 0 — fail-open, as [guards](../foundations/guards.md) requires.
+With `--repo-hooks` — which the install script passes by default — `.claude/settings.json` also gains bee's hook rows (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, SubagentStop, PreCompact, Stop, Notification, SessionEnd), with a `.bak` copy taken first, foreign entries preserved verbatim, and stale bee entries replaced rather than stacked. `.codex/hooks.json` gets the Codex projection of the same set unless the repo owns its own catalog. On Pi, onboarding vendors `.pi/extensions/bee-guard/` and removes legacy `.pi/extensions/bee-guard.ts` before copying module files. Each wired command probes `.bee/bin/bee`, then the main checkout's copy through git, and if neither exists prints `bee: hook binary missing (.bee/bin/bee)` and exits 0 — fail-open, as [guards](../foundations/guards.md) requires.
 
 Two artifacts reach outside the repo: `~/.codex/config.toml` gets a status-line block added if it has none, and `--global-skills` refreshes `~/.claude/skills` — but only entries that already exist there as plain directories; it never creates the legacy global copy.
 

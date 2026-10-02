@@ -109,8 +109,8 @@ against isolated fixtures, asserting that a denied action changed nothing.
   rows (`hooks_file`, `hook_handler`, `skills_installed`,
   `wiring_matches_binary`, `binary_freshness`, `herding_transport`). Pi has no
   structurally unprovable trust rows; `doctor attest --runtime pi` is refused.
-  Whole-file equality verifies `.pi/extensions/bee-guard.ts` against the
-  embedded extension bytes. Binary freshness checks the release version against
+  Module-file equality verifies `.pi/extensions/bee-guard/` (entry `index.ts`) against the
+  embedded extension bytes (failing if legacy `.pi/extensions/bee-guard.ts` is present). Binary freshness checks the release version against
   `.claude-plugin/plugin.json` in the source checkout; in a host it reads
   `.bee/onboarding.json` `bee_version` first (null or absent is missing),
   falls back to the plugin manifest, and reports unknown with neither. Every

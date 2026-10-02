@@ -130,15 +130,15 @@ Doctor grades **mechanical rows** — things it can read — and, on Codex only,
 
 | Row | Question | not_ok when |
 | --- | --- | --- |
-| `hooks_file` | Is the wiring file present? (`.claude/settings.json`, `.codex/hooks.json`, or `.pi/extensions/bee-guard.ts`) | The file is missing — the runtime loads no bee hooks or extension. |
+| `hooks_file` | Is the wiring file present? (`.claude/settings.json`, `.codex/hooks.json`, or `.pi/extensions/bee-guard/` with entry `index.ts`) | The file is missing — the runtime loads no bee hooks or extension. |
 | `hook_handler` | Does `.bee/bin/bee[.exe]` exist? | Missing — every wired hook command points at nothing. |
 | `skills_installed` | Are there skill directories under `.claude/skills` / `.agents/skills`? | Zero — the agent has no bee craft to load. |
-| `wiring_matches_binary` (Codex, Pi) | Is `.codex/hooks.json` or `.pi/extensions/bee-guard.ts` byte-identical to what this binary renders or embeds? | It differs, or there is nothing to compare. |
+| `wiring_matches_binary` (Codex, Pi) | Is `.codex/hooks.json` or `.pi/extensions/bee-guard/` byte-identical to what this binary renders or embeds? | It differs, or there is nothing to compare. |
 | `wiring_points_at_the_binary` (Claude) | Does every wired hook command name `.bee/bin/bee`? | No hooks wired at all, or any command that does not name the vendored binary. |
 | `binary_freshness` | Is the installed binary built from the source beside it? | In a source checkout: `rs-info` version disagrees with `.claude-plugin/plugin.json`, the binary is too old to report a version, or any source input is newer than the binary by mtime. On Pi, host checkouts also verify release version against `.claude-plugin/plugin.json`. |
 | `herding_transport` (Pi) | Is the configured herding transport (tmux, direct) ready? | The transport binary is missing, `$TMUX` is unset without a running session, or configuration is malformed. |
 
-The runtimes get different byte-match rows on purpose. `.codex/hooks.json` and `.pi/extensions/bee-guard.ts` are whole-file artifacts, so exact file equality holds. `.claude/settings.json` is the host settings file with merged hooks; whole-file equality there would fail valid installations.
+The runtimes get different byte-match rows on purpose. `.codex/hooks.json` and `.pi/extensions/bee-guard/` are whole-file artifacts, so exact file equality holds. `.claude/settings.json` is the host settings file with merged hooks; whole-file equality there would fail valid installations.
 
 `binary_freshness` in Claude and Codex exists only in a bee **source** checkout (detected by `packages/bee-rs/Cargo.toml` under the root). In host checkouts for Claude and Codex, the row is absent. On Pi, `binary_freshness` checks the release version against `.claude-plugin/plugin.json` in both source and host repositories. It reports `unknown`, not `not_ok`, when the probe could not run or when the binary is missing.
 

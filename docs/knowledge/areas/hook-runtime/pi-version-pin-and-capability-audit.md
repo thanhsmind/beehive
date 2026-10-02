@@ -9,7 +9,7 @@ bee:
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md, areas/hook-runtime/catalog-projections-and-activation.md, areas/hook-runtime/codex-capability-probe-version-pin-and-re-probe-evidence.md]
   decisions: [pi-stage-dispatch D9 (version labels read 0.84-0.85), pi-beehive D5 / store 5d87f14e (pi means the pi binary only), pi-1-0-upgrade D1 (ceiling moves on live evidence), D2 (codemode and tool_search pass by name), D3 (systemPrompt carrier kept), D4 and D10 (backlog rows)]
-  sources: [.pi/extensions/bee-guard.ts, packages/bee-rs/crates/bee/src/doctor.rs, .bee/verify/verify-app/features/pi-hat-wave.md, pi 0.84.3, 0.85.1 and 1.0.0 shipped docs and the 1.0.0 CHANGELOG under the mise install root]
+  sources: [.pi/extensions/bee-guard/ (entry index.ts), packages/bee-rs/crates/bee/src/doctor.rs, .bee/verify/verify-app/features/pi-hat-wave.md, pi 0.84.3, 0.85.1 and 1.0.0 shipped docs and the 1.0.0 CHANGELOG under the mise install root]
   authoritative_for: "hook-runtime: the Pi version floor, the Pi upgrade re-probe list, and the per-version Pi capability audit"
 ---
 
@@ -28,10 +28,10 @@ governs this audit too.
 
 | Element | Meaning |
 |---|---|
-| Claimed version | The version the belt's own comments name: `0.84.3` (`.pi/extensions/bee-guard.ts:19,317`). |
-| Actual floor | `0.84.4`. The belt registers `ui_prompt_start` and `ui_prompt_end` (`.pi/extensions/bee-guard.ts:2179,2201`), and Pi added both events in 0.84.4. The belt cannot be the belt for 0.84.3. |
+| Claimed version | The version the belt's own comments name: `0.84.3` (`.pi/extensions/bee-guard/` module `index.ts` header comments and `tool-map.ts`). |
+| Actual floor | `0.84.4`. The belt registers `ui_prompt_start` and `ui_prompt_end` (`.pi/extensions/bee-guard/` module `events.ts`), and Pi added both events in 0.84.4. The belt cannot be the belt for 0.84.3. |
 | Last live-evidence version | `1.0.0` — run `20261002-135348-2965648`, 2026-10-02 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`). This is the proven ceiling the belt header names. The five-seat hat wave with seat injection was not re-run on 1.0.0; its newest evidence is still the 0.85.1 run `20260915-180023-56873`. |
-| `PI_BUILTIN_TOOLS` | The named list of eight Pi built-in tool names the write guard routes on (`.pi/extensions/bee-guard.ts:354-363`). Its comment keeps it a named list, not a switch default, "because the fail-safe below depends on knowing exactly which names are enumerated". |
+| `PI_BUILTIN_TOOLS` | The named list of eight Pi built-in tool names the write guard routes on (`.pi/extensions/bee-guard/` module `tool-map.ts`). Its comment keeps it a named list, not a switch default, "because the fail-safe below depends on knowing exactly which names are enumerated". |
 | Pi attestation | None. `bee doctor attest --runtime pi` refuses by design (`packages/bee-rs/crates/bee/src/doctor.rs:899`): "Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest." |
 
 ## Behaviors & Operations
@@ -49,8 +49,8 @@ release that renamed any of them would not be caught by any mechanical check.
 were checked against the shipped 0.85.1 docs for this audit, and the facts they
 label still hold. The label itself does not: `ui_prompt_start` and
 `ui_prompt_end` arrived in 0.84.4, so a belt registering them needs at least
-0.84.4. A third label in the same file already reads as a range —
-`.pi/extensions/bee-guard.ts:73`, "Pi 0.84–0.85 has no interactive permission
+0.84.4. A third label in the same folder already reads as a range —
+`.pi/extensions/bee-guard/` module `index.ts` header comments, "Pi 0.84–0.85 has no interactive permission
 prompt event".
 
 **Pi surfaces an upgrade can break.** These are the rows a future audit
@@ -98,15 +98,15 @@ range covers three releases: 0.84.4 (2026-08-28), 0.85.0 (2026-09-04) and
 | Upstream capability or change | Disposition | Evidence |
 |---|---|---|
 | Built-in tool registry: `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls` | **keep** | `docs/settings.md:223` at 0.84.3 and `docs/settings.md:228` at 0.85.1 carry the identical sentence and the identical eight names, and no changelog entry in the range adds or removes a built-in. `PI_BUILTIN_TOOLS` is complete at 0.85.1. |
-| New events `ui_prompt_start` / `ui_prompt_end` | **adapt — already done, and it raises the floor** | Added in 0.84.4 (issue 8355); present at 0.85.1 `docs/extensions.md:583-600`, absent at 0.84.3. The belt registers both (`.pi/extensions/bee-guard.ts:2179,2201`) and maps them onto the activity surface. Because the belt depends on them, its floor is 0.84.4. |
-| Built-in tools `bash`, `edit`, `find`, `grep`, `ls`, `read`, `write` now honour `ctx.cwd` | **keep — behavior change, no code change** | 0.85.0 fix, issue 8627. The belt reads `ctx.cwd` itself (`.pi/extensions/bee-guard.ts:554,1238,1432,1547`) and routes on tool names, so the fix aligns the built-ins with what the belt already assumed. |
+| New events `ui_prompt_start` / `ui_prompt_end` | **adapt — already done, and it raises the floor** | Added in 0.84.4 (issue 8355); present at 0.85.1 `docs/extensions.md:583-600`, absent at 0.84.3. The belt registers both (`.pi/extensions/bee-guard/` module `events.ts`) and maps them onto the activity surface. Because the belt depends on them, its floor is 0.84.4. |
+| Built-in tools `bash`, `edit`, `find`, `grep`, `ls`, `read`, `write` now honour `ctx.cwd` | **keep — behavior change, no code change** | 0.85.0 fix, issue 8627. The belt reads `ctx.cwd` itself (`.pi/extensions/bee-guard/` modules `session.ts`, `tool-verdict.ts`, `tool-steer.ts`, `transition.ts`) and routes on tool names, so the fix aligns the built-ins with what the belt already assumed. |
 | Session fork fixes: forks losing their compaction boundary; in-memory forks before an active turn settled | **keep — no code change, relevant surface** | 0.85.0, issues 8990 and 8937. The belt forks sessions through `SessionManager.forkFrom` for the `bee-worktree-*` commands, so these fixes land under it. |
 | Resumed sessions corrupting the next appended entry when the session JSONL lacks a trailing newline | **keep — no code change, relevant surface** | 0.84.4, issue 8345. |
-| `pi.setModel` and `pi.setThinkingLevel` become session-scoped and are recorded in session history | **keep — no local impact** | 0.85.1 `docs/extensions.md:1706,1720-1722`. `rg 'setModel\|setThinkingLevel' .pi/extensions/bee-guard.ts` returns no call site. |
+| `pi.setModel` and `pi.setThinkingLevel` become session-scoped and are recorded in session history | **keep — no local impact** | 0.85.1 `docs/extensions.md:1706,1720-1722`. `rg 'setModel\|setThinkingLevel' .pi/extensions/bee-guard/` returns no call site. |
 | `SessionManager.inMemory()` for externally managed session entries | **keep — no local impact** | 0.85.0, issue 8980. An SDK surface; the belt does not use it. |
 | Extension messages sent with `triggerTurn: false` no longer land between a tool call and its result | **keep — no local impact** | 0.84.4, issue 8537. The belt sends through `pi.sendUserMessage`, not this path. |
 | `CustomEditor` gains `{ embedWorkingStatus: true }` | **keep — no local impact** | 0.85.1 `docs/extensions.md:2832`. The belt registers no custom editor. |
-| Interactive permission-prompt event | **keep — still absent** | No such event in either version's `docs/extensions.md`. The named exclusion at `.pi/extensions/bee-guard.ts:73` holds, and its label already reads `0.84–0.85`. |
+| Interactive permission-prompt event | **keep — still absent** | No such event in either version's `docs/extensions.md`. The named exclusion in `.pi/extensions/bee-guard/` module `index.ts` header comments holds, and its label already reads `0.84–0.85`. |
 | Provider, model-registry, auth, TUI, and terminal-capability changes across all three releases | **keep — no local impact** | The belt registers no provider, reads no model catalog, and draws no UI beyond `ctx.ui.notify` and `ctx.ui.setStatus`. |
 
 Nothing in the range earns `delete`.
@@ -125,14 +125,14 @@ install tree. Live evidence is run `20261002-135348-2965648`
 | Upstream capability or change | Disposition | Evidence |
 |---|---|---|
 | 0.86.0 BREAKING: provider stream inputs become `TranscriptContext`; custom providers read the system prompt from `context.messages` | **keep — no local impact** | `CHANGELOG.md:282`. The belt registers no provider. |
-| 0.86.0 BREAKING: `ToolCall.arguments` and `ToolResultMessage.details` restricted to JSON values | **keep — no local impact** | `CHANGELOG.md:283`. The belt reads `event.input` and `event.args` as plain JSON (`.pi/extensions/bee-guard.ts:2452,2561,2625`) and builds no tool result. |
+| 0.86.0 BREAKING: `ToolCall.arguments` and `ToolResultMessage.details` restricted to JSON values | **keep — no local impact** | `CHANGELOG.md:283`. The belt reads `event.input` and `event.args` as plain JSON (`.pi/extensions/bee-guard/` modules `tool-map.ts`, `events.ts`) and builds no tool result. |
 | 0.86.0 BREAKING: `user_bash` fails closed | **keep — no local impact; guard is a backlog row** | `CHANGELOG.md:284`. The belt registers no `user_bash` handler, so a user `!` command is not guarded. A `user_bash` guard is out of scope (pi-1-0-upgrade D4) and filed as a backlog row. |
-| 0.87.0 BREAKING: `shouldStopAfterTurn` removed for `finishTurn` | **keep — no local impact** | `CHANGELOG.md:220`. `rg shouldStopAfterTurn .pi/extensions/bee-guard.ts` returns nothing. |
+| 0.87.0 BREAKING: `shouldStopAfterTurn` removed for `finishTurn` | **keep — no local impact** | `CHANGELOG.md:220`. `rg shouldStopAfterTurn .pi/extensions/bee-guard/` returns nothing. |
 | 0.87.0 BREAKING: `ContextEditEntry` joins the `SessionEntry` union | **keep — no local impact** | `CHANGELOG.md:221`. The belt has no exhaustive switch over session entries. `appendContextEdit` as a carrier is a D4 backlog row. |
-| 0.87.0 BREAKING: `SessionManager` is canonical for provider context; assigning `session.agent.state.messages` no longer replaces history | **keep — no local impact** | `CHANGELOG.md:222`. `rg 'state\.messages' .pi/extensions/bee-guard.ts` returns nothing. The belt forks and switches sessions only through `SessionManager.forkFrom` and `ctx.switchSession`, and the live run relocated a session into a worktree on 1.0.0. |
-| 0.87.0 BREAKING: `TurnEndEvent` gains required fields; `AgentBeforeSettleEvent` joins `ExtensionEvent`; `emit()` no longer takes `turn_end` | **keep — no code change** | `CHANGELOG.md:223`. The belt only receives `turn_end` (`.pi/extensions/bee-guard.ts:2955`) and ignores the event body. It neither constructs events nor switches over the union. `agent_before_settle` is the boundary pi-1-0-upgrade D7 builds on, in a later slice. |
-| 0.87.0 BREAKING: runs requested from `agent_settled` handlers are deferred until all settled handlers finish | **keep — proven live** | `CHANGELOG.md:224`. The belt's worktree relocation rides `agent_settled` (`.pi/extensions/bee-guard.ts:2680`). On 1.0.0, `/bee-worktree-new --feature demo` relocated the session and `ctx.cwd` then named the worktree (`pi-hat-wave.md:145`). |
-| `codemode` and `tool_search` built in (0.99.0) | **adapt — done in p1u-1** | `CHANGELOG.md:119-120`. Before p1u-1 both names fell to the write-capable fail-safe, and stage narrowing stripped them. They now pass the outer guard by name (`.pi/extensions/bee-guard.ts:501-503`, pi-1-0-upgrade D2) and survive narrowing. Pi runs every nested call through `tool_call` (`docs/extensions.md:148` at 1.0.0), so bee-guard judges each real read and write inside a script. Live: a codemode `read` passed, and a codemode `write` before the gate was denied with the nested `write` named (`pi-hat-wave.md:141-142`). |
+| 0.87.0 BREAKING: `SessionManager` is canonical for provider context; assigning `session.agent.state.messages` no longer replaces history | **keep — no local impact** | `CHANGELOG.md:222`. `rg 'state\.messages' .pi/extensions/bee-guard/` returns nothing. The belt forks and switches sessions only through `SessionManager.forkFrom` and `ctx.switchSession`, and the live run relocated a session into a worktree on 1.0.0. |
+| 0.87.0 BREAKING: `TurnEndEvent` gains required fields; `AgentBeforeSettleEvent` joins `ExtensionEvent`; `emit()` no longer takes `turn_end` | **keep — no code change** | `CHANGELOG.md:223`. The belt only receives `turn_end` (`.pi/extensions/bee-guard/` module `events.ts`) and ignores the event body. It neither constructs events nor switches over the union. `agent_before_settle` is the boundary pi-1-0-upgrade D7 builds on, in a later slice. |
+| 0.87.0 BREAKING: runs requested from `agent_settled` handlers are deferred until all settled handlers finish | **keep — proven live** | `CHANGELOG.md:224`. The belt's worktree relocation rides `agent_settled` (`.pi/extensions/bee-guard/` module `events.ts` calling `transition.ts`). On 1.0.0, `/bee-worktree-new --feature demo` relocated the session and `ctx.cwd` then named the worktree (`pi-hat-wave.md:145`). |
+| `codemode` and `tool_search` built in (0.99.0) | **adapt — done in p1u-1** | `CHANGELOG.md:119-120`. Before p1u-1 both names fell to the write-capable fail-safe, and stage narrowing stripped them. They now pass the outer guard by name (`.pi/extensions/bee-guard/` module `tool-map.ts`, pi-1-0-upgrade D2) and survive narrowing. Pi runs every nested call through `tool_call` (`docs/extensions.md:148` at 1.0.0), so bee-guard judges each real read and write inside a script. Live: a codemode `read` passed, and a codemode `write` before the gate was denied with the nested `write` named (`pi-hat-wave.md:141-142`). |
 | Codemode partial writes: a failed script does not undo earlier tool calls | **keep — accepted risk, recorded** | `docs/codemode.md:18` at 1.0.0: "calls made before a failure are not undone". A script whose third write is denied keeps its first two. Write-guard judged each nested write on its own; a deny stops the script, not what already passed. The live error says so: "Tool calls made before the failure (they are not undone)" (`pi-hat-wave.md:142`). Found by the hat wave (`docs/history/pi-1-0-upgrade/reports/hat-wave.md`). |
 | Transcript-backed mid-conversation system prompt and tool changes (0.86.0) | **keep — measured (D3)** | `CHANGELOG.md:288`. On 1.0.0 the per-turn `systemPrompt` from `before_agent_start` added 0 system messages over six turns. The 3 system messages were the session's first and one per tool-set change (`pi-hat-wave.md:143`). The carrier stays; the pi-1-0-upgrade D3 guess is answered. |
 | `/reload` enables tools newly added to `defaultTools`; tools turned off stay off unless newly added (0.99.2) | **keep — measured** | `CHANGELOG.md:64`. In the TUI, `/reload` restored all nine tools, and the next turn narrowed them again to `["read","bash"]`. Write-guard blocked writes in every state (`pi-hat-wave.md:144`). In RPC mode `/reload` is not a command and reaches the model as text. |
@@ -140,7 +140,7 @@ install tree. Live evidence is run `20261002-135348-2965648`
 | `context_with_system` event, `appendContextEdit`, exported hook types (0.86.0, 0.87.0) | **keep — no local impact; backlog row** | `CHANGELOG.md:215,228,231,296`. Out of scope (pi-1-0-upgrade D4), with MCP server export; filed as a backlog row. |
 | Built-in tool registry | **keep** | `docs/settings.md:44` at 1.0.0 names the same eight built-ins and adds that `defaultTools` can also name `codemode` and `tool_search`. `PI_BUILTIN_TOOLS` is complete at 1.0.0. |
 | The thirteen registered events and the API members under "Pi surfaces an upgrade can break" | **keep — checked in the binary and live** | The 1.0.0 docs were rewritten and no longer list every event: `ui_prompt_start`, `ui_prompt_end` and `session_tree` appear in no 1.0.0 doc. All three names are in the 1.0.0 `pi` binary (`rg -a -c`), and the live run drove `turn_start`, `tool_call`, `agent_settled` and the worktree commands. |
-| Interactive permission-prompt event | **keep — still absent** | 1.0.0 adds tool `annotations` that a permission extension can read (`docs/extensions.md:166`), but no prompt event. The named exclusion at `.pi/extensions/bee-guard.ts:73` holds. |
+| Interactive permission-prompt event | **keep — still absent** | 1.0.0 adds tool `annotations` that a permission extension can read (`docs/extensions.md:166`), but no prompt event. The named exclusion in `.pi/extensions/bee-guard/` module `index.ts` header comments holds. |
 | Fullscreen TUI, codemode token cuts, image generation, MCP OAuth, `/login` and provider changes | **keep — no local impact** | `CHANGELOG.md:5-45`. The belt registers no provider and draws no UI beyond notify, status and the widget. |
 
 <!-- /bee:not-a-deferral -->
@@ -172,14 +172,16 @@ Nothing in the range earns `delete`.
   `pvf-1`. The belt header now states the range directly — floor 0.84.4,
   ceiling unproven — and says that a version named anywhere else in the file
   records which docs were READ, so the two are not confused again. The same
-  note rides both contract tests. The `0.84.3` provenance citations at
-  `.pi/extensions/bee-guard.ts:19,317` were deliberately left as written, per
+  note rides both contract tests. The `0.84.3` provenance citations in
+  `.pi/extensions/bee-guard/` (`index.ts` header comments and `tool-map.ts`)
+  were deliberately left as written, per
   `docs/history/pi-stage-dispatch/plan.md:207` ("leave comments that name which
   Pi docs or binary were read unchanged"): they are true statements about what
   was read. The range is a decision, tagged `contract:pi-version-range`.
 - **A delivery record claims a label change that did not reach every copy.**
   `docs/knowledge/work/pi-stage-dispatch/delivery.md:43` cites "the absence of
-  the old Pi 0.84.x label". The label remains at `.pi/extensions/bee-guard.ts:19,317`,
+  the old Pi 0.84.x label". The label remains in `.pi/extensions/bee-guard/`
+  (`index.ts` and `tool-map.ts`),
   `docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md:336`,
   `.bee/verify/verify-app/features/semantic-role-routing.md:56`, and the two
   test files above.
@@ -201,10 +203,34 @@ Nothing in the range earns `delete`.
   audit read three event names out of the `pi` binary. The docs diff in the
   Pointers below is no longer enough on its own.
 
+## Module map (`.pi/extensions/bee-guard/`)
+
+Under `pi-extension-split` (decisions D1–D6), the Pi guard extension ships as a flat directory extension at `.pi/extensions/bee-guard/` with entry `index.ts` instead of the legacy single file `.pi/extensions/bee-guard.ts` (which `bee onboard` removes on upgrade, D3). Each module covers a single concern with relative `.ts` imports and no build step (D1, D6):
+
+- `bee-cli.ts` — Executes bee CLI subprocesses (`execBeeCli`) with timeout and error handling.
+- `commands.ts` — Registers Pi slash commands (`/bee-worktree-*`) via `registerCommands(pi, belt)`.
+- `events.ts` — Registers all `pi.on` event handlers in their original order via `registerEvents(pi, belt)` (D6).
+- `hooks.ts` — Runs blocking (`runBlockingHook`, fail-closed) and advisory (`runAdvisoryHook`, fail-open) bee hooks.
+- `index.ts` — Directory entry point; retains header comments and re-exports the full guard API (D1, D5, D6).
+- `locate.ts` — Discovers the bee store (`.bee`), binary paths, and the git main checkout root.
+- `model-usage.ts` — Tracks token metrics, queries model limits, and formats status-line output.
+- `result-inbox.ts` — Polls and drains background worker results and manages prompt depths.
+- `session.ts` — Provides session helpers, session ID resolution, and preamble injection.
+- `state.ts` — Encapsulates all module-level mutable state in a single exported object (D2).
+- `tool-dispatch.ts` — Implements `bee_dispatch` and `bee_advisor` worker dispatch tools.
+- `tool-map.ts` — Maps Pi tools to bee hooks, defines `PI_BUILTIN_TOOLS`, and narrows tools per stage.
+- `tool-steer.ts` — Delivers mid-run steer inputs to running workers and drains follow-up text.
+- `tool-verdict.ts` — Implements the `verdict` terminating tool for worker mailbox completion.
+- `transition.ts` — Coordinates worktree session relocation through `SessionManager.forkFrom` and `switchSession`.
+- `workers-widget.ts` — Renders the active in-flight worker widget below the editor.
+
+Downgrade step: if rolling back to a legacy single-file bee version, delete the folder manually with `rm -r .pi/extensions/bee-guard/` before running the older `bee onboard --apply`, so Pi does not load both guards simultaneously.
+
 ## Pointers (implementation)
 
-- Belt: `.pi/extensions/bee-guard.ts` — built-in registry at `:354-363`, event
-  registrations from `:2446`, command registrations from `:3035`.
+- Belt: `.pi/extensions/bee-guard/` (entry `index.ts`) — built-in registry in
+  `tool-map.ts`, event registrations in `events.ts`, command registrations in
+  `commands.ts`.
 - Attestation path and the Pi refusal:
   `packages/bee-rs/crates/bee/src/doctor.rs:772-784,899`.
 - Last live evidence: `.bee/verify/verify-app/features/pi-hat-wave.md:136` (Pi 1.0.0).
