@@ -1479,6 +1479,9 @@ enum StubBehavior {
         prepare: String,
         exit: i32,
     },
+    SessionCloseObligations {
+        obligations: Vec<Value>,
+    },
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -1538,6 +1541,12 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
         StubBehavior::SessionCloseAdvisory(msg) => {
             let stdout = json!({"systemMessage": msg}).to_string();
             format!("printf '%s' '{stdout}'\nexit 0\n")
+        }
+        StubBehavior::SessionCloseObligations { obligations } => {
+            let stdout = json!({"obligations": obligations}).to_string();
+            format!(
+                "if grep -q '\"obligations_only\"' \"$d/last_stdin.json\"; then\n  printf '%s' '{stdout}'\n  exit 0\nfi\nexit 0\n"
+            )
         }
         StubBehavior::StageToolsVerdict {
             stage,
@@ -2987,6 +2996,8 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("turn_start", json!({})),
         ("turn_end", json!({})),
         ("session_tree", json!({})),
+        ("agent_before_settle", json!({})),
+        ("agent_before_settle", json!({"entries": []})),
         ("agent_settled", json!({})),
         ("session_before_compact", json!({})),
         ("session_shutdown", json!({"reason": "quit"})),
@@ -4772,7 +4783,15 @@ fn public_and_private_commands_register() {
     node_or_skip!("public_and_private_commands_register");
 
     let registered = pi_registered_commands();
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate", "bee-tools-reopen"] {
+    for cmd in [
+        "bee-worktree-new",
+        "bee-worktree-enter",
+        "bee-worktree-exit",
+        "bee-worktree-merge",
+        "bee-worktree-relocate",
+        "bee-tools-reopen",
+        "bee-obligation-skip",
+    ] {
         assert!(
             registered.contains(cmd),
             "expected .pi/extensions/bee-guard.ts to register command \"{cmd}\", but derived was: {registered:?}"
@@ -4785,7 +4804,15 @@ fn public_and_private_commands_register() {
     write_stub_bee(dir.path(), &StubBehavior::Allow);
 
     let run = run_harness(&harness, vec![]);
-    for cmd in ["bee-worktree-new", "bee-worktree-enter", "bee-worktree-exit", "bee-worktree-merge", "bee-worktree-relocate", "bee-tools-reopen"] {
+    for cmd in [
+        "bee-worktree-new",
+        "bee-worktree-enter",
+        "bee-worktree-exit",
+        "bee-worktree-merge",
+        "bee-worktree-relocate",
+        "bee-tools-reopen",
+        "bee-obligation-skip",
+    ] {
         assert!(
             run.commands.iter().any(|c| c == cmd),
             "expected command \"{cmd}\" to be registered in harness run, found: {:?}",
@@ -8706,7 +8733,7 @@ fn real_bee_hook_stage_tools_end_to_end() {
     assert_eq!(parsed["stage"], "planning");
     assert_eq!(
         parsed["allowed_tools"],
-        json!(["read", "bash"])
+        json!(["read", "bash", "bee_advisor"])
     );
 
     // 2. Drive belt end-to-end through node harness with real binary
@@ -8820,7 +8847,7 @@ fn stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_to
 
     assert_eq!(
         run.active_tools_history.get(1),
-        Some(&vec!["read".to_string(), "bash".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
+        Some(&vec!["read".to_string(), "bash".to_string(), "bee_advisor".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
         "planning keeps read, bash and every non-bee tool: {:?}",
         run.active_tools_history
     );
@@ -9666,5 +9693,251 @@ fn the_write_guard_payload_carries_tools_reopened_after_bee_tools_reopen() {
     assert_eq!(payload["bee_runtime"], "pi", "{payload}");
     assert_eq!(payload["tools_reopened"], true, "{payload}");
 }
+
+#[cfg(unix)]
+#[test]
+fn settle_obligation_produces_one_custom_message_and_continue_true() {
+    node_or_skip!("settle_obligation_produces_one_custom_message_and_continue_true");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let obligation = json!({
+        "key": "demo:cap:demo-1",
+        "kind": "cap",
+        "cell": "demo-1",
+        "message": "bee: cell demo-1 is claimed and not capped. Cap it now.",
+        "user_notice": "bee: work is still owed: cell demo-1 is claimed but not capped."
+    });
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseObligations {
+            obligations: vec![obligation.clone()],
+        },
+    );
+
+    const SESSION_ID: &str = "sess-settle-obl";
+    let run = run_harness(
+        &harness,
+        vec![json!({
+            "event": "agent_before_settle",
+            "event_arg": { "entries": [] },
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": SESSION_ID,
+        })],
+    );
+
+    assert!(run.results.iter().all(|r| !r.threw), "{:?}", run.results);
+    let res = run.results[0].result.as_ref().expect("result");
+    assert_eq!(res["continue"], true);
+    let entries = res["entries"].as_array().expect("entries array");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["type"], "custom_message");
+    assert_eq!(entries[0]["customType"], "bee-obligation");
+    assert_eq!(entries[0]["content"], obligation["message"]);
+    assert_eq!(entries[0]["details"]["key"], obligation["key"]);
+    assert!(
+        run.notifications.iter().any(|n| n["message"] == obligation["user_notice"]),
+        "{:?}",
+        run.notifications
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn settle_empty_obligations_or_failure_produces_no_continuation() {
+    node_or_skip!("settle_empty_obligations_or_failure_produces_no_continuation");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    let dir_empty = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir_empty.path(),
+        &StubBehavior::SessionCloseObligations { obligations: vec![] },
+    );
+    let run_empty = run_harness(
+        &harness,
+        vec![json!({
+            "event": "agent_before_settle",
+            "event_arg": { "entries": [] },
+            "cwd": dir_empty.path().to_string_lossy(),
+            "session_id": "sess-empty",
+        })],
+    );
+    assert!(run_empty.results.iter().all(|r| !r.threw));
+    assert!(
+        run_empty.results[0].result.is_none()
+            || run_empty.results[0].result.as_ref().and_then(|r| r.get("continue")).and_then(Value::as_bool) != Some(true),
+        "{:?}",
+        run_empty.results[0]
+    );
+
+    let dir_crash = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir_crash.path(), &StubBehavior::Crash);
+    let run_crash = run_harness(
+        &harness,
+        vec![json!({
+            "event": "agent_before_settle",
+            "event_arg": { "entries": [] },
+            "cwd": dir_crash.path().to_string_lossy(),
+            "session_id": "sess-crash",
+        })],
+    );
+    assert!(run_crash.results.iter().all(|r| !r.threw));
+    assert!(
+        run_crash.results[0].result.is_none()
+            || run_crash.results[0].result.as_ref().and_then(|r| r.get("continue")).and_then(Value::as_bool) != Some(true),
+        "{:?}",
+        run_crash.results[0]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_obligation_skip_command_calls_session_close_with_skip_key() {
+    node_or_skip!("bee_obligation_skip_command_calls_session_close_with_skip_key");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const SESSION_ID: &str = "sess-skip";
+    let run = run_harness(
+        &harness,
+        vec![command_call(
+            dir.path(),
+            SESSION_ID,
+            "bee-obligation-skip",
+            "demo:cap:demo-1",
+        )],
+    );
+    assert!(run.results.iter().all(|r| !r.threw), "{:?}", run.results);
+    let last_stdin = std::fs::read_to_string(dir.path().join(".bee").join("bin").join("last_stdin.json")).expect("last_stdin");
+    let parsed: Value = serde_json::from_str(&last_stdin).expect("parsed JSON");
+    assert_eq!(parsed["skip_key"], "demo:cap:demo-1");
+    assert_eq!(parsed["hook_event_name"], "Stop");
+}
+
+#[cfg(unix)]
+#[test]
+fn forced_settle_continuation_suppresses_second_turn_nudge_at_agent_settled() {
+    node_or_skip!("forced_settle_continuation_suppresses_second_turn_nudge_at_agent_settled");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let bin_dir = dir.path().join(".bee").join("bin");
+    std::fs::create_dir_all(&bin_dir).expect("bin dir");
+    let script = r#"#!/bin/sh
+d="$(dirname "$0")"
+cat > "$d/last_stdin.json"
+printf '%s\n' "$*" >> "$d/calls.log"
+if grep -q '"obligations_only"' "$d/last_stdin.json"; then
+  printf '{"obligations":[{"key":"demo:cap:demo-1","kind":"cap","cell":"demo-1","message":"must cap","user_notice":"owed"}]}'
+  exit 0
+fi
+printf '{"decision":"block","reason":"nudge reason"}'
+exit 0
+"#;
+    let bee_path = bin_dir.join("bee");
+    std::fs::write(&bee_path, script).expect("write stub script");
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&bee_path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+
+    const SESSION_ID: &str = "sess-suppress-nudge";
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "agent_before_settle",
+                "event_arg": { "entries": [] },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": SESSION_ID,
+            }),
+            advisory_call("agent_settled", dir.path(), SESSION_ID, json!({})),
+        ],
+    );
+
+    assert!(run.results.iter().all(|r| !r.threw), "{:?}", run.results);
+    let before_res = run.results[0].result.as_ref().expect("before settle result");
+    assert_eq!(before_res["continue"], true);
+    assert!(
+        run.messages.is_empty(),
+        "agent_settled continuation nudge must not inject turn when agent_before_settle continued: {:?}",
+        run.messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn real_bee_hook_settle_continuation_end_to_end() {
+    node_or_skip!("real_bee_hook_settle_continuation_end_to_end");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let bee_dir = dir.path().join(".bee");
+    std::fs::write(
+        bee_dir.join("onboarding.json"),
+        r#"{"completed": true}"#,
+    )
+    .expect("write onboarding.json");
+    std::fs::write(
+        bee_dir.join("state.json"),
+        r#"{"phase": "swarming", "approved_gates": {"execution": true}}"#,
+    )
+    .expect("write state.json");
+    let cells_dir = bee_dir.join("cells");
+    std::fs::create_dir_all(&cells_dir).expect("create cells dir");
+    std::fs::write(
+        cells_dir.join("demo-1.json"),
+        r#"{"id": "demo-1", "feature": "demo", "status": "claimed"}"#,
+    )
+    .expect("write cell json");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    const SESSION_ID: &str = "sess-real-settle-obl";
+    let run1 = run_harness(
+        &harness,
+        vec![json!({
+            "event": "agent_before_settle",
+            "event_arg": { "entries": [] },
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": SESSION_ID,
+        })],
+    );
+
+    assert!(run1.results.iter().all(|r| !r.threw), "{:?}", run1.results);
+    let res1 = run1.results[0].result.as_ref().expect("res1");
+    assert_eq!(res1["continue"], true);
+    let entries = res1["entries"].as_array().expect("entries array");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["customType"], "bee-obligation");
+    assert!(entries[0]["content"].as_str().unwrap().contains("demo-1"));
+    assert!(run1.notifications.iter().any(|n| {
+        let msg = n["message"].as_str().unwrap_or("");
+        msg.contains("demo-1")
+    }));
+
+    let run2 = run_harness(
+        &harness,
+        vec![json!({
+            "event": "agent_before_settle",
+            "event_arg": { "entries": [] },
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": SESSION_ID,
+        })],
+    );
+    assert!(run2.results.iter().all(|r| !r.threw), "{:?}", run2.results);
+    assert!(
+        run2.results[0].result.is_none()
+            || run2.results[0].result.as_ref().and_then(|r| r.get("continue")).and_then(Value::as_bool) != Some(true),
+        "second settle must not produce continuation for already served obligation"
+    );
+}
+
 
 

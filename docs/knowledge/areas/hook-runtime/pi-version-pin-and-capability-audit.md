@@ -145,6 +145,8 @@ Nothing in the range earns `delete`.
 
 **Harness-native dispatch on Pi (pi-1-0-upgrade slice 2).** On lanes `small`, `standard` and `high-risk` in an approved swarming phase, write-guard refuses a Pi leader's source write (`check_pi_leader_write_lock`, contract `eba50fb9`), stage-tools hands the leader `bee_dispatch` and `bee_advisor` instead of `edit`/`write` (contract `034373cc`), and the belt's `bee_dispatch` runs `bee dispatch prepare` plus the returned `bee herding run` detached (contract `690c84f5`). Live proof: `.bee/verify/verify-app/features/pi-harness-dispatch.md`, run 20261002-153242-3268921.
 
+**Settle obligations on Pi (pi-1-0-upgrade slice 3).** Pi 1.0's actionable `agent_before_settle` boundary carries one forced turn when bee work is owed. `bee hook session-close` answers an `obligations_only` payload with each owed item once (kinds `cap` and `advisor`, contract `5f6f7020` with amendments `90077144`, `295f1277`, `562588f5`), the belt shows the notice and returns `continue: true` (contract `5495627d`), and the agent_settled nudge does not repeat it (`210c86e4`). The planning tool set carries `bee_advisor` (amendment `82179c5d`). Live proof: `.bee/verify/verify-app/features/pi-harness-dispatch.md`, runs 20261002-181622-3758076 and 20261002-184508-3853826.
+
 ## Business Rules
 
 - A row above is true for the versions named in its evidence and for no others.

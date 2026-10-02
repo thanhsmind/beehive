@@ -216,71 +216,14 @@ What the user sees in slice 4:
 
 ## Cells — current slice (preview)
 
-Slice 1 (p1u-1 to p1u-3) is capped and merged (main 4d16fde). Plan revision 1 prepares slice 2.
-Contracts: `eba50fb9` pi-leader-write-lock, `034373cc` pi-stage-loadout, `690c84f5` pi-dispatch-tool; named defaults `c7bde4b8`.
-Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run by the leader because the worker-outward guard refuses a worker that starts pi.
+Slices 1 and 2 (p1u-1 to p1u-7) are capped and merged (main a8cf7ed). Plan revision 2 prepares slice 3.
+Contracts: `5f6f7020` pi-settle-obligations, `5495627d` pi-settle-continuation.
+Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because the worker-outward guard refuses a worker that starts pi.
+
+Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182003-3768157) showed the planning-phase leader cannot reach bee_advisor; amendment `82179c5d` adds bee_advisor to the gated phases. p1u-8 was reworked under amendment `562588f5` (run count in the advisor message).
 
 ```json
 [
-  {
-    "id": "p1u-4",
-    "feature": "pi-1-0-upgrade",
-    "lane": "high-risk",
-    "role": "code",
-    "change_class": "security",
-    "title": "Refuse source writes from a Pi leader in the execute phase so it dispatches instead",
-    "deps": [],
-    "decisions": [
-      "D8",
-      "D11",
-      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0"
-    ],
-    "files": [
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
-    ],
-    "read_first": [
-      "docs/history/pi-1-0-upgrade/CONTEXT.md",
-      "docs/history/pi-1-0-upgrade/plan.md",
-      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
-      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
-    ],
-    "action": "Red first, then add one check to write-guard that implements contract pi-leader-write-lock exactly: refuse a source write, and a bash call that runs `bee herding run`, from a Pi leader (payload bee_runtime == \"pi\", env BEE_HERDING_WORKER not \"1\") when phase is swarming, the execution gate is approved and the route lane is small, standard or high-risk. Allow lanes tiny, docs and spike, worker sessions, non-Pi payloads, payload tools_reopened true, and config pi_harness_workflow false. The refusal text names bee_dispatch and /bee-tools-reopen. Reuse the record and config readers check_worktree_first already uses. No code comments.",
-    "must_haves": {
-      "truths": [
-        "a Pi leader source write on a small lane in an approved swarming phase is refused, naming bee_dispatch and /bee-tools-reopen",
-        "the same leader's bash `bee herding run` is refused",
-        "a worker session (BEE_HERDING_WORKER=1) on the same record may write",
-        "lane tiny may write",
-        "a non-Pi payload is unchanged",
-        "tools_reopened true may write",
-        "pi_harness_workflow false restores today's behavior"
-      ],
-      "artifacts": [
-        {
-          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
-          "substantive": "the leader write-lock check"
-        },
-        {
-          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
-          "substantive": "one test per truth"
-        }
-      ],
-      "key_links": [
-        "write_guard/main.rs calls the new check on the PreToolUse path"
-      ],
-      "prohibitions": [
-        "No code comments",
-        "Claude and Codex payloads unchanged",
-        "No change to the docs or tiny exemptions"
-      ]
-    },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard",
-    "affects_skills": [],
-    "affects_specs": []
-  },
   {
     "id": "p1u-5",
     "feature": "pi-1-0-upgrade",
@@ -293,7 +236,8 @@ Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run
       "D8",
       "D9",
       "D11",
-      "034373cc-aa8d-4df4-a569-c9a761f80710"
+      "034373cc-aa8d-4df4-a569-c9a761f80710",
+      "82179c5d-3683-4815-bf81-14bf24d58a77"
     ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
@@ -328,27 +272,86 @@ Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run
         "READ_ONLY_TOOLS unchanged"
       ]
     },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
-    "affects_skills": [],
-    "affects_specs": []
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
   },
   {
-    "id": "p1u-6",
+    "id": "p1u-8",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "code",
-    "change_class": "api",
-    "title": "Give the Pi leader bee_dispatch and bee_advisor tools that start workers through bee",
+    "change_class": "behavior",
+    "title": "Let session-close answer which bee obligations a Pi session still owes, once per obligation",
+    "deps": [],
+    "decisions": [
+      "D7",
+      "D9",
+      "D11",
+      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+      "90077144-07cf-446c-8b83-f0996d5b2337",
+      "562588f5-1213-42da-bc58-1463ed4405dd"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "action": "Red first, then implement contract pi-settle-obligations in a new session_close/obligations.rs wired from session_close/mod.rs: an obligations_only payload returns the JSON list and records served keys in one write under .bee/runtime; reuse list_claimed_cells and set_gate's advisor_ref staleness check; skip_key marks a key served; worker env, pi_harness_workflow false and an unwritable served record all return no obligations. The plain session-close path is unchanged. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a claimed uncapped cell is returned once as kind cap with key <feature>:cap:<cell>",
+        "the same key is not returned a second time",
+        "a high-risk planning feature with a gate preview and no fresh advisor_ref is returned once as kind advisor",
+        "BEE_HERDING_WORKER=1 returns no obligations",
+        "pi_harness_workflow false returns no obligations",
+        "an unwritable served record returns no obligations",
+        "skip_key marks a key served",
+        "a payload without obligations_only behaves as before"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+          "substantive": "the obligations answer and the served record"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+          "substantive": "one test per truth"
+        }
+      ],
+      "key_links": [
+        "session_close/mod.rs routes obligations_only and skip_key payloads to obligations.rs"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No new hook name",
+        "No second obligation engine beside session-close"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close"
+  },
+  {
+    "id": "p1u-9",
+    "feature": "pi-1-0-upgrade",
+    "lane": "high-risk",
+    "role": "code",
+    "change_class": "behavior",
+    "title": "Give a Pi session one forced turn when bee work is still owed at settle",
     "deps": [
-      "p1u-4",
-      "p1u-5"
+      "p1u-8"
     ],
     "decisions": [
-      "D6",
+      "D7",
       "D9",
-      "690c84f5-d884-4524-ad73-1289e805dd64",
-      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
-      "c7bde4b8-00bc-4541-9486-89932d04b996"
+      "5495627d-17a8-48d9-ad13-f1f741f3108a",
+      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+      "210c86e4-8fd1-4205-8429-16def14d0f62"
     ],
     "files": [
       ".pi/extensions/bee-guard.ts",
@@ -361,24 +364,23 @@ Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run
       ".pi/extensions/bee-guard.ts",
       "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
     ],
-    "action": "Red first in pi_plugin_contracts.rs, then in the belt: register bee_dispatch and bee_advisor per contract pi-dispatch-tool, reusing tokenizeArgv, resolveBeeBinary and the result drain; add bee_runtime \"pi\" and tools_reopened to the write-guard payload; show each running job in the worker widget. Rebuild .bee/bin/bee, run bee dev regen, and run bee doctor --runtime pi. No code comments.",
+    "action": "Red first in pi_plugin_contracts.rs, then in the belt implement contract pi-settle-continuation: an agent_before_settle handler that calls session-close with obligations_only, shows each user_notice, appends one custom_message per obligation and returns continue true once; register /bee-obligation-skip <key>. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments.",
     "must_haves": {
       "truths": [
-        "bee_dispatch runs dispatch prepare and then the returned herding command as argv, detached, and returns a job id at once",
-        "bee_dispatch refuses a payload whose command is not `.bee/bin/bee herding run`",
-        "bee_advisor runs prepare with --kind advisor",
-        "a prepare refusal comes back as the tool error verbatim",
-        "the write-guard payload carries bee_runtime pi and tools_reopened",
+        "an owed obligation produces one custom_message and continue true",
+        "an empty list or a hook failure produces no continuation",
+        "the user sees each obligation's user_notice",
+        "/bee-obligation-skip calls session-close with skip_key",
         "bee doctor --runtime pi is READY after rebuild"
       ],
       "artifacts": [
         {
           "path": ".pi/extensions/bee-guard.ts",
-          "substantive": "bee_dispatch and bee_advisor tools"
+          "substantive": "agent_before_settle handler and /bee-obligation-skip"
         },
         {
           "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
-          "substantive": "contract tests for both tools and the payload fields"
+          "substantive": "contract tests for the handler and the command"
         }
       ],
       "key_links": [
@@ -386,78 +388,68 @@ Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run
       ],
       "prohibitions": [
         "No code comments",
-        "No spawner in TypeScript beyond running the returned bee command",
-        "No shell parsing of the returned command"
+        "No obligation logic in TypeScript beyond showing what the hook returns",
+        "The agent_settled close warning stays"
       ]
     },
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
-    "affects_skills": [],
-    "affects_specs": [],
     "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
   },
   {
-    "id": "p1u-7",
+    "id": "p1u-10",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "test",
     "change_class": "test",
-    "title": "Prove on Pi 1.0 that a small model dispatches instead of writing inline",
+    "title": "Prove on Pi 1.0 that owed bee work gets one forced turn",
     "deps": [
-      "p1u-6"
+      "p1u-9"
     ],
     "decisions": [
-      "D1",
-      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
-      "034373cc-aa8d-4df4-a569-c9a761f80710",
-      "690c84f5-d884-4524-ad73-1289e805dd64"
+      "D7",
+      "D9",
+      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+      "5495627d-17a8-48d9-ad13-f1f741f3108a"
     ],
     "files": [
       ".bee/verify/verify-app/features/pi-harness-dispatch.md",
-      ".bee/verify/verify-app/features/README.md",
       "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
     ],
     "read_first": [
       "docs/history/pi-1-0-upgrade/CONTEXT.md",
       "docs/history/pi-1-0-upgrade/plan.md",
       "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
-      ".bee/verify/verify-app/features/pi-hat-wave.md"
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md"
     ],
-    "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, a small-lane feature in an approved swarming phase and one open cell, drive a Pi 1.0 leader on deepseek/deepseek-flash: record the tool list, a refused inline write with its text, a bee_dispatch call, the worker's verdict, and the cell's file written by the worker. Write the new feature file and its README index row, and add the mechanism to the audit page.",
+    "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, drive a Pi 1.0 leader on deepseek/deepseek-flash: (a) a session that settles with a claimed uncapped cell gets one forced turn naming the cap, and a second settle does not repeat it; (b) a high-risk feature at a gate-ready plan with no advisor_ref gets one forced turn naming bee_advisor with the run count. Record the evidence in the feature file and the mechanism in the audit page.",
     "must_haves": {
       "truths": [
-        "the leader's tool list has bee_dispatch and no edit or write",
-        "an inline leader write is refused with the bee_dispatch hint",
-        "bee_dispatch starts a worker that writes the cell's file and returns a verdict",
+        "one forced turn names the cap call for a claimed uncapped cell",
+        "a second settle does not repeat the same obligation",
+        "a gate-ready high-risk plan without an advisor_ref gets one forced turn naming bee_advisor and the run count",
         "the feature file names the run id and evidence path"
       ],
       "artifacts": [
         {
           "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
-          "substantive": "how to drive it, the run evidence, gotchas"
+          "substantive": "settle-obligation evidence section"
         }
       ],
-      "key_links": [
-        "README.md index lists pi-harness-dispatch"
-      ],
+      "key_links": [],
       "prohibitions": [
         "No product source edits"
       ]
     },
-    "verify": "bash .bee/verify/verify-app/control-bee doctor",
-    "affects_skills": [],
-    "affects_specs": [
-      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
-    ]
+    "verify": "bash .bee/verify/verify-app/control-bee doctor"
   }
 ]
 ```
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| p1u-4 | Refuse source writes from a Pi leader in the execute phase | write_guard `hook_local.rs`, `main.rs`, `tests.rs` | — | a Pi leader that tries to edit code is told to use `bee_dispatch` | `cargo test -p bee write_guard` |
-| p1u-5 | Make the Pi stage tool set lane- and worker-aware | `stage_tools.rs` | — | the leader's tool list shows `bee_dispatch` and no `edit`/`write` | `cargo test -p bee stage_tools` |
-| p1u-6 | Give the Pi leader `bee_dispatch` and `bee_advisor` | belt, `pi_plugin_contracts.rs` | p1u-4, p1u-5 | one tool call starts a worker and returns a job id | `cargo test --test pi_plugin_contracts`; doctor pi READY |
-| p1u-7 | Prove on Pi 1.0 that a small model dispatches | new `pi-harness-dispatch.md`, README index, audit page | p1u-6 | the verify map shows a small model dispatching on Pi 1.0 | green:live, leader-run |
+| p1u-8 | Let session-close answer which obligations a Pi session still owes | `session_close/mod.rs`, new `obligations.rs`, `tests.rs` | — | bee can say, once, what a session still owes | `cargo test -p bee session_close` |
+| p1u-9 | Give a Pi session one forced turn when bee work is owed | belt, `pi_plugin_contracts.rs` | p1u-8 | a session that stops with work owed gets one extra turn naming the exact call | `cargo test --test pi_plugin_contracts`; doctor pi READY |
+| p1u-10 | Prove it on Pi 1.0 | `pi-harness-dispatch.md`, audit page | p1u-9 | the verify map shows one forced turn for a cap and for a missing advisor review | green:live, leader-run |
 
 ## Test matrix
 Slice 1:

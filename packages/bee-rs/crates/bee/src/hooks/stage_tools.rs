@@ -24,6 +24,7 @@ pub(crate) const LEADER_TOOL_SET: [&str; 10] = [
     "read", "bash", "find", "grep", "ls", "powershell", "codemode", "tool_search", "bee_dispatch",
     "bee_advisor",
 ];
+pub(crate) const GATED_TOOL_SET: [&str; 3] = ["read", "bash", "bee_advisor"];
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let argv = argv.to_vec();
@@ -74,7 +75,10 @@ pub(crate) fn allowed_tools_for(
     }
     if !gate_approved {
         let phase = Value::String(phase.to_string());
-        if is_gated_phase(&phase) || !is_known_phase(&phase) {
+        if is_gated_phase(&phase) {
+            return if harness_workflow { &GATED_TOOL_SET } else { &READ_ONLY_TOOLS };
+        }
+        if !is_known_phase(&phase) {
             return &READ_ONLY_TOOLS;
         }
         return full;
@@ -140,7 +144,8 @@ fn build_verdict(ctx: &HookContext) -> Option<Value> {
     let worker = crate::hooks::herding_worker_marker_set();
     let allowed = allowed_tools_for(phase, gate_approved, lane, worker, harness_workflow);
     let leads = allowed == LEADER_TOOL_SET;
-    let execution_is_open = allowed != READ_ONLY_TOOLS && !leads;
+    let full: &'static [&'static str] = if harness_workflow { &FULL_TOOL_SET } else { &BASE_TOOL_SET };
+    let execution_is_open = allowed == full;
     let allowed_tools: Vec<String> = allowed.iter().map(|s| s.to_string()).collect();
 
     let stage_name = phase;
@@ -234,12 +239,38 @@ mod tests {
         ("compounding-complete", false), // terminal: same partial allowance
     ];
 
+    struct HerdingWorkerEnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl HerdingWorkerEnvGuard {
+        fn non_worker() -> Self {
+            let lock = crate::hooks::herding_env_lock();
+            let prior = std::env::var_os("BEE_HERDING_WORKER");
+            // SAFETY: herding_env_lock serializes every test that touches this var.
+            unsafe { std::env::remove_var("BEE_HERDING_WORKER") };
+            Self { _lock: lock, prior }
+        }
+    }
+
+    impl Drop for HerdingWorkerEnvGuard {
+        fn drop(&mut self) {
+            match &self.prior {
+                // SAFETY: herding_env_lock serializes every test that touches this var.
+                Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+                // SAFETY: herding_env_lock serializes every test that touches this var.
+                None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+            }
+        }
+    }
+
     #[test]
     fn stage_tools_matches_the_write_guards_phase_table() {
         for (phase, expect_narrow) in EXPECTED_WITHOUT_GATE {
             let allowed = allowed_tools_for(phase, false, None, false, true);
             assert_eq!(
-                allowed == READ_ONLY_TOOLS,
+                allowed == GATED_TOOL_SET,
                 expect_narrow,
                 "phase {phase:?}: expected narrowed={expect_narrow}, got {allowed:?}"
             );
@@ -295,7 +326,7 @@ mod tests {
     fn stage_tools_reads_the_execution_gate_out_of_the_state_record() {
         // Guards the JSON path itself: a wrong key name here would leave every
         // phase narrowed and no table test would notice.
-        let _env = crate::hooks::herding_env_lock();
+        let _env = HerdingWorkerEnvGuard::non_worker();
         let dir = setup_bee_repo();
         let state_path = dir.path().join(".bee").join("state.json");
         let stdin = json!({"cwd": dir.path().to_str().unwrap()}).to_string();
@@ -307,7 +338,7 @@ mod tests {
         .expect("write state.json");
         let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
         let verdict = build_verdict(&ctx).expect("verdict");
-        assert_eq!(verdict["allowed_tools"], json!(READ_ONLY_TOOLS));
+        assert_eq!(verdict["allowed_tools"], json!(GATED_TOOL_SET));
 
         std::fs::write(
             &state_path,
@@ -327,7 +358,7 @@ mod tests {
         // belt builds its own user and model sentences, so the four message
         // keys below have no reader today; they stay because the payload is
         // published, and this test states plainly which are load-bearing.
-        let _env = crate::hooks::herding_env_lock();
+        let _env = HerdingWorkerEnvGuard::non_worker();
         let dir = setup_bee_repo();
         std::fs::write(
             dir.path().join(".bee").join("state.json"),
@@ -398,10 +429,10 @@ mod tests {
     }
 
     #[test]
-    fn stage_tools_keeps_the_gated_phases_on_read_and_bash() {
+    fn stage_tools_gives_the_gated_phases_read_bash_and_advisor() {
         for phase in ["exploring", "planning"] {
             for lane in [Some("tiny"), Some("small"), None] {
-                assert_eq!(allowed_tools_for(phase, false, lane, false, true), READ_ONLY_TOOLS, "{phase:?} {lane:?}");
+                assert_eq!(allowed_tools_for(phase, false, lane, false, true), GATED_TOOL_SET, "{phase:?} {lane:?}");
             }
         }
     }
@@ -416,7 +447,7 @@ mod tests {
 
     #[test]
     fn stage_tools_reads_lane_and_harness_switch_into_the_leader_verdict() {
-        let _env = crate::hooks::herding_env_lock();
+        let _env = HerdingWorkerEnvGuard::non_worker();
         let dir = setup_bee_repo();
         std::fs::write(
             dir.path().join(".bee").join("state.json"),

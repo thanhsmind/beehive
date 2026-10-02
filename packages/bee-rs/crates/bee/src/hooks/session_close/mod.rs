@@ -117,6 +117,10 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     if !crate::hooks::adapter::bee_installed(&root) {
         return Ok(());
     }
+    if let Some(out) = obligations::answer(&root, &ctx) {
+        flush(&out, "");
+        return Ok(());
+    }
     // SessionEnd: native-only (the Node wrapper never wired this event —
     // Stop/PreCompact/SubagentStop were its whole surface). Best-effort marks
     // the session record closed under the sessions store lock so a cleanly
@@ -670,6 +674,7 @@ mod nudges;
 mod store;
 mod perf;
 mod html;
+mod obligations;
 pub(crate) use self::reads::*;
 pub(crate) use self::nudges::*;
 pub(crate) use self::store::*;
