@@ -20,9 +20,9 @@ pub(crate) const FULL_TOOL_SET: [&str; 13] = [
     "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
     "bee_dispatch", "bee_advisor", "verdict",
 ];
-pub(crate) const LEADER_TOOL_SET: [&str; 11] = [
+pub(crate) const LEADER_TOOL_SET: [&str; 10] = [
     "read", "bash", "find", "grep", "ls", "powershell", "codemode", "tool_search", "bee_dispatch",
-    "bee_advisor", "verdict",
+    "bee_advisor",
 ];
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
@@ -365,7 +365,7 @@ mod tests {
         let expected: Vec<&str> = FULL_TOOL_SET
             .iter()
             .copied()
-            .filter(|t| *t != "edit" && *t != "write")
+            .filter(|t| !matches!(*t, "edit" | "write" | "verdict"))
             .collect();
         for lane in LEADER_LANES {
             let allowed = allowed_tools_for("swarming", true, Some(lane), false, true);
@@ -373,6 +373,7 @@ mod tests {
             for tool in ["bee_dispatch", "bee_advisor"] {
                 assert!(allowed.contains(&tool), "lane {lane:?} must carry {tool:?}");
             }
+            assert!(!allowed.contains(&"verdict"), "lane {lane:?} must not carry verdict");
         }
     }
 
