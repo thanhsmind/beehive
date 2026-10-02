@@ -220,8 +220,60 @@ Slices 1 and 2 (p1u-1 to p1u-7) are capped and merged (main a8cf7ed). Plan revis
 Contracts: `5f6f7020` pi-settle-obligations, `5495627d` pi-settle-continuation.
 Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because the worker-outward guard refuses a worker that starts pi.
 
+Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182003-3768157) showed the planning-phase leader cannot reach bee_advisor; amendment `82179c5d` adds bee_advisor to the gated phases. p1u-8 was reworked under amendment `562588f5` (run count in the advisor message).
+
 ```json
 [
+  {
+    "id": "p1u-5",
+    "feature": "pi-1-0-upgrade",
+    "lane": "high-risk",
+    "role": "code",
+    "change_class": "behavior",
+    "title": "Make the Pi stage tool set lane- and worker-aware so the leader is handed bee_dispatch",
+    "deps": [],
+    "decisions": [
+      "D8",
+      "D9",
+      "D11",
+      "034373cc-aa8d-4df4-a569-c9a761f80710",
+      "82179c5d-3683-4815-bf81-14bf24d58a77"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+    ],
+    "action": "Red first, then change allowed_tools_for to take lane and worker and implement contract pi-stage-loadout exactly. Read the lane from the resolved record's route, the worker from env BEE_HERDING_WORKER, and pi_harness_workflow from config. Keep both notice sentences and add the leader case's sentence naming bee_dispatch and /bee-tools-reopen. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
+        "a worker session gets the full set plus verdict",
+        "lane tiny keeps the full set",
+        "the gated phases keep read and bash only",
+        "the full set names bee_dispatch, bee_advisor and verdict",
+        "pi_harness_workflow false restores today's answer"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "substantive": "lane- and worker-aware allowed_tools_for with its tests"
+        }
+      ],
+      "key_links": [
+        "the belt's turn_start narrowing reads allowed_tools from this hook unchanged"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "READ_ONLY_TOOLS unchanged"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
+  },
   {
     "id": "p1u-8",
     "feature": "pi-1-0-upgrade",
@@ -234,7 +286,9 @@ Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because 
       "D7",
       "D9",
       "D11",
-      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14"
+      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+      "90077144-07cf-446c-8b83-f0996d5b2337",
+      "562588f5-1213-42da-bc58-1463ed4405dd"
     ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
@@ -280,9 +334,7 @@ Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because 
         "No second obligation engine beside session-close"
       ]
     },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
-    "affects_skills": [],
-    "affects_specs": []
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close"
   },
   {
     "id": "p1u-9",
@@ -298,7 +350,8 @@ Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because 
       "D7",
       "D9",
       "5495627d-17a8-48d9-ad13-f1f741f3108a",
-      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14"
+      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+      "210c86e4-8fd1-4205-8429-16def14d0f62"
     ],
     "files": [
       ".pi/extensions/bee-guard.ts",
@@ -340,8 +393,6 @@ Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because 
       ]
     },
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
-    "affects_skills": [],
-    "affects_specs": [],
     "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
   },
   {
@@ -389,11 +440,7 @@ Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because 
         "No product source edits"
       ]
     },
-    "verify": "bash .bee/verify/verify-app/control-bee doctor",
-    "affects_skills": [],
-    "affects_specs": [
-      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
-    ]
+    "verify": "bash .bee/verify/verify-app/control-bee doctor"
   }
 ]
 ```
