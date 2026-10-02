@@ -1475,6 +1475,10 @@ enum StubBehavior {
         stage: String,
         allowed_tools: Vec<String>,
     },
+    Dispatch {
+        prepare: String,
+        exit: i32,
+    },
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -1708,6 +1712,34 @@ fi
 "#
             )
         }
+        StubBehavior::Dispatch { prepare, exit } => {
+            let channel = if *exit == 0 { "" } else { " >&2" };
+            format!(
+                r#"if [ "$1" = "dispatch" ] && [ "$2" = "prepare" ]; then
+  printf '%s' '{prepare}'{channel}
+  exit {exit}
+fi
+if [ "$1" = "herding" ] && [ "$2" = "run" ]; then
+  cp "$d/last_stdin.json" "$d/herd_stdin.txt"
+  printf '%s\n' "$*" > "$d/herd_args.txt"
+  token=""; job=""; cell=""; prev=""
+  for arg in "$@"; do
+    case "$prev" in
+      --inbox-session) token="$arg" ;;
+      --job-id) job="$arg" ;;
+      --cell-id) cell="$arg" ;;
+    esac
+    prev="$arg"
+  done
+  mkdir -p "$d/../result-inbox/$token"
+  printf '{{"job_id":"%s","cell_id":"%s"}}' "$job" "$cell" > "$d/../result-inbox/$token/$job.json"
+  sleep 3
+  touch "$d/herd_done"
+fi
+exit 0
+"#
+            )
+        }
         StubBehavior::WorktreeFailure(msg) => {
             format!("echo \"error: {msg}\" >&2\nexit 1\n")
         }
@@ -1894,6 +1926,20 @@ fn pi_call_fixtures() -> Vec<PiCallFixture> {
                 "proof": "cargo test -p bee — green:unit — touched bee-guard.ts",
             }),
         },
+        PiCallFixture {
+            name: "bee_dispatch",
+            tool: "bee_dispatch",
+            input: json!({"kind": "cell", "cell": "demo-1", "worker": "w-demo"}),
+            expected_tool_name: "bee_dispatch",
+            expected_tool_input: json!({"kind": "cell", "cell": "demo-1", "worker": "w-demo"}),
+        },
+        PiCallFixture {
+            name: "bee_advisor",
+            tool: "bee_advisor",
+            input: json!({"role": "hat-risks", "purpose": "check the plan"}),
+            expected_tool_name: "bee_advisor",
+            expected_tool_input: json!({"role": "hat-risks", "purpose": "check the plan"}),
+        },
         // ── the FAIL-SAFE rows: names outside PI_BUILTIN_TOOLS ──────────────
         PiCallFixture {
             name: "UNMAPPED tool carrying a command string -> Bash",
@@ -1960,6 +2006,8 @@ fn expected_payload(session_id: &str, cwd: &Path, tool_name: &str, tool_input: &
         "cwd": cwd.to_string_lossy(),
         "tool_name": tool_name,
         "tool_input": tool_input,
+        "bee_runtime": "pi",
+        "tools_reopened": false,
     })
 }
 
@@ -9359,6 +9407,183 @@ fn in_flight_worker_widget_detached_only_limit() {
         active_calls.is_empty(),
         "foreground dispatch leaves no marker and draws no widget (claim 16)"
     );
+}
+
+#[cfg(unix)]
+fn herding_prepare_answer(command: &str) -> String {
+    json!({"tool": "Bash", "payload": {"command": command, "stdin": "TASK BODY"}}).to_string()
+}
+
+#[cfg(unix)]
+fn await_file(path: &Path) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
+#[cfg(unix)]
+fn prepare_invocations(root: &Path) -> Vec<String> {
+    stub_invocations(root).into_iter().filter(|l| l.starts_with("dispatch prepare")).collect()
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_dispatch_runs_the_prepared_herding_command_as_argv_detached_and_returns_a_job_id_at_once() {
+    node_or_skip!("bee_dispatch_runs_the_prepared_herding_command_as_argv_detached_and_returns_a_job_id_at_once");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let command =
+        ".bee/bin/bee herding run --task-file - --json --agent \"pi-worker-1\" --nickname $HOME;true --cell-id \"demo-1\"";
+    write_stub_bee(dir.path(), &StubBehavior::Dispatch { prepare: herding_prepare_answer(command), exit: 0 });
+    let bin = dir.path().join(".bee").join("bin");
+
+    const TOKEN: &str = "sess-bee-dispatch";
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            execute_tool_call(dir.path(), TOKEN, "bee_dispatch", json!({"kind": "cell", "cell": "demo-1", "worker": "w-demo"})),
+            snapshot_step(&bin),
+            sleep_step(2600),
+        ],
+    );
+    assert!(run.tools.iter().any(|t| t == "bee_dispatch"), "bee_dispatch must register: {:?}", run.tools);
+    let call = &run.results[1];
+    assert!(!call.threw, "bee_dispatch threw: {:?}", call.message);
+    let details = call.result.as_ref().and_then(|r| r.get("details")).expect("bee_dispatch details");
+    let job_id = details["job_id"].as_str().expect("details.job_id").to_string();
+    assert!(job_id.starts_with("job-"), "job id: {job_id}");
+    assert_eq!(details["outcome"], "started", "{details}");
+    assert!(
+        !run.snapshot(2).contains(&"herd_done".to_string()),
+        "the tool must return while the worker still runs: {:?}",
+        run.snapshot(2)
+    );
+
+    let prepare = prepare_invocations(dir.path());
+    assert_eq!(prepare.len(), 1, "{prepare:?}");
+    assert!(
+        prepare[0].starts_with("dispatch prepare --runtime pi --kind cell --cell demo-1 --worker w-demo --json"),
+        "{prepare:?}"
+    );
+
+    assert!(await_file(&bin.join("herd_done")), "the detached herding run must run to its end");
+    let args = std::fs::read_to_string(bin.join("herd_args.txt")).expect("herd_args.txt");
+    assert_eq!(
+        args.trim_end(),
+        format!(
+            "herding run --task-file - --json --agent pi-worker-1 --nickname $HOME;true --cell-id demo-1 --inbox-session {TOKEN} --job-id {job_id}"
+        )
+    );
+    assert_eq!(std::fs::read_to_string(bin.join("herd_stdin.txt")).expect("herd_stdin.txt"), "TASK BODY");
+
+    let shown = run.widget_calls.iter().any(|c| {
+        c["key"] == "bee-workers" && c["lines"].as_array().is_some_and(|l| l.iter().any(|row| row == "▸ demo-1"))
+    });
+    assert!(shown, "the worker widget must name the running job: {:?}", run.widget_calls);
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_advisor_prepares_an_advisor_dispatch() {
+    node_or_skip!("bee_advisor_prepares_an_advisor_dispatch");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let command = ".bee/bin/bee herding run --task-file - --json --agent \"pi-worker-1\" --seat \"hat-risks\"";
+    write_stub_bee(dir.path(), &StubBehavior::Dispatch { prepare: herding_prepare_answer(command), exit: 0 });
+
+    let run = run_harness(
+        &harness,
+        vec![execute_tool_call(
+            dir.path(),
+            "sess-bee-advisor",
+            "bee_advisor",
+            json!({"role": "hat-risks", "purpose": "check the plan"}),
+        )],
+    );
+    assert!(run.tools.iter().any(|t| t == "bee_advisor"), "bee_advisor must register: {:?}", run.tools);
+    assert!(!run.results[0].threw, "bee_advisor threw: {:?}", run.results[0].message);
+    let prepare = prepare_invocations(dir.path());
+    assert_eq!(prepare.len(), 1, "{prepare:?}");
+    assert!(
+        prepare[0].starts_with("dispatch prepare --runtime pi --kind advisor --role hat-risks --purpose check the plan --json"),
+        "{prepare:?}"
+    );
+    assert!(
+        await_file(&dir.path().join(".bee").join("bin").join("herd_done")),
+        "bee_advisor must start the herding run"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_dispatch_returns_a_prepare_refusal_verbatim_and_runs_nothing_but_herding_run() {
+    node_or_skip!("bee_dispatch_returns_a_prepare_refusal_verbatim_and_runs_nothing_but_herding_run");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let refusal =
+        json!({"ok": false, "type": "refused", "reason": "claim_ownership", "fix": "claim the cell first"}).to_string();
+    let thrown = "dispatch prepare: --worker is required when --kind cell.".to_string();
+    let cases = [
+        ("refused", refusal.clone(), 0, Some(refusal.clone())),
+        ("thrown", thrown.clone(), 1, Some(thrown.clone())),
+        ("agent", json!({"tool": "Agent", "payload": {"model": "haiku"}}).to_string(), 0, None),
+        ("not-bee", herding_prepare_answer("rm -rf /tmp/x"), 0, None),
+        ("not-herding", herding_prepare_answer(".bee/bin/bee cells claim --id demo-1"), 0, None),
+    ];
+    for (label, prepare, exit, verbatim) in cases {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_stub_bee(dir.path(), &StubBehavior::Dispatch { prepare, exit });
+        let run = run_harness(
+            &harness,
+            vec![execute_tool_call(dir.path(), "sess-refuse", "bee_dispatch", json!({"kind": "cell", "cell": "demo-1"}))],
+        );
+        let call = &run.results[0];
+        assert!(call.threw, "{label}: bee_dispatch must fail: {call:?}");
+        let message = call.message.clone().unwrap_or_default();
+        match verbatim {
+            Some(text) => assert_eq!(message, text, "{label}"),
+            None => assert!(message.contains(".bee/bin/bee herding run"), "{label}: {message}"),
+        }
+        let calls = stub_invocations(dir.path());
+        assert!(
+            calls.iter().all(|l| l.starts_with("dispatch prepare")),
+            "{label}: nothing but prepare may run: {calls:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn the_write_guard_payload_carries_tools_reopened_after_bee_tools_reopen() {
+    node_or_skip!("the_write_guard_payload_carries_tools_reopened_after_bee_tools_reopen");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+    let input = json!({"path": "/tmp/pi-fixture/out.txt", "content": "x"});
+    let run = run_harness(
+        &harness,
+        vec![
+            command_call(dir.path(), "sess-reopen", "bee-tools-reopen", ""),
+            tool_call(dir.path(), "sess-reopen", "write", &input),
+        ],
+    );
+    assert!(!run.results[1].blocked(), "{:?}", run.results[1]);
+    let payload = read_captured_stdin(dir.path());
+    assert_eq!(payload["bee_runtime"], "pi", "{payload}");
+    assert_eq!(payload["tools_reopened"], true, "{payload}");
 }
 
 
