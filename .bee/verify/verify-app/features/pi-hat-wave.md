@@ -133,6 +133,19 @@ Preconditions:
   - Envelope: `{"job_id":"job-1789781937693-3058161-1","seat":"hat-risks","outcome":"timed_out_ceiling","pane_id":null,"closed_pane":false,"dry_run":false,"retryable":false}`.
   - The runner stopped the child at the 1-second ceiling. The runner returned `outcome: "timed_out_ceiling"` and kept `seat: "hat-risks"`.
 
+### Evidence, Pi 1.0.0 run (run 20261002-135348-2965648, 2026-10-02, bee 2.46.0 candidate with pi-1-0-upgrade p1u-1, Pi 1.0.0, model deepseek/deepseek-flash)
+
+The candidate was vendored into the sandbox, and a feature `demo` was started at phase `planning`. A throwaway probe extension (`.pi/extensions/probe.ts`, sandbox only) registered `/probe-tools`, which prints `pi.getActiveTools()` and `ctx.cwd`. The Pi leader ran in RPC mode (`pi --mode rpc --tools read,bash,edit,write,grep,find,ls,codemode,tool_search`). Evidence: `evidence/20261002-135348-2965648/rpc-events.jsonl`, `drive-summary.txt`, `tui-*.txt`, `pi-worker.json`.
+
+- **Stage narrowing on 1.0.** After the first turn: `bee stage gate: active tools narrowed for stage "planning" (removed: edit, write, grep, find, ls, codemode, tool_search)`. `/probe-tools` showed `["read","bash"]`. `/bee-tools-reopen` restored all nine, `codemode` and `tool_search` included.
+- **Codemode read passes.** A codemode script `tools.read({path: 'README.md'})` completed. The nested call is recorded as `{"name": "read", ..., "status": "ok"}`.
+- **Codemode write before the gate is denied.** A codemode script `tools.write({path: 'codemode-probe.txt', ...})` failed with the nested `write` call's deny: `bee gate: phase is "planning" and gate "execution" is not approved — writing "codemode-probe.txt" is blocked.` The script error ends with `Tool calls made before the failure (they are not undone): write (error)`. The file was not created.
+- **System messages per turn: 0 from bee's context feed.** Over the six user turns (five prompts plus one), the session JSONL held 3 system messages: the session's first one, and one per tool-set change (narrowing removed 9 and added 2; `/bee-tools-reopen` added 9 and removed 2). The per-turn `systemPrompt` from `before_agent_start` added none.
+- **`/reload` undoes narrowing only until the next turn.** In RPC mode `/reload` is not a command; Pi sends it to the model as plain text. In the interactive TUI (tmux): before `/reload` the probe showed `["read","bash"]`; right after `/reload` it showed all nine tools; after the next turn the narrowing notice fired again and the probe showed `["read","bash"]`. Write-guard blocks writes in every one of these states.
+- **Relocation lands in the worktree.** `/bee-worktree-new --feature demo` notified `Relocated session to worktree repo--wt--demo (.../repo--wt--demo)`, and `/probe-tools` then showed `cwd=.../repo--wt--demo`. This ran after Pi 0.87's deferred `agent_settled` change.
+- **A bee worker runs on Pi 1.0.** `bee dispatch prepare --runtime pi --kind gather --role read --json` returned `"tool": "Bash"` with `bee herding run ... --agent "pi" --no-pane --seat "read"`. A `herding run --agent pi --no-pane --ceiling 300` worker returned `outcome: "done"`, `pane_id: null`, job `job-1790924377574-2982323-1`, summary `Verdict recorded: done (Read README.md and reported its first line: "# sandbox")`, in 4 s.
+- **Not run on 1.0:** the five-seat hat wave with seat injection into a leader session. The 2026-09-19 run on Pi 0.85.1 above is still the newest evidence for that part.
+
 ## Gotchas
 
 - **A launcher timeout no longer leaves a hat pane open (second run).** In the first run the leader put `& wait` after the backgrounded launches, and its 30-second bash timeout ended the launcher. Pi kills the whole process group on a timeout, so the runner died before its pane close. Now an `--inbox-session` run detaches into its own process group and prints `outcome detached` at once. In the second run no shell timed out, and every hat pane closed after its result (see the second-run evidence). A leader must still not `wait` on the detached jobs.
@@ -144,3 +157,6 @@ Preconditions:
 - Hats spend real model calls on the configured agents. A missing `herding.agents` entry for a `team.pi` agent refuses the run and lists the known agent names.
 - A seat that exceeds the ceiling stops and returns `timed_out_ceiling`. The result envelope keeps the `seat` label.
 - Running hat seats with `--no-pane` executes workers as child processes. It does not open tmux panes (`pane_id: null`).
+- **Vendor the candidate before driving Pi.** Without `.bee/bin/bee` in the sandbox, the belt fails closed on every tool call (`bee guard could not find the bee binary`) and stage narrowing silently does nothing.
+- **A feature-worktree session cannot start `pi`.** The worker-outward guard refuses any shell command that names `pi` while the session's cwd is a feature worktree, the leader's included. Drive Pi from a session rooted in main or in the sandbox.
+- **Built-in TUI commands are not RPC commands.** `/reload` sent over `pi --mode rpc` reaches the model as text. Test `/reload` in the TUI.
