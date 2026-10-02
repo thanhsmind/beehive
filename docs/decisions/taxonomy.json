@@ -618,6 +618,13 @@
     "contract:pi-codemode-guard",
     "named-guess-resolved",
     "finding",
-    "cell-revision"
+    "cell-revision",
+    "contract:pi-leader-write-lock",
+    "contract:pi-stage-loadout",
+    "contract:pi-dispatch-tool",
+    "named-defaults",
+    "live-run",
+    "contract:pi-settle-obligations",
+    "contract:pi-settle-continuation"
   ]
 }
