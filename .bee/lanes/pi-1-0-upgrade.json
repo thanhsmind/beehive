@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pi-1-0-upgrade\" started at phase \"planning\".",
-  "next_action": "Invoke bee-swarming: dispatch p1u-1.",
+  "next_action": "Merged into main at a8cf7ed; reload the product and test \"pi-1-0-upgrade\", then either approve uat (\"bee gate --name uat --approved true --lane pi-1-0-upgrade\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-02T05:39:29.330Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "Approve slice 2 of pi-1-0-upgrade (leader write-lock, lane-aware tools, bee_dispatch)",
-    "asked_at": "2026-10-02T07:12:12.091Z",
-    "session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7"
+    "subject": "uat: pi-1-0-upgrade",
+    "asked_at": "2026-10-02T10:32:16.430Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "advisor_ref": {
     "consulted_at": "2026-10-02T07:12:12.054Z",
@@ -751,12 +751,5 @@
     "rationale": "Harness-native workflow on Pi across belt, binary hooks and doctrine; supersedes two locked Pi decisions",
     "updated_at": "2026-10-02T06:52:07.104Z",
     "feature": "pi-1-0-upgrade"
-  },
-  "merge_ready": {
-    "since": "2026-10-02T08:40:56.438Z",
-    "branch": "wt/pi-1-0-upgrade",
-    "worktree_id": "beehive--wt--pi-1-0-upgrade",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
