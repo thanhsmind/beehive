@@ -125,6 +125,8 @@ import {
   shortJobSuffix,
 } from "./workers-widget.ts"
 
+// ─── the belt ──────────────────────────────────────────────────────────────
+
 export default function (pi: ExtensionAPI) {
   const belt: Belt = {
     fullToolSet: null,
@@ -143,6 +145,8 @@ export default function (pi: ExtensionAPI) {
   }
 }
 
+// Exported for the belt parity/contract suite (pi_plugin_contracts.rs), which
+// derives this belt's rows from this source rather than a hand list.
 export {
   PI_BUILTIN_TOOLS,
   mapToolCall,

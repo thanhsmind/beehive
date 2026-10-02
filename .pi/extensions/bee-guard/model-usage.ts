@@ -1,10 +1,9 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { createRequire } from "node:module"
 import { state } from "./state.ts"
 
-const require = createRequire(import.meta.url)
+// ─── active-branch model usage statusline ──────────────────────────────────
 
 export function formatTokens(n: number): string {
   if (n >= 1e6) {

@@ -6,6 +6,8 @@ import { derivePostExitTimeoutMs, execBeeCli } from "./bee-cli.ts"
 import { directoryOf, sessionIdOf } from "./session.ts"
 import { carriedInboxTokens, recordCarry, saveRelocationCarry } from "./result-inbox.ts"
 
+// ─── worktree session relocation (pi-worktree-session-relocation / pwsr-2) ──
+
 export interface SessionTransitionContinuation {
   operation: "merge-worktree"
   noCleanup: boolean

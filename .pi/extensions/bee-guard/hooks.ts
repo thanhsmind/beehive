@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process"
 import { beeStorePresent, resolveBeeBinary } from "./locate.ts"
 
+// ─── the blocking surface (tool_call): fail CLOSED ─────────────────────────
+
 export type Verdict = { block: true; reason: string } | undefined
 
 export function block(reason: string): Verdict {

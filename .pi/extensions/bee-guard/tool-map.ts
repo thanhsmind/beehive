@@ -1,3 +1,5 @@
+// ─── tool -> hook mapping (the only "rule" in this file) ───────────────────
+
 export type MappedCall = {
   hook: "write-guard" | null
   tool_name: string

@@ -4,6 +4,45 @@ import { beeStorePresent, isDirectory, mainCheckoutRoot } from "./locate.ts"
 import { state } from "./state.ts"
 import { IN_FLIGHT_WORKERS_WIDGET_KEY, refreshInFlightWorkersWidget } from "./workers-widget.ts"
 
+// ─── the result-inbox drain (pi-result-mailbox D4/D5/D6) ───────────────────
+//
+// A detached `bee herding run --inbox-session <token>` writes a PENDING MARKER
+// at `.bee/result-inbox/<token>/<job-id>.json` BEFORE it splits the worker's
+// pane. The marker is a POINTER — `job_id`, the job's `mailbox` directory, an
+// optional `cell_id`, `created_at` — never a copy of the envelope, so there is
+// exactly one copy of the truth. This drain is the other half: the orchestrator
+// session whose own id IS that token polls its inbox, and the moment a marker's
+// mailbox holds a finished `result-N.json` it injects a header into this
+// session — steered into the running turn when busy, a fresh user turn when
+// idle. The discipline below is pi-peer's, proven in shipped code
+// (docs/history/research/pi-peer-distill.md), adapted to bee's typed envelopes
+// rather than its free chat.
+//
+// Five properties this code exists to hold:
+//
+//   1. HEADER ONLY (D5). The injection carries a fixed row set of one-line
+//      fields — job id, cell id, status, summary, proof, report_path — and
+//      NEVER the report body. That is the anti-truncation choice (a long body
+//      clipped by a host is an unreadable result) and the anti-fence-escape one
+//      at the same time: a fixed shape whose every value is flattened to one
+//      backtick-free line has no carrier for a fence a worker wrote into its
+//      own report. The body stays on disk; `report_path` says where.
+//   2. AT-LEAST-ONCE (D6). Nothing here remembers what was already delivered —
+//      a claim that survives a crash is REQUEUED, so a restart can redeliver
+//      the same job. That is the honest guarantee, and the injected header says
+//      so out loud with `job_id` named as the dedupe key.
+//   3. ONE DELIVERY PATH PER JOB (D6). Structural, and decided on the bee side:
+//      only an `--inbox-session` dispatch leaves a marker, so a run the
+//      orchestrator is synchronously waiting on can never also be injected.
+//      This file never has to ask whether someone is waiting.
+//   4. ADVISORY (pi-support D3). Every path swallows its own failure. A drain
+//      that throws takes a turn down; a drain that quietly does nothing costs
+//      only the async convenience — the same result still rides `bee herding
+//      run`'s own output.
+//   5. NO LOAD-TIME TIMER. The interval is created in `session_start`, never at
+//      module load, and it is `.unref()`d — a host (or a contract-test harness)
+//      that imports this file and does nothing else must be able to exit.
+
 /** Poll cadence. pi-peer polls at 250 ms because a human is waiting on a chat
  * line; a herding job runs for minutes, so seconds are the honest unit here and
  * the tick stays cheap (one `readdir` on an empty directory). */
@@ -328,6 +367,11 @@ export async function drainResultInbox(pi: any, directory: string, token: string
 }
 
 
+/** Arms the drain for THIS session. Called from `session_start` and nowhere
+ * else — the "no load-time timer" rule is enforced by where this is called.
+ * Silent and timer-less in every case that cannot deliver: a repo with no bee
+ * store (passivity), a host with no `sendUserMessage`, or a session whose id
+ * cannot name a directory. */
 export function startResultDrain(pi: any, directory: string, sessionId: string | undefined, ctx?: any): void {
   stopDrainTimer()
   // A session boundary resets every latch, so a missed `agent_settled` from a

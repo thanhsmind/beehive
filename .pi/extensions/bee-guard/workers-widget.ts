@@ -3,6 +3,8 @@ import path from "node:path"
 import { isDirectory, mainCheckoutRoot } from "./locate.ts"
 import { carriedInboxTokens, loadRelocationCarry, readJsonObject } from "./result-inbox.ts"
 
+// ─── in-flight workers widget (D2–D5) ───────────────────────────────────────
+
 export const IN_FLIGHT_WORKERS_WIDGET_KEY = "bee-workers"
 
 /**

@@ -3,6 +3,8 @@ import path from "node:path"
 import { candidateRoots, isDirectory, mainCheckoutRoot } from "./locate.ts"
 import { directoryOf } from "./session.ts"
 
+// ─── verdict terminating tool (D6 amended by 6b7e8f49) ──────────────────────
+
 /** Resolves the bee store directory (.bee) across candidateRoots. */
 export function resolveBeeStore(directory: string): string | null {
   for (const root of candidateRoots(directory)) {

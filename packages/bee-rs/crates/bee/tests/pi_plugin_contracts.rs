@@ -7487,9 +7487,9 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&bee_target, std::fs::Permissions::from_mode(0o755)).expect("chmod +x");
 
-    // Ensure .pi/extensions/bee-guard.ts is present
-    let pi_ext = repo_path.join(".pi").join("extensions").join("bee-guard.ts");
-    assert!(pi_ext.is_file(), "onboarding must install .pi/extensions/bee-guard.ts");
+    // Ensure .pi/extensions/bee-guard/index.ts is present
+    let pi_ext = repo_path.join(".pi").join("extensions").join("bee-guard").join("index.ts");
+    assert!(pi_ext.is_file(), "onboarding must install .pi/extensions/bee-guard/index.ts");
 
     // Configure team.pi herding in .bee/config.json
     let config_path = repo_path.join(".bee").join("config.json");

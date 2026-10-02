@@ -23,6 +23,8 @@ import {
 import { drainWorkerSteer } from "./tool-steer.ts"
 import { state } from "./state.ts"
 
+// ─── the belt ──────────────────────────────────────────────────────────────
+
 export interface Belt {
   fullToolSet: string[] | null
   lastStage: string | null
