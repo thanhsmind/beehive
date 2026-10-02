@@ -216,79 +216,83 @@ What the user sees in slice 4:
 
 ## Cells — current slice (preview)
 
-Slices 1 and 2 (p1u-1 to p1u-7) are capped and merged (main a8cf7ed). Plan revision 2 prepares slice 3.
-Contracts: `5f6f7020` pi-settle-obligations, `5495627d` pi-settle-continuation.
-Waves: serial — p1u-9 needs p1u-8's hook answer; p1u-10 is leader-run because the worker-outward guard refuses a worker that starts pi.
-
-Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182003-3768157) showed the planning-phase leader cannot reach bee_advisor; amendment `82179c5d` adds bee_advisor to the gated phases. p1u-8 was reworked under amendment `562588f5` (run count in the advisor message).
+Slices 1-3 (p1u-1 to p1u-10) are capped and merged (main 2450d5e). Plan revision 4 prepares slice 4 (D12-D14).
+Contracts: `ccdae0ed` herding-steer (+`01fd5793`), `8972e270` pi-worker-steer-drain (+`8b0387f5`), `47677410` pi-scope-input (+`bf3483c6`). The amendments carry the slice-4 hat check: docs/history/pi-1-0-upgrade/reports/hat-wave.md ("Slice 4 check").
+Waves: p1u-11 and p1u-12 in parallel (disjoint files); then p1u-13; then p1u-14, leader-run.
 
 ```json
 [
   {
-    "id": "p1u-5",
+    "id": "p1u-11",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "code",
-    "change_class": "behavior",
-    "title": "Make the Pi stage tool set lane- and worker-aware so the leader is handed bee_dispatch",
+    "change_class": "api",
+    "title": "Add bee herding steer so the leader can hand a running worker more context",
     "deps": [],
     "decisions": [
-      "D8",
-      "D9",
-      "D11",
-      "034373cc-aa8d-4df4-a569-c9a761f80710",
-      "82179c5d-3683-4815-bf81-14bf24d58a77"
+      "D13",
+      "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+      "01fd5793-c366-4379-ac74-fe5fca4d270f"
     ],
     "files": [
-      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
     ],
     "read_first": [
       "docs/history/pi-1-0-upgrade/CONTEXT.md",
       "docs/history/pi-1-0-upgrade/plan.md",
-      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
-      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/registry.rs"
     ],
-    "action": "Red first, then change allowed_tools_for to take lane and worker and implement contract pi-stage-loadout exactly. Read the lane from the resolved record's route, the worker from env BEE_HERDING_WORKER, and pi_harness_workflow from config. Keep both notice sentences and add the leader case's sentence naming bee_dispatch and /bee-tools-reopen. No code comments.",
+    "action": "Red first, then add the verb `bee herding steer <job-id> --text <text> [--json]` per contract herding-steer, beside `herding interrupt` in job_verbs.rs, routed from herding.rs and declared in the command registry and catalog the way interrupt is. Reserve and update any registry contract test the new verb needs. No code comments. Write the steer file to a temp name and rename it into place; print one line naming the job and the steer number (JSON with --json), per amendment 01fd5793-c366-4379-ac74-fe5fca4d270f.",
     "must_haves": {
       "truths": [
-        "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
-        "a worker session gets the full set plus verdict",
-        "lane tiny keeps the full set",
-        "the gated phases keep read and bash only",
-        "the full set names bee_dispatch, bee_advisor and verdict",
-        "pi_harness_workflow false restores today's answer"
+        "steer writes the text verbatim as steer-1.json, then steer-2.json, in the job mailbox",
+        "steer refuses a missing job dir",
+        "steer refuses a job that already has a result for its current round",
+        "steer refuses a job whose cell is capped",
+        "bee herding steer --help prints its flags",
+        "the registry contract tests stay green",
+        "steer writes through a temp file and a rename",
+        "steer prints the job id and steer number"
       ],
       "artifacts": [
         {
-          "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
-          "substantive": "lane- and worker-aware allowed_tools_for with its tests"
+          "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "substantive": "the steer verb"
         }
       ],
       "key_links": [
-        "the belt's turn_start narrowing reads allowed_tools from this hook unchanged"
+        "herding.rs routes steer to job_verbs::steer"
       ],
       "prohibitions": [
         "No code comments",
-        "READ_ONLY_TOOLS unchanged"
+        "No pane key sends",
+        "herding interrupt unchanged"
       ]
     },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+    "affects_skills": [],
+    "affects_specs": []
   },
   {
-    "id": "p1u-8",
+    "id": "p1u-12",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "code",
     "change_class": "behavior",
-    "title": "Let session-close answer which bee obligations a Pi session still owes, once per obligation",
+    "title": "Record typed scope changes and owe one log-or-ask turn for each",
     "deps": [],
     "decisions": [
-      "D7",
-      "D9",
-      "D11",
-      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
-      "90077144-07cf-446c-8b83-f0996d5b2337",
-      "562588f5-1213-42da-bc58-1463ed4405dd"
+      "D12",
+      "D14",
+      "47677410-2447-4239-b596-f33a69eb87be",
+      "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
     ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
@@ -298,89 +302,91 @@ Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182
     "read_first": [
       "docs/history/pi-1-0-upgrade/CONTEXT.md",
       "docs/history/pi-1-0-upgrade/plan.md",
-      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
-      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
-      "packages/bee-rs/crates/bee/src/hooks/session_close/store.rs",
-      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
     ],
-    "action": "Red first, then implement contract pi-settle-obligations in a new session_close/obligations.rs wired from session_close/mod.rs: an obligations_only payload returns the JSON list and records served keys in one write under .bee/runtime; reuse list_claimed_cells and set_gate's advisor_ref staleness check; skip_key marks a key served; worker env, pi_harness_workflow false and an unwritable served record all return no obligations. The plain session-close path is unchanged. No code comments.",
+    "action": "Red first, then in session_close implement contract pi-scope-input: a record_scope_input payload matches config pi_scope_words (with the default list) and appends a match to .bee/runtime/scope-inputs.jsonl; obligations_only returns a kind scope obligation for each recorded input with no decision logged after it, once per key. No code comments. Apply amendment bf3483c6-76f9-4da3-a63d-788356d3fbc7: phrase list without 'không' or bare 'change', word-edge matching, empty list records nothing, kill switch and worker env record nothing, at most one scope obligation per settle, the message names /bee-obligation-skip <key>, prune served or answered inputs.",
     "must_haves": {
       "truths": [
-        "a claimed uncapped cell is returned once as kind cap with key <feature>:cap:<cell>",
-        "the same key is not returned a second time",
-        "a high-risk planning feature with a gate preview and no fresh advisor_ref is returned once as kind advisor",
-        "BEE_HERDING_WORKER=1 returns no obligations",
-        "pi_harness_workflow false returns no obligations",
-        "an unwritable served record returns no obligations",
-        "skip_key marks a key served",
-        "a payload without obligations_only behaves as before"
+        "a matching input is recorded",
+        "a non-matching input is not recorded",
+        "config pi_scope_words replaces the default list",
+        "a recorded input with no later decision is returned once as kind scope",
+        "a decision logged after the input clears it",
+        "the scope message says a change to an approved plan reopens the gate and only the user answers it",
+        "the default list does not match an ordinary Vietnamese sentence with 'không' or the bare word 'change'",
+        "an empty pi_scope_words records nothing",
+        "pi_harness_workflow false or BEE_HERDING_WORKER=1 records nothing",
+        "at most one scope obligation is returned per settle",
+        "the scope message names /bee-obligation-skip"
       ],
       "artifacts": [
         {
           "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
-          "substantive": "the obligations answer and the served record"
-        },
-        {
-          "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
-          "substantive": "one test per truth"
+          "substantive": "scope recording and the scope obligation"
         }
       ],
       "key_links": [
-        "session_close/mod.rs routes obligations_only and skip_key payloads to obligations.rs"
+        "mod.rs routes record_scope_input"
       ],
       "prohibitions": [
         "No code comments",
-        "No new hook name",
-        "No second obligation engine beside session-close"
+        "No new hook name"
       ]
     },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close"
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+    "affects_skills": [],
+    "affects_specs": []
   },
   {
-    "id": "p1u-9",
+    "id": "p1u-13",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "code",
     "change_class": "behavior",
-    "title": "Give a Pi session one forced turn when bee work is still owed at settle",
+    "title": "Carry typed context into running Pi workers and tag scope changes in the belt",
     "deps": [
-      "p1u-8"
+      "p1u-11",
+      "p1u-12"
     ],
     "decisions": [
-      "D7",
-      "D9",
-      "5495627d-17a8-48d9-ad13-f1f741f3108a",
-      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
-      "210c86e4-8fd1-4205-8429-16def14d0f62"
+      "D12",
+      "D13",
+      "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+      "47677410-2447-4239-b596-f33a69eb87be",
+      "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+      "8b0387f5-833a-4d2e-a655-67639141ac60"
     ],
     "files": [
       ".pi/extensions/bee-guard.ts",
-      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
     ],
     "read_first": [
       "docs/history/pi-1-0-upgrade/CONTEXT.md",
       "docs/history/pi-1-0-upgrade/plan.md",
-      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
       ".pi/extensions/bee-guard.ts",
       "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
     ],
-    "action": "Red first in pi_plugin_contracts.rs, then in the belt implement contract pi-settle-continuation: an agent_before_settle handler that calls session-close with obligations_only, shows each user_notice, appends one custom_message per obligation and returns continue true once; register /bee-obligation-skip <key>. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments.",
+    "action": "Red first in pi_plugin_contracts.rs, then in the belt: an input handler that sends steer and follow-up text to session-close as record_scope_input and returns the text unchanged; a worker-side steer drain per contract pi-worker-steer-drain using the main-checkout mailbox, and the same resolution in the verdict tool; a bee_steer leader tool. Add bee_steer to LEADER_TOOL_SET and FULL_TOOL_SET in stage_tools.rs and to BEE_STAGE_TOOLS in the belt. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments. Apply amendment 8b0387f5-833a-4d2e-a655-67639141ac60 in full; its point (1) — no newest-dir verdict fallback when BEE_HERDING_JOB_ID is set — comes first.",
     "must_haves": {
       "truths": [
-        "an owed obligation produces one custom_message and continue true",
-        "an empty list or a hook failure produces no continuation",
-        "the user sees each obligation's user_notice",
-        "/bee-obligation-skip calls session-close with skip_key",
-        "bee doctor --runtime pi is READY after rebuild"
+        "a steered input is sent to session-close and passes through unchanged",
+        "a worker session delivers each steer file once as a steer message",
+        "a worker whose cwd is a feature worktree records its verdict",
+        "bee_steer runs bee herding steer and refuses when zero or several jobs run with job_id omitted",
+        "bee doctor --runtime pi is READY after rebuild",
+        "with BEE_HERDING_JOB_ID set and its mailbox dir missing, verdict refuses naming the job",
+        "the drain skips a malformed or oversized steer file and reports it",
+        "the delivered steer starts with the fixed prefix line",
+        "an undelivered steer is named in the leader's result header",
+        "bee_steer is in the leader tool set",
+        "bee_steer with job_id omitted lists the running job ids when it refuses",
+        "the input handler never delays or changes the typed text"
       ],
       "artifacts": [
         {
           "path": ".pi/extensions/bee-guard.ts",
-          "substantive": "agent_before_settle handler and /bee-obligation-skip"
-        },
-        {
-          "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
-          "substantive": "contract tests for the handler and the command"
+          "substantive": "input handler, worker steer drain, bee_steer tool"
         }
       ],
       "key_links": [
@@ -388,28 +394,35 @@ Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182
       ],
       "prohibitions": [
         "No code comments",
-        "No obligation logic in TypeScript beyond showing what the hook returns",
-        "The agent_settled close warning stays"
+        "The belt never edits or drops typed text",
+        "No scope word list in TypeScript"
       ]
     },
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "affects_skills": [],
+    "affects_specs": [],
     "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
   },
   {
-    "id": "p1u-10",
+    "id": "p1u-14",
     "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "test",
     "change_class": "test",
-    "title": "Prove on Pi 1.0 that owed bee work gets one forced turn",
+    "title": "Prove on Pi 1.0 that typed context reaches a running worker and scope changes get one log-or-ask turn",
     "deps": [
-      "p1u-9"
+      "p1u-13"
     ],
     "decisions": [
-      "D7",
-      "D9",
-      "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
-      "5495627d-17a8-48d9-ad13-f1f741f3108a"
+      "D12",
+      "D13",
+      "D14",
+      "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+      "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+      "47677410-2447-4239-b596-f33a69eb87be",
+      "01fd5793-c366-4379-ac74-fe5fca4d270f",
+      "8b0387f5-833a-4d2e-a655-67639141ac60",
+      "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
     ],
     "files": [
       ".bee/verify/verify-app/features/pi-harness-dispatch.md",
@@ -418,21 +431,20 @@ Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182
     "read_first": [
       "docs/history/pi-1-0-upgrade/CONTEXT.md",
       "docs/history/pi-1-0-upgrade/plan.md",
-      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
       ".bee/verify/verify-app/features/pi-harness-dispatch.md"
     ],
-    "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, drive a Pi 1.0 leader on deepseek/deepseek-flash: (a) a session that settles with a claimed uncapped cell gets one forced turn naming the cap, and a second settle does not repeat it; (b) a high-risk feature at a gate-ready plan with no advisor_ref gets one forced turn naming bee_advisor with the run count. Record the evidence in the feature file and the mechanism in the audit page.",
+    "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored: (a) dispatch a no-pane Pi worker on a small cell, run bee herding steer on its job while it runs, and show the text in the worker's session; (b) type a scope-change follow-up to a Pi leader and show one forced turn asking to log it or ask the user; (c) show a worktree worker recording its verdict. Record the evidence in the feature file and the audit page.",
     "must_haves": {
       "truths": [
-        "one forced turn names the cap call for a claimed uncapped cell",
-        "a second settle does not repeat the same obligation",
-        "a gate-ready high-risk plan without an advisor_ref gets one forced turn naming bee_advisor and the run count",
+        "steered text appears in the running worker's session once",
+        "a typed scope change gets one forced log-or-ask turn and no gate approval",
+        "a worktree worker records its verdict",
         "the feature file names the run id and evidence path"
       ],
       "artifacts": [
         {
           "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
-          "substantive": "settle-obligation evidence section"
+          "substantive": "mid-run input evidence section"
         }
       ],
       "key_links": [],
@@ -440,16 +452,21 @@ Plan revision 3 re-opens p1u-5 inside slice 3: the p1u-10 live run (20261002-182
         "No product source edits"
       ]
     },
-    "verify": "bash .bee/verify/verify-app/control-bee doctor"
+    "verify": "bash .bee/verify/verify-app/control-bee doctor",
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ]
   }
 ]
 ```
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| p1u-8 | Let session-close answer which obligations a Pi session still owes | `session_close/mod.rs`, new `obligations.rs`, `tests.rs` | — | bee can say, once, what a session still owes | `cargo test -p bee session_close` |
-| p1u-9 | Give a Pi session one forced turn when bee work is owed | belt, `pi_plugin_contracts.rs` | p1u-8 | a session that stops with work owed gets one extra turn naming the exact call | `cargo test --test pi_plugin_contracts`; doctor pi READY |
-| p1u-10 | Prove it on Pi 1.0 | `pi-harness-dispatch.md`, audit page | p1u-9 | the verify map shows one forced turn for a cap and for a missing advisor review | green:live, leader-run |
+| p1u-11 | Add `bee herding steer` | herding.rs, job_verbs.rs, herding tests, registry, catalog | — | `bee herding steer <job> --text ...` puts text in a running worker's inbox and says so | `cargo test -p bee herding` |
+| p1u-12 | Record typed scope changes, owe one log-or-ask turn | session_close mod/obligations/tests | — | a typed scope change gets one turn to log it or ask you | `cargo test -p bee session_close` |
+| p1u-13 | Carry typed context into running Pi workers | belt, stage_tools.rs, pi_plugin_contracts.rs | p1u-11, p1u-12 | the leader has `bee_steer`; the worker reads it at its next turn; a worktree worker records its verdict | `cargo test --test pi_plugin_contracts`; doctor pi READY |
+| p1u-14 | Prove it on Pi 1.0 | feature map, audit page | p1u-13 | the verify map shows steer delivery and one scope turn | green:live, leader-run |
 
 ## Test matrix
 Slice 1:

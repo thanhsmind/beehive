@@ -117,6 +117,12 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     if !crate::hooks::adapter::bee_installed(&root) {
         return Ok(());
     }
+    if let Some(val) = ctx.payload.get("record_scope_input") {
+        if let Some(text) = val.as_str() {
+            obligations::record_scope_input(&root, &ctx, text);
+        }
+        return Ok(());
+    }
     if let Some(out) = obligations::answer(&root, &ctx) {
         flush(&out, "");
         return Ok(());

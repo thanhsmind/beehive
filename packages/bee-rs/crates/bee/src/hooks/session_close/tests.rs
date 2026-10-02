@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use sha2::Digest;
     use super::*;
     use serde_json::json;
 
@@ -1914,7 +1915,16 @@ so the next session can resume cleanly, or record a capture stub for what settle
         );
     }
 
-    fn settle(root: &Path, extra: Value) -> Option<String> {
+    fn settle_with_worker_env(root: &Path, extra: Value, worker: bool) -> Option<String> {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        unsafe {
+            if worker {
+                std::env::set_var("BEE_HERDING_WORKER", "1");
+            } else {
+                std::env::remove_var("BEE_HERDING_WORKER");
+            }
+        };
         let mut body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy()});
         if let Value::Object(m) = extra {
             for (k, v) in m {
@@ -1923,7 +1933,47 @@ so the next session can resume cleanly, or record a capture stub for what settle
         }
         let ctx = read_hook_context(HOOK_NAME, &[], &serde_json::to_string(&body).unwrap());
         let root = ctx.root.clone().expect("fixture root resolves");
-        super::obligations::answer(&root, &ctx)
+        let res = super::obligations::answer(&root, &ctx);
+        unsafe {
+            match prior {
+                Some(v) => std::env::set_var("BEE_HERDING_WORKER", v),
+                None => std::env::remove_var("BEE_HERDING_WORKER"),
+            }
+        };
+        res
+    }
+
+    fn settle(root: &Path, extra: Value) -> Option<String> {
+        settle_with_worker_env(root, extra, false)
+    }
+
+    fn record_scope_input_with_worker_env(root: &Path, text: &str, worker: bool) {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        unsafe {
+            if worker {
+                std::env::set_var("BEE_HERDING_WORKER", "1");
+            } else {
+                std::env::remove_var("BEE_HERDING_WORKER");
+            }
+        };
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "record_scope_input": text,
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        let _ = run_inner(&[], &stdin);
+        unsafe {
+            match prior {
+                Some(v) => std::env::set_var("BEE_HERDING_WORKER", v),
+                None => std::env::remove_var("BEE_HERDING_WORKER"),
+            }
+        };
+    }
+
+    fn record_scope(root: &Path, text: &str) {
+        record_scope_input_with_worker_env(root, text, false);
     }
 
     fn owed(root: &Path) -> Vec<Value> {
@@ -2009,20 +2059,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
     #[test]
     fn settle_in_a_herding_worker_returns_no_obligations() {
         let fx = claimed_cell_fixture();
-        let _guard = crate::hooks::herding_env_lock();
-        let prior = std::env::var_os("BEE_HERDING_WORKER");
-        // SAFETY: herding_env_lock serializes every test that touches this var.
-        unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
-        let worker_owed = owed(fx.path());
-        // SAFETY: herding_env_lock serializes every test that touches this var.
-        unsafe { std::env::remove_var("BEE_HERDING_WORKER") };
+        let worker_owed = {
+            let out = settle_with_worker_env(fx.path(), json!({"obligations_only": true}), true)
+                .expect("an obligations payload answers");
+            let parsed: Value = serde_json::from_str(&out).unwrap();
+            parsed["obligations"].as_array().unwrap().clone()
+        };
         let non_worker_owed = owed(fx.path());
-        match prior {
-            // SAFETY: herding_env_lock serializes every test that touches this var.
-            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
-            // SAFETY: herding_env_lock serializes every test that touches this var.
-            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
-        }
         assert!(worker_owed.is_empty(), "{worker_owed:?}");
         assert_eq!(non_worker_owed.len(), 1);
     }
@@ -2093,5 +2136,162 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(after.len(), 1, "{after:?}");
         assert_eq!(after[0]["kind"], "cap");
         assert_eq!(after[0]["cell"], "demo-1");
+    }
+
+    #[test]
+    fn a_matching_scope_input_is_recorded_and_non_matching_is_not() {
+        let fx = fixture();
+        let root = fx.path();
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(runtime_file.exists());
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "please change the interface");
+
+        record_scope(root, "just an ordinary greeting");
+        let lines_after = super::read_jsonl(&runtime_file);
+        assert_eq!(lines_after.len(), 1);
+    }
+
+    #[test]
+    fn config_pi_scope_words_replaces_default_list() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_scope_words": ["custom_trigger"]}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+
+        record_scope(root, "we have custom_trigger here");
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "we have custom_trigger here");
+    }
+
+    #[test]
+    fn default_list_does_not_match_vietnamese_khong_or_bare_change() {
+        let fx = fixture();
+        let root = fx.path();
+        record_scope(root, "Tôi không thích làm thế");
+        record_scope(root, "Please change this now");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+    }
+
+    #[test]
+    fn empty_pi_scope_words_records_nothing() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_scope_words": []}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+    }
+
+    #[test]
+    fn kill_switch_and_worker_env_record_nothing() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("config.json"),
+            &json!({"pi_harness_workflow": false}),
+        );
+        record_scope(root, "please change the interface");
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file.exists());
+
+        let fx2 = fixture();
+        let root2 = fx2.path();
+        record_scope_input_with_worker_env(root2, "please change the interface", true);
+        let runtime_file2 = root2.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        assert!(!runtime_file2.exists());
+    }
+
+    #[test]
+    fn recorded_scope_input_returned_once_with_obligation_message_and_skip() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        record_scope(root, "change the database schema");
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "scope");
+        let sha = sha2::Sha256::digest(b"change the database schema");
+        let sha_hex = format!("{sha:x}");
+        assert_eq!(first[0]["key"], format!("demo:scope:{sha_hex}"));
+        let msg = first[0]["message"].as_str().unwrap();
+        assert!(msg.contains("a change to an approved plan reopens the gate and only the user answers it"));
+        assert!(msg.contains("/bee-obligation-skip"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("Esc stops it"));
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn decision_logged_after_input_clears_it() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        std::fs::create_dir_all(runtime_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &runtime_file,
+            json!({"text": "change the plan", "time": "2026-10-02T10:00:00.000Z", "feature": "demo"}).to_string() + "\n",
+        ).unwrap();
+        let dec_file = root.join(".bee").join("decisions.jsonl");
+        std::fs::write(
+            &dec_file,
+            json!({"type": "decide", "id": "dec-1", "date": "2026-10-02T11:00:00.000Z"}).to_string() + "\n",
+        ).unwrap();
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn at_most_one_scope_obligation_per_settle_picks_newest_and_pruning_cleans_file() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo"}),
+        );
+        let runtime_file = root.join(".bee").join("runtime").join("scope-inputs.jsonl");
+        std::fs::create_dir_all(runtime_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &runtime_file,
+            format!(
+                "{}\n{}\n",
+                json!({"text": "change the first thing", "time": "2026-10-02T10:00:00.000Z", "feature": "demo"}),
+                json!({"text": "change the second thing", "time": "2026-10-02T10:05:00.000Z", "feature": "demo"})
+            ),
+        ).unwrap();
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "scope");
+        let sha2 = format!("{:x}", sha2::Sha256::digest(b"change the second thing"));
+        assert_eq!(first[0]["key"], format!("demo:scope:{sha2}"));
+
+        let second = owed(root);
+        assert_eq!(second.len(), 1, "{second:?}");
+        let sha1 = format!("{:x}", sha2::Sha256::digest(b"change the first thing"));
+        assert_eq!(second[0]["key"], format!("demo:scope:{sha1}"));
+
+        assert!(owed(root).is_empty());
+
+        record_scope(root, "change the third thing");
+        let lines = super::read_jsonl(&runtime_file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["text"], "change the third thing");
     }
 

@@ -16,13 +16,13 @@ pub(crate) const READ_ONLY_TOOLS: [&str; 2] = ["read", "bash"];
 pub(crate) const BASE_TOOL_SET: [&str; 10] = [
     "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
 ];
-pub(crate) const FULL_TOOL_SET: [&str; 13] = [
+pub(crate) const FULL_TOOL_SET: [&str; 14] = [
     "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
-    "bee_dispatch", "bee_advisor", "verdict",
+    "bee_dispatch", "bee_advisor", "bee_steer", "verdict",
 ];
-pub(crate) const LEADER_TOOL_SET: [&str; 10] = [
+pub(crate) const LEADER_TOOL_SET: [&str; 11] = [
     "read", "bash", "find", "grep", "ls", "powershell", "codemode", "tool_search", "bee_dispatch",
-    "bee_advisor",
+    "bee_advisor", "bee_steer",
 ];
 pub(crate) const GATED_TOOL_SET: [&str; 3] = ["read", "bash", "bee_advisor"];
 
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn stage_tools_full_set_names_every_tool_bee_registers() {
-        for tool in ["bee_dispatch", "bee_advisor", "verdict"] {
+        for tool in ["bee_dispatch", "bee_advisor", "bee_steer", "verdict"] {
             assert!(FULL_TOOL_SET.contains(&tool), "full set must keep {tool:?}");
         }
         assert_eq!(READ_ONLY_TOOLS, ["read", "bash"]);
@@ -401,7 +401,7 @@ mod tests {
         for lane in LEADER_LANES {
             let allowed = allowed_tools_for("swarming", true, Some(lane), false, true);
             assert_eq!(allowed, expected.as_slice(), "lane {lane:?}");
-            for tool in ["bee_dispatch", "bee_advisor"] {
+            for tool in ["bee_dispatch", "bee_advisor", "bee_steer"] {
                 assert!(allowed.contains(&tool), "lane {lane:?} must carry {tool:?}");
             }
             assert!(!allowed.contains(&"verdict"), "lane {lane:?} must not carry verdict");

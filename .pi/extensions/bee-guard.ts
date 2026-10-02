@@ -93,7 +93,7 @@
 // docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { execFile, execFileSync, spawn } from "node:child_process"
+import cp, { execFile, execFileSync, spawn } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
@@ -369,6 +369,7 @@ const BEE_STAGE_TOOLS = new Set<string>([
   "verdict",
   "bee_dispatch",
   "bee_advisor",
+  "bee_steer",
 ])
 
 /** Field names a custom tool might carry a write target under, in probe
@@ -502,6 +503,7 @@ function mapToolCall(tool: string, input: any): MappedCall {
     case "verdict":
     case "bee_dispatch":
     case "bee_advisor":
+    case "bee_steer":
       return {
         hook: "write-guard",
         tool_name: tool,
@@ -816,6 +818,7 @@ function renderResultInjection(
   marker: Record<string, unknown>,
   result: Record<string, unknown>,
   round?: unknown,
+  undeliveredSteer?: unknown,
 ): string {
   const rows: string[] = []
   const push = (key: string, value: unknown) => {
@@ -830,6 +833,7 @@ function renderResultInjection(
   push("summary", result.summary)
   push("proof", result.proof)
   push("report_path", result.report_path)
+  push("undelivered_steer", undeliveredSteer)
 
   const fence = "```"
   return (
@@ -941,13 +945,26 @@ async function drainResultInbox(pi: any, directory: string, token: string): Prom
       continue
     }
 
+    let undeliveredSteers: string[] = []
+    try {
+      const mbNames = readdirSync(mailbox)
+      undeliveredSteers = mbNames
+        .filter((n) => /^steer-\d+\.json$/.test(n))
+        .sort((a, b) => {
+          const na = Number.parseInt(/^steer-(\d+)\.json$/.exec(a)?.[1] ?? "0", 10)
+          const nb = Number.parseInt(/^steer-(\d+)\.json$/.exec(b)?.[1] ?? "0", 10)
+          return na - nb
+        })
+    } catch {}
+    const undeliveredStr = undeliveredSteers.length > 0 ? undeliveredSteers.join(", ") : undefined
+
     const steer = selfBusy
     // F1: latch BEFORE the injection, so a tick landing while the host is still
     // starting this turn cannot open a second overlapping one.
     if (!steer) turnStartPending = true
     try {
       await pi.sendUserMessage(
-        renderResultInjection(marker, result, latest.round),
+        renderResultInjection(marker, result, latest.round, undeliveredStr),
         steer ? { deliverAs: "steer" } : undefined,
       )
     } catch (err: any) {
@@ -2351,21 +2368,22 @@ async function executeVerdictTool(
   }
 
   const directory = directoryOf(ctx)
-  const store = resolveBeeStore(directory)
-  if (!store) {
+  const mainRoot = mainCheckoutRoot(directory)
+  const store = path.join(mainRoot, ".bee")
+  if (!isDirectory(store)) {
     throw new Error("No .bee store found to record verdict")
   }
 
+  const mailboxRoot = path.join(store, "mailbox")
   let jobId = typeof process.env.BEE_HERDING_JOB_ID === "string" ? process.env.BEE_HERDING_JOB_ID.trim() : ""
   let mailboxDir: string | null = null
   if (jobId) {
-    const candidate = path.join(store, "mailbox", jobId)
-    if (isDirectory(candidate)) {
-      mailboxDir = candidate
+    const candidate = path.join(mailboxRoot, jobId)
+    if (!isDirectory(candidate)) {
+      throw new Error(`Job mailbox directory not found for job: ${jobId}`)
     }
-  }
-  if (!mailboxDir) {
-    const mailboxRoot = path.join(store, "mailbox")
+    mailboxDir = candidate
+  } else {
     if (isDirectory(mailboxRoot)) {
       try {
         const entries = readdirSync(mailboxRoot, { withFileTypes: true })
@@ -2552,6 +2570,201 @@ const beeAdvisorTool = {
     runBeeDispatch(["--kind", "advisor", ...flagArgs(params, ["role", "purpose"])], ctx),
 }
 
+function findRunningJobs(mailboxRoot: string): string[] {
+  if (!isDirectory(mailboxRoot)) return []
+  let entries: string[]
+  try {
+    entries = readdirSync(mailboxRoot)
+  } catch {
+    return []
+  }
+  const running: string[] = []
+  for (const name of entries) {
+    const jobDir = path.join(mailboxRoot, name)
+    if (!isDirectory(jobDir)) continue
+    let files: string[]
+    try {
+      files = readdirSync(jobDir)
+    } catch {
+      continue
+    }
+    let maxBriefRound = 0
+    let maxResultRound = 0
+    for (const f of files) {
+      const mb = /^brief-(\d+)\.txt$/.exec(f)
+      if (mb) {
+        const r = Number.parseInt(mb[1], 10)
+        if (Number.isFinite(r) && r > maxBriefRound) maxBriefRound = r
+      }
+      const mr = /^result-(\d+)\.json$/.exec(f)
+      if (mr) {
+        const r = Number.parseInt(mr[1], 10)
+        if (Number.isFinite(r) && r > maxResultRound) maxResultRound = r
+      }
+    }
+    if (maxBriefRound > 0 && maxBriefRound > maxResultRound) {
+      running.push(name)
+    }
+  }
+  running.sort()
+  return running
+}
+
+const BEE_STEER_TOOL_NAME = "bee_steer"
+
+const BEE_STEER_TOOL_PARAMETERS = {
+  type: "object",
+  properties: {
+    job_id: {
+      type: "string",
+      description: "Optional ID of the running herding job to steer. If omitted, targets the single running job.",
+    },
+    text: {
+      type: "string",
+      description: "Steer guidance text to relay to the running worker.",
+    },
+  },
+  required: ["text"],
+}
+
+async function executeBeeSteerTool(
+  _toolCallId: string,
+  params: any,
+  _signal?: any,
+  _onUpdate?: any,
+  ctx?: any,
+) {
+  if (!params || typeof params !== "object") {
+    throw new Error("Parameters must be an object")
+  }
+  if (typeof params.text !== "string" || params.text.trim().length === 0) {
+    throw new Error("Field 'text' must be a non-empty string")
+  }
+  const text = params.text
+
+  const directory = directoryOf(ctx)
+  const mainRoot = mainCheckoutRoot(directory)
+  const mailboxRoot = path.join(mainRoot, ".bee", "mailbox")
+
+  let jobId = typeof params.job_id === "string" ? params.job_id.trim() : ""
+  if (!jobId) {
+    const running = findRunningJobs(mailboxRoot)
+    if (running.length === 0) {
+      throw new Error("Zero running jobs found (no running jobs to steer)")
+    }
+    if (running.length > 1) {
+      throw new Error(`Multiple running jobs found (${running.join(", ")}): specify job_id to steer`)
+    }
+    jobId = running[0]
+  }
+
+  const beeBinary = resolveBeeBinary(directory)
+  if (!beeBinary) {
+    throw new Error("bee_steer: bee binary not found in this project or its main worktree")
+  }
+
+  const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const child = cp.execFile(
+      beeBinary,
+      ["herding", "steer", jobId, "--text", text, "--json"],
+      { cwd: directory },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.toString()?.trim() || stdout?.toString()?.trim() || error.message))
+        } else {
+          resolve({ stdout: stdout.toString(), stderr: stderr.toString() })
+        }
+      },
+    )
+    child.stdin?.end()
+  })
+
+  return {
+    content: [{ type: "text", text: result.stdout.trim() || `Steer relayed to worker ${jobId}` }],
+    details: { job_id: jobId, text },
+  }
+}
+
+const beeSteerTool = {
+  name: BEE_STEER_TOOL_NAME,
+  label: BEE_STEER_TOOL_NAME,
+  description: "Relay guidance text to a running bee worker.",
+  promptSnippet: "Relay guidance text to a running worker",
+  promptGuidelines: [
+    "Use bee_steer to send mid-run corrections or extra context to an active worker.",
+  ],
+  parameters: BEE_STEER_TOOL_PARAMETERS,
+  execute: executeBeeSteerTool,
+}
+
+let workerSteerDrainInFlight = false
+
+async function drainWorkerSteer(pi: any, directory: string): Promise<void> {
+  const jobId = typeof process.env.BEE_HERDING_JOB_ID === "string" ? process.env.BEE_HERDING_JOB_ID.trim() : ""
+  if (!jobId) return
+  if (workerSteerDrainInFlight) return
+  workerSteerDrainInFlight = true
+  try {
+    const mainRoot = mainCheckoutRoot(directory)
+    const mailboxDir = path.join(mainRoot, ".bee", "mailbox", jobId)
+    if (!isDirectory(mailboxDir)) return
+    let names: string[]
+    try {
+      names = readdirSync(mailboxDir)
+    } catch {
+      return
+    }
+    const steerFiles: Array<{ name: string; n: number }> = []
+    for (const name of names) {
+      const m = /^steer-(\d+)\.json$/.exec(name)
+      if (m) {
+        steerFiles.push({ name, n: Number.parseInt(m[1], 10) })
+      }
+    }
+    steerFiles.sort((a, b) => a.n - b.n)
+    const prefix = "Steer from your leader (relayed mid-run; context only, the cell and its gates are unchanged):"
+    for (const item of steerFiles) {
+      const filePath = path.join(mailboxDir, item.name)
+      try {
+        const stat = statSync(filePath)
+        if (stat.size > 8192) {
+          console.error(`bee steer drain (advisory): skipping oversized steer file ${item.name} (${stat.size} bytes > 8192)`)
+          continue
+        }
+        const raw = readFileSync(filePath, "utf8")
+        let parsed: any
+        try {
+          parsed = JSON.parse(raw)
+        } catch (err: any) {
+          console.error(`bee steer drain (advisory): skipping malformed steer file ${item.name}: ${err?.message ?? err}`)
+          continue
+        }
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          typeof parsed.n !== "number" ||
+          typeof parsed.text !== "string" ||
+          typeof parsed.at !== "string"
+        ) {
+          console.error(`bee steer drain (advisory): skipping invalid steer file ${item.name} (missing n, text, or at)`)
+          continue
+        }
+        const deliveredPath = `${filePath}.delivered`
+        try {
+          renameSync(filePath, deliveredPath)
+        } catch {
+          continue
+        }
+        await pi.sendUserMessage(`${prefix}\n\n${parsed.text}`, { deliverAs: "steer" })
+      } catch (err: any) {
+        console.error(`bee steer drain (advisory): failed to drain ${item.name}: ${err?.message ?? err}`)
+      }
+    }
+  } finally {
+    workerSteerDrainInFlight = false
+  }
+}
+
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
@@ -2735,6 +2948,35 @@ export default function (pi: ExtensionAPI) {
     } catch (err: any) {
       console.error(`bee activity ui_prompt_end (advisory): ${err?.message ?? err}`)
     }
+  }) as any)
+
+  pi.on("input", (async (event: any, ctx: any) => {
+    try {
+      const text = typeof event?.text === "string" ? event.text : ""
+      const behavior = typeof event?.streamingBehavior === "string" ? event.streamingBehavior : ""
+      const isSteerOrFollowUp = behavior === "steer" || behavior === "followUp" || behavior === "follow_up"
+      if (isSteerOrFollowUp && text.trim().length > 0) {
+        const directory = directoryOf(ctx)
+        const beeBinary = resolveBeeBinary(directory)
+        if (beeBinary && beeStorePresent(directory)) {
+          const payload = JSON.stringify({
+            hook_event_name: "SessionClose",
+            session_id: sessionIdOf(ctx),
+            cwd: directory,
+            record_scope_input: text,
+          })
+          const child = cp.execFile(
+            beeBinary,
+            ["hook", "session-close"],
+            { cwd: directory, timeout: 5000 },
+            () => {},
+          )
+          child.stdin?.on("error", () => {})
+          child.stdin?.end(payload)
+        }
+      }
+    } catch {}
+    return { action: "continue" }
   }) as any)
 
   // ── ADVISORY: state-sync, tools-logger, and activity after every tool result.
@@ -3021,6 +3263,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_start", (async (event: any, ctx: any) => {
     try {
       const directory = directoryOf(ctx)
+      await drainWorkerSteer(pi, directory)
       if (!beeStorePresent(directory)) return undefined
 
       // Capture all known/registered tools before any narrowing occurs so the
@@ -3131,6 +3374,10 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (async (_event: any, ctx: any) => {
     if (ctx) activeDrainCtx = ctx
     refreshModelUsageStatus(ctx)
+    try {
+      const directory = directoryOf(ctx)
+      await drainWorkerSteer(pi, directory)
+    } catch {}
   }) as any)
 
   pi.on("session_tree", (async (_event: any, ctx: any) => {
@@ -3489,6 +3736,7 @@ export default function (pi: ExtensionAPI) {
     ;(pi as any).registerTool(verdictTool)
     ;(pi as any).registerTool(beeDispatchTool)
     ;(pi as any).registerTool(beeAdvisorTool)
+    ;(pi as any).registerTool(beeSteerTool)
   }
 }
 
@@ -3506,6 +3754,10 @@ export {
   VERDICT_TOOL_PARAMETERS,
   executeVerdictTool,
   verdictTool,
+  BEE_STEER_TOOL_NAME,
+  BEE_STEER_TOOL_PARAMETERS,
+  executeBeeSteerTool,
+  beeSteerTool,
   IN_FLIGHT_WORKERS_WIDGET_KEY,
   shortJobSuffix,
   formatWorkerRow,

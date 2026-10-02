@@ -49,12 +49,14 @@ impl std::fmt::Display for JobVerbError {
 struct ParsedArgs<'a> {
     job_id: Option<&'a str>,
     main_root: Option<&'a str>,
+    text: Option<&'a str>,
     json: bool,
 }
 
 fn parse_args<'a>(args: &[&'a str]) -> ParsedArgs<'a> {
     let mut job_id = None;
     let mut main_root = None;
+    let mut text = None;
     let mut json = false;
     let mut i = 0usize;
     while i < args.len() {
@@ -71,6 +73,14 @@ fn parse_args<'a>(args: &[&'a str]) -> ParsedArgs<'a> {
                 main_root = Some(&arg["--main-root=".len()..]);
                 i += 1;
             }
+            "--text" => {
+                text = args.get(i + 1).copied();
+                i += 2;
+            }
+            arg if arg.starts_with("--text=") => {
+                text = Some(&arg["--text=".len()..]);
+                i += 1;
+            }
             arg if !arg.starts_with('-') && job_id.is_none() => {
                 job_id = Some(arg);
                 i += 1;
@@ -80,7 +90,7 @@ fn parse_args<'a>(args: &[&'a str]) -> ParsedArgs<'a> {
             }
         }
     }
-    ParsedArgs { job_id, main_root, json }
+    ParsedArgs { job_id, main_root, text, json }
 }
 
 fn read_job_spec(
@@ -427,6 +437,245 @@ pub(super) fn cancel(args: &[&str]) -> ExitCode {
                 } else {
                     eprintln!("{}", e.message);
                 }
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn find_job_cell_id(job_dir: &Path, job_raw: &Value) -> Option<String> {
+    if let Some(id) = job_raw.get("cell_id").and_then(Value::as_str) {
+        if !id.trim().is_empty() {
+            return Some(id.to_string());
+        }
+    }
+    if let Some(id) = job_raw.get("cell").and_then(Value::as_str) {
+        if !id.trim().is_empty() {
+            return Some(id.to_string());
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(job_dir) {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("ack-") && name.ends_with(".json") {
+                if let Ok(raw) = std::fs::read_to_string(entry.path()) {
+                    if let Ok(val) = serde_json::from_str::<Value>(&raw) {
+                        if let Some(id) = val.get("cell_id").and_then(Value::as_str) {
+                            if !id.trim().is_empty() {
+                                return Some(id.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(job_dir) {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with("brief-") && name.ends_with(".txt") {
+                if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+                        if trimmed.starts_with("\"cell_id\":") {
+                            let parts: Vec<&str> = trimmed.split('"').collect();
+                            if parts.len() >= 4 && !parts[3].trim().is_empty() {
+                                return Some(parts[3].to_string());
+                            }
+                        }
+                        if let Some(rest) = trimmed.strip_prefix("Assigned cell id:") {
+                            let id = rest.trim();
+                            if !id.is_empty() {
+                                return Some(id.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn steer_job(
+    main_root: &Path,
+    job_id: &str,
+    text: &str,
+) -> Result<u32, JobVerbError> {
+    let bee_dir = main_root.join(".bee");
+    let mbox = mailbox::mailbox_dir(&bee_dir, job_id);
+    if !mbox.is_dir() {
+        return Err(JobVerbError {
+            code: "job_not_found",
+            message: format!(
+                "herding steer: job \"{job_id}\" not found (no job directory .bee/mailbox/{job_id}/). FIX: check the job id with bee herding status"
+            ),
+        });
+    }
+
+    let job_path = mailbox::job_path(&bee_dir, job_id);
+    let job_raw = match crate::fsutil::read_json(&job_path) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(v)) => Value::Object(v),
+        _ => {
+            return Err(JobVerbError {
+                code: "job_not_found",
+                message: format!(
+                    "herding steer: job \"{job_id}\" has no readable job.json in .bee/mailbox/{job_id}/. FIX: check the job with bee herding status"
+                ),
+            });
+        }
+    };
+
+    if let Some(cell_id) = find_job_cell_id(&mbox, &job_raw) {
+        let cell_path = bee_dir.join("cells").join(format!("{cell_id}.json"));
+        if cell_path.is_file() {
+            if let Ok(raw) = std::fs::read_to_string(&cell_path) {
+                if let Ok(cell_json) = serde_json::from_str::<Value>(&raw) {
+                    let is_capped = cell_json.get("status").and_then(Value::as_str) == Some("capped")
+                        || cell_json
+                            .get("trace")
+                            .and_then(|t| t.get("capped_at"))
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.trim().is_empty());
+                    if is_capped {
+                        return Err(JobVerbError {
+                            code: "cell_capped",
+                            message: format!(
+                                "herding steer: cell \"{cell_id}\" for job \"{job_id}\" is already capped — cannot steer. FIX: start a new job or cell"
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let entries: Vec<String> = match std::fs::read_dir(&mbox) {
+        Ok(rd) => rd
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect(),
+        Err(e) => {
+            return Err(JobVerbError {
+                code: "mailbox_read_failed",
+                message: format!("herding steer: could not read directory {}: {e}", mbox.display()),
+            });
+        }
+    };
+
+    let base_round = job_raw.get("round").and_then(Value::as_u64).map(|r| r as u32).unwrap_or(1);
+    let max_brief_round = entries
+        .iter()
+        .filter_map(|name| {
+            let digits = name.strip_prefix("brief-")?.strip_suffix(".txt")?;
+            digits.parse::<u32>().ok()
+        })
+        .max()
+        .unwrap_or(1);
+    let current_round = base_round.max(max_brief_round);
+
+    let has_result = entries.iter().any(|name| {
+        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json")) {
+            if let Ok(r) = digits.parse::<u32>() {
+                return r >= current_round;
+            }
+        }
+        false
+    });
+    if has_result {
+        return Err(JobVerbError {
+            code: "result_already_written",
+            message: format!(
+                "herding steer: job \"{job_id}\" already has a result for round {current_round} — cannot steer. FIX: continue the job with bee herding run --continue {job_id}"
+            ),
+        });
+    }
+
+    let max_steer_n = entries
+        .iter()
+        .filter_map(|name| {
+            let rest = name.strip_prefix("steer-")?;
+            let digits = rest.split('.').next()?;
+            digits.parse::<u32>().ok()
+        })
+        .max()
+        .unwrap_or(0);
+    let next_n = max_steer_n + 1;
+
+    let steer_obj = serde_json::json!({
+        "n": next_n,
+        "text": text,
+        "at": chrono::Utc::now().to_rfc3339(),
+    });
+    let tmp_file = mbox.join(format!("steer-{next_n}.json.tmp"));
+    let final_file = mbox.join(format!("steer-{next_n}.json"));
+    let payload = match serde_json::to_string_pretty(&steer_obj) {
+        Ok(s) => format!("{s}\n"),
+        Err(e) => {
+            return Err(JobVerbError {
+                code: "json_serialize_failed",
+                message: format!("herding steer: failed to serialize steer object: {e}"),
+            });
+        }
+    };
+    if let Err(e) = std::fs::write(&tmp_file, payload) {
+        return Err(JobVerbError {
+            code: "write_steer_failed",
+            message: format!("herding steer: failed to write {}: {e}", tmp_file.display()),
+        });
+    }
+    if let Err(e) = std::fs::rename(&tmp_file, &final_file) {
+        let _ = std::fs::remove_file(&tmp_file);
+        return Err(JobVerbError {
+            code: "rename_steer_failed",
+            message: format!(
+                "herding steer: failed to rename {} to {}: {e}",
+                tmp_file.display(),
+                final_file.display()
+            ),
+        });
+    }
+
+    Ok(next_n)
+}
+
+pub(super) fn steer(args: &[&str]) -> ExitCode {
+    let parsed = parse_args(args);
+    let Some(job_id) = parsed.job_id else {
+        eprintln!("herding steer: missing <job-id> positional argument. FIX: run bee herding steer <job-id> --text <text>");
+        return ExitCode::FAILURE;
+    };
+    let Some(text) = parsed.text else {
+        eprintln!("herding steer: missing required --text argument. FIX: run bee herding steer <job-id> --text <text>");
+        return ExitCode::FAILURE;
+    };
+    let Some(main_root) = resolve_main_root(parsed.main_root) else {
+        eprintln!("herding steer: could not resolve main checkout root. FIX: pass --main-root <path>");
+        return ExitCode::FAILURE;
+    };
+    match steer_job(&main_root, job_id, text) {
+        Ok(n) => {
+            if parsed.json {
+                let out = serde_json::json!({
+                    "job_id": job_id,
+                    "steer": n,
+                    "n": n,
+                });
+                println!("{}", serde_json::to_string(&out).unwrap());
+            } else {
+                println!("herding: steered job {job_id} (steer #{n})");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            if parsed.json {
+                let err_obj = serde_json::json!({
+                    "error": e.code,
+                    "message": e.message,
+                });
+                println!("{}", serde_json::to_string(&err_obj).unwrap());
+            } else {
+                eprintln!("{}", e.message);
             }
             ExitCode::FAILURE
         }

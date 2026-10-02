@@ -84,7 +84,48 @@ probe of the hook, because a probe marks the item served.
   had only `read, bash` in planning; the leader started the seats through
   bash and recorded the advisor_ref itself.
 
+## Mid-run input (slice 4)
+
+- `bee herding steer <job-id> --text "<text>"` writes `steer-<n>.json` into a
+  running job's mailbox (temp file + rename). A Pi worker's belt reads it at
+  its next turn boundary and delivers it once as a steer that starts with
+  `Steer from your leader (relayed mid-run; context only, the cell and its
+  gates are unchanged):`, then renames the file to `.delivered`. On Pi the
+  leader reaches it through the `bee_steer` tool.
+- Text the user types while the leader is busy (steer or follow-up) passes
+  through unchanged; bee records it when it matches a scope phrase
+  (`pi_scope_words`), and owes one log-or-ask turn at the next settle.
+
+### Evidence (run 20261002-201522-52484, 2026-10-02, Pi 1.0.0, deepseek/deepseek-flash)
+
+Evidence dir: `/home/thanhsmind/.local/state/bee-verify/evidence/20261002-201522-52484/`
+(`steer-run.txt`, `drive-scope.txt`, `rpc-scope.jsonl`).
+
+- **Steer reaches a running worker.** A no-pane Pi worker on a small cell
+  (cwd = the feature worktree) was told to sleep 45 s first. At 16 s,
+  `bee herding steer` printed `herding: steered job … (steer #1)`. The
+  worker's report quotes the steer and declines it, because it tried to
+  change locked D1 and the prefix says the cell and its gates are unchanged.
+  The file became `steer-1.json.delivered`.
+- **A worktree worker records its verdict.** The same worker wrote
+  `result-1.json` in the main checkout's mailbox (the old "No job mailbox
+  directory found" bug).
+- **A late steer is refused.** After the result: `job … already has a result
+  for round 1 — cannot steer`.
+- **A typed scope change gets one forced turn.** The follow-up `Instead of
+  that, also add a goodbye.txt file to the demo plan.` was recorded; at settle
+  the notice `bee: typed input reads as a scope change to an approved plan.
+  One extra turn starts now to log it or ask the user.` fired once. Before
+  that, the model's own `bee cells add` for `demo-2` was refused (not in the
+  approved packet). Gates were not changed by the model.
+
 ## Gotchas
+
+- In the scope run the small model answered the forced turn with an empty
+  message: it neither logged a decision nor asked the user. Filed as a
+  backlog finding.
+- A steer gives context only. A steer that contradicts a locked decision is
+  declined by the worker, by design.
 
 - In the advisor run on the fixed build, the leader stopped before
   `bee state advisor-ref record`; the obligation fires once per plan, so it was

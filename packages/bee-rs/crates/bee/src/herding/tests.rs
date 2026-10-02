@@ -252,3 +252,96 @@ fn parse_options_handles_no_pane_and_runner_flags() {
     let opts3 = parse_options(&["--task", "test"]).unwrap();
     assert!(!opts3.no_pane);
 }
+
+#[test]
+fn steer_writes_text_verbatim_as_numbered_files() {
+    let tmp = tempdir().unwrap();
+    let bee_dir = tmp.path().join(".bee");
+    let job_dir = bee_dir.join("mailbox").join("job-steer-test");
+    std::fs::create_dir_all(&job_dir).unwrap();
+    let job_spec = serde_json::json!({
+        "job_id": "job-steer-test",
+        "round": 1
+    });
+    std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
+
+    let n1 = crate::herding::job_verbs::steer_job(tmp.path(), "job-steer-test", "first steer").unwrap();
+    assert_eq!(n1, 1);
+    let steer1_path = job_dir.join("steer-1.json");
+    assert!(steer1_path.is_file());
+    let steer1_raw = std::fs::read_to_string(&steer1_path).unwrap();
+    let steer1_val: Value = serde_json::from_str(&steer1_raw).unwrap();
+    assert_eq!(steer1_val.get("n").and_then(Value::as_u64), Some(1));
+    assert_eq!(steer1_val.get("text").and_then(Value::as_str), Some("first steer"));
+    assert!(steer1_val.get("at").and_then(Value::as_str).is_some());
+
+    let n2 = crate::herding::job_verbs::steer_job(tmp.path(), "job-steer-test", "second steer").unwrap();
+    assert_eq!(n2, 2);
+    let steer2_path = job_dir.join("steer-2.json");
+    assert!(steer2_path.is_file());
+    let steer2_raw = std::fs::read_to_string(&steer2_path).unwrap();
+    let steer2_val: Value = serde_json::from_str(&steer2_raw).unwrap();
+    assert_eq!(steer2_val.get("n").and_then(Value::as_u64), Some(2));
+    assert_eq!(steer2_val.get("text").and_then(Value::as_str), Some("second steer"));
+}
+
+#[test]
+fn steer_refuses_missing_job_dir() {
+    let tmp = tempdir().unwrap();
+    let res = crate::herding::job_verbs::steer_job(tmp.path(), "nonexistent-job", "some context");
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(err.code, "job_not_found");
+}
+
+#[test]
+fn steer_refuses_job_with_result_for_current_round() {
+    let tmp = tempdir().unwrap();
+    let bee_dir = tmp.path().join(".bee");
+    let job_dir = bee_dir.join("mailbox").join("job-result-test");
+    std::fs::create_dir_all(&job_dir).unwrap();
+    let job_spec = serde_json::json!({
+        "job_id": "job-result-test",
+        "round": 1
+    });
+    std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
+    std::fs::write(job_dir.join("result-1.json"), "{}").unwrap();
+
+    let res = crate::herding::job_verbs::steer_job(tmp.path(), "job-result-test", "steer after result");
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(err.code, "result_already_written");
+    assert!(!job_dir.join("steer-1.json").exists());
+}
+
+#[test]
+fn steer_refuses_job_when_cell_is_capped() {
+    let tmp = tempdir().unwrap();
+    let bee_dir = tmp.path().join(".bee");
+    let job_dir = bee_dir.join("mailbox").join("job-capped-test");
+    std::fs::create_dir_all(&job_dir).unwrap();
+    let job_spec = serde_json::json!({
+        "job_id": "job-capped-test",
+        "cell_id": "cell-capped-1",
+        "round": 1
+    });
+    std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
+
+    let cells_dir = bee_dir.join("cells");
+    std::fs::create_dir_all(&cells_dir).unwrap();
+    let cell_data = serde_json::json!({
+        "id": "cell-capped-1",
+        "status": "capped",
+        "trace": {
+            "capped_at": "2026-10-02T12:00:00Z"
+        }
+    });
+    std::fs::write(cells_dir.join("cell-capped-1.json"), cell_data.to_string()).unwrap();
+
+    let res = crate::herding::job_verbs::steer_job(tmp.path(), "job-capped-test", "steer on capped cell");
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(err.code, "cell_capped");
+    assert!(!job_dir.join("steer-1.json").exists());
+}
+

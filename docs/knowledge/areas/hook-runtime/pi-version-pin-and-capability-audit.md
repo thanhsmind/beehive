@@ -147,6 +147,8 @@ Nothing in the range earns `delete`.
 
 **Settle obligations on Pi (pi-1-0-upgrade slice 3).** Pi 1.0's actionable `agent_before_settle` boundary carries one forced turn when bee work is owed. `bee hook session-close` answers an `obligations_only` payload with each owed item once (kinds `cap` and `advisor`, contract `5f6f7020` with amendments `90077144`, `295f1277`, `562588f5`), the belt shows the notice and returns `continue: true` (contract `5495627d`), and the agent_settled nudge does not repeat it (`210c86e4`). The planning tool set carries `bee_advisor` (amendment `82179c5d`). Live proof: `.bee/verify/verify-app/features/pi-harness-dispatch.md`, runs 20261002-181622-3758076 and 20261002-184508-3853826.
 
+**Mid-run input on Pi (pi-1-0-upgrade slice 4).** `bee herding steer` (contract `ccdae0ed`, amendment `01fd5793`) writes a steer file into a running job's mailbox; the Pi worker belt delivers it once as a context-only steer and the verdict tool resolves the main-checkout mailbox without a newest-dir guess when `BEE_HERDING_JOB_ID` is set (contract `8972e270`, amendment `8b0387f5`). The belt's `input` handler records steer and follow-up text through session-close without changing it, and a scope-phrase match is owed as one log-or-ask turn (contract `47677410`, amendment `bf3483c6`). Live proof: `.bee/verify/verify-app/features/pi-harness-dispatch.md`, run 20261002-201522-52484.
+
 ## Business Rules
 
 - A row above is true for the versions named in its evidence and for no others.
