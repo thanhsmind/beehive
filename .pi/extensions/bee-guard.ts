@@ -362,6 +362,15 @@ const PI_BUILTIN_TOOLS = [
   "ls",
 ] as const
 
+const BEE_STAGE_TOOLS = new Set<string>([
+  ...PI_BUILTIN_TOOLS,
+  "codemode",
+  "tool_search",
+  "verdict",
+  "bee_dispatch",
+  "bee_advisor",
+])
+
 /** Field names a custom tool might carry a write target under, in probe
  * order — used ONLY by the fail-safe route below. */
 const PATH_FIELDS = [
@@ -3023,26 +3032,24 @@ export default function (pi: ExtensionAPI) {
       }
 
       const allowedSet = new Set(allowed)
-      const basePool = fullToolSet && fullToolSet.length > 0 ? fullToolSet : currentActive
-      const targetActive = basePool.filter((t) => allowedSet.has(t))
-      const removedTools = currentActive.filter((t) => !allowedSet.has(t))
+      const keeps = (t: string) => (BEE_STAGE_TOOLS.has(t) ? allowedSet.has(t) : currentActive.includes(t))
+      const pool = [...new Set([...(fullToolSet ?? []), ...currentActive])]
+      const targetActive = pool.filter(keeps)
+      const removedTools = currentActive.filter((t) => !keeps(t))
+      const addedTools = targetActive.filter((t) => !currentActive.includes(t))
 
-      if (removedTools.length > 0 && typeof (pi as any).setActiveTools === "function") {
+      if (removedTools.length + addedTools.length > 0 && typeof (pi as any).setActiveTools === "function") {
         (pi as any).setActiveTools(targetActive)
 
-        // D12 Obligation 2: announce narrowing to user where it happens
-        const stageMsg = stage ? `stage "${stage}"` : "current stage policy"
-        const userNotice = `bee stage gate: active tools narrowed for ${stageMsg} (removed: ${removedTools.join(", ")}). Use /bee-tools-reopen to restore all tools.`
-        if (typeof ctx?.ui?.notify === "function") {
-          ctx.ui.notify(userNotice, "info")
+        if (typeof parsed.user_message === "string" && typeof ctx?.ui?.notify === "function") {
+          ctx.ui.notify(parsed.user_message, "info")
         }
 
-        // D12 Obligation 3: tell model that tools were removed by stage policy
-        if (typeof (pi as any).sendMessage === "function") {
+        if (typeof parsed.model_message === "string" && typeof (pi as any).sendMessage === "function") {
           try {
             await (pi as any).sendMessage({
               customType: "bee-stage-tools",
-              content: `Notice: The following tool(s) were removed by bee ${stageMsg}: ${removedTools.join(", ")}. Do not attempt to use them or fall back to bash redirection. If you require these tools, ask the user to run /bee-tools-reopen.`,
+              content: parsed.model_message,
               display: true,
               details: {
                 stage: stage || null,

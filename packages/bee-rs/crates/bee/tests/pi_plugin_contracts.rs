@@ -1546,6 +1546,8 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
             let tools_json = json!({
                 "stage": stage,
                 "allowed_tools": allowed_tools,
+                "user_message": format!("hook user sentence for {stage}"),
+                "model_message": format!("hook model sentence for {stage}"),
             })
             .to_string();
             format!(
@@ -8592,53 +8594,49 @@ fn stage_tools_narrowing_and_reopen_command() {
         },
     );
 
-    let run = run_harness(
+    let tools = json!(["read", "bash", "write", "edit", "grep", "find", "ls", "web_search", "vcc_recall"]);
+    let run = run_harness_spec(
         &harness,
-        vec![
-            json!({
-                "event": "turn_start",
-                "event_arg": { "turnIndex": 1 },
-                "cwd": dir.path().to_string_lossy(),
-                "session_id": "sess-stage-test",
-            }),
-            command_call(dir.path(), "sess-stage-test", "bee-tools-reopen", ""),
-        ],
+        json!({
+            "initial_tools": tools,
+            "all_tools": tools,
+            "calls": [
+                json!({
+                    "event": "turn_start",
+                    "event_arg": { "turnIndex": 1 },
+                    "cwd": dir.path().to_string_lossy(),
+                    "session_id": "sess-stage-test",
+                }),
+                command_call(dir.path(), "sess-stage-test", "bee-tools-reopen", ""),
+            ],
+        }),
     );
 
-    // 1. Tool narrowing happened on turn_start: narrowed to ["read", "bash"]
     assert_eq!(
         run.active_tools_history.get(1),
-        Some(&vec!["read".to_string(), "bash".to_string()]),
-        "expected active tools to narrow to [read, bash] on turn_start, history: {:?}",
+        Some(&vec!["read".to_string(), "bash".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
+        "narrowing must remove only bee-known tools the hook excludes, history: {:?}",
         run.active_tools_history
     );
 
-    // 2. User was notified with slash command name and removed tools
     assert!(
-        run.notifications.iter().any(|n| {
-            let msg = n["message"].as_str().unwrap_or("");
-            msg.contains("planning") && msg.contains("/bee-tools-reopen") && msg.contains("write")
-        }),
-        "expected user notification about narrowing and /bee-tools-reopen, got: {:?}",
+        run.notifications.iter().any(|n| n["message"] == "hook user sentence for planning"),
+        "the user notice must be the hook's user_message verbatim, got: {:?}",
         run.notifications
     );
 
-    // 3. Model was sent a message explaining stage policy
     assert!(
         run.custom_messages.iter().any(|m| {
-            let content = m["message"]["content"].as_str().unwrap_or("");
             m["message"]["customType"] == "bee-stage-tools"
-                && content.contains("planning")
-                && content.contains("write")
+                && m["message"]["content"] == "hook model sentence for planning"
         }),
-        "expected model notice via pi.sendMessage with customType bee-stage-tools, got: {:?}",
+        "the model notice must be the hook's model_message verbatim, got: {:?}",
         run.custom_messages
     );
 
-    // 4. bee-tools-reopen restored the full tool set
     assert_eq!(
         run.active_tools,
-        vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
+        vec!["read", "bash", "write", "edit", "grep", "find", "ls", "web_search", "vcc_recall"],
         "expected active tools to be fully restored after reopen command"
     );
     assert!(
@@ -8736,25 +8734,18 @@ fn real_bee_hook_stage_tools_end_to_end() {
         run.active_tools_history
     );
 
-    // User was notified
     assert!(
-        run.notifications.iter().any(|n| {
-            let msg = n["message"].as_str().unwrap_or("");
-            msg.contains("planning") && msg.contains("/bee-tools-reopen") && msg.contains("write")
-        }),
-        "expected user notification from real hook narrowing: {:?}",
+        run.notifications.iter().any(|n| n["message"] == parsed["user_message"]),
+        "expected the real hook's user_message as the notice: {:?}",
         run.notifications
     );
 
-    // Model was notified
     assert!(
         run.custom_messages.iter().any(|m| {
-            let content = m["message"]["content"].as_str().unwrap_or("");
             m["message"]["customType"] == "bee-stage-tools"
-                && content.contains("planning")
-                && content.contains("write")
+                && m["message"]["content"] == parsed["model_message"]
         }),
-        "expected model notice from real hook narrowing: {:?}",
+        "expected the real hook's model_message as the model notice: {:?}",
         run.custom_messages
     );
 
@@ -8764,6 +8755,96 @@ fn real_bee_hook_stage_tools_end_to_end() {
         vec!["read", "bash", "write", "edit", "grep", "find", "ls"],
         "expected active tools restored"
     );
+}
+
+#[cfg(unix)]
+fn real_stage_tools_verdict(root: &Path, state: &Value) -> Value {
+    std::fs::write(root.join(".bee").join("state.json"), state.to_string()).expect("write state.json");
+    let output = Command::new(bee_bin())
+        .args(["hook", "stage-tools"])
+        .env_remove("BEE_HERDING_WORKER")
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn bee hook stage-tools");
+    serde_json::from_slice(&output.stdout).expect("stage-tools verdict must be JSON")
+}
+
+#[cfg(unix)]
+#[test]
+fn stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_tools() {
+    node_or_skip!("stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_tools");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let swarming = json!({
+        "phase": "swarming",
+        "route": { "lane": "high-risk" },
+        "approved_gates": { "execution": true }
+    });
+    let leader = real_stage_tools_verdict(dir.path(), &swarming);
+    let full = real_stage_tools_verdict(dir.path(), &json!({"phase": "grooming", "approved_gates": {"execution": false}}));
+    let planning = json!({"phase": "planning", "approved_gates": {"execution": false}});
+    real_stage_tools_verdict(dir.path(), &planning);
+
+    let mut tools: Vec<String> = serde_json::from_value(full["allowed_tools"].clone()).expect("full tool list");
+    tools.extend(["web_search".to_string(), "vcc_recall".to_string()]);
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let turn = |n: u64| {
+        json!({
+            "event": "turn_start",
+            "event_arg": { "turnIndex": n },
+            "cwd": dir.path().to_string_lossy(),
+            "session_id": "sess-stage-leader",
+        })
+    };
+    let run = run_harness_spec(
+        &harness,
+        json!({
+            "initial_tools": tools,
+            "all_tools": tools,
+            "calls": [
+                turn(1),
+                json!({
+                    "kind": "write_file",
+                    "path": dir.path().join(".bee").join("state.json").to_string_lossy(),
+                    "content": swarming.to_string(),
+                }),
+                turn(2),
+                turn(3),
+            ],
+        }),
+    );
+
+    assert_eq!(
+        run.active_tools_history.get(1),
+        Some(&vec!["read".to_string(), "bash".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
+        "planning keeps read, bash and every non-bee tool: {:?}",
+        run.active_tools_history
+    );
+    let mut expected: Vec<String> = serde_json::from_value(leader["allowed_tools"].clone()).expect("leader tool list");
+    expected.extend(["web_search".to_string(), "vcc_recall".to_string()]);
+    let mut got = run.active_tools.clone();
+    got.sort();
+    expected.sort();
+    assert_eq!(got, expected, "swarming re-opens the leader set and keeps non-bee tools: {:?}", run.active_tools_history);
+    assert!(run.active_tools.iter().any(|t| t == "bee_dispatch"), "{:?}", run.active_tools);
+    assert_eq!(run.active_tools_history.len(), 3, "turn 3 changes nothing: {:?}", run.active_tools_history);
+
+    let notices: Vec<&Value> = run.notifications.iter().map(|n| &n["message"]).collect();
+    assert_eq!(notices.len(), 2, "{notices:?}");
+    assert_eq!(notices[1], &leader["user_message"]);
+    let model: Vec<&Value> = run
+        .custom_messages
+        .iter()
+        .filter(|m| m["message"]["customType"] == "bee-stage-tools")
+        .map(|m| &m["message"]["content"])
+        .collect();
+    assert_eq!(model.len(), 2, "{model:?}");
+    assert_eq!(model[1], &leader["model_message"]);
+    assert!(model[1].as_str().unwrap_or("").contains("bee_dispatch"), "{model:?}");
 }
 
 #[cfg(unix)]
