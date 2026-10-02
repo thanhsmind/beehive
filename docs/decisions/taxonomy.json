@@ -614,6 +614,10 @@
     "named-guess",
     "harness-native",
     "redirect",
-    "mid-run-input"
+    "mid-run-input",
+    "contract:pi-codemode-guard",
+    "named-guess-resolved",
+    "finding",
+    "cell-revision"
   ]
 }

@@ -1,0 +1,600 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-1-0-upgrade",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-1-0-upgrade\" started at phase \"planning\".",
+  "next_action": "Invoke bee-swarming: dispatch p1u-1.",
+  "created_at": "2026-10-02T05:39:29.330Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "advisor_ref": {
+    "consulted_at": "2026-10-02T06:44:18.081Z",
+    "feature": "pi-1-0-upgrade",
+    "newest_decision_id": "1fcec474-0161-4bc2-b0a2-3845b5d19858",
+    "plan_sha256": "5ff602f2db31df427d05f49d1a8a1f3019b558fb36805632e7ed77359f47ea2f",
+    "advisor": "hat-wave five seats (hat-risks fable; facts-gaps, value, alternatives, user-impact opus)",
+    "digest_head": "# Hat wave synthesis — pi-1-0-upgrade\n\nFive seats critiqued the first harness-native draft of `plan.md` on\n2026-10-02. All five returned inside the ceiling; none was dropped. The\nleader synthesized; each finding below names where it landed.\n\n## Blockers\n\n| Seat | Finding | Landed |\n|---|---|---|\n| risks | Codemode scripts call tools whatever the active set is (Pi `docs/mcp.md:204`), so hiding `edit`/`write` cannot stop a leader write. | D8 amended: the rule is enforced in write-guard; the loadou"
+  },
+  "gate_preview": {
+    "feature": "pi-1-0-upgrade",
+    "plan_sha256": "5ff602f2db31df427d05f49d1a8a1f3019b558fb36805632e7ed77359f47ea2f",
+    "previewed_at": "2026-10-02T06:44:23.255Z",
+    "cells": [
+      {
+        "id": "p1u-1",
+        "feature": "pi-1-0-upgrade",
+        "title": "Let codemode and tool_search through the Pi guard and keep them through stage narrowing",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "bugfix",
+        "deps": [],
+        "decisions": [
+          "D2"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "~/.local/share/mise/installs/pi/latest/pi/docs/extensions.md",
+          "~/.local/share/mise/installs/pi/latest/pi/docs/codemode.md"
+        ],
+        "action": "Red first: add contract cases that fail on main. Then add codemode and tool_search as named cases in mapToolCall that skip write-guard, and add both names to FULL_TOOL_SET in stage_tools.rs so narrowing keeps them once writes are allowed. MCP and other unknown names keep the fail-safe. Add no code comments (no_code_comments is on). Rebuild .bee/bin/bee and run bee doctor.",
+        "must_haves": {
+          "truths": [
+            "an outer codemode or tool_search call is allowed",
+            "a nested write without an approved gate is still denied",
+            "a nested bash write redirect without an approved gate is still denied",
+            "an unknown tool with no path is still denied",
+            "after gate approval, narrowing keeps codemode and tool_search active",
+            "bee doctor reports the embedded belt byte-identical after rebuild"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "codemode and tool_search cases in mapToolCall"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+              "substantive": "FULL_TOOL_SET names codemode and tool_search"
+            }
+          ],
+          "key_links": [
+            "doctor.rs:47 embeds .pi/extensions/bee-guard.ts, so the rebuilt binary carries the change"
+          ],
+          "prohibitions": [
+            "No code comments added",
+            "MCP and unknown tools keep the fail-safe",
+            "READ_ONLY_TOOLS unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
+      },
+      {
+        "id": "p1u-2",
+        "feature": "pi-1-0-upgrade",
+        "title": "Drive a bee workflow end to end on Pi 1.0.0 and record the evidence",
+        "lane": "high-risk",
+        "role": "test",
+        "change_class": "test",
+        "deps": [
+          "p1u-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/pi-hat-wave.md"
+        ],
+        "read_first": [
+          ".bee/verify/verify-app/features/pi-hat-wave.md",
+          "docs/history/pi-1-0-upgrade/plan.md"
+        ],
+        "action": "Use the verify-app skill on a throwaway sandbox with Pi 1.0.0: run the pi-hat-wave flow; run one codemode script that reads and one that writes before the gate; count system entries per turn in the session JSONL over five turns; narrow tools by stage, then /reload, and read the active tools; run /bee-worktree-new and confirm relocation after the deferred agent_settled.",
+        "must_haves": {
+          "truths": [
+            "a Pi 1.0.0 run id in pi-hat-wave.md",
+            "system entries per turn, as a number",
+            "a yes or no for /reload keeping stage narrowing",
+            "relocation lands in the worktree",
+            "the codemode write is denied with a message naming the nested tool"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/pi-hat-wave.md",
+              "substantive": "a Pi 1.0.0 run id and its findings"
+            }
+          ],
+          "key_links": [
+            "p1u-3 cites this run id as the D1 evidence"
+          ],
+          "prohibitions": [
+            "No product source edits"
+          ]
+        },
+        "verify": "green:live — the verify-app skill run on Pi 1.0.0; the run id and evidence path recorded in .bee/verify/verify-app/features/pi-hat-wave.md"
+      },
+      {
+        "id": "p1u-3",
+        "feature": "pi-1-0-upgrade",
+        "title": "Record Pi 1.0.0 as the proven ceiling and audit the 0.85.1 to 1.0.0 range",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "deps": [
+          "p1u-2"
+        ],
+        "decisions": [
+          "D1",
+          "D4",
+          "D10"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "action": "Edit the existing CEILING comment line to name 1.0.0 and the p1u-2 run (an edit, not a new comment). Add the 0.85.1 to 1.0.0 keep/adapt/delete table to the audit page, including codemode partial writes and the D3 and /reload findings. Update the re-verified label in the contract test. File the D4 and D10 backlog rows with bee backlog add.",
+        "must_haves": {
+          "truths": [
+            "header, audit page and test name the same ceiling",
+            "every breaking entry from 0.86.0 and 0.87.0 has a disposition row",
+            "D4 and D10 rows exist in the backlog"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+              "substantive": "0.85.1 to 1.0.0 disposition table"
+            }
+          ],
+          "key_links": [
+            "the ceiling cites the p1u-2 run id"
+          ],
+          "prohibitions": [
+            "Floor stays 0.84.4",
+            "No D4 or D10 ability is built",
+            "Comment count does not rise"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts"
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p1u-1 changes the guard mapping and its contract test."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "p1u-2 drives a real bee workflow on Pi 1.0.0 and records evidence."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p1u-3 moves the ceiling and writes the 0.85.1 to 1.0.0 audit table."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "The changelog digest already ran."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "pi-1-0-upgrade",
+    "plan_sha256": "5ff602f2db31df427d05f49d1a8a1f3019b558fb36805632e7ed77359f47ea2f",
+    "previewed_at": "2026-10-02T06:44:23.255Z",
+    "cells": [
+      {
+        "id": "p1u-1",
+        "feature": "pi-1-0-upgrade",
+        "title": "Let codemode and tool_search through the Pi guard and keep them through stage narrowing",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "bugfix",
+        "deps": [],
+        "decisions": [
+          "D2"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "~/.local/share/mise/installs/pi/latest/pi/docs/extensions.md",
+          "~/.local/share/mise/installs/pi/latest/pi/docs/codemode.md"
+        ],
+        "action": "Red first: add contract cases that fail on main. Then add codemode and tool_search as named cases in mapToolCall that skip write-guard, and add both names to FULL_TOOL_SET in stage_tools.rs so narrowing keeps them once writes are allowed. MCP and other unknown names keep the fail-safe. Add no code comments (no_code_comments is on). Rebuild .bee/bin/bee and run bee doctor.",
+        "must_haves": {
+          "truths": [
+            "an outer codemode or tool_search call is allowed",
+            "a nested write without an approved gate is still denied",
+            "a nested bash write redirect without an approved gate is still denied",
+            "an unknown tool with no path is still denied",
+            "after gate approval, narrowing keeps codemode and tool_search active",
+            "bee doctor reports the embedded belt byte-identical after rebuild"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard.ts",
+              "substantive": "codemode and tool_search cases in mapToolCall"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+              "substantive": "FULL_TOOL_SET names codemode and tool_search"
+            }
+          ],
+          "key_links": [
+            "doctor.rs:47 embeds .pi/extensions/bee-guard.ts, so the rebuilt binary carries the change"
+          ],
+          "prohibitions": [
+            "No code comments added",
+            "MCP and unknown tools keep the fail-safe",
+            "READ_ONLY_TOOLS unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
+      },
+      {
+        "id": "p1u-2",
+        "feature": "pi-1-0-upgrade",
+        "title": "Drive a bee workflow end to end on Pi 1.0.0 and record the evidence",
+        "lane": "high-risk",
+        "role": "test",
+        "change_class": "test",
+        "deps": [
+          "p1u-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3"
+        ],
+        "files": [
+          ".bee/verify/verify-app/features/pi-hat-wave.md"
+        ],
+        "read_first": [
+          ".bee/verify/verify-app/features/pi-hat-wave.md",
+          "docs/history/pi-1-0-upgrade/plan.md"
+        ],
+        "action": "Use the verify-app skill on a throwaway sandbox with Pi 1.0.0: run the pi-hat-wave flow; run one codemode script that reads and one that writes before the gate; count system entries per turn in the session JSONL over five turns; narrow tools by stage, then /reload, and read the active tools; run /bee-worktree-new and confirm relocation after the deferred agent_settled.",
+        "must_haves": {
+          "truths": [
+            "a Pi 1.0.0 run id in pi-hat-wave.md",
+            "system entries per turn, as a number",
+            "a yes or no for /reload keeping stage narrowing",
+            "relocation lands in the worktree",
+            "the codemode write is denied with a message naming the nested tool"
+          ],
+          "artifacts": [
+            {
+              "path": ".bee/verify/verify-app/features/pi-hat-wave.md",
+              "substantive": "a Pi 1.0.0 run id and its findings"
+            }
+          ],
+          "key_links": [
+            "p1u-3 cites this run id as the D1 evidence"
+          ],
+          "prohibitions": [
+            "No product source edits"
+          ]
+        },
+        "verify": "green:live — the verify-app skill run on Pi 1.0.0; the run id and evidence path recorded in .bee/verify/verify-app/features/pi-hat-wave.md"
+      },
+      {
+        "id": "p1u-3",
+        "feature": "pi-1-0-upgrade",
+        "title": "Record Pi 1.0.0 as the proven ceiling and audit the 0.85.1 to 1.0.0 range",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "deps": [
+          "p1u-2"
+        ],
+        "decisions": [
+          "D1",
+          "D4",
+          "D10"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-1-0-upgrade/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "action": "Edit the existing CEILING comment line to name 1.0.0 and the p1u-2 run (an edit, not a new comment). Add the 0.85.1 to 1.0.0 keep/adapt/delete table to the audit page, including codemode partial writes and the D3 and /reload findings. Update the re-verified label in the contract test. File the D4 and D10 backlog rows with bee backlog add.",
+        "must_haves": {
+          "truths": [
+            "header, audit page and test name the same ceiling",
+            "every breaking entry from 0.86.0 and 0.87.0 has a disposition row",
+            "D4 and D10 rows exist in the backlog"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+              "substantive": "0.85.1 to 1.0.0 disposition table"
+            }
+          ],
+          "key_links": [
+            "the ceiling cites the p1u-2 run id"
+          ],
+          "prohibitions": [
+            "Floor stays 0.84.4",
+            "No D4 or D10 ability is built",
+            "Comment count does not rise"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts"
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p1u-1 changes the guard mapping and its contract test."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "required",
+          "role": "test",
+          "reason": "p1u-2 drives a real bee workflow on Pi 1.0.0 and records evidence."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p1u-3 moves the ceiling and writes the 0.85.1 to 1.0.0 audit table."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "The changelog digest already ran."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "route": {
+    "class": "refactor",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "Harness-native workflow on Pi across belt, binary hooks and doctrine; supersedes two locked Pi decisions",
+    "updated_at": "2026-10-02T06:52:07.104Z",
+    "feature": "pi-1-0-upgrade"
+  },
+  "merge_ready": {
+    "since": "2026-10-02T07:06:09.039Z",
+    "branch": "wt/pi-1-0-upgrade",
+    "worktree_id": "beehive--wt--pi-1-0-upgrade",
+    "uat": "pending",
+    "blocked_by": [
+      "leader-check",
+      "doc-deferral"
+    ]
+  }
+}
