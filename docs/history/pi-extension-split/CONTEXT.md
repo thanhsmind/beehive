@@ -28,6 +28,16 @@ so it is easier to extend and to follow.
   source facts from the concatenated `bee-guard` module sources and run
   `index.ts` under node. Existing comments move verbatim with their code.
 
+- **D6** (store `8cdd7725`, from the plan-step hat wave): the folder is
+  flat, with no subfolders. Every `pi.on` handler stays in one `events.ts`
+  in its original order. Every `register*` function takes the parameter
+  named `pi`. The shipped set is every `.ts` file in the folder, sorted by
+  name. Onboard plans `remove_pi_extension` for the legacy file before any
+  copy, and only when the source folder ships files. Prune removes only
+  `.ts` files bee does not ship and never follows symlinks. The remove arm
+  accepts only `.pi/extensions/bee-guard/*.ts` or the exact legacy path.
+  Doctor failure text names `bee onboard --apply`.
+
 ## Out of scope
 
 - The OpenCode plugin `.opencode/plugins/bee-guard.ts` keeps its one-file
