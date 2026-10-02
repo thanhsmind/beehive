@@ -115,8 +115,8 @@ const PI_PLUGIN_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-g
 ///
 /// The 0.84.3 above names the Pi docs the list was read from, not the version
 /// this belt supports: the supported floor is 0.84.4 (see the belt header).
-/// The same eight names were re-verified unchanged in Pi 0.85.1 on
-/// 2026-09-18, so the label is provenance rather than drift.
+/// The same eight names were re-verified unchanged in Pi 1.0.0, the proven
+/// ceiling, on 2026-10-02, so the label is provenance rather than drift.
 fn pi_builtin_tools() -> Vec<String> {
     const MARKER: &str = "const PI_BUILTIN_TOOLS = [";
     let start = PI_PLUGIN_SOURCE.find(MARKER).unwrap_or_else(|| {
