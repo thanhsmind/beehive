@@ -46,6 +46,8 @@ Playbook: `skills/bee-planning/playbooks/refactor.md` (route class `refactor`); 
 ## Load-bearing claims
 Labels are `read` / `ran`; evidence is a verbatim substring of the anchor; multi-line evidence joins lines with " / ".
 
+<!-- bee:not-a-deferral: historical claim table; the changelog line it quotes describes Pi behavior, not bee work owed -->
+
 | # | Claim | Label | Anchor | Verbatim evidence |
 |---|-------|-------|--------|-------------------|
 | 1 | Pi runs codemode's nested calls through `tool_call`, so the guard still sees each real write | ran | `sed -n 148,148p ~/.local/share/mise/installs/pi/latest/pi/docs/extensions.md` | Nested calls go through argument validation and the `tool_call` and `tool_result` handlers like model-issued calls, |
@@ -76,6 +78,8 @@ Labels are `read` / `ran`; evidence is a verbatim substring of the anchor; multi
 | 26 | The no-pane Pi worker gets no input after it starts | read | packages/bee-rs/crates/bee/src/herding/run.rs:2984 | cmd.stdin(Stdio::null()); |
 | 27 | The no-pane worker is a one-shot `pi --mode json -p` run | read | packages/bee-rs/crates/bee/src/herding/run.rs:2777-2779 | "--mode".to_string(), /         "json".to_string(), /         "-p".to_string(), |
 | 28 | The belt already steers into a running turn — the carrier D13 reuses in the worker | read | .pi/extensions/bee-guard.ts:935 | steer ? { deliverAs: "steer" } : undefined, |
+
+<!-- /bee:not-a-deferral -->
 
 ## Discovery
 Read the Pi 1.0.0 CHANGELOG from 0.85.1 up (eight releases: 0.86.0, 0.86.1,
@@ -189,8 +193,12 @@ Slice queue: 1 → 2 → 3 → 4 (4 reuses 2's dispatch path and 3's obligation
 check). Current slice to prepare: slice 1. Slices 2-4 are headlines; their
 cells are drafted after p1u-2's live run.
 
+<!-- bee:not-a-deferral: historical plan text; every deferred decision landed in a later capped cell or a filed backlog row -->
+
 Deferred coverage (on purpose, not a gap): D5-D9 and D11 land in slice 2-3
 cells; D12-D14 in slice 4 cells; D10 lands as a backlog row in p1u-3.
+
+<!-- /bee:not-a-deferral -->
 
 What the user sees in slices 2-3 (from the hat-user-impact seat):
 ```

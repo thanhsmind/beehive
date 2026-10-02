@@ -120,6 +120,8 @@ of their eight entries has a row below. `CHANGELOG.md` lines cite the 1.0.0
 install tree. Live evidence is run `20261002-135348-2965648`
 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`).
 
+<!-- bee:not-a-deferral: the out-of-scope rows record backlog rows already filed on 2026-10-02 (.bee/backlog.jsonl), not a promise to act later -->
+
 | Upstream capability or change | Disposition | Evidence |
 |---|---|---|
 | 0.86.0 BREAKING: provider stream inputs become `TranscriptContext`; custom providers read the system prompt from `context.messages` | **keep — no local impact** | `CHANGELOG.md:282`. The belt registers no provider. |
@@ -140,6 +142,8 @@ install tree. Live evidence is run `20261002-135348-2965648`
 | The thirteen registered events and the API members under "Pi surfaces an upgrade can break" | **keep — checked in the binary and live** | The 1.0.0 docs were rewritten and no longer list every event: `ui_prompt_start`, `ui_prompt_end` and `session_tree` appear in no 1.0.0 doc. All three names are in the 1.0.0 `pi` binary (`rg -a -c`), and the live run drove `turn_start`, `tool_call`, `agent_settled` and the worktree commands. |
 | Interactive permission-prompt event | **keep — still absent** | 1.0.0 adds tool `annotations` that a permission extension can read (`docs/extensions.md:166`), but no prompt event. The named exclusion at `.pi/extensions/bee-guard.ts:73` holds. |
 | Fullscreen TUI, codemode token cuts, image generation, MCP OAuth, `/login` and provider changes | **keep — no local impact** | `CHANGELOG.md:5-45`. The belt registers no provider and draws no UI beyond notify, status and the widget. |
+
+<!-- /bee:not-a-deferral -->
 
 Nothing in the range earns `delete`.
 
