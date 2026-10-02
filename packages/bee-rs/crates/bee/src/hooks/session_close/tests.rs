@@ -2050,3 +2050,46 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert!(!fx.path().join(".bee").join("runtime").join("settle-obligations.json").exists());
         assert_eq!(owed(fx.path()).len(), 1);
     }
+
+    #[test]
+    fn settle_owes_no_cap_while_dispatched_worker_is_running() {
+        let fx = claimed_cell_fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"workers": [{"nickname": "w-demo", "cell": "demo-1", "status": "running"}]}),
+        );
+        let job_dir = root.join(".bee").join("mailbox").join("w-demo");
+        write_json_file(&job_dir.join("job.json"), &json!({"job_id": "w-demo", "cell_id": "demo-1"}));
+        assert!(owed(root).is_empty());
+        write_json_file(&job_dir.join("result-1.json"), &json!({"status": "done"}));
+        let after = owed(root);
+        assert_eq!(after.len(), 1, "{after:?}");
+        assert_eq!(after[0]["kind"], "cap");
+        assert_eq!(after[0]["cell"], "demo-1");
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_owes_no_cap_while_claim_has_live_heartbeat() {
+        let fx = claimed_cell_fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("claims").join("demo-1.json"),
+            &json!({"cell": "demo-1", "session": "s-live", "ttl_seconds": 3600, "claimed_at": now_iso()}),
+        );
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-live.json"),
+            &json!({"id": "s-live", "status": "active", "last_heartbeat": now_iso()}),
+        );
+        assert!(owed(root).is_empty());
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-live.json"),
+            &json!({"id": "s-live", "status": "closed", "last_heartbeat": now_iso()}),
+        );
+        let after = owed(root);
+        assert_eq!(after.len(), 1, "{after:?}");
+        assert_eq!(after[0]["kind"], "cap");
+        assert_eq!(after[0]["cell"], "demo-1");
+    }
+

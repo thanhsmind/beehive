@@ -1,4 +1,4 @@
-use super::{control_root, list_claimed_cells, read_json_failopen};
+use super::{control_root, list_claimed_cells, read_json_failopen, read_session_record};
 use crate::fsutil::ReadJson;
 use crate::hooks::adapter::{now_iso, HookContext};
 use crate::verbs::state_group::{advisor_ref_anchors, advisor_ref_stale};
@@ -50,6 +50,9 @@ fn unserved(root: &Path, file: &Path) -> Vec<Value> {
     let mut owed: Vec<Value> = Vec::new();
     for cell in list_claimed_cells(root).unwrap_or_default() {
         let Some(id) = cell.get("id").and_then(Value::as_str) else { continue };
+        if is_cell_worker_running(root, id) {
+            continue;
+        }
         let feature = cell.get("feature").and_then(Value::as_str).unwrap_or("");
         owed.push(json!({
             "key": format!("{feature}:cap:{id}"),
@@ -98,6 +101,159 @@ One extra turn starts now to run the advisor (this costs extra model calls). \
     });
     owed
 }
+
+fn is_cell_worker_running(root: &Path, cell_id: &str) -> bool {
+    has_running_registered_worker(root, cell_id) || has_live_claim_heartbeat(root, cell_id)
+}
+
+fn has_running_registered_worker(root: &Path, cell_id: &str) -> bool {
+    let state_file = root.join(".bee").join("state.json");
+    let ReadJson::Parsed(Value::Object(state)) = read_json_failopen(&state_file) else {
+        return false;
+    };
+    let Some(Value::Array(workers)) = state.get("workers") else {
+        return false;
+    };
+    let mailbox_dir = root.join(".bee").join("mailbox");
+    for w in workers {
+        if matches!(w.get("status"), Some(Value::String(s)) if s == "capped") {
+            continue;
+        }
+        if w.get("cell").and_then(Value::as_str) != Some(cell_id) {
+            continue;
+        }
+        let nickname = w.get("nickname").and_then(Value::as_str);
+        if let Some(nick) = nickname {
+            let job_dir = mailbox_dir.join(nick);
+            if job_dir.is_dir() && !has_result_file(&job_dir) {
+                return true;
+            }
+        }
+        if mailbox_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&mailbox_dir) {
+                for entry in entries.flatten() {
+                    let Ok(ft) = entry.file_type() else { continue };
+                    if !ft.is_dir() {
+                        continue;
+                    }
+                    let job_path = entry.path();
+                    if job_dir_matches_worker_or_cell(&job_path, nickname, cell_id) && !has_result_file(&job_path) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn has_result_file(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(digits) = name.strip_prefix("result-").and_then(|s| s.strip_suffix(".json")) {
+            if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn job_dir_matches_worker_or_cell(dir: &Path, nickname: Option<&str>, cell_id: &str) -> bool {
+    let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if let Some(nick) = nickname {
+        if dir_name == nick {
+            return true;
+        }
+    }
+    let job_file = dir.join("job.json");
+    if let ReadJson::Parsed(Value::Object(job)) = read_json_failopen(&job_file) {
+        if job.get("cell_id").and_then(Value::as_str) == Some(cell_id) {
+            return true;
+        }
+        if let Some(nick) = nickname {
+            if job.get("job_id").and_then(Value::as_str) == Some(nick) {
+                return true;
+            }
+        }
+        if let Some(task) = job.get("task").and_then(Value::as_str) {
+            if task.contains(&format!("cell: {cell_id}"))
+                || task.contains(&format!("\"cell_id\": \"{cell_id}\""))
+                || task.contains(&format!("Assigned cell id: {cell_id}"))
+            {
+                return true;
+            }
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with("ack-") && name.ends_with(".json") {
+                if let ReadJson::Parsed(Value::Object(ack)) = read_json_failopen(&e.path()) {
+                    if ack.get("cell_id").and_then(Value::as_str) == Some(cell_id) {
+                        return true;
+                    }
+                    if let Some(nick) = nickname {
+                        if ack.get("nickname").and_then(Value::as_str) == Some(nick) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn has_live_claim_heartbeat(root: &Path, cell_id: &str) -> bool {
+    let claim_file = root.join(".bee").join("claims").join(format!("{cell_id}.json"));
+    let ReadJson::Parsed(Value::Object(claim)) = read_json_failopen(&claim_file) else {
+        return false;
+    };
+    let Some(sid) = claim.get("session").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(session) = super::read_session_record(root, sid) else {
+        return false;
+    };
+    if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead")
+        || session.get("closed_at").is_some()
+        || session.get("released").is_some()
+    {
+        return false;
+    }
+    let Some(beat_ms) = date_parse_ms(session.get("last_heartbeat")) else {
+        return false;
+    };
+    let now_ms = chrono::Utc::now().timestamp_millis() as f64;
+    if now_ms - beat_ms > 900_000.0 {
+        return false;
+    }
+    if let Some(ttl) = claim.get("ttl_seconds").and_then(Value::as_f64) {
+        if let Some(claimed_ms) = date_parse_ms(claim.get("claimed_at")) {
+            if claimed_ms + ttl * 1000.0 <= now_ms {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn date_parse_ms(v: Option<&Value>) -> Option<f64> {
+    let Value::String(s) = v? else { return None };
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.timestamp_millis() as f64);
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        let dt = d.and_hms_opt(0, 0, 0)?;
+        return Some(dt.and_utc().timestamp_millis() as f64);
+    }
+    None
+}
+
 
 fn planning_records(root: &Path) -> Vec<Map<String, Value>> {
     let bee = root.join(".bee");
