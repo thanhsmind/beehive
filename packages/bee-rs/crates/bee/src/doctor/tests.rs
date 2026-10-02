@@ -684,6 +684,35 @@ fn mock_tmux_env(key: &str) -> Option<String> {
 }
 
 #[cfg(unix)]
+const fn find_index_ts() -> &'static str {
+    let mut i = 0;
+    while i < PI_GUARD_FILES.len() {
+        let (name, content) = PI_GUARD_FILES[i];
+        let bytes = name.as_bytes();
+        let target = b"index.ts";
+        if bytes.len() == target.len() {
+            let mut j = 0;
+            let mut matches = true;
+            while j < bytes.len() {
+                if bytes[j] != target[j] {
+                    matches = false;
+                    break;
+                }
+                j += 1;
+            }
+            if matches {
+                return content;
+            }
+        }
+        i += 1;
+    }
+    panic!("index.ts not found in PI_GUARD_FILES")
+}
+
+#[cfg(unix)]
+const PI_EXTENSION_SOURCE: &str = find_index_ts();
+
+#[cfg(unix)]
 fn pi_repo(
     tmp: &Path,
     with_binary: bool,
@@ -703,8 +732,12 @@ fn pi_repo(
         std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
     }
     if let Some(text) = extension {
-        std::fs::create_dir_all(root.join(".pi/extensions/bee-guard")).unwrap();
-        std::fs::write(root.join(".pi/extensions/bee-guard/index.ts"), text).unwrap();
+        let guard_dir = root.join(".pi/extensions/bee-guard");
+        std::fs::create_dir_all(&guard_dir).unwrap();
+        for (name, content) in PI_GUARD_FILES {
+            let body = if *name == "index.ts" { text } else { *content };
+            std::fs::write(guard_dir.join(name), body).unwrap();
+        }
     }
     if let Some(ver) = plugin_version {
         std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
@@ -1070,3 +1103,73 @@ fn pi_transport_keeps_pane_check_when_a_slot_is_not_pi() {
     assert_eq!(*ok, Some(false), "{detail}");
     assert!(detail.contains("HERDR_ENV is not set"), "{detail}");
 }
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_when_one_guard_module_differs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/events.ts"), "modified").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("events.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_when_one_guard_module_is_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::remove_file(root.join(".pi/extensions/bee-guard/state.ts")).unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("state.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_fails_on_unshipped_host_ts_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/extra.ts"), "export {}").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("extra.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("1"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_ignores_non_ts_file_in_guard_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/notes.md"), "# notes").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(true), "non-.ts file must not fail wiring: {}", wiring.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_failure_detail_names_count_and_first_few_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard/events.ts"), "modified").unwrap();
+    std::fs::remove_file(root.join(".pi/extensions/bee-guard/state.ts")).unwrap();
+    std::fs::write(root.join(".pi/extensions/bee-guard/extra.ts"), "export {}").unwrap();
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false));
+    assert!(wiring.2.contains("3"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
+}
+
+
