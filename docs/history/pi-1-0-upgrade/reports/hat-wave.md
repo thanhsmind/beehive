@@ -42,3 +42,19 @@ The user added mid-run input on 2026-10-02, after the five seats returned.
 Slice 4 (D12-D14) is a headline with no cells, so the wave is not re-run for
 the whole feature (once per feature). Its cells get the hat-risks and
 hat-user-impact check at slice-4 drafting, before they persist.
+
+## Slice 4 check (hat-risks, hat-user-impact), 2026-10-02
+
+Both seats returned before the cells were saved, as the named deviation above promised.
+
+| Seat | Finding | Landed |
+|---|---|---|
+| risks | The verdict tool falls back to the newest mailbox dir, which can belong to another job — the one irreversible risk. | drain amendment (1); p1u-13 truth |
+| risks | Scope words ('không', bare 'change') fire on ordinary text and pile up forced turns. | scope amendment: phrase list, word edges, one per settle |
+| risks | The kill switch did not stop scope recording. | scope amendment; p1u-12 truth |
+| risks | Steer write races the worker's result. | steer amendment (temp + rename); drain amendment (4) |
+| risks | The input handler could block typing. | drain amendment (7); p1u-13 truth |
+| risks | Relayed text could pose as the user's words; any file in the mailbox is read. | drain amendment (2), (3) |
+| user-impact | bee_steer missing from the leader tool set. | drain amendment (6); p1u-13 files add stage_tools.rs |
+| user-impact | No way out of a false scope match. | scope message names /bee-obligation-skip |
+| user-impact | Refusal without the running job ids; no confirmation line. | drain amendment (6); steer amendment |
