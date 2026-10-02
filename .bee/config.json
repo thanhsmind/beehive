@@ -16,7 +16,6 @@
   "worktree_first": "on",
   "worktree_cleanup_on_merge": false,
   "uat_stop": "close",
-  "no_code_comments": true,
   "uat_before_merge": false,
   "staging_before_merge": false,
   "team": {
@@ -119,23 +118,28 @@
     },
     "claude": {
       "code": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "author or repair tests, red-first"
       },
       "docs": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "doc edits and parity sweeps"
       },
       "deploy": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
@@ -143,11 +147,13 @@
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -171,7 +177,8 @@
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "hat-facts-gaps": {
@@ -183,7 +190,8 @@
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
       },
       "hat-value": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
@@ -191,7 +199,8 @@
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "agy-flash",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     },
