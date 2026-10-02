@@ -629,6 +629,9 @@
     "contract:herding-steer",
     "contract:pi-worker-steer-drain",
     "contract:pi-scope-input",
-    "plan-rev"
+    "plan-rev",
+    "contract:probe-x",
+    "contract:pi-guard-folder-doctor",
+    "contract:pi-guard-folder-onboard"
   ]
 }

@@ -1,0 +1,865 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-extension-split",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-extension-split\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-02T15:44:04.058Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "refactor",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 20,
+    "rationale": null,
+    "updated_at": "2026-10-02T15:44:04.086Z",
+    "feature": "pi-extension-split"
+  },
+  "gate_preview": {
+    "feature": "pi-extension-split",
+    "plan_sha256": "188440a603c30e76212e87c1cb6403cf1b907eb431fe7a7798ec20b917b339cc",
+    "previewed_at": "2026-10-02T15:54:29.722Z",
+    "cells": [
+      {
+        "id": "pes-1",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "refactor",
+        "title": "Split the Pi guard into a folder of small modules",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D5",
+          "D6",
+          "19afb54e-dadc-48af-b293-fee2398e47bf",
+          "75e947e9-554d-41cd-89cb-ecfe99ea7ace",
+          "b8635d0e-5609-4bda-b58a-b948505e1cbb",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          ".pi/extensions/bee-guard/index.ts",
+          ".pi/extensions/bee-guard/locate.ts",
+          ".pi/extensions/bee-guard/hooks.ts",
+          ".pi/extensions/bee-guard/tool-map.ts",
+          ".pi/extensions/bee-guard/state.ts",
+          ".pi/extensions/bee-guard/session.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          ".pi/extensions/bee-guard/workers-widget.ts",
+          ".pi/extensions/bee-guard/bee-cli.ts",
+          ".pi/extensions/bee-guard/transition.ts",
+          ".pi/extensions/bee-guard/model-usage.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts",
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-steer.ts",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/commands.ts",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+          "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "docs/history/pi-extension-split/plan.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "action": "Move .pi/extensions/bee-guard.ts into the flat folder .pi/extensions/bee-guard/ with exactly the module layout in plan.md Approach, per D1 and D6. Move code verbatim: no logic change, every comment moves with its code, the file header comment (lines 1-94, with the NAMED EXCLUSION lines) goes to the top of index.ts. Relative imports use ./name.ts specifiers. Every module ends with a newline. Per D2, every module-level let (cachedPreamble, preambleInjected, sessionInitRun, drainTimer, drainToken, drainDirectory, activeDrainCtx, drainInFlight, turnStartPending, selfBusy, activeTransition, transitionTeardownOccurred, cachedLimitsText, lastLimitsFetchTime, lastLimitsModelKey, isFetchingLimits, dispatchCounter, workerSteerDrainInFlight) becomes a field of one exported state object in state.ts and every read and write uses state.<name>. Per D6, every pi.on handler moves into events.ts in its original order inside registerEvents(pi: ExtensionAPI, belt), every pi.registerCommand into commands.ts inside registerCommands(pi: ExtensionAPI, belt), and the default export in index.ts makes the belt object { fullToolSet, lastStage, toolsReopened } inside the factory. index.ts re-exports every name in the old export list. Delete the old file. In doctor.rs, embed .pi/extensions/bee-guard/index.ts for now, set hooks_rel for Pi to .pi/extensions/bee-guard/index.ts, and fail the wiring row when .pi/extensions/bee-guard.ts exists with text that names bee onboard --apply; update doctor/tests.rs to match. Per D5, in both contract test files replace the include_str! constant with one helper that reads index.ts, then every other .ts file in the folder sorted by name, joined with a newline, and point the node harness path at index.ts. Never edit an assertion. Update the old-path mentions in stage_tools.rs, hook_manifests.rs, devtools/mod.rs and release_manifest.rs doc comments to the folder without adding comment lines. Then run .bee/bin/bee dev release-manifest --write and commit the regenerated manifest. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "the Pi contract suite is green with no assertion changed",
+            "the OpenCode contract suite is green with no assertion changed",
+            "the release manifest check is green",
+            "no module assigns a let binding imported from another module",
+            "index.ts re-exports every name the old file exported",
+            "the header comment with the NAMED EXCLUSION lines opens index.ts",
+            "doctor fails the wiring row naming bee onboard --apply when the legacy single file exists"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/index.ts",
+              "substantive": "default export registers every handler, tool and command"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/state.ts",
+              "substantive": "one exported state object holding the former module-level lets"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "every pi.on handler in its original order"
+            }
+          ],
+          "key_links": [
+            "pi_plugin_contracts.rs runs .pi/extensions/bee-guard/index.ts",
+            "doctor.rs embeds .pi/extensions/bee-guard/index.ts"
+          ],
+          "prohibitions": [
+            "No guard behavior change",
+            "No assertion edited to pass",
+            "No new code comments",
+            "No subfolder under .pi/extensions/bee-guard/"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: && .bee/bin/bee dev release-manifest --check",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-2",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Check every guard module file in bee doctor",
+        "deps": [
+          "pes-1"
+        ],
+        "decisions": [
+          "D4",
+          "D6",
+          "8822545c-f8df-4dce-b277-95af37922795",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/build.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "packages/bee-rs/crates/bee/build.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "action": "Red first in doctor/tests.rs, then per D4: build.rs lists every .ts file directly in .pi/extensions/bee-guard/ sorted by name, writes a generated Rust file into OUT_DIR holding (file name, include_str! of the absolute path) pairs, and prints rerun-if-changed for the folder. doctor.rs includes that generated file and replaces the single index.ts embed: the wiring row compares each embedded file byte for byte against .pi/extensions/bee-guard/<name> in the host, and also flags host .ts files in that folder that bee does not ship. On failure the detail names the count of mismatched files, the first few names, and bee onboard --apply. The legacy-file failure from pes-1 stays. No hand-kept file list. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "doctor passes the wiring row when every module file matches",
+            "doctor fails the wiring row naming the file when one module file differs",
+            "doctor fails the wiring row when one module file is missing",
+            "doctor failure text names bee onboard --apply and the mismatch count",
+            "adding a .ts file to the folder needs no Rust edit to be checked"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/build.rs",
+              "substantive": "generates the bee-guard file list from the folder"
+            }
+          ],
+          "key_links": [
+            "doctor.rs includes the build.rs generated list"
+          ],
+          "prohibitions": [
+            "No hand-kept module list in Rust",
+            "No new code comments"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor::",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-3",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Install the guard folder and remove the old single file on onboard",
+        "deps": [
+          "pes-2"
+        ],
+        "decisions": [
+          "D3",
+          "D6",
+          "0c06dba7-d2e6-4674-8843-72383467e385",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "action": "Red first in onboard/tests.rs, then per D3 and D6, copying the shape of the expertise vendor-and-prune code (plan.rs list_source_expertise, walk_md_tree, the remove_expertise item near plan.rs:804, and the remove_expertise arm in apply.rs): list_pi_extension_files returns every .ts file directly in the source .pi/extensions/bee-guard/ as bee-guard/<name>, sorted, never following symlinks. In the plan step, when that list is not empty: first plan remove_pi_extension for .pi/extensions/bee-guard.ts if it exists, then create .pi/extensions/bee-guard if missing, then plan copy_pi_extension for each missing or drifted file at .pi/extensions/bee-guard/<name>, then plan remove_pi_extension for each .ts file directly in the host .pi/extensions/bee-guard/ that the source does not ship. When the list is empty, plan no Pi removal. apply.rs copies copy_pi_extension by its path relative to .pi/extensions (not the base name). The new remove_pi_extension arm accepts only .pi/extensions/bee-guard.ts or .pi/extensions/bee-guard/<name>.ts with no .. and no further slash, refuses anything else, and reports a failed remove instead of ignoring it. Update the existing Pi onboard tests to the folder shape. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "onboard plans one copy_pi_extension item per drifted module file",
+            "onboard apply writes every module file under .pi/extensions/bee-guard/",
+            "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+            "onboard removes a legacy .pi/extensions/bee-guard.ts on apply",
+            "onboard plans no Pi removal when the source folder ships no files",
+            "onboard removes a host .ts file in bee-guard/ that bee does not ship",
+            "a non-.ts file in the host bee-guard/ folder survives onboard",
+            "the remove_pi_extension arm refuses a path outside its scope",
+            "a second onboard on an up-to-date host plans no Pi item"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+              "substantive": "folder listing, ordered legacy removal and prune items"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+              "substantive": "relative-path copy and a scoped remove_pi_extension arm"
+            }
+          ],
+          "key_links": [
+            "apply.rs copies copy_pi_extension by relative path"
+          ],
+          "prohibitions": [
+            "No change to the OpenCode plugin vendoring",
+            "No removal outside .pi/extensions/bee-guard.ts and .pi/extensions/bee-guard/*.ts",
+            "No new code comments"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-4",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "title": "Point the live docs at the guard folder",
+        "deps": [
+          "pes-1"
+        ],
+        "decisions": [
+          "D1",
+          "D6",
+          "19afb54e-dadc-48af-b293-fee2398e47bf",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+          "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+          "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+          "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+          "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+          "docs/config-reference.md",
+          "docs/01-distillation.md",
+          "docs/02-architecture.md",
+          "docs/06-runtime-integration.md",
+          "docs/product-description/maintenance/onboarding.md",
+          "docs/product-description/observability/status.md",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          ".claude/skills/verify-app/features/pi-runtime.md",
+          ".claude/skills/verify-app/features/semantic-role-routing.md",
+          ".agents/skills/verify-app/features/pi-runtime.md",
+          ".agents/skills/verify-app/features/semantic-role-routing.md",
+          ".opencode/skills/verify-app/features/pi-runtime.md",
+          ".opencode/skills/verify-app/features/semantic-role-routing.md",
+          ".bee/config-sample.json"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "action": "Per D1 and D6, replace every live mention of the single file .pi/extensions/bee-guard.ts in the listed files with the folder .pi/extensions/bee-guard/ (entry index.ts), and name the module that holds a fact when a doc points at one function. A doc that describes onboard upgrade names the legacy file as the one onboard removes. Add a short module map (one line per file in the folder) to docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md, citing pi-extension-split D1-D6, plus the downgrade step rm -r .pi/extensions/bee-guard/. Edit the .bee/verify feature file first, then make the .claude, .agents and .opencode copies byte-identical to it. Leave docs/history/**, docs/knowledge/work/** (delivery records) and .bee/*.jsonl untouched.",
+        "must_haves": {
+          "truths": [
+            "no listed file names .pi/extensions/bee-guard.ts except as the legacy file onboard removes",
+            "one knowledge concept carries the module map and cites pi-extension-split D1-D6",
+            "the four verify-app feature copies are byte-identical"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+              "substantive": "names the bee-guard folder and carries the module map"
+            }
+          ],
+          "key_links": [
+            "the module map names each file in .pi/extensions/bee-guard/"
+          ],
+          "prohibitions": [
+            "No edit under docs/history",
+            "No edit under docs/knowledge/work",
+            "No edit to .bee jsonl stores"
+          ]
+        },
+        "verify": "! rg -n 'extensions/bee-guard\\.ts' docs/knowledge/areas docs/config-reference.md docs/01-distillation.md docs/02-architecture.md docs/06-runtime-integration.md docs/product-description .bee/verify .claude/skills/verify-app .agents/skills/verify-app .opencode/skills/verify-app .bee/config-sample.json | rg -v -i 'legacy'",
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pes-1 to pes-3 move the TypeScript and change doctor and the installer."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pes-4 updates the live docs that name the old path."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-02T15:54:29.892Z",
+    "feature": "pi-extension-split",
+    "newest_decision_id": "6ed2c71d-8c61-44ec-b438-5ee8891285d8",
+    "plan_sha256": "188440a603c30e76212e87c1cb6403cf1b907eb431fe7a7798ec20b917b339cc",
+    "advisor": "hat-wave",
+    "digest_head": "# Hat wave: pi-extension-split\n\nFive seats ran on plan revision 1 (commit `1b242017c`). All five returned\nSHIP-WITH-CHANGES. No seat was dropped.\n\n| Seat | Model | Verdict |\n|---|---|---|\n| hat-facts-gaps | opus | SHIP-WITH-CHANGES (1 blocker) |\n| hat-risks | fable | SHIP-WITH-CHANGES (2 blockers) |\n| hat-alternatives | opus | SHIP-WITH-CHANGES |\n| hat-value | gemini-3.8-flash-high | SHIP-WITH-CHANGES |\n| hat-user-impact | gemini-3.8-flash-high | SHIP-WITH-CHANGES |\n\n## Accepted, and where it la"
+  },
+  "approved_cell_packet": {
+    "feature": "pi-extension-split",
+    "plan_sha256": "188440a603c30e76212e87c1cb6403cf1b907eb431fe7a7798ec20b917b339cc",
+    "previewed_at": "2026-10-02T15:54:29.722Z",
+    "cells": [
+      {
+        "id": "pes-1",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "refactor",
+        "title": "Split the Pi guard into a folder of small modules",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D5",
+          "D6",
+          "19afb54e-dadc-48af-b293-fee2398e47bf",
+          "75e947e9-554d-41cd-89cb-ecfe99ea7ace",
+          "b8635d0e-5609-4bda-b58a-b948505e1cbb",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard.ts",
+          ".pi/extensions/bee-guard/index.ts",
+          ".pi/extensions/bee-guard/locate.ts",
+          ".pi/extensions/bee-guard/hooks.ts",
+          ".pi/extensions/bee-guard/tool-map.ts",
+          ".pi/extensions/bee-guard/state.ts",
+          ".pi/extensions/bee-guard/session.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          ".pi/extensions/bee-guard/workers-widget.ts",
+          ".pi/extensions/bee-guard/bee-cli.ts",
+          ".pi/extensions/bee-guard/transition.ts",
+          ".pi/extensions/bee-guard/model-usage.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts",
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-steer.ts",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/commands.ts",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+          "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "docs/history/pi-extension-split/plan.md",
+          ".pi/extensions/bee-guard.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "action": "Move .pi/extensions/bee-guard.ts into the flat folder .pi/extensions/bee-guard/ with exactly the module layout in plan.md Approach, per D1 and D6. Move code verbatim: no logic change, every comment moves with its code, the file header comment (lines 1-94, with the NAMED EXCLUSION lines) goes to the top of index.ts. Relative imports use ./name.ts specifiers. Every module ends with a newline. Per D2, every module-level let (cachedPreamble, preambleInjected, sessionInitRun, drainTimer, drainToken, drainDirectory, activeDrainCtx, drainInFlight, turnStartPending, selfBusy, activeTransition, transitionTeardownOccurred, cachedLimitsText, lastLimitsFetchTime, lastLimitsModelKey, isFetchingLimits, dispatchCounter, workerSteerDrainInFlight) becomes a field of one exported state object in state.ts and every read and write uses state.<name>. Per D6, every pi.on handler moves into events.ts in its original order inside registerEvents(pi: ExtensionAPI, belt), every pi.registerCommand into commands.ts inside registerCommands(pi: ExtensionAPI, belt), and the default export in index.ts makes the belt object { fullToolSet, lastStage, toolsReopened } inside the factory. index.ts re-exports every name in the old export list. Delete the old file. In doctor.rs, embed .pi/extensions/bee-guard/index.ts for now, set hooks_rel for Pi to .pi/extensions/bee-guard/index.ts, and fail the wiring row when .pi/extensions/bee-guard.ts exists with text that names bee onboard --apply; update doctor/tests.rs to match. Per D5, in both contract test files replace the include_str! constant with one helper that reads index.ts, then every other .ts file in the folder sorted by name, joined with a newline, and point the node harness path at index.ts. Never edit an assertion. Update the old-path mentions in stage_tools.rs, hook_manifests.rs, devtools/mod.rs and release_manifest.rs doc comments to the folder without adding comment lines. Then run .bee/bin/bee dev release-manifest --write and commit the regenerated manifest. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "the Pi contract suite is green with no assertion changed",
+            "the OpenCode contract suite is green with no assertion changed",
+            "the release manifest check is green",
+            "no module assigns a let binding imported from another module",
+            "index.ts re-exports every name the old file exported",
+            "the header comment with the NAMED EXCLUSION lines opens index.ts",
+            "doctor fails the wiring row naming bee onboard --apply when the legacy single file exists"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/index.ts",
+              "substantive": "default export registers every handler, tool and command"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/state.ts",
+              "substantive": "one exported state object holding the former module-level lets"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "every pi.on handler in its original order"
+            }
+          ],
+          "key_links": [
+            "pi_plugin_contracts.rs runs .pi/extensions/bee-guard/index.ts",
+            "doctor.rs embeds .pi/extensions/bee-guard/index.ts"
+          ],
+          "prohibitions": [
+            "No guard behavior change",
+            "No assertion edited to pass",
+            "No new code comments",
+            "No subfolder under .pi/extensions/bee-guard/"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts --test opencode_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: && .bee/bin/bee dev release-manifest --check",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-2",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Check every guard module file in bee doctor",
+        "deps": [
+          "pes-1"
+        ],
+        "decisions": [
+          "D4",
+          "D6",
+          "8822545c-f8df-4dce-b277-95af37922795",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/build.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "packages/bee-rs/crates/bee/build.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "action": "Red first in doctor/tests.rs, then per D4: build.rs lists every .ts file directly in .pi/extensions/bee-guard/ sorted by name, writes a generated Rust file into OUT_DIR holding (file name, include_str! of the absolute path) pairs, and prints rerun-if-changed for the folder. doctor.rs includes that generated file and replaces the single index.ts embed: the wiring row compares each embedded file byte for byte against .pi/extensions/bee-guard/<name> in the host, and also flags host .ts files in that folder that bee does not ship. On failure the detail names the count of mismatched files, the first few names, and bee onboard --apply. The legacy-file failure from pes-1 stays. No hand-kept file list. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "doctor passes the wiring row when every module file matches",
+            "doctor fails the wiring row naming the file when one module file differs",
+            "doctor fails the wiring row when one module file is missing",
+            "doctor failure text names bee onboard --apply and the mismatch count",
+            "adding a .ts file to the folder needs no Rust edit to be checked"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/build.rs",
+              "substantive": "generates the bee-guard file list from the folder"
+            }
+          ],
+          "key_links": [
+            "doctor.rs includes the build.rs generated list"
+          ],
+          "prohibitions": [
+            "No hand-kept module list in Rust",
+            "No new code comments"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor::",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-3",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Install the guard folder and remove the old single file on onboard",
+        "deps": [
+          "pes-2"
+        ],
+        "decisions": [
+          "D3",
+          "D6",
+          "0c06dba7-d2e6-4674-8843-72383467e385",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+          "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "action": "Red first in onboard/tests.rs, then per D3 and D6, copying the shape of the expertise vendor-and-prune code (plan.rs list_source_expertise, walk_md_tree, the remove_expertise item near plan.rs:804, and the remove_expertise arm in apply.rs): list_pi_extension_files returns every .ts file directly in the source .pi/extensions/bee-guard/ as bee-guard/<name>, sorted, never following symlinks. In the plan step, when that list is not empty: first plan remove_pi_extension for .pi/extensions/bee-guard.ts if it exists, then create .pi/extensions/bee-guard if missing, then plan copy_pi_extension for each missing or drifted file at .pi/extensions/bee-guard/<name>, then plan remove_pi_extension for each .ts file directly in the host .pi/extensions/bee-guard/ that the source does not ship. When the list is empty, plan no Pi removal. apply.rs copies copy_pi_extension by its path relative to .pi/extensions (not the base name). The new remove_pi_extension arm accepts only .pi/extensions/bee-guard.ts or .pi/extensions/bee-guard/<name>.ts with no .. and no further slash, refuses anything else, and reports a failed remove instead of ignoring it. Update the existing Pi onboard tests to the folder shape. No new code comments.",
+        "must_haves": {
+          "truths": [
+            "onboard plans one copy_pi_extension item per drifted module file",
+            "onboard apply writes every module file under .pi/extensions/bee-guard/",
+            "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+            "onboard removes a legacy .pi/extensions/bee-guard.ts on apply",
+            "onboard plans no Pi removal when the source folder ships no files",
+            "onboard removes a host .ts file in bee-guard/ that bee does not ship",
+            "a non-.ts file in the host bee-guard/ folder survives onboard",
+            "the remove_pi_extension arm refuses a path outside its scope",
+            "a second onboard on an up-to-date host plans no Pi item"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+              "substantive": "folder listing, ordered legacy removal and prune items"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+              "substantive": "relative-path copy and a scoped remove_pi_extension arm"
+            }
+          ],
+          "key_links": [
+            "apply.rs copies copy_pi_extension by relative path"
+          ],
+          "prohibitions": [
+            "No change to the OpenCode plugin vendoring",
+            "No removal outside .pi/extensions/bee-guard.ts and .pi/extensions/bee-guard/*.ts",
+            "No new code comments"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee onboard::",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "pes-4",
+        "feature": "pi-extension-split",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "title": "Point the live docs at the guard folder",
+        "deps": [
+          "pes-1"
+        ],
+        "decisions": [
+          "D1",
+          "D6",
+          "19afb54e-dadc-48af-b293-fee2398e47bf",
+          "8cdd7725-c059-4b92-aaef-b548c427ae36"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+          "docs/knowledge/areas/hook-runtime/agent-activity-record.md",
+          "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md",
+          "docs/knowledge/areas/hook-runtime/governed-paths-and-the-intake-gate.md",
+          "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+          "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+          "docs/knowledge/areas/onboarding/status-display-vendoring.md",
+          "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+          "docs/config-reference.md",
+          "docs/01-distillation.md",
+          "docs/02-architecture.md",
+          "docs/06-runtime-integration.md",
+          "docs/product-description/maintenance/onboarding.md",
+          "docs/product-description/observability/status.md",
+          ".bee/verify/verify-app/features/pi-runtime.md",
+          ".bee/verify/verify-app/features/semantic-role-routing.md",
+          ".claude/skills/verify-app/features/pi-runtime.md",
+          ".claude/skills/verify-app/features/semantic-role-routing.md",
+          ".agents/skills/verify-app/features/pi-runtime.md",
+          ".agents/skills/verify-app/features/semantic-role-routing.md",
+          ".opencode/skills/verify-app/features/pi-runtime.md",
+          ".opencode/skills/verify-app/features/semantic-role-routing.md",
+          ".bee/config-sample.json"
+        ],
+        "read_first": [
+          "docs/history/pi-extension-split/CONTEXT.md",
+          "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+        ],
+        "action": "Per D1 and D6, replace every live mention of the single file .pi/extensions/bee-guard.ts in the listed files with the folder .pi/extensions/bee-guard/ (entry index.ts), and name the module that holds a fact when a doc points at one function. A doc that describes onboard upgrade names the legacy file as the one onboard removes. Add a short module map (one line per file in the folder) to docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md, citing pi-extension-split D1-D6, plus the downgrade step rm -r .pi/extensions/bee-guard/. Edit the .bee/verify feature file first, then make the .claude, .agents and .opencode copies byte-identical to it. Leave docs/history/**, docs/knowledge/work/** (delivery records) and .bee/*.jsonl untouched.",
+        "must_haves": {
+          "truths": [
+            "no listed file names .pi/extensions/bee-guard.ts except as the legacy file onboard removes",
+            "one knowledge concept carries the module map and cites pi-extension-split D1-D6",
+            "the four verify-app feature copies are byte-identical"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+              "substantive": "names the bee-guard folder and carries the module map"
+            }
+          ],
+          "key_links": [
+            "the module map names each file in .pi/extensions/bee-guard/"
+          ],
+          "prohibitions": [
+            "No edit under docs/history",
+            "No edit under docs/knowledge/work",
+            "No edit to .bee jsonl stores"
+          ]
+        },
+        "verify": "! rg -n 'extensions/bee-guard\\.ts' docs/knowledge/areas docs/config-reference.md docs/01-distillation.md docs/02-architecture.md docs/06-runtime-integration.md docs/product-description .bee/verify .claude/skills/verify-app .agents/skills/verify-app .opencode/skills/verify-app .bee/config-sample.json | rg -v -i 'legacy'",
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pes-1 to pes-3 move the TypeScript and change doctor and the installer."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pes-4 updates the live docs that name the old path."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "High-risk gate: the hat-wave synthesis is recorded as the advisor ref."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-02T17:09:27.510Z",
+    "branch": "wt/pi-extension-split",
+    "worktree_id": "beehive--wt--pi-extension-split",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
