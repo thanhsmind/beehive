@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pi-extension-split\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at a424a53; reload the product and test \"pi-extension-split\", then either approve uat (\"bee gate --name uat --approved true --lane pi-extension-split\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-02T15:44:04.058Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-extension-split",
+    "asked_at": "2026-10-02T17:12:01.990Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "refactor",
     "lane": "high-risk",
@@ -854,12 +859,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-02T17:09:27.510Z",
-    "branch": "wt/pi-extension-split",
-    "worktree_id": "beehive--wt--pi-extension-split",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
