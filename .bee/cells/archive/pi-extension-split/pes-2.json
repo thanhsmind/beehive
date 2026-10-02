@@ -1,0 +1,174 @@
+{
+  "id": "pes-2",
+  "feature": "pi-extension-split",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Check every guard module file in bee doctor",
+  "deps": [
+    "pes-3"
+  ],
+  "decisions": [
+    "D4",
+    "D6",
+    "8822545c-f8df-4dce-b277-95af37922795",
+    "8cdd7725-c059-4b92-aaef-b548c427ae36",
+    "94dc9af8-eff7-4ad4-8b0e-82afe4965fde"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/build.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-extension-split/CONTEXT.md",
+    "packages/bee-rs/crates/bee/build.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "action": "Red first in doctor/tests.rs, then per D4: build.rs lists every .ts file directly in .pi/extensions/bee-guard/ sorted by name, writes a generated Rust file into OUT_DIR holding (file name, include_str! of the absolute path) pairs, and prints rerun-if-changed for the folder. doctor.rs includes that generated file and replaces the single index.ts embed: the wiring row compares each embedded file byte for byte against .pi/extensions/bee-guard/<name> in the host, and also flags host .ts files in that folder that bee does not ship. On failure the detail names the count of mismatched files, the first few names, and bee onboard --apply. The legacy-file failure from pes-1 stays. No hand-kept file list. No new code comments.",
+  "must_haves": {
+    "truths": [
+      "doctor passes the wiring row when every module file matches",
+      "doctor fails the wiring row naming the file when one module file differs",
+      "doctor fails the wiring row when one module file is missing",
+      "doctor failure text names bee onboard --apply and the mismatch count",
+      "adding a .ts file to the folder needs no Rust edit to be checked"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/build.rs",
+        "substantive": "generates the bee-guard file list from the folder"
+      }
+    ],
+    "key_links": [
+      "doctor.rs includes the build.rs generated list"
+    ],
+    "prohibitions": [
+      "No hand-kept module list in Rust",
+      "No new code comments"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor::",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "pes2-doctor",
+    "outcome": "bee doctor --runtime pi compares every .ts file of the build.rs-generated bee-guard list byte for byte, flags missing and unshipped modules with a count and bee onboard --apply, and keeps the legacy-file failure.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/build.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "build.rs lost its module doc comment; the same rationale already lives in docs/knowledge/areas/onboarding/release-identity-and-version-parity.md, so the no-comment rule keeps one home",
+      "the worker run returned exit 1 after committing; the leader verified the tree and capped"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T17:09:27.487Z",
+    "behavior_change": true,
+    "verification_evidence": "doctor:: filter covers the wiring row cases; the full declared suite also ran green on 16e5836e8 (main bin 3909 passed, pi_plugin_contracts 104, opencode_plugin_contracts 8, no failures)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor::",
+    "claimed_at": "2026-10-02T16:58:48.921Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "owner_bypassed": null,
+        "at": "2026-10-02T17:09:27.486Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee doctor --runtime pi compares every .ts file of the build.rs-generated bee-guard list byte for byte, flags missing and unshipped modules with a count and bee onboard --apply, and keeps the legacy-file failure.",
+      "commit": "16e5836e8",
+      "files": [
+        "packages/bee-rs/crates/bee/build.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor:: — green:unit — doctor:: filter covers the wiring row cases; the full declared suite also ran green on 16e5836e8 (main bin 3909 passed, pi_plugin_contracts 104, opencode_plugin_contracts 8, no failures)",
+      "deviations": [
+        "build.rs lost its module doc comment; the same rationale already lives in docs/knowledge/areas/onboarding/release-identity-and-version-parity.md, so the no-comment rule keeps one home",
+        "the worker run returned exit 1 after committing; the leader verified the tree and capped"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "build.rs generates the bee-guard file list from the folder",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/build.rs reads .pi/extensions/bee-guard, keeps .ts files, sorts by name, writes PI_GUARD_FILES of (name, include_str!(abs path)) into OUT_DIR/pi_guard_files.rs, and prints rerun-if-changed for the folder. No hand-kept list exists in Rust."
+          },
+          {
+            "id": "doctor fails the wiring row naming the file when one module file differs or is missing",
+            "status": "PASS",
+            "evidence": "doctor.rs pushes a module name into `mismatched` on a byte difference or NotFound, and reports `<count> file(s) in .pi/extensions/bee-guard/ differ ... (<first 3>) — run bee onboard --apply to refresh`; doctor/tests.rs adds the drift and missing cases."
+          },
+          {
+            "id": "doctor flags unshipped .ts files in the host folder",
+            "status": "PASS",
+            "evidence": "doctor.rs walks the host folder and adds any .ts name that PI_GUARD_FILES does not hold."
+          },
+          {
+            "id": "the legacy single-file failure from pes-1 stays",
+            "status": "PASS",
+            "evidence": "the legacy check landed in ebd9ddc9c is untouched by 16e5836e8; doctor:: tests for it still pass."
+          },
+          {
+            "id": "proof",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee --bin bee doctor:: green; the full declared suite on 16e5836e8: main bin 3909 passed, 20 ignored, pi_plugin_contracts 104, opencode_plugin_contracts 8, no failures."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "claude-opus-5-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-02T17:10:04.093Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "doctor passes the wiring row when every module file matches",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "doctor fails the wiring row naming the file when one module file differs",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "doctor fails the wiring row when one module file is missing",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "doctor failure text names bee onboard --apply and the mismatch count",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "adding a .ts file to the folder needs no Rust edit to be checked",
+            "artifact": "packages/bee-rs/crates/bee/build.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T17:13:51.929Z",
+        "recorded_by": "86eae0ba-56e7-4a36-a190-3a13f12344f0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
