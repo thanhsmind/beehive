@@ -94,6 +94,7 @@ required state, commands, and observable proof.
 - [Pi runtime](./pi-runtime.md) covers installed extension health, fail-closed
   doctor checks, write protection, turn completion tracking, and herding transport
   readiness.
+- [Pi harness dispatch](./pi-harness-dispatch.md) (`pi-harness-dispatch`) covers a Pi leader on a cell lane that cannot write source and starts workers with `bee_dispatch`.
 - [Pi hat wave](./pi-hat-wave.md) (`pi-hat-wave`) covers a live Pi leader in a
   feature worktree: it prepares hat seats, launches them detached with
   `$PI_SESSION_ID`, gets seat-named injected results, reads `report_path`, and
