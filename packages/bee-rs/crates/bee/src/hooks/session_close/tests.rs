@@ -1913,3 +1913,140 @@ so the next session can resume cleanly, or record a capture stub for what settle
             Some("sess-1".to_string())
         );
     }
+
+    fn settle(root: &Path, extra: Value) -> Option<String> {
+        let mut body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy()});
+        if let Value::Object(m) = extra {
+            for (k, v) in m {
+                body[k.as_str()] = v;
+            }
+        }
+        let ctx = read_hook_context(HOOK_NAME, &[], &serde_json::to_string(&body).unwrap());
+        let root = ctx.root.clone().expect("fixture root resolves");
+        super::obligations::answer(&root, &ctx)
+    }
+
+    fn owed(root: &Path) -> Vec<Value> {
+        let out = settle(root, json!({"obligations_only": true})).expect("an obligations payload answers");
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        parsed["obligations"].as_array().unwrap().clone()
+    }
+
+    fn claimed_cell_fixture() -> tempfile::TempDir {
+        let fx = fixture();
+        write_json_file(
+            &fx.path().join(".bee").join("cells").join("demo-1.json"),
+            &json!({"id": "demo-1", "feature": "demo", "status": "claimed"}),
+        );
+        fx
+    }
+
+    fn high_risk_planning_fixture() -> tempfile::TempDir {
+        let fx = fixture();
+        let root = fx.path();
+        let plan = root.join("docs").join("history").join("demo").join("plan.md");
+        std::fs::create_dir_all(plan.parent().unwrap()).unwrap();
+        std::fs::write(&plan, "# plan\n").unwrap();
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo", "phase": "planning", "mode": "high-risk", "gate_preview": {"feature": "demo"}}),
+        );
+        fx
+    }
+
+    #[test]
+    fn settle_returns_a_claimed_uncapped_cell_once_as_cap() {
+        let fx = claimed_cell_fixture();
+        let owed = owed(fx.path());
+        assert_eq!(owed.len(), 1, "{owed:?}");
+        assert_eq!(owed[0]["kind"], "cap");
+        assert_eq!(owed[0]["key"], "demo:cap:demo-1");
+        assert_eq!(owed[0]["cell"], "demo-1");
+        assert!(owed[0]["message"].as_str().unwrap().contains("bee cells finish --id demo-1"));
+        assert!(owed[0]["user_notice"].as_str().unwrap().contains("demo-1"));
+    }
+
+    #[test]
+    fn settle_never_returns_the_same_key_twice() {
+        let fx = claimed_cell_fixture();
+        assert_eq!(owed(fx.path()).len(), 1);
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_returns_missing_advisor_debt_once_for_a_gate_ready_high_risk_plan() {
+        let fx = high_risk_planning_fixture();
+        let root = fx.path();
+        let sha = crate::verbs::state_group::advisor_ref_anchors(root, &json!("demo"))["plan_sha256"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let first = owed(root);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!(first[0]["kind"], "advisor");
+        assert_eq!(first[0]["key"], format!("demo:advisor:{sha}"));
+        assert!(first[0].get("cell").is_none());
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_owes_no_advisor_once_a_fresh_advisor_ref_is_recorded() {
+        let fx = high_risk_planning_fixture();
+        let root = fx.path();
+        let anchors = crate::verbs::state_group::advisor_ref_anchors(root, &json!("demo"));
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"feature": "demo", "phase": "planning", "mode": "high-risk", "gate_preview": {"feature": "demo"},
+                    "advisor_ref": {"feature": "demo", "newest_decision_id": anchors["newest_decision_id"], "plan_sha256": anchors["plan_sha256"]}}),
+        );
+        assert!(owed(root).is_empty());
+    }
+
+    #[test]
+    fn settle_in_a_herding_worker_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        // SAFETY: herding_env_lock serializes every test that touches this var.
+        unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+        let worker_owed = owed(fx.path());
+        match prior {
+            // SAFETY: herding_env_lock serializes every test that touches this var.
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            // SAFETY: herding_env_lock serializes every test that touches this var.
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+        assert!(worker_owed.is_empty(), "{worker_owed:?}");
+        assert_eq!(owed(fx.path()).len(), 1);
+    }
+
+    #[test]
+    fn settle_with_pi_harness_workflow_off_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        write_json_file(&fx.path().join(".bee").join("config.json"), &json!({"pi_harness_workflow": false}));
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_with_an_unwritable_served_record_returns_no_obligations() {
+        let fx = claimed_cell_fixture();
+        std::fs::write(fx.path().join(".bee").join("runtime"), "not a directory").unwrap();
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn settle_skip_key_marks_the_key_served() {
+        let fx = claimed_cell_fixture();
+        let out = settle(fx.path(), json!({"skip_key": "demo:cap:demo-1"}));
+        assert_eq!(out.as_deref(), Some(""));
+        assert!(owed(fx.path()).is_empty());
+    }
+
+    #[test]
+    fn a_payload_without_obligations_only_is_not_an_obligations_answer() {
+        let fx = claimed_cell_fixture();
+        assert_eq!(settle(fx.path(), json!({})), None);
+        assert_eq!(settle(fx.path(), json!({"obligations_only": false})), None);
+        assert!(!fx.path().join(".bee").join("runtime").join("settle-obligations.json").exists());
+        assert_eq!(owed(fx.path()).len(), 1);
+    }
