@@ -8733,7 +8733,7 @@ fn real_bee_hook_stage_tools_end_to_end() {
     assert_eq!(parsed["stage"], "planning");
     assert_eq!(
         parsed["allowed_tools"],
-        json!(["read", "bash"])
+        json!(["read", "bash", "bee_advisor"])
     );
 
     // 2. Drive belt end-to-end through node harness with real binary
@@ -8847,7 +8847,7 @@ fn stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_to
 
     assert_eq!(
         run.active_tools_history.get(1),
-        Some(&vec!["read".to_string(), "bash".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
+        Some(&vec!["read".to_string(), "bash".to_string(), "bee_advisor".to_string(), "web_search".to_string(), "vcc_recall".to_string()]),
         "planning keeps read, bash and every non-bee tool: {:?}",
         run.active_tools_history
     );
