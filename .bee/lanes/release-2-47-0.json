@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "I wait for the check to finish.",
-    "asked_at": "2026-10-02T14:52:04.794Z",
+    "subject": "Tree is clean. Getting the release permit and starting the release script.",
+    "asked_at": "2026-10-02T14:55:26.891Z",
     "session": "efc4f7ef-8185-4d94-b537-d769ed9cdd25"
   },
   "route": {
