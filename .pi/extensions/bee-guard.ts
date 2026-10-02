@@ -677,6 +677,7 @@ let selfBusy = false
  * so a claim covers the whole turn and not merely the host's acceptance of
  * `sendUserMessage`. */
 const inFlightClaims = new Set<string>()
+const forcedContinuationSessions = new Set<string>()
 
 /**
  * Nested UI prompt depth tracking across sessions.
@@ -2788,6 +2789,63 @@ export default function (pi: ExtensionAPI) {
     return patch
   }) as any)
 
+  pi.on("agent_before_settle", (async (event: any, ctx: any) => {
+    try {
+      const directory = directoryOf(ctx)
+      const raw = runAdvisoryHook(directory, "session-close", {
+        hook_event_name: "Stop",
+        session_id: sessionIdOf(ctx),
+        cwd: directory,
+        obligations_only: true,
+      })
+      if (!raw || typeof raw !== "string" || raw.trim().length === 0) {
+        return undefined
+      }
+      let parsed: any = null
+      try {
+        parsed = JSON.parse(raw.trim())
+      } catch {
+        return undefined
+      }
+      const obligations = Array.isArray(parsed?.obligations) ? parsed.obligations : []
+      if (obligations.length === 0) {
+        return undefined
+      }
+      for (const o of obligations) {
+        if (typeof o?.user_notice === "string" && ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+          try {
+            ctx.ui.notify(o.user_notice, "warning")
+          } catch (err: any) {
+            console.error(`bee settle obligation notify (advisory): ${err?.message ?? err}`)
+          }
+        }
+      }
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      if (activeSessionId) {
+        forcedContinuationSessions.add(activeSessionId)
+      }
+      const existingEntries = Array.isArray(event?.entries) ? event.entries : []
+      const obligationEntries = obligations.map((o: any) => ({
+        type: "custom_message",
+        customType: "bee-obligation",
+        content: o.message,
+        display: true,
+        details: {
+          key: o.key,
+          kind: o.kind,
+          cell: o.cell,
+        },
+      }))
+      return {
+        entries: [...existingEntries, ...obligationEntries],
+        continue: true,
+      }
+    } catch (err: any) {
+      console.error(`bee agent_before_settle (advisory): ${err?.message ?? err}`)
+      return undefined
+    }
+  }) as any)
+
   // ── ADVISORY: the turn-end waiting mark and continuation nudge.
   // `agent_settled` is Pi's own "nothing will continue automatically" signal
   // (docs/extensions.md:569) — the Stop analog, where session-close sets the
@@ -2800,8 +2858,10 @@ export default function (pi: ExtensionAPI) {
     // now — not when `sendUserMessage` returned. A claim still on disk after a
     // crash is reclaimed at the next `session_start`, which is what makes this
     // channel at-least-once rather than at-most-once.
+    const activeSessionId = sessionIdOf(ctx) ?? ""
+    const hadForcedContinuation = forcedContinuationSessions.has(activeSessionId)
+    forcedContinuationSessions.delete(activeSessionId)
     try {
-      const activeSessionId = sessionIdOf(ctx) ?? ""
       promptDepths.delete(activeSessionId)
       selfBusy = false
       turnStartPending = false
@@ -2812,7 +2872,6 @@ export default function (pi: ExtensionAPI) {
     }
 
     try {
-      const activeSessionId = sessionIdOf(ctx)
       if (activeSessionId && pendingRelocationTokens.has(activeSessionId)) {
         const token = pendingRelocationTokens.get(activeSessionId)!
         pendingRelocationTokens.delete(activeSessionId)
@@ -2861,6 +2920,7 @@ export default function (pi: ExtensionAPI) {
         try {
           const parsed = JSON.parse(rawVerdict.trim())
           if (
+            !hadForcedContinuation &&
             parsed &&
             parsed.decision === "block" &&
             typeof parsed.reason === "string" &&
@@ -3394,6 +3454,33 @@ export default function (pi: ExtensionAPI) {
         }
       } catch (err: any) {
         ctx.ui?.notify?.(`Failed to restore tools: ${err?.message ?? err}`, "error")
+      }
+    },
+  })
+
+  pi.registerCommand("bee-obligation-skip", {
+    description: "Skip an obligation by key so it produces no continuation",
+    handler: async (args: string, ctx: any) => {
+      const key = String(args ?? "").trim()
+      if (!key) {
+        if (ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+          ctx.ui.notify("Usage: /bee-obligation-skip <key>", "error")
+        }
+        return
+      }
+      try {
+        const directory = directoryOf(ctx)
+        runAdvisoryHook(directory, "session-close", {
+          hook_event_name: "Stop",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          skip_key: key,
+        })
+        if (ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+          ctx.ui.notify(`Skipped obligation: ${key}`, "info")
+        }
+      } catch (err: any) {
+        console.error(`bee obligation skip (advisory): ${err?.message ?? err}`)
       }
     },
   })
