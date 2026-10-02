@@ -932,4 +932,15 @@ mod tests {
             assert!(subs.contains(&live.to_string()), "{live} is missing: {subs:?}");
         }
     }
+
+    #[test]
+    fn herding_steer_resolves_and_declares_text_required() {
+        let (entry, rest) = resolve(&["herding", "steer"]).expect("herding.steer is in the registry");
+        assert_eq!(entry.invoke, "bee herding steer");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["text".to_string()]);
+        assert!(missing_required(entry, &["--text".to_string(), "hello".to_string()]).is_empty());
+    }
 }
+

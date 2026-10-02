@@ -117,7 +117,7 @@ mod split_lock;
 // The interrupt and cancel verbs (herding-cockpit-completeness D1, D4):
 // interrupt sends Escape and keeps the pane; cancel captures foreground pid,
 // closes the pane, and confirms exit within 5 s. See job_verbs.rs.
-mod job_verbs;
+pub(crate) mod job_verbs;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
@@ -145,6 +145,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "control-loop" => Some(control_loop::control_loop(rest)),
         "interrupt" => Some(job_verbs::interrupt(rest)),
         "cancel" => Some(job_verbs::cancel(rest)),
+        "steer" => Some(job_verbs::steer(rest)),
         _ => None,
     }
 }
