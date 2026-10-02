@@ -13,8 +13,16 @@ use std::process::ExitCode;
 pub const HOOK_NAME: &str = "stage-tools";
 
 pub(crate) const READ_ONLY_TOOLS: [&str; 2] = ["read", "bash"];
-pub(crate) const FULL_TOOL_SET: [&str; 10] = [
+pub(crate) const BASE_TOOL_SET: [&str; 10] = [
     "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
+];
+pub(crate) const FULL_TOOL_SET: [&str; 13] = [
+    "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
+    "bee_dispatch", "bee_advisor", "verdict",
+];
+pub(crate) const LEADER_TOOL_SET: [&str; 11] = [
+    "read", "bash", "find", "grep", "ls", "powershell", "codemode", "tool_search", "bee_dispatch",
+    "bee_advisor", "verdict",
 ];
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
@@ -53,16 +61,31 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 ///
 /// A second hand-kept list here once named only the four open phases and
 /// drifted from the guard, which cost `grooming` its write tools.
-pub(crate) fn allowed_tools_for(phase: &str, gate_approved: bool) -> &'static [&'static str] {
-    if gate_approved {
-        return &FULL_TOOL_SET;
+pub(crate) fn allowed_tools_for(
+    phase: &str,
+    gate_approved: bool,
+    lane: Option<&str>,
+    worker: bool,
+    harness_workflow: bool,
+) -> &'static [&'static str] {
+    let full: &'static [&'static str] = if harness_workflow { &FULL_TOOL_SET } else { &BASE_TOOL_SET };
+    if harness_workflow && worker {
+        return full;
     }
-    let phase = Value::String(phase.to_string());
-    if is_gated_phase(&phase) || !is_known_phase(&phase) {
-        &READ_ONLY_TOOLS
-    } else {
-        &FULL_TOOL_SET
+    if !gate_approved {
+        let phase = Value::String(phase.to_string());
+        if is_gated_phase(&phase) || !is_known_phase(&phase) {
+            return &READ_ONLY_TOOLS;
+        }
+        return full;
     }
+    if harness_workflow
+        && phase == "swarming"
+        && matches!(lane, Some("small" | "standard" | "high-risk"))
+    {
+        return &LEADER_TOOL_SET;
+    }
+    full
 }
 
 fn run_inner(ctx: &HookContext) -> ExitCode {
@@ -108,13 +131,25 @@ fn build_verdict(ctx: &HookContext) -> Option<Value> {
         record.get("approved_gates").and_then(|g| g.get("execution")),
         Some(Value::Bool(true))
     );
-    let allowed = allowed_tools_for(phase, gate_approved);
-    let execution_is_open = allowed == FULL_TOOL_SET;
+    let lane = record
+        .get("route")
+        .and_then(|r| r.get("lane"))
+        .and_then(Value::as_str);
+    let harness_workflow = crate::state::read_config_raw(&store_root_pb).get("pi_harness_workflow")
+        != Some(&Value::Bool(false));
+    let worker = crate::hooks::herding_worker_marker_set();
+    let allowed = allowed_tools_for(phase, gate_approved, lane, worker, harness_workflow);
+    let leads = allowed == LEADER_TOOL_SET;
+    let execution_is_open = allowed != READ_ONLY_TOOLS && !leads;
     let allowed_tools: Vec<String> = allowed.iter().map(|s| s.to_string()).collect();
 
     let stage_name = phase;
     let user_sentence = if execution_is_open {
         format!("bee stage gate: full tool set active for stage \"{stage_name}\".")
+    } else if leads {
+        format!(
+            "bee stage gate: leader tools for stage \"{stage_name}\": edit and write removed, start workers with bee_dispatch. Use /bee-tools-reopen to restore all tools."
+        )
     } else {
         format!(
             "bee stage gate: active tools narrowed for stage \"{stage_name}\" (allowed: {}). Use /bee-tools-reopen to restore all tools.",
@@ -124,6 +159,10 @@ fn build_verdict(ctx: &HookContext) -> Option<Value> {
 
     let model_sentence = if execution_is_open {
         format!("Notice: Full tool set is available for bee stage \"{stage_name}\".")
+    } else if leads {
+        format!(
+            "Notice: You lead bee stage \"{stage_name}\": edit and write are removed. Dispatch each cell to a worker with bee_dispatch; do not write source inline or fall back to bash redirection. If you require these tools, ask the user to run /bee-tools-reopen."
+        )
     } else {
         format!(
             "Notice: Tools narrowed by bee stage policy for stage \"{stage_name}\": off-stage tools removed. Do not attempt to use them or fall back to bash redirection. If you require these tools, ask the user to run /bee-tools-reopen."
@@ -198,7 +237,7 @@ mod tests {
     #[test]
     fn stage_tools_matches_the_write_guards_phase_table() {
         for (phase, expect_narrow) in EXPECTED_WITHOUT_GATE {
-            let allowed = allowed_tools_for(phase, false);
+            let allowed = allowed_tools_for(phase, false, None, false, true);
             assert_eq!(
                 allowed == READ_ONLY_TOOLS,
                 expect_narrow,
@@ -224,7 +263,7 @@ mod tests {
     fn stage_tools_opens_every_phase_once_the_execution_gate_is_approved() {
         for phase in KNOWN_PHASES {
             assert_eq!(
-                allowed_tools_for(phase, true),
+                allowed_tools_for(phase, true, None, false, true),
                 FULL_TOOL_SET,
                 "phase {phase:?} with an approved execution gate must carry the full tool set"
             );
@@ -234,7 +273,7 @@ mod tests {
     #[test]
     fn stage_tools_keeps_pi_codemode_and_tool_search_once_writes_are_allowed() {
         for (phase, gate) in [("planning", true), ("swarming", false), ("grooming", false)] {
-            let allowed = allowed_tools_for(phase, gate);
+            let allowed = allowed_tools_for(phase, gate, None, false, true);
             for tool in ["codemode", "tool_search"] {
                 assert!(allowed.contains(&tool), "{phase:?} gate={gate} must keep {tool:?}");
             }
@@ -248,14 +287,15 @@ mod tests {
         // write_guard/checks.rs refuses EVERY write under an unrecognized phase
         // ("bee phase guard: phase ... is not a recognized phase"). Handing the
         // model write tools there spends its turns on calls that always deny.
-        assert_eq!(allowed_tools_for("wayfinding", false), READ_ONLY_TOOLS);
-        assert_eq!(allowed_tools_for("", false), READ_ONLY_TOOLS);
+        assert_eq!(allowed_tools_for("wayfinding", false, None, false, true), READ_ONLY_TOOLS);
+        assert_eq!(allowed_tools_for("", false, None, false, true), READ_ONLY_TOOLS);
     }
 
     #[test]
     fn stage_tools_reads_the_execution_gate_out_of_the_state_record() {
         // Guards the JSON path itself: a wrong key name here would leave every
         // phase narrowed and no table test would notice.
+        let _env = crate::hooks::herding_env_lock();
         let dir = setup_bee_repo();
         let state_path = dir.path().join(".bee").join("state.json");
         let stdin = json!({"cwd": dir.path().to_str().unwrap()}).to_string();
@@ -287,6 +327,7 @@ mod tests {
         // belt builds its own user and model sentences, so the four message
         // keys below have no reader today; they stay because the payload is
         // published, and this test states plainly which are load-bearing.
+        let _env = crate::hooks::herding_env_lock();
         let dir = setup_bee_repo();
         std::fs::write(
             dir.path().join(".bee").join("state.json"),
@@ -307,6 +348,99 @@ mod tests {
         for key in ["user_message", "user_notice", "model_message", "model_notice"] {
             assert!(verdict.get(key).is_some(), "missing key {key:?}");
         }
+    }
+
+    const LEADER_LANES: [&str; 3] = ["small", "standard", "high-risk"];
+
+    #[test]
+    fn stage_tools_full_set_names_every_tool_bee_registers() {
+        for tool in ["bee_dispatch", "bee_advisor", "verdict"] {
+            assert!(FULL_TOOL_SET.contains(&tool), "full set must keep {tool:?}");
+        }
+        assert_eq!(READ_ONLY_TOOLS, ["read", "bash"]);
+    }
+
+    #[test]
+    fn stage_tools_hands_a_leader_dispatch_instead_of_edit_and_write() {
+        let expected: Vec<&str> = FULL_TOOL_SET
+            .iter()
+            .copied()
+            .filter(|t| *t != "edit" && *t != "write")
+            .collect();
+        for lane in LEADER_LANES {
+            let allowed = allowed_tools_for("swarming", true, Some(lane), false, true);
+            assert_eq!(allowed, expected.as_slice(), "lane {lane:?}");
+            for tool in ["bee_dispatch", "bee_advisor"] {
+                assert!(allowed.contains(&tool), "lane {lane:?} must carry {tool:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn stage_tools_gives_a_worker_session_the_full_set_with_verdict() {
+        for lane in LEADER_LANES {
+            let allowed = allowed_tools_for("swarming", true, Some(lane), true, true);
+            assert_eq!(allowed, FULL_TOOL_SET, "lane {lane:?}");
+            assert!(allowed.contains(&"verdict"));
+        }
+    }
+
+    #[test]
+    fn stage_tools_keeps_the_full_set_off_the_leader_lanes_and_phase() {
+        for lane in [Some("tiny"), Some("docs"), Some("spike"), Some(""), None] {
+            assert_eq!(allowed_tools_for("swarming", true, lane, false, true), FULL_TOOL_SET, "lane {lane:?}");
+        }
+        for phase in ["reviewing", "scribing", "compounding", "grooming", "idle"] {
+            assert_eq!(allowed_tools_for(phase, true, Some("small"), false, true), FULL_TOOL_SET, "phase {phase:?}");
+        }
+        assert_eq!(allowed_tools_for("swarming", false, Some("small"), false, true), FULL_TOOL_SET);
+    }
+
+    #[test]
+    fn stage_tools_keeps_the_gated_phases_on_read_and_bash() {
+        for phase in ["exploring", "planning"] {
+            for lane in [Some("tiny"), Some("small"), None] {
+                assert_eq!(allowed_tools_for(phase, false, lane, false, true), READ_ONLY_TOOLS, "{phase:?} {lane:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn stage_tools_restores_todays_answer_when_the_harness_workflow_is_off() {
+        assert_eq!(allowed_tools_for("swarming", true, Some("small"), false, false), BASE_TOOL_SET);
+        assert_eq!(allowed_tools_for("swarming", true, Some("small"), true, false), BASE_TOOL_SET);
+        assert_eq!(allowed_tools_for("grooming", false, None, false, false), BASE_TOOL_SET);
+        assert_eq!(allowed_tools_for("planning", false, Some("small"), false, false), READ_ONLY_TOOLS);
+    }
+
+    #[test]
+    fn stage_tools_reads_lane_and_harness_switch_into_the_leader_verdict() {
+        let _env = crate::hooks::herding_env_lock();
+        let dir = setup_bee_repo();
+        std::fs::write(
+            dir.path().join(".bee").join("state.json"),
+            r#"{"phase": "swarming", "route": {"lane": "small"}, "approved_gates": {"execution": true}}"#,
+        )
+        .expect("write state.json");
+        let stdin = json!({"cwd": dir.path().to_str().unwrap()}).to_string();
+
+        let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
+        let verdict = build_verdict(&ctx).expect("verdict");
+        assert_eq!(verdict["allowed_tools"], json!(LEADER_TOOL_SET));
+        for key in ["user_message", "model_message"] {
+            let text = verdict[key].as_str().expect("sentence");
+            assert!(text.contains("bee_dispatch"), "{key} must name bee_dispatch: {text}");
+            assert!(text.contains("/bee-tools-reopen"), "{key} must name /bee-tools-reopen: {text}");
+        }
+
+        std::fs::write(
+            dir.path().join(".bee").join("config.json"),
+            r#"{"pi_harness_workflow": false}"#,
+        )
+        .expect("write config.json");
+        let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
+        let verdict = build_verdict(&ctx).expect("verdict");
+        assert_eq!(verdict["allowed_tools"], json!(BASE_TOOL_SET));
     }
 
     #[test]
