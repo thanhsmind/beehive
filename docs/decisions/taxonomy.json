@@ -625,6 +625,9 @@
     "named-defaults",
     "live-run",
     "contract:pi-settle-obligations",
-    "contract:pi-settle-continuation"
+    "contract:pi-settle-continuation",
+    "contract:herding-steer",
+    "contract:pi-worker-steer-drain",
+    "contract:pi-scope-input"
   ]
 }
