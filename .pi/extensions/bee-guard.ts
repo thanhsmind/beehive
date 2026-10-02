@@ -323,7 +323,7 @@ function runAdvisoryHook(
 // ─── tool -> hook mapping (the only "rule" in this file) ───────────────────
 
 type MappedCall = {
-  hook: "write-guard"
+  hook: "write-guard" | null
   tool_name: string
   tool_input: Record<string, unknown>
   /** true only when tool_input is the caller's own input forwarded verbatim —
@@ -497,6 +497,10 @@ function mapToolCall(tool: string, input: any): MappedCall {
         tool_input: args,
         passthrough: false,
       }
+
+    case "codemode":
+    case "tool_search":
+      return { hook: null, tool_name: tool, tool_input: args, passthrough: false }
 
     default: {
       // FAIL-SAFE. Never a silent allow: bee decides, on the write-capable
@@ -2446,6 +2450,7 @@ export default function (pi: ExtensionAPI) {
     if (!beeStorePresent(directory)) return undefined
 
     const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
+    if (mapped.hook === null) return undefined
     return runBlockingHook(
       directory,
       mapped.hook,

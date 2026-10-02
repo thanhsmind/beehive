@@ -183,7 +183,11 @@ fn pi_tool_hook_pairs() -> Vec<(String, String)> {
             .find('"')
             .expect(".pi/extensions/bee-guard.ts: unterminated `case \"...\"` tool literal");
         pending.push(seg[..tool_end].to_string());
-        if let Some(h) = seg.find("hook: \"") {
+        if seg.find("hook: null").is_some_and(|n| seg.find("hook: \"").is_none_or(|h| n < h)) {
+            for tool in pending.drain(..) {
+                pairs.push((tool, "none".to_string()));
+            }
+        } else if let Some(h) = seg.find("hook: \"") {
             let rest = &seg[h + "hook: \"".len()..];
             let hend = rest
                 .find('"')
@@ -1984,8 +1988,11 @@ fn every_enumerated_builtin_routes_to_the_write_guard_and_has_a_field_shape_fixt
             ));
         }
     }
+    let unguarded: BTreeSet<&str> =
+        pairs.iter().filter(|(_, h)| h == "none").map(|(t, _)| t.as_str()).collect();
+    assert_eq!(unguarded, BTreeSet::from(["codemode", "tool_search"]), "derived routes: {pairs:?}");
     for (tool, hook) in &pairs {
-        if hook != "write-guard" {
+        if hook != "write-guard" && hook != "none" {
             gaps.push(format!(
                 "{tool} -> {hook}: the Pi belt's only BLOCKING destination is write-guard \
                  (model-guard is a NAMED EXCLUSION — Pi has no subagent surface, store 7f9c8518)"
@@ -7225,6 +7232,79 @@ fn pre_gate_main_write_pi_extension_blocks_early_source_writes() {
         &json!({"path": "src/app.js", "content": "console.log(3);"}),
     )]);
     assert!(!run_docs.results[0].blocked(), "Pi write during docs lane must pass");
+}
+
+#[cfg(unix)]
+#[test]
+fn codemode_and_tool_search_pass_the_outer_guard_while_nested_writes_stay_guarded() {
+    node_or_skip!("codemode_and_tool_search_pass_the_outer_guard_while_nested_writes_stay_guarded");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_real_bee(dir.path());
+    let status = Command::new("git").args(["init", "-q"]).current_dir(dir.path()).status();
+    if !status.map(|s| s.success()).unwrap_or(false) {
+        return;
+    }
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        serde_json::to_string_pretty(&json!({
+            "phase": "planning",
+            "mode": "standard",
+            "feature": "demo",
+            "route": { "class": "feature", "lane": "standard", "flags": [], "product_files": 2, "rationale": null },
+            "approved_gates": { "context": true, "shape": true, "execution": false, "review": false }
+        }))
+        .unwrap()
+            + "\n",
+    )
+    .expect("write state.json");
+
+    const SESSION_ID: &str = "sess-pi-codemode";
+    let run = run_harness(
+        &harness,
+        vec![
+            tool_call(dir.path(), SESSION_ID, "codemode", &json!({"code": "await tools.write({path: \"src/app.js\", content: \"x\"})"})),
+            tool_call(dir.path(), SESSION_ID, "tool_search", &json!({"query": "write files"})),
+            tool_call(dir.path(), SESSION_ID, "write", &json!({"path": "src/app.js", "content": "x"})),
+            tool_call(dir.path(), SESSION_ID, "bash", &json!({"command": "echo x > src/app.js"})),
+            tool_call(dir.path(), SESSION_ID, "mystery_tool", &json!({"opaque": 1})),
+        ],
+    );
+    assert_eq!(run.results.len(), 5, "{:?}", run.results);
+    assert!(!run.results[0].blocked(), "outer codemode must pass: {:?}", run.results[0]);
+    assert!(!run.results[1].blocked(), "tool_search must pass: {:?}", run.results[1]);
+    assert!(run.results[2].blocked(), "nested write before the gate must deny: {:?}", run.results[2]);
+    assert!(run.results[3].blocked(), "nested bash redirect before the gate must deny: {:?}", run.results[3]);
+    assert!(run.results[4].blocked(), "unknown tool with no path must deny: {:?}", run.results[4]);
+
+    std::fs::write(
+        dir.path().join(".bee").join("state.json"),
+        r#"{"phase": "planning", "approved_gates": {"execution": true}}"#,
+    )
+    .expect("write state.json");
+    let tools = json!(["read", "bash", "write", "edit", "grep", "find", "ls", "codemode", "tool_search"]);
+    let run = run_harness_spec(
+        &harness,
+        json!({
+            "initial_tools": tools,
+            "all_tools": tools,
+            "calls": [json!({
+                "event": "turn_start",
+                "event_arg": { "turnIndex": 1 },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": SESSION_ID,
+            })],
+        }),
+    );
+    for tool in ["codemode", "tool_search"] {
+        assert!(
+            run.active_tools.iter().any(|t| t == tool),
+            "{tool} must stay active after gate approval: {:?}",
+            run.active_tools_history
+        );
+    }
 }
 
 /// D1, D2, D3, D4, D5, D6, D8 / pihp-7 / pfp-2: Drive the complete Pi lifecycle path against a throwaway onboarded repo:

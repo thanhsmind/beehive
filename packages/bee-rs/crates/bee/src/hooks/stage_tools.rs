@@ -13,8 +13,8 @@ use std::process::ExitCode;
 pub const HOOK_NAME: &str = "stage-tools";
 
 pub(crate) const READ_ONLY_TOOLS: [&str; 2] = ["read", "bash"];
-pub(crate) const FULL_TOOL_SET: [&str; 8] = [
-    "read", "bash", "edit", "write", "find", "grep", "ls", "powershell",
+pub(crate) const FULL_TOOL_SET: [&str; 10] = [
+    "read", "bash", "edit", "write", "find", "grep", "ls", "powershell", "codemode", "tool_search",
 ];
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
@@ -229,6 +229,18 @@ mod tests {
                 "phase {phase:?} with an approved execution gate must carry the full tool set"
             );
         }
+    }
+
+    #[test]
+    fn stage_tools_keeps_pi_codemode_and_tool_search_once_writes_are_allowed() {
+        for (phase, gate) in [("planning", true), ("swarming", false), ("grooming", false)] {
+            let allowed = allowed_tools_for(phase, gate);
+            for tool in ["codemode", "tool_search"] {
+                assert!(allowed.contains(&tool), "{phase:?} gate={gate} must keep {tool:?}");
+            }
+        }
+        assert!(!READ_ONLY_TOOLS.contains(&"codemode"));
+        assert!(!READ_ONLY_TOOLS.contains(&"tool_search"));
     }
 
     #[test]
