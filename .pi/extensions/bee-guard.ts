@@ -79,8 +79,8 @@
 // FLOOR: Pi 0.84.4. This belt registers `ui_prompt_start` and `ui_prompt_end`
 // (rows 6 and 1 above), and Pi added both events in 0.84.4, so the belt cannot
 // run on 0.84.3.
-// CEILING: none proven. 0.85.1 is the newest Pi a bee workflow has been driven
-// end to end on (.bee/verify/verify-app/features/pi-hat-wave.md).
+// CEILING: Pi 1.0.0, proven by live run 20261002-135348-2965648, a bee workflow
+// driven end to end on it (.bee/verify/verify-app/features/pi-hat-wave.md).
 //
 // A version named anywhere else in this file records which Pi docs or binary
 // were READ for the fact beside it. That is a different claim from the range
@@ -323,7 +323,7 @@ function runAdvisoryHook(
 // ─── tool -> hook mapping (the only "rule" in this file) ───────────────────
 
 type MappedCall = {
-  hook: "write-guard"
+  hook: "write-guard" | null
   tool_name: string
   tool_input: Record<string, unknown>
   /** true only when tool_input is the caller's own input forwarded verbatim —
@@ -347,9 +347,9 @@ type MappedCall = {
  * Kept as a NAMED LIST, not a switch default, because the fail-safe below
  * depends on knowing exactly which names are enumerated.
  *
- * Re-verified 2026-09-18 against Pi 0.85.1: `docs/settings.md` carries the
- * identical sentence and the identical eight names, and no changelog entry
- * between 0.84.3 and 0.85.1 adds or removes a built-in. The list is still
+ * Re-verified 2026-10-02 against Pi 1.0.0: `docs/settings.md` carries the
+ * identical eight names, and no changelog entry between 0.84.3 and 1.0.0
+ * adds or removes a built-in. The list is still
  * complete at the ceiling named in the header. */
 const PI_BUILTIN_TOOLS = [
   "bash",
@@ -497,6 +497,10 @@ function mapToolCall(tool: string, input: any): MappedCall {
         tool_input: args,
         passthrough: false,
       }
+
+    case "codemode":
+    case "tool_search":
+      return { hook: null, tool_name: tool, tool_input: args, passthrough: false }
 
     default: {
       // FAIL-SAFE. Never a silent allow: bee decides, on the write-capable
@@ -2446,6 +2450,7 @@ export default function (pi: ExtensionAPI) {
     if (!beeStorePresent(directory)) return undefined
 
     const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
+    if (mapped.hook === null) return undefined
     return runBlockingHook(
       directory,
       mapped.hook,
