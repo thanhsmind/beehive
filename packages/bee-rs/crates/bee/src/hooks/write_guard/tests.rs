@@ -6006,3 +6006,130 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("z.rs:added line 2"), "{}", e.stderr);
         assert!(e.stderr.contains("(\"// why z exists\")"), "{}", e.stderr);
     }
+
+    fn pi_lock_fixture(lane: &str, harness_workflow: Option<bool>) -> Fx {
+        let fx = build_fixture("swarming", true);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": "feature", "lane": lane });
+        write_state(&fx.root, &st);
+        if let Some(on) = harness_workflow {
+            std::fs::write(
+                fx.root.join(".bee").join("config.json"),
+                format!("{}\n", json!({ "pi_harness_workflow": on })),
+            )
+            .unwrap();
+        }
+        fx
+    }
+
+    fn pi(mut payload: Value) -> Value {
+        payload["bee_runtime"] = json!("pi");
+        payload
+    }
+
+    fn with_worker_env<T>(value: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior = std::env::var("BEE_HERDING_WORKER").ok();
+        match value {
+            // SAFETY: `herding_env_lock` serializes every test that touches this var.
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            // SAFETY: see above.
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+        let out = f();
+        match prior {
+            // SAFETY: see above.
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            // SAFETY: see above.
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+        out
+    }
+
+    fn pi_lock_run(fx: &Fx, payload: Value, worker: Option<&str>) -> Emit {
+        with_worker_env(worker, || expect_done(payload, &fx.root))
+    }
+
+    #[test]
+    fn pi_leader_source_write_on_a_small_lane_is_refused_naming_the_dispatch_and_reopen_paths() {
+        let fx = pi_lock_fixture("small", None);
+        let e = pi_lock_run(&fx, pi(edit("src/app.rs")), None);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee_dispatch"), "{}", e.stderr);
+        assert!(e.stderr.contains("/bee-tools-reopen"), "{}", e.stderr);
+        for lane in ["standard", "high-risk"] {
+            let fx = pi_lock_fixture(lane, Some(true));
+            assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 2, "{lane}");
+        }
+    }
+
+    #[test]
+    fn pi_leader_bash_herding_run_is_refused() {
+        let fx = pi_lock_fixture("small", None);
+        for cmd in [
+            "bee herding run --role code --cell x",
+            ".bee/bin/bee herding run --role code",
+            "cd x && BEE_X=1 bee herding run",
+        ] {
+            let e = pi_lock_run(&fx, pi(bash(cmd)), None);
+            assert_eq!(e.code, 2, "{cmd}: {}", e.stderr);
+            assert!(e.stderr.contains("bee_dispatch"), "{}", e.stderr);
+        }
+        assert_eq!(pi_lock_run(&fx, pi(bash("bee herding status")), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, pi(bash("git status")), None).code, 0);
+    }
+
+    #[test]
+    fn pi_worker_session_on_the_same_record_may_write() {
+        let fx = pi_lock_fixture("small", None);
+        let e = pi_lock_run(&fx, pi(edit("src/app.rs")), Some("1"));
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = pi_lock_run(&fx, pi(bash("bee herding run --role code")), Some("1"));
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn pi_leader_on_lanes_tiny_docs_and_spike_may_write() {
+        for lane in ["tiny", "docs", "spike"] {
+            let fx = pi_lock_fixture(lane, None);
+            let e = pi_lock_run(&fx, pi(edit("src/app.rs")), None);
+            assert_eq!(e.code, 0, "{lane}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn non_pi_payload_is_unchanged_by_the_pi_leader_lock() {
+        let fx = pi_lock_fixture("small", None);
+        assert_eq!(pi_lock_run(&fx, edit("src/app.rs"), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, bash("bee herding run --role code"), None).code, 0);
+        let mut claude = edit("src/app.rs");
+        claude["bee_runtime"] = json!("claude");
+        assert_eq!(pi_lock_run(&fx, claude, None).code, 0);
+    }
+
+    #[test]
+    fn pi_leader_with_tools_reopened_may_write() {
+        let fx = pi_lock_fixture("small", None);
+        let mut payload = pi(edit("src/app.rs"));
+        payload["tools_reopened"] = json!(true);
+        let e = pi_lock_run(&fx, payload, None);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn pi_harness_workflow_false_restores_the_leader_write() {
+        let fx = pi_lock_fixture("small", Some(false));
+        assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 0);
+        assert_eq!(pi_lock_run(&fx, pi(bash("bee herding run --role code")), None).code, 0);
+    }
+
+    #[test]
+    fn pi_leader_lock_holds_only_in_an_approved_swarming_phase_and_for_source_paths() {
+        let fx = pi_lock_fixture("small", None);
+        assert_eq!(pi_lock_run(&fx, pi(edit("docs/history/demo/notes.md")), None).code, 0);
+        let mut st = swarming_state(true);
+        st["route"] = json!({ "class": "feature", "lane": "small" });
+        st["phase"] = json!("reviewing");
+        write_state(&fx.root, &st);
+        assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 0);
+    }

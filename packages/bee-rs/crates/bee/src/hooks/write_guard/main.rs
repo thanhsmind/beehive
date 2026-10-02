@@ -794,7 +794,8 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if denial.is_none() && !rel_paths.is_empty() {
+        let pi_leader = is_pi_leader(payload);
+        if denial.is_none() && (!rel_paths.is_empty() || pi_leader) {
             // The worktree-first guard must judge the same ACTING record
             // every other write check already resolved (resolve_write_record:
             // the lane record for a lane-bound session, the default state
@@ -816,15 +817,22 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             if let RecordResolution::Ok { record, .. } =
                 resolve_write_record(&topo.control_root, &state, session_id.as_deref(), &mut emit)?
             {
-                if let Some(reason) = check_worktree_first(
-                    ctx.worktree_resolution,
-                    &root,
-                    &store_root_pb,
-                    &record,
-                    &rel_paths,
-                    session_id.as_deref(),
-                )? {
-                    denial = Some(reason);
+                if !rel_paths.is_empty() {
+                    denial = check_worktree_first(
+                        ctx.worktree_resolution,
+                        &root,
+                        &store_root_pb,
+                        &record,
+                        &rel_paths,
+                        session_id.as_deref(),
+                    )?;
+                }
+                if denial.is_none() && pi_leader {
+                    let command = match first_truthy(&tool_input, &["command", "cmd"]) {
+                        Some(Value::String(s)) if is_shell => s.as_str(),
+                        _ => "",
+                    };
+                    denial = check_pi_leader_write_lock(&store_root_pb, &record, &rel_paths, command)?;
                 }
             }
         }
