@@ -369,7 +369,7 @@ of help — the registry is the only home for that text.
 
 **Pi result drain reads only result file headers, never run envelope keys.** The
 Pi extension's result drain (`renderResultInjection` in
-`.pi/extensions/bee-guard.ts:729-743`) parses only `{job_id, cell_id, status,
+`.pi/extensions/bee-guard/` module `result-inbox.ts`, entry `index.ts`) parses only `{job_id, cell_id, status,
 summary, proof, report_path}` from the worker's mailbox `result-N.json`. The new
 envelope keys added by `bee herding run` (`retryable`, `git`) belong to the CLI
 output envelope, not `result-N.json`. They never reach the Pi injection header,

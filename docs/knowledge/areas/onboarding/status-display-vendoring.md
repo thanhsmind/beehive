@@ -34,7 +34,7 @@ that resolves none simply renders the first line without the token/cost line.
 | status-display script | The script that renders the assistant's per-session status line. It draws the session facts itself and asks `bee dev statusline` for the optional token/cost line. The canonical copy lives with bee's source; each managed project holds a vendored copy. |
 | absent status entry | The project's assistant-settings file is missing or contains no `statusLine` key. This is the trigger for the default install. |
 | project-level status entry | The project's assistant-settings file declares a status-display command that points at the **project's own** copy of the display script — either anchored by the project-directory variable or written as a bare project-relative path. A reference to a user-level (home-directory) copy is NOT a project-level entry. |
-| managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record whenever the project-level entry is present, so later runs can tell current from drifted. Projects without a project-level entry carry no such record. |
+| managed status-display record | A fingerprint per vendored file, stored in the project's onboarding record whenever the project-level entry is present, so each following run can tell current from drifted. Projects without a project-level entry carry no such record. |
 | active-branch model usage | New and cached token totals for each provider/model pair on the current session branch. New tokens include input, output, and cache-write tokens. Cached tokens include cache-read tokens. |
 
 ## Behaviors & Operations
@@ -236,6 +236,6 @@ All Rust paths below are relative to `packages/bee-rs/crates/bee/`.
   (`codex_user_config_path()`, `codex_statusline_missing()`,
   `codex_statusline_next_text()`), `src/onboard/plan.rs:679-680` (the
   `ensure_codex_statusline` action — `~/.codex/config.toml`, never repoRoot-joined).
-- Pi active-branch status: `.pi/extensions/bee-guard.ts` owns aggregation and
+- Pi active-branch status: `.pi/extensions/bee-guard/` (module `model-usage.ts`, entry `index.ts`) owns aggregation and
   lifecycle refresh. `tests/pi_plugin_contracts.rs` drives the real extension
   through restore, completed-turn, branch-change, and empty-branch cases.

@@ -1,0 +1,33 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "build.rs generates the bee-guard file list from the folder",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/build.rs reads .pi/extensions/bee-guard, keeps .ts files, sorts by name, writes PI_GUARD_FILES of (name, include_str!(abs path)) into OUT_DIR/pi_guard_files.rs, and prints rerun-if-changed for the folder. No hand-kept list exists in Rust."
+    },
+    {
+      "id": "doctor fails the wiring row naming the file when one module file differs or is missing",
+      "status": "PASS",
+      "evidence": "doctor.rs pushes a module name into `mismatched` on a byte difference or NotFound, and reports `<count> file(s) in .pi/extensions/bee-guard/ differ ... (<first 3>) — run bee onboard --apply to refresh`; doctor/tests.rs adds the drift and missing cases."
+    },
+    {
+      "id": "doctor flags unshipped .ts files in the host folder",
+      "status": "PASS",
+      "evidence": "doctor.rs walks the host folder and adds any .ts name that PI_GUARD_FILES does not hold."
+    },
+    {
+      "id": "the legacy single-file failure from pes-1 stays",
+      "status": "PASS",
+      "evidence": "the legacy check landed in ebd9ddc9c is untouched by 16e5836e8; doctor:: tests for it still pass."
+    },
+    {
+      "id": "proof",
+      "status": "PASS",
+      "evidence": "cargo test --release -p bee --bin bee doctor:: green; the full declared suite on 16e5836e8: main bin 3909 passed, 20 ignored, pi_plugin_contracts 104, opencode_plugin_contracts 8, no failures."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

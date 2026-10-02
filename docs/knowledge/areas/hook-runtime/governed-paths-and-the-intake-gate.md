@@ -546,7 +546,7 @@ permitted write is the commoner one.
   `packages/bee-rs/crates/bee/src/hooks/stage_tools.rs`, which calls
   `write_guard::is_gated_phase` and `write_guard::is_known_phase` rather than
   naming phases itself; the belt side is the `turn_start` handler in
-  `.pi/extensions/bee-guard.ts`. The tests import `write_guard::KNOWN_PHASES`
+  `.pi/extensions/bee-guard/` (`events.ts`, entry `index.ts`). The tests import `write_guard::KNOWN_PHASES`
   so a phase added to the guard and not to the tool table fails
   `stage_tools_table_covers_every_phase_the_write_guard_knows`.
 

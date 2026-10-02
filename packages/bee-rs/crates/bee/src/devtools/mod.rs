@@ -534,7 +534,7 @@ mod tests {
 /// refused — but always answer None: hook_manifests::Runtime carries a NAMED
 /// exclusion for both (see that enum's doc comment), because their hook belts
 /// are checked-in TypeScript — `.opencode/plugins/bee-guard.ts` and
-/// `.pi/extensions/bee-guard.ts` — not rendered JSON manifests this function
+/// `.pi/extensions/bee-guard/` — not rendered JSON manifests this function
 /// could produce. A caller (e.g. `doctor`) reads None the same way it already
 /// does for any runtime with nothing to byte-compare.
 pub fn render_projection_text_for(runtime: &str) -> Option<String> {

@@ -240,7 +240,7 @@ guess.
   The no-activity-on-child rule is unchanged. Parent `Stop` sets `waiting_on` to `turn-end`
   in `.bee/state.json` (requiring a persisted transcript) and marks activity `idle`; child
   `SubagentStop` is isolated so child completion does not alter the parent's idle state.
-- In the shipped Pi extension (`.pi/extensions/bee-guard.ts`), `hook activity` is
+- In the shipped Pi extension folder (`.pi/extensions/bee-guard/`, entry `index.ts`, event handlers in `events.ts`), `hook activity` is
   wired on `before_agent_start` (`UserPromptSubmit`), `tool_execution_start`
   (`PreToolUse`), `tool_result` (`PostToolUse` / `PostToolUseFailure`),
   `ui_prompt_start` (`Notification` with `notification_type: agent_needs_input`),

@@ -44,7 +44,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const ATTEST_REL: &str = ".bee/doctor-attest.json";
-const PI_EXTENSION_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
+include!(concat!(env!("OUT_DIR"), "/pi_guard_files.rs"));
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Runtime {
@@ -74,7 +74,7 @@ impl Runtime {
         match self {
             Runtime::Claude => ".claude/settings.json",
             Runtime::Codex => ".codex/hooks.json",
-            Runtime::Pi => ".pi/extensions/bee-guard.ts",
+            Runtime::Pi => ".pi/extensions/bee-guard/index.ts",
         }
     }
     fn skills_rel(self) -> &'static str {
@@ -300,31 +300,99 @@ fn mechanical_rows_with_env(
             }
         }
         Runtime::Pi => {
-            let extension_match = match hooks_bytes.as_ref() {
-                Some(on_disk) => {
-                    let same = on_disk.as_slice() == PI_EXTENSION_SOURCE.as_bytes();
-                    Row {
-                        key: "wiring_matches_binary",
-                        ok: Some(same),
-                        detail: if same {
-                            ".pi/extensions/bee-guard.ts is byte-identical to what this bee embeds".to_string()
-                        } else {
-                            ".pi/extensions/bee-guard.ts differs from what this bee embeds — re-run the installer to refresh it".to_string()
-                        },
+            let legacy_path = root.join(".pi/extensions/bee-guard.ts");
+            let extension_match = if legacy_path.exists() {
+                Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "legacy .pi/extensions/bee-guard.ts is present — run `bee onboard --apply` to migrate to .pi/extensions/bee-guard/".to_string(),
+                }
+            } else {
+                let guard_dir = root.join(".pi/extensions/bee-guard");
+                let mut unreadable: Option<String> = None;
+                let mut mismatched: Vec<String> = Vec::new();
+
+                for (name, expected_content) in PI_GUARD_FILES {
+                    let path = guard_dir.join(name);
+                    match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            if bytes.as_slice() != expected_content.as_bytes() {
+                                mismatched.push((*name).to_string());
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            mismatched.push((*name).to_string());
+                        }
+                        Err(e) => {
+                            if unreadable.is_none() {
+                                unreadable = Some(format!(
+                                    ".pi/extensions/bee-guard/{name} cannot be read to compare ({e})"
+                                ));
+                            }
+                        }
                     }
                 }
-                None => match hooks_ok {
-                    Some(false) => Row {
-                        key: "wiring_matches_binary",
-                        ok: Some(false),
-                        detail: "no .pi/extensions/bee-guard.ts to compare".to_string(),
-                    },
-                    _ => Row {
+
+                match std::fs::read_dir(&guard_dir) {
+                    Ok(read_dir) => {
+                        for entry in read_dir.flatten() {
+                            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
+                            if is_file {
+                                let name = entry.file_name().to_string_lossy().to_string();
+                                if name.ends_with(".ts")
+                                    && !PI_GUARD_FILES.iter().any(|(n, _)| *n == name)
+                                {
+                                    mismatched.push(name);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        if unreadable.is_none() {
+                            unreadable = Some(format!(
+                                ".pi/extensions/bee-guard cannot be read to compare ({e})"
+                            ));
+                        }
+                    }
+                }
+
+                if let Some(detail) = unreadable {
+                    Row {
                         key: "wiring_matches_binary",
                         ok: None,
-                        detail: ".pi/extensions/bee-guard.ts cannot be read to compare".to_string(),
-                    },
-                },
+                        detail,
+                    }
+                } else {
+                    mismatched.sort();
+                    mismatched.dedup();
+                    if mismatched.is_empty() {
+                        Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(true),
+                            detail: format!(
+                                ".pi/extensions/bee-guard/ ({} files) is byte-identical to what this bee embeds",
+                                PI_GUARD_FILES.len()
+                            ),
+                        }
+                    } else {
+                        let count = mismatched.len();
+                        let preview = if count > 3 {
+                            format!("{}, ...", mismatched[..3].join(", "))
+                        } else {
+                            mismatched.join(", ")
+                        };
+                        let file_str = if count == 1 { "file" } else { "files" };
+                        let verb_str = if count == 1 { "differs" } else { "differ" };
+                        Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(false),
+                            detail: format!(
+                                "{count} {file_str} in .pi/extensions/bee-guard/ {verb_str} from what this bee embeds ({preview}) — run `bee onboard --apply` to refresh"
+                            ),
+                        }
+                    }
+                }
             };
             rows.push(extension_match);
 

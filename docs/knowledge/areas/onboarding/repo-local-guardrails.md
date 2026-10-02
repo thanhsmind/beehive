@@ -127,11 +127,27 @@ asymmetry named above for the second runtime does not repeat here
   longer be resolved — the same fresh-diff discipline R27 already applies to
   a retired library module, so a helper never lingers on disk advertising a
   dispatch that would no longer resolve (opencode-support oc-14).
+- **The fourth runtime's guard is a folder, vendored as a folder.** The Pi
+  guard ships as `.pi/extensions/bee-guard/` (entry `index.ts`, one module per
+  concern). Onboard copies every `.ts` file of that folder when it is missing
+  or drifted. When the source ships the folder, onboard first removes a legacy
+  `.pi/extensions/bee-guard.ts`, before any copy, because Pi loads top-level
+  files and folder entries alike and would register the guard twice. It then
+  removes host `.ts` files in the folder that bee no longer ships. Non-`.ts`
+  files, symlinks and any path outside the folder are never removed. An empty
+  source plans no removal at all, so an old install is never stripped with
+  nothing to replace it. The doctor's Pi wiring row checks every module byte
+  for byte and names `bee onboard --apply` as the fix (pi-extension-split
+  D3, D4, D6; module map in
+  `docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md`).
 
 ## Edge Cases Settled
 
 - A local guardrail file deleted or corrupted in a project that opted in → the
   next plain run restores it from source. Nothing else in the project is touched.
+- A host that still carries `.pi/extensions/bee-guard.ts` after an upgrade →
+  the doctor row fails until onboard runs; onboard removes the file before it
+  writes the folder (pi-extension-split D3, D6).
 
 ## Open Gaps
 
@@ -162,3 +178,9 @@ asymmetry named above for the second runtime does not repeat here
   `.opencode/agent/bee-{build,gather,extract,review}.md`. Evidence:
   `.bee/cells/archive/opencode-support/oc-11.json`, `.bee/cells/archive/opencode-support/oc-13.json`,
   `docs/history/opencode-support/discovery.md`.
+- Fourth-runtime vendoring: `packages/bee-rs/crates/bee/src/onboard/plan.rs`
+  (`list_pi_extension_files`, the ordered `remove_pi_extension` /
+  `copy_pi_extension` plan step), `packages/bee-rs/crates/bee/src/onboard/apply.rs`
+  (`remove_pi_extension_admissible`), `packages/bee-rs/crates/bee/build.rs`
+  (generated `PI_GUARD_FILES`), `packages/bee-rs/crates/bee/src/doctor.rs`
+  (Pi `wiring_matches_binary` row). Evidence: `docs/history/pi-extension-split/`.

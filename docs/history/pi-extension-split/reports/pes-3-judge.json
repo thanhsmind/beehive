@@ -1,0 +1,38 @@
+{
+  "schema": "judge-verdict/1",
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "the legacy remove_pi_extension item comes before every copy_pi_extension item",
+      "status": "PASS",
+      "evidence": "packages/bee-rs/crates/bee/src/onboard/plan.rs pushes remove_pi_extension for .pi/extensions/bee-guard.ts inside `if !pi_extension_files.is_empty()` before the create_dir and copy loop; onboard/tests.rs asserts legacy_remove_idx is lower than every copy index."
+    },
+    {
+      "id": "onboard plans no Pi removal when the source folder ships no files",
+      "status": "PASS",
+      "evidence": "every Pi plan item sits inside `if !pi_extension_files.is_empty()`, and list_pi_extension_files returns empty when the source bee-guard folder is absent."
+    },
+    {
+      "id": "prune removes only unshipped .ts files and never follows symlinks",
+      "status": "PASS",
+      "evidence": "the stale filter is `e.is_file && !e.is_symlink && e.name.ends_with(\".ts\") && !pi_extension_files.contains(..)`; the source listing uses the same is_file, !is_symlink and .ts filter."
+    },
+    {
+      "id": "the remove_pi_extension arm refuses a path outside its scope and reports a failed remove",
+      "status": "PASS",
+      "evidence": "apply.rs remove_pi_extension_admissible accepts only the exact legacy path or .pi/extensions/bee-guard/<name>.ts with no .. and no further slash; its unit test covers ../, a subfolder, another file, a .md file and an empty name. A remove error other than NotFound is printed to stderr instead of being dropped."
+    },
+    {
+      "id": "copy_pi_extension copies by relative path",
+      "status": "PASS",
+      "evidence": "apply.rs strips .pi/extensions/ and joins the rest onto engine.pi_extension_dir, replacing the old posix_basename copy."
+    },
+    {
+      "id": "proof",
+      "status": "PASS",
+      "evidence": "cargo test --release -p bee --bin bee onboard:: — 193 passed, 1 ignored; pi_lifecycle_end_to_end_onboarded_repo_parity, which onboards a real repo with the built binary, passes on 51504365e; the full declared suite is green on 16e5836e8."
+    }
+  ],
+  "fixability": "automatic",
+  "confidence": "high"
+}

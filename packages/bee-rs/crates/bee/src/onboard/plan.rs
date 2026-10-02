@@ -120,14 +120,17 @@ pub fn list_opencode_plugin_files(engine: &Engine) -> Vec<String> {
 /// hand-written TypeScript belt is vendored "copy when missing or drifted",
 /// never rendered by the skill-tree pipeline (which has no pi target).
 pub fn list_pi_extension_files(engine: &Engine) -> Vec<String> {
-    if !exists(&engine.pi_extension_dir) {
+    let guard_dir = engine.pi_extension_dir.join("bee-guard");
+    if !exists(&guard_dir) {
         return Vec::new();
     }
-    read_dir_sorted(&engine.pi_extension_dir)
+    let mut out: Vec<String> = read_dir_sorted(&guard_dir)
         .into_iter()
-        .filter(|e| e.is_file && e.name.ends_with(".ts"))
-        .map(|e| e.name)
-        .collect()
+        .filter(|e| e.is_file && !e.is_symlink && e.name.ends_with(".ts"))
+        .map(|e| format!("bee-guard/{}", e.name))
+        .collect();
+    out.sort();
+    out
 }
 
 fn list_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
@@ -869,14 +872,32 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // so copying the file into the host project IS the whole install: no
     // global directory, no user config, no hook JSON.
     let pi_extension_files = list_pi_extension_files(engine);
-    if !pi_extension_files.is_empty() && !exists(&repo_root.join(".pi").join("extensions")) {
-        plan.push(plan_item("create_dir", ".pi/extensions"));
-    }
-    for name in &pi_extension_files {
-        let source = read_text_if_exists(&engine.pi_extension_dir.join(name));
-        let target = repo_root.join(".pi").join("extensions").join(name);
-        if read_text_if_exists(&target) != source {
-            plan.push(plan_item("copy_pi_extension", &format!(".pi/extensions/{name}")));
+    if !pi_extension_files.is_empty() {
+        let legacy_file = repo_root.join(".pi").join("extensions").join("bee-guard.ts");
+        if exists(&legacy_file) || lstat_if_exists(&legacy_file).is_some() {
+            plan.push(plan_item("remove_pi_extension", ".pi/extensions/bee-guard.ts"));
+        }
+        let guard_dir = repo_root.join(".pi").join("extensions").join("bee-guard");
+        if !exists(&guard_dir) {
+            plan.push(plan_item("create_dir", ".pi/extensions/bee-guard"));
+        }
+        for rel in &pi_extension_files {
+            let source = read_text_if_exists(&engine.pi_extension_dir.join(rel));
+            let target = repo_root.join(".pi").join("extensions").join(rel);
+            if read_text_if_exists(&target) != source {
+                plan.push(plan_item("copy_pi_extension", &format!(".pi/extensions/{rel}")));
+            }
+        }
+        if exists(&guard_dir) {
+            let mut stale: Vec<String> = read_dir_sorted(&guard_dir)
+                .into_iter()
+                .filter(|e| e.is_file && !e.is_symlink && e.name.ends_with(".ts") && !pi_extension_files.contains(&format!("bee-guard/{}", e.name)))
+                .map(|e| e.name)
+                .collect();
+            stale.sort();
+            for name in stale {
+                plan.push(plan_item("remove_pi_extension", &format!(".pi/extensions/bee-guard/{name}")));
+            }
         }
     }
 

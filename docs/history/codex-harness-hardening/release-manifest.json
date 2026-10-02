@@ -1773,11 +1773,116 @@
       "packagePath": ".opencode/plugins/bee-guard.ts"
     },
     {
-      "path": ".pi/extensions/bee-guard.ts",
-      "sha256": "3d482bddf13337938d5c58071a85385db5108a3dbda4df7f91414fd1efe3704d",
+      "path": ".pi/extensions/bee-guard/bee-cli.ts",
+      "sha256": "432701d473dc64cd0610df51a55f6a235af22a33242bd495074df13d304a379f",
       "mode": "644",
       "role": "pi_extension",
-      "packagePath": ".pi/extensions/bee-guard.ts"
+      "packagePath": ".pi/extensions/bee-guard/bee-cli.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/commands.ts",
+      "sha256": "eae2faa7bd21359ba04f1981a13c16b2cd15d9f19f8ab7945a7756ac3ba1cffd",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/commands.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/events.ts",
+      "sha256": "232416d3385692bf98e14b917815c8fe5f724f022d6b6cf481cce4336b7e2ccd",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/events.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/hooks.ts",
+      "sha256": "2cbad6c13dcc350b7fa095882b1f15b722a8b8e495cb482aa53b1e2e6b28aa0e",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/hooks.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/index.ts",
+      "sha256": "093969d274b564ec52d5110061744bf533425ca4e5be0393be7c9c85c5db0f9d",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/index.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/locate.ts",
+      "sha256": "e94a737cfbd1892670a29023c4cdd9e7c4b6146e754aa2034f5aa2cefb460ccf",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/locate.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/model-usage.ts",
+      "sha256": "2ea19be4fb20dc0fd750f5cb749ed6d6523bbf4793765997d5a01cd583c659e7",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/model-usage.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/result-inbox.ts",
+      "sha256": "c0e2b29e4dc3d1c9726a1e78b3fed970cf6a0a28b42e5febe1e51b9bacc78ef1",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/session.ts",
+      "sha256": "71f25c142afbffb1114bd5d0ed6e4b414616382247efed353457bb58cc4858b7",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/session.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/state.ts",
+      "sha256": "7388377fb88c37d401a9be03e9dd4ee78ede866998f98669bbbae98df6e5cf5e",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/state.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/tool-dispatch.ts",
+      "sha256": "7e2e21bb2344fc9386aa27b4af63b386080b7c536b6206ff291407e8279bdf17",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/tool-dispatch.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/tool-map.ts",
+      "sha256": "6a0f7d2855d41e058fe939c0b988177e0c169a8fb5d70c305e4fb6ec721623ec",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/tool-map.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/tool-steer.ts",
+      "sha256": "d10131ab1acfe572598117a501bc5f4e31f38f9260da559a17e9d4833ec828c3",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/tool-steer.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/tool-verdict.ts",
+      "sha256": "9e32e291f24d74079375391430d3a093449216d81af0f876b495b8484ecb88d3",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/tool-verdict.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/transition.ts",
+      "sha256": "92b5b50759ccac7a6767793a7262d1408d68a723ab020dee9674facef73307b2",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/transition.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/workers-widget.ts",
+      "sha256": "50d67eea630df1234dbf5c9960e5323f7a71197864144df44ebda942cb4b5e69",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/workers-widget.ts"
     },
     {
       "path": "expertise/apis.md",
