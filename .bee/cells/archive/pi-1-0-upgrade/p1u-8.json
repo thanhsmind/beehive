@@ -1,0 +1,233 @@
+{
+  "id": "p1u-8",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Let session-close answer which bee obligations a Pi session still owes, once per obligation",
+  "deps": [],
+  "decisions": [
+    "D7",
+    "D9",
+    "D11",
+    "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+    "90077144-07cf-446c-8b83-f0996d5b2337",
+    "562588f5-1213-42da-bc58-1463ed4405dd"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "action": "Red first, then implement contract pi-settle-obligations in a new session_close/obligations.rs wired from session_close/mod.rs: an obligations_only payload returns the JSON list and records served keys in one write under .bee/runtime; reuse list_claimed_cells and set_gate's advisor_ref staleness check; skip_key marks a key served; worker env, pi_harness_workflow false and an unwritable served record all return no obligations. The plain session-close path is unchanged. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a claimed uncapped cell is returned once as kind cap with key <feature>:cap:<cell>",
+      "the same key is not returned a second time",
+      "a high-risk planning feature with a gate preview and no fresh advisor_ref is returned once as kind advisor",
+      "BEE_HERDING_WORKER=1 returns no obligations",
+      "pi_harness_workflow false returns no obligations",
+      "an unwritable served record returns no obligations",
+      "skip_key marks a key served",
+      "a payload without obligations_only behaves as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+        "substantive": "the obligations answer and the served record"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "substantive": "one test per truth"
+      }
+    ],
+    "key_links": [
+      "session_close/mod.rs routes obligations_only and skip_key payloads to obligations.rs"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No new hook name",
+      "No second obligation engine beside session-close"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "p1u-8-r2",
+    "outcome": "session-close answers obligations_only with cap and advisor obligations once per key; a cell whose registered worker has no result yet is not owed; the leader's own claim does not hide a cap",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "round 4 (3b98c5e63) adds the run count and seat names per amendment 562588f5 after the live run — the plan was wrong about a fact",
+      "round 1 (5f97402a1) followed the plan; round 2 (a75fe2ba1) added the running-worker filter per amendment 90077144; round 3 (100fb7652) dropped the claim-heartbeat half per correction 295f1277 — the plan was wrong about a fact",
+      "the herding worker wrote a malformed result-1.json and does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T11:31:12.190Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the cell verify on 3b98c5e63 (advisor message states 5 runs and names the seats, amendment 562588f5): test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 3845 filtered out; finished in 0.16s; test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 96 filtered out; finished in 0.17s; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+    "claimed_at": "2026-10-02T11:24:27.318Z",
+    "mistakes": [
+      {
+        "wrong": "amendment 90077144 counted a live heartbeat on the claim, which is the leader's own session, hiding every uncapped cell",
+        "better": "name the one signal unique to a running worker",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "session-close answers obligations_only with cap and advisor obligations once per key; a cell whose registered worker has no result yet is not owed; the leader's own claim does not hide a cap",
+      "commit": "3b98c5e63",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close — green:unit — leader re-ran the cell verify on 3b98c5e63 (advisor message states 5 runs and names the seats, amendment 562588f5): test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 3845 filtered out; finished in 0.16s; test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 96 filtered out; finished in 0.17s; whole suite not run",
+      "deviations": [
+        "round 4 (3b98c5e63) adds the run count and seat names per amendment 562588f5 after the live run — the plan was wrong about a fact",
+        "round 1 (5f97402a1) followed the plan; round 2 (a75fe2ba1) added the running-worker filter per amendment 90077144; round 3 (100fb7652) dropped the claim-heartbeat half per correction 295f1277 — the plan was wrong about a fact",
+        "the herding worker wrote a malformed result-1.json and does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "amendment 90077144 counted a live heartbeat on the claim, which is the leader's own session, hiding every uncapped cell — name the one signal unique to a running worker — doctrine"
+      ]
+    },
+    "baseline": null,
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-02T11:24:27.079Z",
+    "reopened_reason": "amendment 562588f5-1213-42da-bc58-1463ed4405dd: the advisor obligation states 5 runs and names the five hat seats",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a claimed uncapped cell is returned once as kind cap with key <feature>:cap:<cell>",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "the same key is not returned a second time",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "a high-risk planning feature with a gate preview and no fresh advisor_ref is returned once as kind advisor",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "BEE_HERDING_WORKER=1 returns no obligations",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "pi_harness_workflow false returns no obligations",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "an unwritable served record returns no obligations",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "skip_key marks a key served",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "a payload without obligations_only behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T11:51:48.263Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-claimed-uncapped-cap-obligation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:245-258, tests.rs:2008-2018 returns kind cap with key <feature>:cap:<cell>"
+          },
+          {
+            "id": "truth-key-not-returned-twice",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:210,227-234, tests.rs:2020-2025 marked served in settle-obligations.json"
+          },
+          {
+            "id": "truth-advisor-obligation-high-risk",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:260-287, tests.rs:2027-2057 returns kind advisor naming 5 runs and 5 hat seats per amendment 562588f5"
+          },
+          {
+            "id": "truth-worker-env-no-obligations",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:197-208, tests.rs:2060-2071 returns empty list when BEE_HERDING_WORKER=1"
+          },
+          {
+            "id": "truth-pi-harness-workflow-false-no-obligations",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:198-208, tests.rs:2074-2079 returns empty list when pi_harness_workflow is false"
+          },
+          {
+            "id": "truth-unwritable-served-record-no-obligations",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:210, tests.rs:2081-2086 returns empty list if served record write fails"
+          },
+          {
+            "id": "truth-skip-key-marks-served",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:201-207, tests.rs:2088-2094 marks key served in settle-obligations.json"
+          },
+          {
+            "id": "truth-payload-without-obligations-only",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:193-196, tests.rs:2096-2103 returns None and falls through to normal session close"
+          },
+          {
+            "id": "artifact-obligations",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:191-335 implements obligations resolution and served records"
+          },
+          {
+            "id": "artifact-tests",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs:2008-2139 unit tests for all truths"
+          },
+          {
+            "id": "key-link-mod-routing",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs:126-129 routes obligations_only and skip_key payloads to obligations.rs"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "gemini-3.8-flash-high",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-02T14:54:36.239Z"
+      }
+    ]
+  }
+}

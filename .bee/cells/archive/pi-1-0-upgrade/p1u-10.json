@@ -1,0 +1,129 @@
+{
+  "id": "p1u-10",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "test",
+  "change_class": "test",
+  "title": "Prove on Pi 1.0 that owed bee work gets one forced turn",
+  "deps": [
+    "p1u-9"
+  ],
+  "decisions": [
+    "D7",
+    "D9",
+    "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+    "5495627d-17a8-48d9-ad13-f1f741f3108a"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+  ],
+  "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, drive a Pi 1.0 leader on deepseek/deepseek-flash: (a) a session that settles with a claimed uncapped cell gets one forced turn naming the cap, and a second settle does not repeat it; (b) a high-risk feature at a gate-ready plan with no advisor_ref gets one forced turn naming bee_advisor with the run count. Record the evidence in the feature file and the mechanism in the audit page.",
+  "must_haves": {
+    "truths": [
+      "one forced turn names the cap call for a claimed uncapped cell",
+      "a second settle does not repeat the same obligation",
+      "a gate-ready high-risk plan without an advisor_ref gets one forced turn naming bee_advisor and the run count",
+      "the feature file names the run id and evidence path"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        "substantive": "settle-obligation evidence section"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No product source edits"
+    ]
+  },
+  "verify": "bash .bee/verify/verify-app/control-bee doctor",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "trace": {
+    "worker": "leader",
+    "outcome": "Live Pi 1.0 proof: one forced turn for a claimed uncapped cell (leader then dispatched and capped) and one for a gate-ready high-risk plan (leader called bee_advisor x5, did not approve the gate); no repeat on a second settle",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "deviations": [
+      "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+      "the first advisor run found two gaps (bee_advisor not in the planning set; no run count) and p1u-5 and p1u-8 were reworked before the final run — the plan was wrong about a fact",
+      "the leader in the final advisor run stopped before recording the advisor_ref; filed as a backlog finding — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T11:48:50.896Z",
+    "behavior_change": false,
+    "verification_evidence": "sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-181622-3758076/ and /home/thanhsmind/.local/state/bee-verify/evidence/20261002-184508-3853826/ (drive-*.txt, rpc-*.jsonl); before-state: no agent_before_settle handler, a Pi session settled with owed work and only a warning",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee doctor",
+    "escalation_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a worker that starts pi",
+    "claimed_at": "2026-10-02T11:48:50.816Z",
+    "mistakes": [
+      {
+        "wrong": "the first advisor sandbox used mode standard while the obligation keys on mode high-risk",
+        "better": "read the gate's own high-risk test before building a fixture",
+        "fix_at": "none"
+      }
+    ],
+    "inline_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a dispatched worker that starts pi",
+    "report": {
+      "outcome": "Live Pi 1.0 proof: one forced turn for a claimed uncapped cell (leader then dispatched and capped) and one for a gate-ready high-risk plan (leader called bee_advisor x5, did not approve the gate); no repeat on a second settle",
+      "commit": "f61b67fbc",
+      "files": [
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee doctor — green:live — sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-181622-3758076/ and /home/thanhsmind/.local/state/bee-verify/evidence/20261002-184508-3853826/ (drive-*.txt, rpc-*.jsonl); before-state: no agent_before_settle handler, a Pi session settled with owed work and only a warning",
+      "deviations": [
+        "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+        "the first advisor run found two gaps (bee_advisor not in the planning set; no run count) and p1u-5 and p1u-8 were reworked before the final run — the plan was wrong about a fact",
+        "the leader in the final advisor run stopped before recording the advisor_ref; filed as a backlog finding — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "the first advisor sandbox used mode standard while the obligation keys on mode high-risk — read the gate's own high-risk test before building a fixture — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "one forced turn names the cap call for a claimed uncapped cell",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "a second settle does not repeat the same obligation",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "a gate-ready high-risk plan without an advisor_ref gets one forced turn naming bee_advisor and the run count",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "the feature file names the run id and evidence path",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T11:51:48.281Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

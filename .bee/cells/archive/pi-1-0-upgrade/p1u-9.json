@@ -1,0 +1,184 @@
+{
+  "id": "p1u-9",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Give a Pi session one forced turn when bee work is still owed at settle",
+  "deps": [
+    "p1u-8"
+  ],
+  "decisions": [
+    "D7",
+    "D9",
+    "5495627d-17a8-48d9-ad13-f1f741f3108a",
+    "5f6f7020-fe26-4dec-9ed5-a2dcb13e2b14",
+    "210c86e4-8fd1-4205-8429-16def14d0f62"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "action": "Red first in pi_plugin_contracts.rs, then in the belt implement contract pi-settle-continuation: an agent_before_settle handler that calls session-close with obligations_only, shows each user_notice, appends one custom_message per obligation and returns continue true once; register /bee-obligation-skip <key>. Rebuild .bee/bin/bee, run bee dev regen and bee doctor --runtime pi. No code comments.",
+  "must_haves": {
+    "truths": [
+      "an owed obligation produces one custom_message and continue true",
+      "an empty list or a hook failure produces no continuation",
+      "the user sees each obligation's user_notice",
+      "/bee-obligation-skip calls session-close with skip_key",
+      "bee doctor --runtime pi is READY after rebuild"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "agent_before_settle handler and /bee-obligation-skip"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "contract tests for the handler and the command"
+      }
+    ],
+    "key_links": [
+      "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No obligation logic in TypeScript beyond showing what the hook returns",
+      "The agent_settled close warning stays"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)",
+  "trace": {
+    "worker": "p1u-9-coder",
+    "outcome": "agent_before_settle asks session-close for obligations, shows each user_notice, appends one bee-obligation custom_message each and returns continue true once; the agent_settled nudge is suppressed after a forced turn; /bee-obligation-skip sends skip_key",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/bin/bee",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T11:16:00.728Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran the cell verify on cf0471a14: test result: ok. 98 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.91s; worker also reported doctor --runtime pi READY; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "claimed_at": "2026-10-02T10:57:34.646Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "agent_before_settle asks session-close for obligations, shows each user_notice, appends one bee-obligation custom_message each and returns continue true once; the agent_settled nudge is suppressed after a forced turn; /bee-obligation-skip sends skip_key",
+      "commit": "cf0471a14",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/bin/bee",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — leader re-ran the cell verify on cf0471a14: test result: ok. 98 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.91s; worker also reported doctor --runtime pi READY; whole suite not run",
+      "deviations": [
+        "the herding worker does not cap, so the leader capped after re-running the verify — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an owed obligation produces one custom_message and continue true",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "an empty list or a hook failure produces no continuation",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "the user sees each obligation's user_notice",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "/bee-obligation-skip calls session-close with skip_key",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee doctor --runtime pi is READY after rebuild",
+            "artifact": ".bee/bin/bee"
+          }
+        ],
+        "recorded_at": "2026-10-02T11:51:48.272Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-owed-obligation-continuation",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:3070-3084, tests/pi_plugin_contracts.rs:9034-9076 produces custom_message with customType bee-obligation and continue true"
+          },
+          {
+            "id": "truth-empty-or-failure-no-continuation",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:3043-3055,3087, tests/pi_plugin_contracts.rs:9078-9129 returns undefined without continuation"
+          },
+          {
+            "id": "truth-user-notice-shown",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:3056-3064, tests/pi_plugin_contracts.rs:9067-9074 calls ctx.ui.notify(o.user_notice, 'warning')"
+          },
+          {
+            "id": "truth-obligation-skip-command",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:3708-3733, tests/pi_plugin_contracts.rs:9131-9159 registers /bee-obligation-skip calling session-close with skip_key"
+          },
+          {
+            "id": "truth-doctor-pi-ready",
+            "status": "PASS",
+            "evidence": "bee doctor --runtime pi exits 0 with READY"
+          },
+          {
+            "id": "artifact-bee-guard",
+            "status": "PASS",
+            "evidence": ".pi/extensions/bee-guard.ts:3034-3089,3708-3733 agent_before_settle handler and skip command"
+          },
+          {
+            "id": "artifact-contracts-tests",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs:9034-9244 contract tests"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "gemini-3.8-flash-high",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-02T14:54:36.241Z"
+      }
+    ]
+  }
+}

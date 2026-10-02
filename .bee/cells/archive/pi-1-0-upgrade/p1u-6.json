@@ -1,0 +1,165 @@
+{
+  "id": "p1u-6",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "api",
+  "title": "Give the Pi leader bee_dispatch and bee_advisor tools that start workers through bee",
+  "deps": [
+    "p1u-4",
+    "p1u-5"
+  ],
+  "decisions": [
+    "D6",
+    "D9",
+    "690c84f5-d884-4524-ad73-1289e805dd64",
+    "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
+    "c7bde4b8-00bc-4541-9486-89932d04b996"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "action": "Red first in pi_plugin_contracts.rs, then in the belt: register bee_dispatch and bee_advisor per contract pi-dispatch-tool, reusing tokenizeArgv, resolveBeeBinary and the result drain; add bee_runtime \"pi\" and tools_reopened to the write-guard payload; show each running job in the worker widget. Rebuild .bee/bin/bee, run bee dev regen, and run bee doctor --runtime pi. No code comments.",
+  "must_haves": {
+    "truths": [
+      "bee_dispatch runs dispatch prepare and then the returned herding command as argv, detached, and returns a job id at once",
+      "bee_dispatch refuses a payload whose command is not `.bee/bin/bee herding run`",
+      "bee_advisor runs prepare with --kind advisor",
+      "a prepare refusal comes back as the tool error verbatim",
+      "the write-guard payload carries bee_runtime pi and tools_reopened",
+      "bee doctor --runtime pi is READY after rebuild"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "bee_dispatch and bee_advisor tools"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "substantive": "contract tests for both tools and the payload fields"
+      }
+    ],
+    "key_links": [
+      "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No spawner in TypeScript beyond running the returned bee command",
+      "No shell parsing of the returned command"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)",
+  "trace": {
+    "worker": "p1u-6-fix",
+    "outcome": "Pi belt passes the stage hook notices through verbatim and narrows only bee-known tools, re-adding them when a stage allows",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/bin/bee",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the belt also re-activates bee tools a later stage allows (planning to swarming), not only removes them — without it a leader that came from planning never got bee_dispatch back, since the old code only called setActiveTools when something was removed — something else had to be fixed first",
+      "the bee-known set is a belt constant BEE_STAGE_TOOLS built from PI_BUILTIN_TOOLS plus five names; parity with stage_tools.rs FULL_TOOL_SET is proven by the new test, which feeds the real hook full list plus two foreign tools and expects only the foreign ones kept — the hook carries no known-tools field and stage_tools.rs is outside this cell — found a better route",
+      "left for the orchestrator: the test comment in packages/bee-rs/crates/bee/src/hooks/stage_tools.rs (stage_tools_keeps_the_verdict_keys_it_publishes) still says the belt builds its own sentences and the message keys have no reader; that is now false, and the file is outside this cell files — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T08:32:11.585Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell own verify, 93 passed; run without the PATH prefix because the worktree guard refuses the CARGO_HOME expansion and cargo was already on PATH; plus bee dev regen 3/3 green and .bee/bin/bee doctor --runtime pi READY (wiring_matches_binary ok); stage_tools.rs unit tests not run (file untouched)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "claimed_at": "2026-10-02T08:26:13.656Z",
+    "mistakes": [
+      {
+        "wrong": "a shell line with a $S scratch variable and a multi-step finish line were refused by the worktree guard",
+        "better": "spell paths out in full and keep guarded commands plain in a worktree session",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "the first finish quoted the verify command without its PATH prefix and was refused",
+        "better": "quote the cell verify string exactly in the proof line",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Pi belt turn_start handler in .pi/extensions/bee-guard.ts now shows the stage-tools hook user_message and model_message verbatim, narrows only BEE_STAGE_TOOLS (Pi built-ins + codemode, tool_search, verdict, bee_dispatch, bee_advisor) the hook excludes, keeps non-bee tools (web_search, vcc_recall), and re-adds bee tools when a later stage allows them; prior round bee_dispatch/bee_advisor/payload work unchanged",
+      "commit": "021a5262bee90c45cf3aa3f29dd689963aaafb16",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/bin/bee",
+        ".bee/onboarding.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts — green:unit — the cell own verify, 93 passed; run without the PATH prefix because the worktree guard refuses the CARGO_HOME expansion and cargo was already on PATH; plus bee dev regen 3/3 green and .bee/bin/bee doctor --runtime pi READY (wiring_matches_binary ok); stage_tools.rs unit tests not run (file untouched)",
+      "deviations": [
+        "the belt also re-activates bee tools a later stage allows (planning to swarming), not only removes them — without it a leader that came from planning never got bee_dispatch back, since the old code only called setActiveTools when something was removed — something else had to be fixed first",
+        "the bee-known set is a belt constant BEE_STAGE_TOOLS built from PI_BUILTIN_TOOLS plus five names; parity with stage_tools.rs FULL_TOOL_SET is proven by the new test, which feeds the real hook full list plus two foreign tools and expects only the foreign ones kept — the hook carries no known-tools field and stage_tools.rs is outside this cell — found a better route",
+        "left for the orchestrator: the test comment in packages/bee-rs/crates/bee/src/hooks/stage_tools.rs (stage_tools_keeps_the_verdict_keys_it_publishes) still says the belt builds its own sentences and the message keys have no reader; that is now false, and the file is outside this cell files — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "a shell line with a $S scratch variable and a multi-step finish line were refused by the worktree guard — spell paths out in full and keep guarded commands plain in a worktree session — doctrine",
+        "the first finish quoted the verify command without its PATH prefix and was refused — quote the cell verify string exactly in the proof line — doctrine"
+      ],
+      "baseline": "with the base belt (HEAD bee-guard.ts) and the new tests, stage_tools_narrowing_and_reopen_command, real_bee_hook_stage_tools_end_to_end and stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_tools all FAILED"
+    },
+    "baseline": "with the base belt (HEAD bee-guard.ts) and the new tests, stage_tools_narrowing_and_reopen_command, real_bee_hook_stage_tools_end_to_end and stage_tools_hands_the_leader_bee_dispatch_after_planning_and_keeps_non_bee_tools all FAILED",
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-02T08:22:52.003Z",
+    "reopened_reason": "live run: the belt drops the hook's model_message/user_message and writes its own generic notice, so the leader is never told about bee_dispatch; and narrowing removes non-bee tools (web_search, vcc_recall). Use the hook's sentences and remove only bee-known tools the hook excludes",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee_dispatch runs dispatch prepare and then the returned herding command as argv, detached, and returns a job id at once",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee_dispatch refuses a payload whose command is not `.bee/bin/bee herding run`",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee_advisor runs prepare with --kind advisor",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "a prepare refusal comes back as the tool error verbatim",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "the write-guard payload carries bee_runtime pi and tools_reopened",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "bee doctor --runtime pi is READY after rebuild",
+            "artifact": ".bee/bin/bee"
+          }
+        ],
+        "recorded_at": "2026-10-02T10:32:51.089Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

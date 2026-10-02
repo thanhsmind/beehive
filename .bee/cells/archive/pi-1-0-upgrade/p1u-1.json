@@ -1,0 +1,139 @@
+{
+  "id": "p1u-1",
+  "feature": "pi-1-0-upgrade",
+  "title": "Let codemode and tool_search through the Pi guard and keep them through stage narrowing",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "bugfix",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "4d884180-e2d5-413d-a0d5-2d081d7fbd6f"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard.ts",
+    "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+    "~/.local/share/mise/installs/pi/latest/pi/docs/extensions.md",
+    "~/.local/share/mise/installs/pi/latest/pi/docs/codemode.md"
+  ],
+  "action": "Red first: add contract cases that fail on main. Then add codemode and tool_search as named cases in mapToolCall that skip write-guard, and add both names to FULL_TOOL_SET in stage_tools.rs so narrowing keeps them once writes are allowed. MCP and other unknown names keep the fail-safe. Add no code comments (no_code_comments is on). Rebuild .bee/bin/bee and run bee doctor.",
+  "must_haves": {
+    "truths": [
+      "an outer codemode or tool_search call is allowed",
+      "a nested write without an approved gate is still denied",
+      "a nested bash write redirect without an approved gate is still denied",
+      "an unknown tool with no path is still denied",
+      "after gate approval, narrowing keeps codemode and tool_search active",
+      "bee doctor reports the embedded belt byte-identical after rebuild"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard.ts",
+        "substantive": "codemode and tool_search cases in mapToolCall"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "substantive": "FULL_TOOL_SET names codemode and tool_search"
+      }
+    ],
+    "key_links": [
+      "doctor.rs:47 embeds .pi/extensions/bee-guard.ts, so the rebuilt binary carries the change"
+    ],
+    "prohibitions": [
+      "No code comments added",
+      "MCP and unknown tools keep the fail-safe",
+      "READ_ONLY_TOOLS unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "p1u-1-coder",
+    "outcome": "codemode and tool_search skip the outer Pi guard and survive stage narrowing; nested writes, bash redirects and unknown tools stay denied; doctor pi READY byte-identical",
+    "files_changed": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      ".bee/bin/bee"
+    ],
+    "deviations": [
+      "mapToolCall returns hook null for codemode/tool_search and the tool_call handler returns undefined on null, so MappedCall.hook widened to write-guard or null — the direct path to skip write-guard without a fake route — found a better route",
+      "pi_tool_hook_pairs parser now reads hook: null as route none, and the coverage test pins the unguarded set to exactly codemode and tool_search — without it the parser would misattribute the default arm's write-guard to tool_search — something else had to be fixed first",
+      "rebuilt and committed the tracked vendored .bee/bin/bee (reserved under p1u-1-coder) as the action asked; it is not in the cell files list — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T06:51:27.587Z",
+    "behavior_change": false,
+    "verification_evidence": "88/88 pi_plugin_contracts plus 9 stage_tools unit tests, covering the belt and FULL_TOOL_SET this cell touched; full declared suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
+    "claimed_at": "2026-10-02T06:45:01.009Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "codemode and tool_search skip the outer Pi guard and survive stage narrowing; nested writes, bash redirects and unknown tools stay denied; doctor pi READY byte-identical",
+      "commit": "f5ae895fe13e0412007c56d527aa8f3a48776e6f",
+      "files": [
+        ".pi/extensions/bee-guard.ts",
+        "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        ".bee/bin/bee"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools — green:unit — 88/88 pi_plugin_contracts plus 9 stage_tools unit tests, covering the belt and FULL_TOOL_SET this cell touched; full declared suite not run",
+      "deviations": [
+        "mapToolCall returns hook null for codemode/tool_search and the tool_call handler returns undefined on null, so MappedCall.hook widened to write-guard or null — the direct path to skip write-guard without a fake route — found a better route",
+        "pi_tool_hook_pairs parser now reads hook: null as route none, and the coverage test pins the unguarded set to exactly codemode and tool_search — without it the parser would misattribute the default arm's write-guard to tool_search — something else had to be fixed first",
+        "rebuilt and committed the tracked vendored .bee/bin/bee (reserved under p1u-1-coder) as the action asked; it is not in the cell files list — the plan was wrong about a fact"
+      ],
+      "mistakes": [],
+      "baseline": "on base 6014bc019 the new contract test failed (outer codemode blocked by write-guard: could not be canonically contained) and stage_tools_keeps_pi_codemode_and_tool_search_once_writes_are_allowed failed; doctor --runtime pi was BLOCKED (wiring_matches_binary, binary_freshness)"
+    },
+    "baseline": "on base 6014bc019 the new contract test failed (outer codemode blocked by write-guard: could not be canonically contained) and stage_tools_keeps_pi_codemode_and_tool_search_once_writes_are_allowed failed; doctor --runtime pi was BLOCKED (wiring_matches_binary, binary_freshness)",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an outer codemode or tool_search call is allowed",
+            "artifact": ".pi/extensions/bee-guard.ts"
+          },
+          {
+            "requirement": "a nested write without an approved gate is still denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "a nested bash write redirect without an approved gate is still denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "an unknown tool with no path is still denied",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "after gate approval, narrowing keeps codemode and tool_search active",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+          },
+          {
+            "requirement": "bee doctor reports the embedded belt byte-identical after rebuild",
+            "artifact": ".bee/bin/bee"
+          }
+        ],
+        "recorded_at": "2026-10-02T07:09:39.132Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "id": "p1u-12",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Record typed scope changes and owe one log-or-ask turn for each",
+  "deps": [],
+  "decisions": [
+    "D12",
+    "D14",
+    "47677410-2447-4239-b596-f33a69eb87be",
+    "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+  ],
+  "action": "Red first, then in session_close implement contract pi-scope-input: a record_scope_input payload matches config pi_scope_words (with the default list) and appends a match to .bee/runtime/scope-inputs.jsonl; obligations_only returns a kind scope obligation for each recorded input with no decision logged after it, once per key. No code comments. Apply amendment bf3483c6-76f9-4da3-a63d-788356d3fbc7: phrase list without 'không' or bare 'change', word-edge matching, empty list records nothing, kill switch and worker env record nothing, at most one scope obligation per settle, the message names /bee-obligation-skip <key>, prune served or answered inputs.",
+  "must_haves": {
+    "truths": [
+      "a matching input is recorded",
+      "a non-matching input is not recorded",
+      "config pi_scope_words replaces the default list",
+      "a recorded input with no later decision is returned once as kind scope",
+      "a decision logged after the input clears it",
+      "the scope message says a change to an approved plan reopens the gate and only the user answers it",
+      "the default list does not match an ordinary Vietnamese sentence with 'không' or the bare word 'change'",
+      "an empty pi_scope_words records nothing",
+      "pi_harness_workflow false or BEE_HERDING_WORKER=1 records nothing",
+      "at most one scope obligation is returned per settle",
+      "the scope message names /bee-obligation-skip"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+        "substantive": "scope recording and the scope obligation"
+      }
+    ],
+    "key_links": [
+      "mod.rs routes record_scope_input"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No new hook name"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "p1u-12-coder",
+    "outcome": "Record typed scope changes in runtime file and owe one settle turn per change",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: cell p1u-12 declared no skill changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T12:41:58.056Z",
+    "behavior_change": true,
+    "verification_evidence": "session_close unit tests pass",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close",
+    "claimed_at": "2026-10-02T12:23:41.336Z",
+    "sync_ack": "cell p1u-12 declared no skill changes",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Record typed scope changes in runtime file and owe one settle turn per change",
+      "commit": "3810e78768ab09a61b81645db6c13767942243f5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_close — green:unit — session_close unit tests pass",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a matching input is recorded",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "a non-matching input is not recorded",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "config pi_scope_words replaces the default list",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "a recorded input with no later decision is returned once as kind scope",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "a decision logged after the input clears it",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "the scope message says a change to an approved plan reopens the gate and only the user answers it",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "the default list does not match an ordinary Vietnamese sentence with 'không' or the bare word 'change'",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "an empty pi_scope_words records nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "pi_harness_workflow false or BEE_HERDING_WORKER=1 records nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "at most one scope obligation is returned per settle",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          },
+          {
+            "requirement": "the scope message names /bee-obligation-skip",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T13:27:32.491Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-matching-input-recorded",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:26-52, tests.rs:2142-2151 appends match to .bee/runtime/scope-inputs.jsonl"
+          },
+          {
+            "id": "truth-non-matching-input-not-recorded",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:41-43, tests.rs:2152-2155 non-matching input discarded"
+          },
+          {
+            "id": "truth-config-pi-scope-words",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:34-40, tests.rs:2158-2174 config overrides default word list"
+          },
+          {
+            "id": "truth-recorded-input-returned-once-as-scope",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:294-328, tests.rs:2218-2237 returned once as kind scope"
+          },
+          {
+            "id": "truth-decision-clears-scope-input",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:102-145,172-174,305-307, tests.rs:2240-2260 decision after input time clears it"
+          },
+          {
+            "id": "truth-scope-message-reopens-gate",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:319, tests.rs:2233 message contains 'a change to an approved plan reopens the gate and only the user answers it'"
+          },
+          {
+            "id": "truth-default-list-vietnamese-khong-or-bare-change",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:9-24,54-71, tests.rs:2176-2184 word boundary and omission of bare change/không"
+          },
+          {
+            "id": "truth-empty-pi-scope-words",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:41, tests.rs:2186-2196 empty list records nothing"
+          },
+          {
+            "id": "truth-kill-switch-and-worker-env",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:27-31, tests.rs:2199-2215 records nothing when pi_harness_workflow=false or BEE_HERDING_WORKER=1"
+          },
+          {
+            "id": "truth-at-most-one-scope-obligation",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:311-328, tests.rs:2262-2296 selects unserved_scope.last()"
+          },
+          {
+            "id": "truth-scope-message-names-obligation-skip",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:320, tests.rs:2234 names /bee-obligation-skip"
+          },
+          {
+            "id": "artifact-obligations",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/obligations.rs:26-189,288-328 implements scope recording and obligations"
+          },
+          {
+            "id": "key-link-mod-routing",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs:120-125 routes record_scope_input payload to obligations.rs"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "gemini-3.8-flash-high",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-02T14:54:36.243Z"
+      }
+    ]
+  }
+}

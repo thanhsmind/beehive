@@ -1,0 +1,125 @@
+{
+  "id": "p1u-14",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "test",
+  "change_class": "test",
+  "title": "Prove on Pi 1.0 that typed context reaches a running worker and scope changes get one log-or-ask turn",
+  "deps": [
+    "p1u-13"
+  ],
+  "decisions": [
+    "D12",
+    "D13",
+    "D14",
+    "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+    "8972e270-a4b6-43b7-a1e3-e8ace1d19a48",
+    "47677410-2447-4239-b596-f33a69eb87be",
+    "01fd5793-c366-4379-ac74-fe5fca4d270f",
+    "8b0387f5-833a-4d2e-a655-67639141ac60",
+    "bf3483c6-76f9-4da3-a63d-788356d3fbc7"
+  ],
+  "files": [
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+  ],
+  "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored: (a) dispatch a no-pane Pi worker on a small cell, run bee herding steer on its job while it runs, and show the text in the worker's session; (b) type a scope-change follow-up to a Pi leader and show one forced turn asking to log it or ask the user; (c) show a worktree worker recording its verdict. Record the evidence in the feature file and the audit page.",
+  "must_haves": {
+    "truths": [
+      "steered text appears in the running worker's session once",
+      "a typed scope change gets one forced log-or-ask turn and no gate approval",
+      "a worktree worker records its verdict",
+      "the feature file names the run id and evidence path"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        "substantive": "mid-run input evidence section"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "No product source edits"
+    ]
+  },
+  "verify": "bash .bee/verify/verify-app/control-bee doctor",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "trace": {
+    "worker": "leader",
+    "outcome": "Live Pi 1.0 proof: a steer reached a running worktree worker once (it declined a scope-changing steer by design), the worktree worker recorded its verdict, a late steer was refused, and a typed scope change got one forced turn while bee refused an unapproved cell add",
+    "files_changed": [
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "deviations": [
+      "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+      "the steer test text asked for a scope change, which the worker correctly declined; delivery is proven by the worker report quoting it — found a better route",
+      "in the scope run the small model answered the forced turn with an empty message; filed as a backlog finding — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T13:25:31.086Z",
+    "behavior_change": false,
+    "verification_evidence": "sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-201522-52484/ (steer-run.txt, drive-scope.txt, rpc-scope.jsonl); before-state: no-pane workers had no input channel and worktree workers could not record a verdict",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "bash .bee/verify/verify-app/control-bee doctor",
+    "escalation_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a worker that starts pi",
+    "claimed_at": "2026-10-02T13:25:31.001Z",
+    "no_mistakes": true,
+    "inline_reason": "live Pi drive runs in the leader session; the worker-outward guard refuses a dispatched worker that starts pi",
+    "report": {
+      "outcome": "Live Pi 1.0 proof: a steer reached a running worktree worker once (it declined a scope-changing steer by design), the worktree worker recorded its verdict, a late steer was refused, and a typed scope change got one forced turn while bee refused an unapproved cell add",
+      "commit": "ac19261e1",
+      "files": [
+        ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+      ],
+      "tests": "bash .bee/verify/verify-app/control-bee doctor — green:live — sandbox doctor healthy; evidence /home/thanhsmind/.local/state/bee-verify/evidence/20261002-201522-52484/ (steer-run.txt, drive-scope.txt, rpc-scope.jsonl); before-state: no-pane workers had no input channel and worktree workers could not record a verdict",
+      "deviations": [
+        "leader-run instead of a worker — the worker-outward guard refuses a worker that starts pi — hit an unforeseen obstacle",
+        "the steer test text asked for a scope change, which the worker correctly declined; delivery is proven by the worker report quoting it — found a better route",
+        "in the scope run the small model answered the forced turn with an empty message; filed as a backlog finding — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "steered text appears in the running worker's session once",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "a typed scope change gets one forced log-or-ask turn and no gate approval",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "a worktree worker records its verdict",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          },
+          {
+            "requirement": "the feature file names the run id and evidence path",
+            "artifact": ".bee/verify/verify-app/features/pi-harness-dispatch.md"
+          }
+        ],
+        "recorded_at": "2026-10-02T13:27:32.509Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

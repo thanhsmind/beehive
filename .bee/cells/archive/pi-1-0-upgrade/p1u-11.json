@@ -1,0 +1,145 @@
+{
+  "id": "p1u-11",
+  "feature": "pi-1-0-upgrade",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "api",
+  "title": "Add bee herding steer so the leader can hand a running worker more context",
+  "deps": [],
+  "decisions": [
+    "D13",
+    "ccdae0ed-8330-4134-829a-0c34fa3331e4",
+    "01fd5793-c366-4379-ac74-fe5fca4d270f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-1-0-upgrade/CONTEXT.md",
+    "docs/history/pi-1-0-upgrade/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/registry.rs"
+  ],
+  "action": "Red first, then add the verb `bee herding steer <job-id> --text <text> [--json]` per contract herding-steer, beside `herding interrupt` in job_verbs.rs, routed from herding.rs and declared in the command registry and catalog the way interrupt is. Reserve and update any registry contract test the new verb needs. No code comments. Write the steer file to a temp name and rename it into place; print one line naming the job and the steer number (JSON with --json), per amendment 01fd5793-c366-4379-ac74-fe5fca4d270f.",
+  "must_haves": {
+    "truths": [
+      "steer writes the text verbatim as steer-1.json, then steer-2.json, in the job mailbox",
+      "steer refuses a missing job dir",
+      "steer refuses a job that already has a result for its current round",
+      "steer refuses a job whose cell is capped",
+      "bee herding steer --help prints its flags",
+      "the registry contract tests stay green",
+      "steer writes through a temp file and a rename",
+      "steer prints the job id and steer number"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "substantive": "the steer verb"
+      }
+    ],
+    "key_links": [
+      "herding.rs routes steer to job_verbs::steer"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No pane key sends",
+      "herding interrupt unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "p1u-11-coder",
+    "outcome": "bee herding steer <job-id> --text writes steer-<n>.json through temp+rename in the job mailbox, refuses a missing job, a finished round or a capped cell, and prints the job and steer number",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs"
+    ],
+    "deviations": [
+      "the herding worker does not cap, so the leader capped after re-running the verify and the registry contract tests — hit an unforeseen obstacle",
+      "sync-ack: bee herding steer is reached on Pi through the bee_steer leader tool; the skills/bee-herding verb list update is filed as a backlog debt row"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-02T12:40:58.913Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran the cell verify plus --test registry_contracts on 78b3dc17e: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3918 filtered out; finished in 0.00s; test result: ok. 611 passed; 0 failed; 0 ignored; 0 measured; 3308 filtered out; finished in 6.41s; test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 3.19s; test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s; whole suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding",
+    "claimed_at": "2026-10-02T12:23:41.087Z",
+    "sync_ack": "bee herding steer is reached on Pi through the bee_steer leader tool; the skills/bee-herding verb list update is filed as a backlog debt row",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee herding steer <job-id> --text writes steer-<n>.json through temp+rename in the job mailbox, refuses a missing job, a finished round or a capped cell, and prints the job and steer number",
+      "commit": "78b3dc17e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green:unit — leader re-ran the cell verify plus --test registry_contracts on 78b3dc17e: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3918 filtered out; finished in 0.00s; test result: ok. 611 passed; 0 failed; 0 ignored; 0 measured; 3308 filtered out; finished in 6.41s; test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 3.19s; test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s; whole suite not run",
+      "deviations": [
+        "the herding worker does not cap, so the leader capped after re-running the verify and the registry contract tests — hit an unforeseen obstacle"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "steer writes the text verbatim as steer-1.json, then steer-2.json, in the job mailbox",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "steer refuses a missing job dir",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "steer refuses a job that already has a result for its current round",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "steer refuses a job whose cell is capped",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "bee herding steer --help prints its flags",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "the registry contract tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/tests.rs"
+          },
+          {
+            "requirement": "steer writes through a temp file and a rename",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "steer prints the job id and steer number",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          }
+        ],
+        "recorded_at": "2026-10-02T13:27:32.482Z",
+        "recorded_by": "0bc76aa8-838d-4d91-b3ee-f1ca09b205b7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
