@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-extension-split",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pi-extension-split\" started at phase \"exploring\" (lane).",
-  "next_action": "uat: user tests the Pi guard folder on main, then bee gate --name uat --approved true",
+  "next_action": "bee close finished \"pi-extension-split\" — feature is closed.",
   "created_at": "2026-10-02T15:44:04.058Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "refactor",
