@@ -216,76 +216,248 @@ What the user sees in slice 4:
 
 ## Cells — current slice (preview)
 
+Slice 1 (p1u-1 to p1u-3) is capped and merged (main 4d16fde). Plan revision 1 prepares slice 2.
+Contracts: `eba50fb9` pi-leader-write-lock, `034373cc` pi-stage-loadout, `690c84f5` pi-dispatch-tool; named defaults `c7bde4b8`.
+Waves: p1u-4 and p1u-5 in parallel (disjoint files); then p1u-6; then p1u-7, run by the leader because the worker-outward guard refuses a worker that starts pi.
+
 ```json
 [
   {
-    "id": "p1u-1",
+    "id": "p1u-4",
     "feature": "pi-1-0-upgrade",
-    "title": "Let codemode and tool_search through the Pi guard and keep them through stage narrowing",
     "lane": "high-risk",
     "role": "code",
-    "change_class": "bugfix",
+    "change_class": "security",
+    "title": "Refuse source writes from a Pi leader in the execute phase so it dispatches instead",
     "deps": [],
-    "decisions": ["D2"],
-    "files": [".pi/extensions/bee-guard.ts", "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"],
-    "read_first": ["docs/history/pi-1-0-upgrade/CONTEXT.md", "docs/history/pi-1-0-upgrade/reports/hat-wave.md", "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md", "~/.local/share/mise/installs/pi/latest/pi/docs/extensions.md", "~/.local/share/mise/installs/pi/latest/pi/docs/codemode.md"],
-    "action": "Red first: add contract cases that fail on main. Then add codemode and tool_search as named cases in mapToolCall that skip write-guard, and add both names to FULL_TOOL_SET in stage_tools.rs so narrowing keeps them once writes are allowed. MCP and other unknown names keep the fail-safe. Add no code comments (no_code_comments is on). Rebuild .bee/bin/bee and run bee doctor.",
+    "decisions": [
+      "D8",
+      "D11",
+      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "action": "Red first, then add one check to write-guard that implements contract pi-leader-write-lock exactly: refuse a source write, and a bash call that runs `bee herding run`, from a Pi leader (payload bee_runtime == \"pi\", env BEE_HERDING_WORKER not \"1\") when phase is swarming, the execution gate is approved and the route lane is small, standard or high-risk. Allow lanes tiny, docs and spike, worker sessions, non-Pi payloads, payload tools_reopened true, and config pi_harness_workflow false. The refusal text names bee_dispatch and /bee-tools-reopen. Reuse the record and config readers check_worktree_first already uses. No code comments.",
     "must_haves": {
-      "truths": ["an outer codemode or tool_search call is allowed", "a nested write without an approved gate is still denied", "a nested bash write redirect without an approved gate is still denied", "an unknown tool with no path is still denied", "after gate approval, narrowing keeps codemode and tool_search active", "bee doctor reports the embedded belt byte-identical after rebuild"],
-      "artifacts": [{"path": ".pi/extensions/bee-guard.ts", "substantive": "codemode and tool_search cases in mapToolCall"}, {"path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs", "substantive": "FULL_TOOL_SET names codemode and tool_search"}],
-      "key_links": ["doctor.rs:47 embeds .pi/extensions/bee-guard.ts, so the rebuilt binary carries the change"],
-      "prohibitions": ["No code comments added", "MCP and unknown tools keep the fail-safe", "READ_ONLY_TOOLS unchanged"]
+      "truths": [
+        "a Pi leader source write on a small lane in an approved swarming phase is refused, naming bee_dispatch and /bee-tools-reopen",
+        "the same leader's bash `bee herding run` is refused",
+        "a worker session (BEE_HERDING_WORKER=1) on the same record may write",
+        "lane tiny may write",
+        "a non-Pi payload is unchanged",
+        "tools_reopened true may write",
+        "pi_harness_workflow false restores today's behavior"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "substantive": "the leader write-lock check"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+          "substantive": "one test per truth"
+        }
+      ],
+      "key_links": [
+        "write_guard/main.rs calls the new check on the PreToolUse path"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "Claude and Codex payloads unchanged",
+        "No change to the docs or tiny exemptions"
+      ]
     },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools"
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard",
+    "affects_skills": [],
+    "affects_specs": []
   },
   {
-    "id": "p1u-2",
+    "id": "p1u-5",
     "feature": "pi-1-0-upgrade",
-    "title": "Drive a bee workflow end to end on Pi 1.0.0 and record the evidence",
+    "lane": "high-risk",
+    "role": "code",
+    "change_class": "behavior",
+    "title": "Make the Pi stage tool set lane- and worker-aware so the leader is handed bee_dispatch",
+    "deps": [],
+    "decisions": [
+      "D8",
+      "D9",
+      "D11",
+      "034373cc-aa8d-4df4-a569-c9a761f80710"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs"
+    ],
+    "action": "Red first, then change allowed_tools_for to take lane and worker and implement contract pi-stage-loadout exactly. Read the lane from the resolved record's route, the worker from env BEE_HERDING_WORKER, and pi_harness_workflow from config. Keep both notice sentences and add the leader case's sentence naming bee_dispatch and /bee-tools-reopen. No code comments.",
+    "must_haves": {
+      "truths": [
+        "a leader in an approved swarming phase on lane small gets the full set minus edit and write, plus bee_dispatch and bee_advisor",
+        "a worker session gets the full set plus verdict",
+        "lane tiny keeps the full set",
+        "the gated phases keep read and bash only",
+        "the full set names bee_dispatch, bee_advisor and verdict",
+        "pi_harness_workflow false restores today's answer"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/stage_tools.rs",
+          "substantive": "lane- and worker-aware allowed_tools_for with its tests"
+        }
+      ],
+      "key_links": [
+        "the belt's turn_start narrowing reads allowed_tools from this hook unchanged"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "READ_ONLY_TOOLS unchanged"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee stage_tools",
+    "affects_skills": [],
+    "affects_specs": []
+  },
+  {
+    "id": "p1u-6",
+    "feature": "pi-1-0-upgrade",
+    "lane": "high-risk",
+    "role": "code",
+    "change_class": "api",
+    "title": "Give the Pi leader bee_dispatch and bee_advisor tools that start workers through bee",
+    "deps": [
+      "p1u-4",
+      "p1u-5"
+    ],
+    "decisions": [
+      "D6",
+      "D9",
+      "690c84f5-d884-4524-ad73-1289e805dd64",
+      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
+      "c7bde4b8-00bc-4541-9486-89932d04b996"
+    ],
+    "files": [
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      ".pi/extensions/bee-guard.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "action": "Red first in pi_plugin_contracts.rs, then in the belt: register bee_dispatch and bee_advisor per contract pi-dispatch-tool, reusing tokenizeArgv, resolveBeeBinary and the result drain; add bee_runtime \"pi\" and tools_reopened to the write-guard payload; show each running job in the worker widget. Rebuild .bee/bin/bee, run bee dev regen, and run bee doctor --runtime pi. No code comments.",
+    "must_haves": {
+      "truths": [
+        "bee_dispatch runs dispatch prepare and then the returned herding command as argv, detached, and returns a job id at once",
+        "bee_dispatch refuses a payload whose command is not `.bee/bin/bee herding run`",
+        "bee_advisor runs prepare with --kind advisor",
+        "a prepare refusal comes back as the tool error verbatim",
+        "the write-guard payload carries bee_runtime pi and tools_reopened",
+        "bee doctor --runtime pi is READY after rebuild"
+      ],
+      "artifacts": [
+        {
+          "path": ".pi/extensions/bee-guard.ts",
+          "substantive": "bee_dispatch and bee_advisor tools"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "substantive": "contract tests for both tools and the payload fields"
+        }
+      ],
+      "key_links": [
+        "doctor.rs:47 embeds the belt, so .bee/bin/bee is rebuilt in this cell"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No spawner in TypeScript beyond running the returned bee command",
+        "No shell parsing of the returned command"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts",
+    "affects_skills": [],
+    "affects_specs": [],
+    "regen_obligation_ack": "regen chain runs inside this cell (bee dev regen named in action)"
+  },
+  {
+    "id": "p1u-7",
+    "feature": "pi-1-0-upgrade",
     "lane": "high-risk",
     "role": "test",
     "change_class": "test",
-    "deps": ["p1u-1"],
-    "decisions": ["D1", "D3"],
-    "files": [".bee/verify/verify-app/features/pi-hat-wave.md"],
-    "read_first": [".bee/verify/verify-app/features/pi-hat-wave.md", "docs/history/pi-1-0-upgrade/plan.md"],
-    "action": "Use the verify-app skill on a throwaway sandbox with Pi 1.0.0: run the pi-hat-wave flow; run one codemode script that reads and one that writes before the gate; count system entries per turn in the session JSONL over five turns; narrow tools by stage, then /reload, and read the active tools; run /bee-worktree-new and confirm relocation after the deferred agent_settled.",
+    "title": "Prove on Pi 1.0 that a small model dispatches instead of writing inline",
+    "deps": [
+      "p1u-6"
+    ],
+    "decisions": [
+      "D1",
+      "eba50fb9-8c3c-49c9-899c-9ffe202b77f0",
+      "034373cc-aa8d-4df4-a569-c9a761f80710",
+      "690c84f5-d884-4524-ad73-1289e805dd64"
+    ],
+    "files": [
+      ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+      ".bee/verify/verify-app/features/README.md",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ],
+    "read_first": [
+      "docs/history/pi-1-0-upgrade/CONTEXT.md",
+      "docs/history/pi-1-0-upgrade/plan.md",
+      "docs/history/pi-1-0-upgrade/reports/hat-wave.md",
+      ".bee/verify/verify-app/features/pi-hat-wave.md"
+    ],
+    "action": "Leader-run (the worker-outward guard refuses a worker that starts pi). In a fresh verify-app sandbox with the candidate vendored, a small-lane feature in an approved swarming phase and one open cell, drive a Pi 1.0 leader on deepseek/deepseek-flash: record the tool list, a refused inline write with its text, a bee_dispatch call, the worker's verdict, and the cell's file written by the worker. Write the new feature file and its README index row, and add the mechanism to the audit page.",
     "must_haves": {
-      "truths": ["a Pi 1.0.0 run id in pi-hat-wave.md", "system entries per turn, as a number", "a yes or no for /reload keeping stage narrowing", "relocation lands in the worktree", "the codemode write is denied with a message naming the nested tool"],
-      "artifacts": [{"path": ".bee/verify/verify-app/features/pi-hat-wave.md", "substantive": "a Pi 1.0.0 run id and its findings"}],
-      "key_links": ["p1u-3 cites this run id as the D1 evidence"],
-      "prohibitions": ["No product source edits"]
+      "truths": [
+        "the leader's tool list has bee_dispatch and no edit or write",
+        "an inline leader write is refused with the bee_dispatch hint",
+        "bee_dispatch starts a worker that writes the cell's file and returns a verdict",
+        "the feature file names the run id and evidence path"
+      ],
+      "artifacts": [
+        {
+          "path": ".bee/verify/verify-app/features/pi-harness-dispatch.md",
+          "substantive": "how to drive it, the run evidence, gotchas"
+        }
+      ],
+      "key_links": [
+        "README.md index lists pi-harness-dispatch"
+      ],
+      "prohibitions": [
+        "No product source edits"
+      ]
     },
-    "verify": "green:live — the verify-app skill run on Pi 1.0.0; the run id and evidence path recorded in .bee/verify/verify-app/features/pi-hat-wave.md"
-  },
-  {
-    "id": "p1u-3",
-    "feature": "pi-1-0-upgrade",
-    "title": "Record Pi 1.0.0 as the proven ceiling and audit the 0.85.1 to 1.0.0 range",
-    "lane": "high-risk",
-    "role": "docs",
-    "change_class": "docs",
-    "deps": ["p1u-2"],
-    "decisions": ["D1", "D4", "D10"],
-    "files": [".pi/extensions/bee-guard.ts", "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md", "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"],
-    "read_first": ["docs/history/pi-1-0-upgrade/CONTEXT.md", "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"],
-    "action": "Edit the existing CEILING comment line to name 1.0.0 and the p1u-2 run (an edit, not a new comment). Add the 0.85.1 to 1.0.0 keep/adapt/delete table to the audit page, including codemode partial writes and the D3 and /reload findings. Update the re-verified label in the contract test. File the D4 and D10 backlog rows with bee backlog add.",
-    "must_haves": {
-      "truths": ["header, audit page and test name the same ceiling", "every breaking entry from 0.86.0 and 0.87.0 has a disposition row", "D4 and D10 rows exist in the backlog"],
-      "artifacts": [{"path": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md", "substantive": "0.85.1 to 1.0.0 disposition table"}],
-      "key_links": ["the ceiling cites the p1u-2 run id"],
-      "prohibitions": ["Floor stays 0.84.4", "No D4 or D10 ability is built", "Comment count does not rise"]
-    },
-    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts"
+    "verify": "bash .bee/verify/verify-app/control-bee doctor",
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+    ]
   }
 ]
 ```
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| p1u-1 | Let codemode and tool_search through the Pi guard and keep them | belt, `stage_tools.rs`, `pi_plugin_contracts.rs` | — | a Pi user can run codemode in a bee repo; its unapproved writes are still blocked | contract and stage-tools tests green; doctor byte-identical |
-| p1u-2 | Drive bee on Pi 1.0.0 end to end | `pi-hat-wave.md` | p1u-1 | the verify map shows a passing 1.0.0 run | green:live run log |
-| p1u-3 | Record 1.0.0 as the proven ceiling | belt header, audit page, contract test | p1u-2 | bee's docs and checks agree Pi 1.0.0 is supported | contract test green + docs parity |
+| p1u-4 | Refuse source writes from a Pi leader in the execute phase | write_guard `hook_local.rs`, `main.rs`, `tests.rs` | — | a Pi leader that tries to edit code is told to use `bee_dispatch` | `cargo test -p bee write_guard` |
+| p1u-5 | Make the Pi stage tool set lane- and worker-aware | `stage_tools.rs` | — | the leader's tool list shows `bee_dispatch` and no `edit`/`write` | `cargo test -p bee stage_tools` |
+| p1u-6 | Give the Pi leader `bee_dispatch` and `bee_advisor` | belt, `pi_plugin_contracts.rs` | p1u-4, p1u-5 | one tool call starts a worker and returns a job id | `cargo test --test pi_plugin_contracts`; doctor pi READY |
+| p1u-7 | Prove on Pi 1.0 that a small model dispatches | new `pi-harness-dispatch.md`, README index, audit page | p1u-6 | the verify map shows a small model dispatching on Pi 1.0 | green:live, leader-run |
 
 ## Test matrix
 Slice 1:

@@ -143,6 +143,8 @@ install tree. Live evidence is run `20261002-135348-2965648`
 
 Nothing in the range earns `delete`.
 
+**Harness-native dispatch on Pi (pi-1-0-upgrade slice 2).** On lanes `small`, `standard` and `high-risk` in an approved swarming phase, write-guard refuses a Pi leader's source write (`check_pi_leader_write_lock`, contract `eba50fb9`), stage-tools hands the leader `bee_dispatch` and `bee_advisor` instead of `edit`/`write` (contract `034373cc`), and the belt's `bee_dispatch` runs `bee dispatch prepare` plus the returned `bee herding run` detached (contract `690c84f5`). Live proof: `.bee/verify/verify-app/features/pi-harness-dispatch.md`, run 20261002-153242-3268921.
+
 ## Business Rules
 
 - A row above is true for the versions named in its evidence and for no others.

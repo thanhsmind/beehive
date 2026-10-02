@@ -901,6 +901,53 @@ this edit there. Deliberate override: set worktree_first: \"off\" in .bee/config
     )))
 }
 
+pub(crate) fn is_pi_leader(payload: &Map<String, Value>) -> bool {
+    payload.get("bee_runtime").and_then(Value::as_str) == Some("pi")
+        && payload.get("tools_reopened") != Some(&Value::Bool(true))
+        && std::env::var("BEE_HERDING_WORKER").as_deref() != Ok("1")
+}
+
+fn runs_herding_run(command: &str) -> bool {
+    tokenize_deep(command).tokens.windows(3).any(|w| {
+        let base = w[0].rsplit(['/', '\\']).next().unwrap_or("");
+        matches!(base, "bee" | "bee.exe") && w[1] == "herding" && w[2] == "run"
+    })
+}
+
+pub(crate) fn check_pi_leader_write_lock(
+    store_root: &Path,
+    record: &Map<String, Value>,
+    rel_paths: &[String],
+    command: &str,
+) -> R<Option<String>> {
+    let lane = record
+        .get("route")
+        .and_then(|r| r.get("lane"))
+        .and_then(Value::as_str);
+    if !matches!(lane, Some("small" | "standard" | "high-risk"))
+        || record.get("phase").and_then(Value::as_str) != Some("swarming")
+        || record.get("approved_gates").and_then(|g| g.get("execution")) != Some(&Value::Bool(true))
+    {
+        return Ok(None);
+    }
+    let what = if let Some(rel) = rel_paths.iter().find(|rel| !under_allowed_prefix_gated(rel)) {
+        format!("writing \"{rel}\"")
+    } else if runs_herding_run(command) {
+        "running `bee herding run` by hand".to_string()
+    } else {
+        return Ok(None);
+    };
+    if read_config(store_root)?.get("pi_harness_workflow") == Some(&Value::Bool(false)) {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "bee Pi leader lock: {what} is refused — the Pi leader does not write source in the execute phase of a \
+\"{}\" lane; workers do. FIX: hand the cell to a worker with the bee_dispatch tool. To write here yourself \
+anyway, run /bee-tools-reopen first.",
+        lane.unwrap_or_default()
+    )))
+}
+
 // ─── large-read guard (provenance: bee-write-guard.mjs router-cost rc-1) ───
 
 pub(crate) fn resolve_max_read_lines(config: &Map<String, Value>) -> f64 {
