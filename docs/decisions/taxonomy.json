@@ -628,6 +628,7 @@
     "contract:pi-settle-continuation",
     "contract:herding-steer",
     "contract:pi-worker-steer-drain",
-    "contract:pi-scope-input"
+    "contract:pi-scope-input",
+    "plan-rev"
   ]
 }
