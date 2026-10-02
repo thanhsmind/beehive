@@ -346,7 +346,7 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
 ///     while installing nothing, the exact silent-drop the manifest exists
 ///     to catch for every other shipped artifact
 ///   * the fourth belt       .pi/extensions/** (pi-support D1) —
-///     `bee-guard.ts`, vendored into a host by `bee onboard --apply` exactly
+///     `bee-guard/`, vendored into a host by `bee onboard --apply` exactly
 ///     as the OpenCode plugin is, and rooted here for the same reason
 ///
 /// DROPPED, with reasons:

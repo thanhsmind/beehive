@@ -354,7 +354,7 @@ mod tests {
     fn stage_tools_keeps_the_verdict_keys_it_publishes() {
         // The Pi belt reads exactly two of these: `allowed_tools` (with
         // `allowedTools`/`tools` fallbacks) and `stage` (with a `stage_name`
-        // fallback) — .pi/extensions/bee-guard.ts, the turn_start handler. The
+        // fallback) — .pi/extensions/bee-guard/, the turn_start handler. The
         // belt builds its own user and model sentences, so the four message
         // keys below have no reader today; they stay because the payload is
         // published, and this test states plainly which are load-bearing.

@@ -703,8 +703,8 @@ fn pi_repo(
         std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
     }
     if let Some(text) = extension {
-        std::fs::create_dir_all(root.join(".pi/extensions")).unwrap();
-        std::fs::write(root.join(".pi/extensions/bee-guard.ts"), text).unwrap();
+        std::fs::create_dir_all(root.join(".pi/extensions/bee-guard")).unwrap();
+        std::fs::write(root.join(".pi/extensions/bee-guard/index.ts"), text).unwrap();
     }
     if let Some(ver) = plugin_version {
         std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
@@ -816,7 +816,7 @@ fn pi_doctor_reports_unreadable_cases() {
     let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
 
     // Unreadable extension
-    let ext_path = root.join(".pi/extensions/bee-guard.ts");
+    let ext_path = root.join(".pi/extensions/bee-guard/index.ts");
     let orig_perms = std::fs::metadata(&ext_path).unwrap().permissions();
     let mut zero_perms = orig_perms.clone();
     zero_perms.set_mode(0o000);
@@ -910,8 +910,8 @@ fn pi_doctor_reports_stale_binary() {
     let bin = root.join(".bee/bin/bee");
     write_executable_binary(&bin, "0.1.0", "0.0.9");
     std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
-    std::fs::create_dir_all(root.join(".pi/extensions")).unwrap();
-    std::fs::write(root.join(".pi/extensions/bee-guard.ts"), PI_EXTENSION_SOURCE).unwrap();
+    std::fs::create_dir_all(root.join(".pi/extensions/bee-guard")).unwrap();
+    std::fs::write(root.join(".pi/extensions/bee-guard/index.ts"), PI_EXTENSION_SOURCE).unwrap();
     std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
     std::fs::write(
         root.join(".claude-plugin/plugin.json"),
@@ -924,6 +924,20 @@ fn pi_doctor_reports_stale_binary() {
     assert_eq!(freshness.1, Some(false), "stale binary version must report not_ok");
     assert!(freshness.2.contains("0.0.9"), "{}", freshness.2);
     assert!(freshness.2.contains("0.1.0"), "{}", freshness.2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pi_doctor_reports_legacy_extension_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    std::fs::write(root.join(".pi/extensions/bee-guard.ts"), "legacy").unwrap();
+
+    let rows = pi_rows_of(&root, &mock_herdr_env);
+    let wiring = rows.iter().find(|(k, _, _)| k == "wiring_matches_binary").unwrap();
+    assert_eq!(wiring.1, Some(false), "legacy extension file must report not_ok");
+    assert!(wiring.2.contains(".pi/extensions/bee-guard.ts"), "{}", wiring.2);
+    assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
 }
 
 /// Pi doctor refuses attest because Pi has no trust-unknown rows to attest.

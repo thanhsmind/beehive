@@ -44,7 +44,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const ATTEST_REL: &str = ".bee/doctor-attest.json";
-const PI_EXTENSION_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
+const PI_EXTENSION_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard/index.ts");
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Runtime {
@@ -74,7 +74,7 @@ impl Runtime {
         match self {
             Runtime::Claude => ".claude/settings.json",
             Runtime::Codex => ".codex/hooks.json",
-            Runtime::Pi => ".pi/extensions/bee-guard.ts",
+            Runtime::Pi => ".pi/extensions/bee-guard/index.ts",
         }
     }
     fn skills_rel(self) -> &'static str {
@@ -300,31 +300,40 @@ fn mechanical_rows_with_env(
             }
         }
         Runtime::Pi => {
-            let extension_match = match hooks_bytes.as_ref() {
-                Some(on_disk) => {
-                    let same = on_disk.as_slice() == PI_EXTENSION_SOURCE.as_bytes();
-                    Row {
-                        key: "wiring_matches_binary",
-                        ok: Some(same),
-                        detail: if same {
-                            ".pi/extensions/bee-guard.ts is byte-identical to what this bee embeds".to_string()
-                        } else {
-                            ".pi/extensions/bee-guard.ts differs from what this bee embeds — re-run the installer to refresh it".to_string()
-                        },
-                    }
+            let legacy_path = root.join(".pi/extensions/bee-guard.ts");
+            let extension_match = if legacy_path.exists() {
+                Row {
+                    key: "wiring_matches_binary",
+                    ok: Some(false),
+                    detail: "legacy .pi/extensions/bee-guard.ts is present — run `bee onboard --apply` to migrate to .pi/extensions/bee-guard/".to_string(),
                 }
-                None => match hooks_ok {
-                    Some(false) => Row {
-                        key: "wiring_matches_binary",
-                        ok: Some(false),
-                        detail: "no .pi/extensions/bee-guard.ts to compare".to_string(),
+            } else {
+                match hooks_bytes.as_ref() {
+                    Some(on_disk) => {
+                        let same = on_disk.as_slice() == PI_EXTENSION_SOURCE.as_bytes();
+                        Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(same),
+                            detail: if same {
+                                ".pi/extensions/bee-guard/index.ts is byte-identical to what this bee embeds".to_string()
+                            } else {
+                                ".pi/extensions/bee-guard/index.ts differs from what this bee embeds — run `bee onboard --apply` to refresh it".to_string()
+                            },
+                        }
+                    }
+                    None => match hooks_ok {
+                        Some(false) => Row {
+                            key: "wiring_matches_binary",
+                            ok: Some(false),
+                            detail: "no .pi/extensions/bee-guard/index.ts to compare".to_string(),
+                        },
+                        _ => Row {
+                            key: "wiring_matches_binary",
+                            ok: None,
+                            detail: ".pi/extensions/bee-guard/index.ts cannot be read to compare".to_string(),
+                        },
                     },
-                    _ => Row {
-                        key: "wiring_matches_binary",
-                        ok: None,
-                        detail: ".pi/extensions/bee-guard.ts cannot be read to compare".to_string(),
-                    },
-                },
+                }
             };
             rows.push(extension_match);
 

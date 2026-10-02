@@ -135,7 +135,39 @@ const PLUGIN_SOURCE: &str = include_str!("../../../../../.opencode/plugins/bee-g
 /// (`docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md`
 /// and `docs/history/opencode-support/discovery.md`), and a rename would turn
 /// both pointers into dangling references to buy nothing.
-const PI_PLUGIN_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
+fn pi_plugin_source() -> &'static str {
+    static SOURCE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SOURCE.get_or_init(|| {
+        let dir = repo_root().join(".pi/extensions/bee-guard");
+        let index_file = dir.join("index.ts");
+        let index_content = std::fs::read_to_string(&index_file)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", index_file.display()));
+
+        let mut other_files = Vec::new();
+        let entries = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("failed to read_dir {}: {e}", dir.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|e| panic!("dir entry error in {}: {e}", dir.display()));
+            let path = entry.path();
+            if path.is_file()
+                && path.extension().and_then(|s| s.to_str()) == Some("ts")
+                && entry.file_name() != "index.ts"
+            {
+                other_files.push((entry.file_name(), path));
+            }
+        }
+        other_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut sources = Vec::with_capacity(1 + other_files.len());
+        sources.push(index_content);
+        for (_name, path) in other_files {
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+            sources.push(content);
+        }
+        sources.join("\n")
+    }).as_str()
+}
 
 /// `hook_contracts.rs`'s own source, embedded so the parity test can look
 /// for the CLAUDE belt's deny fixtures by what they actually assert, rather
@@ -452,10 +484,10 @@ fn opencode_advisory_hooks() -> BTreeSet<String> {
 /// supported floor is 0.84.4 (see the belt header). The same eight names were
 /// re-verified unchanged in Pi 0.85.1 on 2026-09-18.
 fn pi_tool_hook_pairs() -> Vec<(String, String)> {
-    let fn_start = PI_PLUGIN_SOURCE
+    let fn_start = pi_plugin_source()
         .find("function mapToolCall")
         .expect(".pi/extensions/bee-guard.ts: mapToolCall not found — has the routing function been renamed?");
-    let unbounded = &PI_PLUGIN_SOURCE[fn_start..];
+    let unbounded = &pi_plugin_source()[fn_start..];
     // Bound the slice at mapToolCall's own closing brace (the first `}` at
     // column 0 — every brace inside the body is indented). Unbounded, the
     // scan runs on into `sessionSource`'s `switch (reason)` and reads its
@@ -517,7 +549,7 @@ fn pi_belt_shape_marker(shape: &str) -> &'static str {
 /// passes for any name mentioned anywhere, whether or not that mention was
 /// tagged as an exclusion.
 fn pi_belt_names_the_exclusion(rule: &str) -> bool {
-    PI_PLUGIN_SOURCE.lines().any(|line| line.contains(rule) && line.contains("NAMED EXCLUSION"))
+    pi_plugin_source().lines().any(|line| line.contains(rule) && line.contains("NAMED EXCLUSION"))
 }
 
 /// Every ADVISORY hook name the Pi belt wires, parsed from its own
@@ -527,9 +559,9 @@ fn pi_advisory_hooks() -> BTreeSet<String> {
     const MARKER: &str = "runAdvisoryHook(directory, \"";
     let mut set = BTreeSet::new();
     let mut idx = 0usize;
-    while let Some(pos) = PI_PLUGIN_SOURCE[idx..].find(MARKER) {
+    while let Some(pos) = pi_plugin_source()[idx..].find(MARKER) {
         let start = idx + pos + MARKER.len();
-        let rest = &PI_PLUGIN_SOURCE[start..];
+        let rest = &pi_plugin_source()[start..];
         let end = rest
             .find('"')
             .expect(".pi/extensions/bee-guard.ts: unterminated runAdvisoryHook name literal");
@@ -1589,7 +1621,7 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
                          line (derived pairs: {pi_pairs:?})"
                     ));
                 }
-            } else if !PI_PLUGIN_SOURCE.contains(pi_belt_shape_marker(shape)) {
+            } else if !pi_plugin_source().contains(pi_belt_shape_marker(shape)) {
                 gaps.push(format!(
                     "{hook} / {shape} / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
                      longer implements this shape (marker {:?} not found)",
@@ -1646,7 +1678,7 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
                 .to_string(),
         );
     }
-    if !PI_PLUGIN_SOURCE.contains("could not parse") {
+    if !pi_plugin_source().contains("could not parse") {
         gaps.push(
             "unparseable exit-0 verdict / pi belt: .pi/extensions/bee-guard.ts's runBlockingHook no \
              longer blocks with a \"could not parse\" reason on invalid exit-0 verdict JSON"

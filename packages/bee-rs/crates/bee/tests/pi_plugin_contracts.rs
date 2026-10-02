@@ -97,14 +97,42 @@ fn repo_root() -> PathBuf {
 }
 
 fn pi_extension_path() -> PathBuf {
-    repo_root().join(".pi/extensions/bee-guard.ts")
+    repo_root().join(".pi/extensions/bee-guard/index.ts")
 }
 
-/// The real Pi belt source, embedded at compile time. Every derivation below
-/// reads THIS, never a hand-copied list — per
-/// `docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-
-/// never-compares-two-hand-lists.md`.
-const PI_PLUGIN_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-guard.ts");
+fn pi_plugin_source() -> &'static str {
+    static SOURCE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SOURCE.get_or_init(|| {
+        let dir = repo_root().join(".pi/extensions/bee-guard");
+        let index_file = dir.join("index.ts");
+        let index_content = std::fs::read_to_string(&index_file)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", index_file.display()));
+
+        let mut other_files = Vec::new();
+        let entries = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("failed to read_dir {}: {e}", dir.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|e| panic!("dir entry error in {}: {e}", dir.display()));
+            let path = entry.path();
+            if path.is_file()
+                && path.extension().and_then(|s| s.to_str()) == Some("ts")
+                && entry.file_name() != "index.ts"
+            {
+                other_files.push((entry.file_name(), path));
+            }
+        }
+        other_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut sources = Vec::with_capacity(1 + other_files.len());
+        sources.push(index_content);
+        for (_name, path) in other_files {
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+            sources.push(content);
+        }
+        sources.join("\n")
+    }).as_str()
+}
 
 // ─── derivations from the belt's own source ────────────────────────────────
 
@@ -119,10 +147,10 @@ const PI_PLUGIN_SOURCE: &str = include_str!("../../../../../.pi/extensions/bee-g
 /// ceiling, on 2026-10-02, so the label is provenance rather than drift.
 fn pi_builtin_tools() -> Vec<String> {
     const MARKER: &str = "const PI_BUILTIN_TOOLS = [";
-    let start = PI_PLUGIN_SOURCE.find(MARKER).unwrap_or_else(|| {
+    let start = pi_plugin_source().find(MARKER).unwrap_or_else(|| {
         panic!(".pi/extensions/bee-guard.ts: `{MARKER}` not found — has the enumerated built-in tool list been renamed or reshaped?")
     });
-    let rest = &PI_PLUGIN_SOURCE[start + MARKER.len()..];
+    let rest = &pi_plugin_source()[start + MARKER.len()..];
     let end = rest
         .find(']')
         .expect(".pi/extensions/bee-guard.ts: unterminated PI_BUILTIN_TOOLS array literal");
@@ -157,10 +185,10 @@ fn pi_builtin_tools() -> Vec<String> {
 /// `sessionSource`'s own `switch (reason)` and its `case "new"` /
 /// `case "reload"` labels get parsed as routed TOOL names.
 fn map_tool_call_body() -> &'static str {
-    let fn_start = PI_PLUGIN_SOURCE
+    let fn_start = pi_plugin_source()
         .find("function mapToolCall")
         .expect(".pi/extensions/bee-guard.ts: mapToolCall not found — has the routing function been renamed?");
-    let body = &PI_PLUGIN_SOURCE[fn_start..];
+    let body = &pi_plugin_source()[fn_start..];
     // The function's own closing brace is the first `}` at column 0 after it;
     // every brace inside the body is indented.
     let end = body
@@ -267,7 +295,7 @@ fn strip_js_comments(source: &str) -> String {
 /// `runAdvisoryHook(directory, "<name>", ...)` call sites — same derivation
 /// the OpenCode suite uses for its belt.
 fn pi_advisory_hooks() -> BTreeSet<String> {
-    let stripped = strip_js_comments(PI_PLUGIN_SOURCE);
+    let stripped = strip_js_comments(pi_plugin_source());
     const MARKER: &str = "runAdvisoryHook(directory, \"";
     let mut set = BTreeSet::new();
     let mut idx = 0usize;
@@ -307,7 +335,7 @@ fn pi_registered_events_from(source: &str) -> BTreeSet<String> {
 /// fixture list is gated against: an event wired without a row here would
 /// otherwise be an advisory surface nothing ever proved swallows its failures.
 fn pi_registered_events() -> BTreeSet<String> {
-    let set = pi_registered_events_from(PI_PLUGIN_SOURCE);
+    let set = pi_registered_events_from(pi_plugin_source());
     assert!(
         !set.is_empty(),
         ".pi/extensions/bee-guard.ts: found zero `pi.on(\"…\"` registrations — event derivation broke"
@@ -333,7 +361,7 @@ fn pi_registered_commands_from(source: &str) -> BTreeSet<String> {
 }
 
 fn pi_registered_commands() -> BTreeSet<String> {
-    pi_registered_commands_from(PI_PLUGIN_SOURCE)
+    pi_registered_commands_from(pi_plugin_source())
 }
 
 /// Rules the Claude hook manifest (`packages/bee/hooks/claude-hooks.json`)
@@ -372,10 +400,10 @@ fn claude_turn_end_rules() -> BTreeSet<String> {
 
 /// The body of the `pi.on("agent_settled", ...)` handler in `.pi/extensions/bee-guard.ts`.
 fn pi_agent_settled_handler_body() -> &'static str {
-    let start = PI_PLUGIN_SOURCE.find("pi.on(\"agent_settled\"").expect(
+    let start = pi_plugin_source().find("pi.on(\"agent_settled\"").expect(
         ".pi/extensions/bee-guard.ts: pi.on(\"agent_settled\" not found — turn-end handler renamed?",
     );
-    let body = &PI_PLUGIN_SOURCE[start..];
+    let body = &pi_plugin_source()[start..];
     let end = body
         .find("pi.on(\"session_before_compact\"")
         .expect(".pi/extensions/bee-guard.ts: could not find the end of agent_settled handler");
@@ -414,11 +442,11 @@ fn pi_turn_end_rules() -> BTreeSet<String> {
 /// `renderResultInjection`'s own source, sliced at the function's closing
 /// brace — the same column-0 bound `map_tool_call_body` uses.
 fn render_result_injection_body() -> &'static str {
-    let start = PI_PLUGIN_SOURCE.find("function renderResultInjection").expect(
+    let start = pi_plugin_source().find("function renderResultInjection").expect(
         ".pi/extensions/bee-guard.ts: renderResultInjection not found — has the injected-header \
          renderer been renamed?",
     );
-    let body = &PI_PLUGIN_SOURCE[start..];
+    let body = &pi_plugin_source()[start..];
     let end = body
         .find("\n}\n")
         .expect(".pi/extensions/bee-guard.ts: could not find the end of renderResultInjection");
@@ -446,10 +474,10 @@ fn injection_row_keys() -> Vec<String> {
 /// The fence info tag the injection uses, read from the belt's own constant.
 fn result_fence_tag() -> String {
     const MARKER: &str = "const RESULT_FENCE_TAG = \"";
-    let start = PI_PLUGIN_SOURCE
+    let start = pi_plugin_source()
         .find(MARKER)
         .expect(".pi/extensions/bee-guard.ts: RESULT_FENCE_TAG constant not found");
-    let rest = &PI_PLUGIN_SOURCE[start + MARKER.len()..];
+    let rest = &pi_plugin_source()[start + MARKER.len()..];
     let end = rest.find('"').expect(".pi/extensions/bee-guard.ts: unterminated RESULT_FENCE_TAG literal");
     rest[..end].to_string()
 }
@@ -459,10 +487,10 @@ fn result_fence_tag() -> String {
 /// drain run at all, and a cadence change would make that silent.
 fn drain_poll_ms() -> u64 {
     const MARKER: &str = "const DRAIN_POLL_MS = ";
-    let start = PI_PLUGIN_SOURCE
+    let start = pi_plugin_source()
         .find(MARKER)
         .expect(".pi/extensions/bee-guard.ts: DRAIN_POLL_MS constant not found — the drain cadence moved");
-    let rest = &PI_PLUGIN_SOURCE[start + MARKER.len()..];
+    let rest = &pi_plugin_source()[start + MARKER.len()..];
     let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
     rest[..end].parse().unwrap_or_else(|e| panic!(".pi/extensions/bee-guard.ts: DRAIN_POLL_MS is not a number: {e}"))
 }

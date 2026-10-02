@@ -55,7 +55,7 @@ use std::process::ExitCode;
 /// docs/history/pi-support/plan.md). Pi is a first-class runtime at the
 /// dispatch door (D5: `team.pi`, herding-only) and ships no hook-config
 /// surface at all — its belt is the checked-in TypeScript extension at
-/// `.pi/extensions/bee-guard.ts`, auto-discovered by Pi from the workspace
+/// `.pi/extensions/bee-guard/`, auto-discovered by Pi from the workspace
 /// cwd, translating Pi's events onto `bee hook <rule>`. So there is NO
 /// `Runtime::Pi` and NO fourth projection here either; D4's purpose (derived
 /// coverage, never a hand list) is served the OpenCode way — the belt joins
