@@ -2071,7 +2071,7 @@ so the next session can resume cleanly, or record a capture stub for what settle
     }
 
     #[test]
-    fn settle_owes_no_cap_while_claim_has_live_heartbeat() {
+    fn settle_owes_cap_when_claim_belongs_to_live_session_without_running_worker() {
         let fx = claimed_cell_fixture();
         let root = fx.path();
         write_json_file(
@@ -2081,11 +2081,6 @@ so the next session can resume cleanly, or record a capture stub for what settle
         write_json_file(
             &root.join(".bee").join("sessions").join("s-live.json"),
             &json!({"id": "s-live", "status": "active", "last_heartbeat": now_iso()}),
-        );
-        assert!(owed(root).is_empty());
-        write_json_file(
-            &root.join(".bee").join("sessions").join("s-live.json"),
-            &json!({"id": "s-live", "status": "closed", "last_heartbeat": now_iso()}),
         );
         let after = owed(root);
         assert_eq!(after.len(), 1, "{after:?}");

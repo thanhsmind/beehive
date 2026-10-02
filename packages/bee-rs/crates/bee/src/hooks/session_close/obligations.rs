@@ -1,4 +1,4 @@
-use super::{control_root, list_claimed_cells, read_json_failopen, read_session_record};
+use super::{control_root, list_claimed_cells, read_json_failopen};
 use crate::fsutil::ReadJson;
 use crate::hooks::adapter::{now_iso, HookContext};
 use crate::verbs::state_group::{advisor_ref_anchors, advisor_ref_stale};
@@ -103,7 +103,7 @@ One extra turn starts now to run the advisor (this costs extra model calls). \
 }
 
 fn is_cell_worker_running(root: &Path, cell_id: &str) -> bool {
-    has_running_registered_worker(root, cell_id) || has_live_claim_heartbeat(root, cell_id)
+    has_running_registered_worker(root, cell_id)
 }
 
 fn has_running_registered_worker(root: &Path, cell_id: &str) -> bool {
@@ -208,51 +208,6 @@ fn job_dir_matches_worker_or_cell(dir: &Path, nickname: Option<&str>, cell_id: &
     false
 }
 
-fn has_live_claim_heartbeat(root: &Path, cell_id: &str) -> bool {
-    let claim_file = root.join(".bee").join("claims").join(format!("{cell_id}.json"));
-    let ReadJson::Parsed(Value::Object(claim)) = read_json_failopen(&claim_file) else {
-        return false;
-    };
-    let Some(sid) = claim.get("session").and_then(Value::as_str) else {
-        return false;
-    };
-    let Some(session) = super::read_session_record(root, sid) else {
-        return false;
-    };
-    if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead")
-        || session.get("closed_at").is_some()
-        || session.get("released").is_some()
-    {
-        return false;
-    }
-    let Some(beat_ms) = date_parse_ms(session.get("last_heartbeat")) else {
-        return false;
-    };
-    let now_ms = chrono::Utc::now().timestamp_millis() as f64;
-    if now_ms - beat_ms > 900_000.0 {
-        return false;
-    }
-    if let Some(ttl) = claim.get("ttl_seconds").and_then(Value::as_f64) {
-        if let Some(claimed_ms) = date_parse_ms(claim.get("claimed_at")) {
-            if claimed_ms + ttl * 1000.0 <= now_ms {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-fn date_parse_ms(v: Option<&Value>) -> Option<f64> {
-    let Value::String(s) = v? else { return None };
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
-        return Some(dt.timestamp_millis() as f64);
-    }
-    if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        let dt = d.and_hms_opt(0, 0, 0)?;
-        return Some(dt.and_utc().timestamp_millis() as f64);
-    }
-    None
-}
 
 
 fn planning_records(root: &Path) -> Vec<Map<String, Value>> {
