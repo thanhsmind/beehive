@@ -51,7 +51,44 @@ The first run (20261002-151421-3214679, before the p1u-5/p1u-6 fixes) found
 three defects: the belt dropped the hook's notice sentences, narrowing removed
 non-bee tools, and the leader set carried `verdict`. All three are fixed.
 
+## Settle obligations (slice 3)
+
+When a Pi leader tries to stop with bee work still owed, it gets one extra
+turn. bee's `session-close` hook decides what is owed (`obligations_only`
+payload) and returns each item once; the belt's `agent_before_settle`
+handler shows the notice and asks Pi for one continuation. `/bee-obligation-skip
+<key>` dismisses an item. The older agent_settled nudge does not fire for the
+same settle.
+
+Drive it: a sandbox feature with a claimed, uncapped cell (kind `cap`), or a
+`high-risk` mode feature in `planning` with a gate preview and no advisor_ref
+(kind `advisor`). Delete `.bee/runtime/settle-obligations.json` after any
+probe of the hook, because a probe marks the item served.
+
+### Evidence (2026-10-02, Pi 1.0.0, leader deepseek/deepseek-flash)
+
+- **Cap, run 20261002-181622-3758076** (evidence
+  `/home/thanhsmind/.local/state/bee-verify/evidence/20261002-181622-3758076/`, `drive-cap.txt`, `rpc-cap.jsonl`):
+  after "ready" the notice `bee: work is still owed: cell demo-1 is claimed but
+  not capped. One extra turn starts now to cap it.` fired; in the extra turn the
+  leader found the work undone, called `bee_dispatch`, the worker wrote and
+  capped the cell. A second prompt settled with no repeat.
+- **Advisor, run 20261002-184508-3853826** (evidence
+  `/home/thanhsmind/.local/state/bee-verify/evidence/20261002-184508-3853826/`, `drive-advisor.txt`, `rpc-advisor.jsonl`):
+  the planning tool set was `read, bash, bee_advisor`; the notice named
+  `5 runs, one bee_advisor call each: hat-facts-gaps, hat-risks, hat-value,
+  hat-alternatives, hat-user-impact`; the leader called `bee_advisor` five
+  times and read the reports. It did not approve the gate. A second prompt
+  settled with no repeat.
+- The first advisor run (20261002-182003-3768157, before the p1u-5 rework)
+  had only `read, bash` in planning; the leader started the seats through
+  bash and recorded the advisor_ref itself.
+
 ## Gotchas
+
+- In the advisor run on the fixed build, the leader stopped before
+  `bee state advisor-ref record`; the obligation fires once per plan, so it was
+  not pushed again. Filed as a backlog finding.
 
 - The small model still ran `dispatch prepare` through bash once before it
   called `bee_dispatch`. The tool call is what started the worker.
