@@ -1986,6 +1986,10 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(first[0]["kind"], "advisor");
         assert_eq!(first[0]["key"], format!("demo:advisor:{sha}"));
         assert!(first[0].get("cell").is_none());
+        assert!(first[0]["message"].as_str().unwrap().contains("5 runs"));
+        assert!(first[0]["message"].as_str().unwrap().contains("hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("5 runs"));
+        assert!(first[0]["user_notice"].as_str().unwrap().contains("hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact"));
         assert!(owed(root).is_empty());
     }
 
@@ -2010,6 +2014,9 @@ so the next session can resume cleanly, or record a capture stub for what settle
         // SAFETY: herding_env_lock serializes every test that touches this var.
         unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
         let worker_owed = owed(fx.path());
+        // SAFETY: herding_env_lock serializes every test that touches this var.
+        unsafe { std::env::remove_var("BEE_HERDING_WORKER") };
+        let non_worker_owed = owed(fx.path());
         match prior {
             // SAFETY: herding_env_lock serializes every test that touches this var.
             Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
@@ -2017,7 +2024,7 @@ so the next session can resume cleanly, or record a capture stub for what settle
             None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
         }
         assert!(worker_owed.is_empty(), "{worker_owed:?}");
-        assert_eq!(owed(fx.path()).len(), 1);
+        assert_eq!(non_worker_owed.len(), 1);
     }
 
     #[test]

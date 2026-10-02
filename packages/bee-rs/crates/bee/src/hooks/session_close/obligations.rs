@@ -83,13 +83,16 @@ If the work is not done, write .bee/HANDOFF.json and release the claim instead."
             "kind": "advisor",
             "message": format!(
                 "bee: the high-risk plan for {feature} is gate-ready but has no fresh advisor consult ({}). \
-Run the plan-step hat wave now: bee_advisor (bee dispatch prepare --kind advisor), synthesize it, then record it: \
-bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>. Do not approve the gate; the user does.",
+Run the plan-step hat wave now: 5 runs, one bee_advisor call each for the five hat seats \
+(hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact) via bee dispatch prepare --kind advisor, \
+synthesize it, then record it: bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>. \
+Do not approve the gate; the user does.",
                 staleness.reasons.join("; ")
             ),
             "user_notice": format!(
                 "bee: the plan for {feature} is ready for its gate but has no fresh advisor review. \
-One extra turn starts now to run the advisor (this costs extra model calls). \
+One extra turn starts now to run the advisor (5 runs, one bee_advisor call each: \
+hat-facts-gaps, hat-risks, hat-value, hat-alternatives, hat-user-impact). \
 (Esc stops it. This message will not repeat for this plan.)"
             ),
         }));
