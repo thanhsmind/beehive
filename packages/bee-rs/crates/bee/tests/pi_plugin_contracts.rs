@@ -2114,7 +2114,17 @@ fn the_belt_wires_every_advisory_surface_the_event_map_promises() {
 #[test]
 fn the_injected_header_carries_exactly_the_one_line_rows_the_contract_names() {
     let derived = injection_row_keys();
-    let expected = ["job_id", "round", "seat", "cell_id", "status", "summary", "proof", "report_path"];
+    let expected = [
+        "job_id",
+        "round",
+        "seat",
+        "cell_id",
+        "status",
+        "summary",
+        "proof",
+        "report_path",
+        "undelivered_steer",
+    ];
     assert_eq!(
         derived, expected,
         "the injected fence's row set (or its order) changed. Every row here is a ONE-LINE field \
@@ -3002,6 +3012,8 @@ fn never_throw_event_rows() -> Vec<(&'static str, Value)> {
         ("session_before_compact", json!({})),
         ("session_shutdown", json!({"reason": "quit"})),
         ("session_shutdown", json!({})),
+        ("input", json!({"text": "hello", "streamingBehavior": "steer"})),
+        ("input", json!({})),
     ]
 }
 
@@ -9938,6 +9950,433 @@ fn real_bee_hook_settle_continuation_end_to_end() {
         "second settle must not produce continuation for already served obligation"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn verdict_refuses_when_bee_herding_job_id_mailbox_dir_is_missing() {
+    node_or_skip!("verdict_refuses_when_bee_herding_job_id_mailbox_dir_is_missing");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let other_job_id = "job-other-newest";
+    let other_mailbox = dir.path().join(".bee").join("mailbox").join(other_job_id);
+    std::fs::create_dir_all(&other_mailbox).expect("create mailbox");
+    std::fs::write(other_mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let missing_job_id = "job-missing-404";
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell",
+        "files_changed": [".pi/extensions/bee-guard.ts"],
+        "proof": "cargo test -p bee — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-1",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", missing_job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(exec_res.threw, "verdict execute must throw when BEE_HERDING_JOB_ID mailbox is missing");
+    let msg = exec_res.message.as_deref().unwrap_or("");
+    assert!(
+        msg.contains(missing_job_id),
+        "refusal message must name the missing job id, got: {msg}"
+    );
+    assert!(
+        !other_mailbox.join("result-1.json").exists(),
+        "verdict must not fall back to newest dir when BEE_HERDING_JOB_ID is set"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn worker_in_worktree_records_verdict_in_main_checkout_mailbox() {
+    node_or_skip!("worker_in_worktree_records_verdict_in_main_checkout_mailbox");
+    let Some(git) = git_or_skip("worker_in_worktree_records_verdict_in_main_checkout_mailbox") else {
+        return;
+    };
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+
+    let scratch_dir = tempfile::tempdir().expect("tempdir");
+    let scratch = dunce::canonicalize(scratch_dir.path()).expect("canonicalize tempdir");
+    let main_root = scratch.join("main");
+    let worktree = scratch.join("wt-worker");
+    std::fs::create_dir_all(&main_root).unwrap();
+
+    let run_git = |args: &[&str], what: &str| {
+        let out = Command::new(&git)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("{what}: failed to run git {args:?}: {e}"));
+        assert!(
+            out.status.success(),
+            "{what}: git {args:?} exited nonzero ({:?}) — stderr:\n{}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let main_str = main_root.to_str().unwrap();
+    run_git(&["-C", main_str, "init", "-q"], "git init");
+    run_git(
+        &["-C", main_str, "-c", "user.name=test", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init"],
+        "git commit",
+    );
+    run_git(
+        &["-C", main_str, "worktree", "add", "-q", "--detach", worktree.to_str().unwrap()],
+        "git worktree add",
+    );
+
+    let job_id = "job-wt-verdict-1";
+    let mailbox = main_root.join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox in main");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+    std::fs::write(mailbox.join("ack-1.json"), "{}").expect("write ack");
+    write_stub_bee(&main_root, &StubBehavior::Allow);
+
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "worktree worker finished",
+        "files_changed": ["src/lib.rs"],
+        "proof": "cargo test — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    &worktree,
+                    "sess-wt",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(!exec_res.threw, "verdict in worktree threw: {:?}", exec_res.message);
+    assert_eq!(
+        exec_res.result.as_ref().and_then(|r| r.get("terminate")).and_then(Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        mailbox.join("result-1.json").is_file(),
+        "result-1.json must be recorded in main checkout mailbox"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn input_event_with_steer_or_followup_records_scope_input_and_passes_through_unchanged() {
+    node_or_skip!("input_event_with_steer_or_followup_records_scope_input_and_passes_through_unchanged");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            json!({
+                "event": "input",
+                "event_arg": {
+                    "text": "please also add v2 endpoint",
+                    "streamingBehavior": "steer"
+                },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": "sess-input-steer",
+            }),
+            json!({
+                "event": "input",
+                "event_arg": {
+                    "text": "plain prompt without steer"
+                },
+                "cwd": dir.path().to_string_lossy(),
+                "session_id": "sess-input-plain",
+            }),
+        ],
+    );
+
+    assert!(run.results.iter().all(|r| !r.threw), "{:?}", run.results);
+    let r0 = run.results[0].result.as_ref().expect("input steer result");
+    assert_eq!(r0["action"], "continue");
+
+    let r1 = run.results[1].result.as_ref().expect("input plain result");
+    assert_eq!(r1["action"], "continue");
+
+    let calls = &run.exec_calls;
+    let session_close_calls: Vec<&Value> = calls
+        .iter()
+        .filter(|c| {
+            c["args"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|arg| arg == "session-close"))
+        })
+        .collect();
+    assert_eq!(
+        session_close_calls.len(),
+        1,
+        "only steer or follow-up input must be sent to session-close: {calls:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn worker_steer_drain_delivers_steer_files_once_with_prefix_and_skips_malformed_or_oversized() {
+    node_or_skip!("worker_steer_drain_delivers_steer_files_once_with_prefix_and_skips_malformed_or_oversized");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-steer-drain-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+
+    let steer1 = json!({
+        "n": 1,
+        "text": "use v2 endpoint instead",
+        "at": "2026-10-02T12:00:00Z"
+    });
+    std::fs::write(mailbox.join("steer-1.json"), serde_json::to_string(&steer1).unwrap()).unwrap();
+
+    let oversized_text = "x".repeat(9000);
+    let steer2 = json!({
+        "n": 2,
+        "text": oversized_text,
+        "at": "2026-10-02T12:00:01Z"
+    });
+    std::fs::write(mailbox.join("steer-2.json"), serde_json::to_string(&steer2).unwrap()).unwrap();
+
+    std::fs::write(mailbox.join("steer-3.json"), "invalid json content").unwrap();
+
+    let steer4 = json!({
+        "n": 4,
+        "text": "keep tests passing",
+        "at": "2026-10-02T12:00:02Z"
+    });
+    std::fs::write(mailbox.join("steer-4.json"), serde_json::to_string(&steer4).unwrap()).unwrap();
+
+    let run1 = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                json!({
+                    "event": "turn_start",
+                    "event_arg": { "turnIndex": 1 },
+                    "cwd": dir.path().to_string_lossy(),
+                    "session_id": "sess-worker-1",
+                })
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    assert!(run1.results.iter().all(|r| !r.threw), "{:?}", run1.results);
+    assert_eq!(
+        run1.messages.len(),
+        2,
+        "valid steers 1 and 4 must be delivered, 2 (oversized) and 3 (malformed) skipped: {:?}",
+        run1.messages
+    );
+
+    let prefix = "Steer from your leader (relayed mid-run; context only, the cell and its gates are unchanged):";
+    let msg1 = &run1.messages[0];
+    assert!(msg1.text.starts_with(prefix), "must start with prefix: {}", msg1.text);
+    assert!(msg1.text.contains("use v2 endpoint instead"), "{}", msg1.text);
+    assert!(msg1.steered(), "must be steered: {:?}", msg1.options);
+
+    let msg2 = &run1.messages[1];
+    assert!(msg2.text.starts_with(prefix), "must start with prefix: {}", msg2.text);
+    assert!(msg2.text.contains("keep tests passing"), "{}", msg2.text);
+    assert!(msg2.steered(), "must be steered: {:?}", msg2.options);
+
+    assert!(mailbox.join("steer-1.json.delivered").exists(), "steer-1 must be renamed to .delivered");
+    assert!(mailbox.join("steer-4.json.delivered").exists(), "steer-4 must be renamed to .delivered");
+    assert!(!mailbox.join("steer-1.json").exists(), "original steer-1 must not exist");
+    assert!(!mailbox.join("steer-4.json").exists(), "original steer-4 must not exist");
+
+    let run2 = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                json!({
+                    "event": "turn_start",
+                    "event_arg": { "turnIndex": 2 },
+                    "cwd": dir.path().to_string_lossy(),
+                    "session_id": "sess-worker-1",
+                })
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    assert!(
+        run2.messages.is_empty(),
+        "second turn_start must not deliver already delivered steers: {:?}",
+        run2.messages
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn undelivered_steer_is_named_in_leaders_result_header() {
+    node_or_skip!("undelivered_steer_is_named_in_leaders_result_header");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-leader-steer";
+    let job_id = "job-leader-steer-1";
+    let mailbox = job_mailbox(dir.path(), job_id);
+    write_result(&mailbox, 1, &result_envelope("ok", "finished", "cargo test — green"));
+    write_marker(dir.path(), TOKEN, job_id, &mailbox, Some("demo-cell"));
+
+    std::fs::write(
+        mailbox.join("steer-2.json"),
+        serde_json::to_string(&json!({"n": 2, "text": "too late", "at": "now"})).unwrap(),
+    )
+    .unwrap();
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections(1),
+        ],
+    );
+
+    assert_eq!(run.messages.len(), 1, "{:?}", run.messages);
+    let text = &run.messages[0].text;
+    assert!(
+        text.contains("undelivered_steer: steer-2.json"),
+        "result header must name undelivered steer file: {text}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_steer_leader_tool_contracts_and_refusals() {
+    node_or_skip!("bee_steer_leader_tool_contracts_and_refusals");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let pairs = pi_tool_hook_pairs();
+    assert!(
+        pairs.iter().any(|(tool, hook)| tool == "bee_steer" && hook == "write-guard"),
+        "expected mapToolCall to route 'bee_steer' to 'write-guard', found: {pairs:?}"
+    );
+
+    const TOKEN: &str = "sess-steer-tool";
+
+    let run_zero = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            execute_tool_call(
+                dir.path(),
+                TOKEN,
+                "bee_steer",
+                json!({"text": "guidance text"}),
+            ),
+        ],
+    );
+    assert!(run_zero.tools.iter().any(|t| t == "bee_steer"), "bee_steer must register: {:?}", run_zero.tools);
+    let zero_res = &run_zero.results[1];
+    assert!(zero_res.threw, "bee_steer with 0 running jobs must throw");
+    let zero_msg = zero_res.message.as_deref().unwrap_or("");
+    assert!(
+        zero_msg.to_lowercase().contains("zero") || zero_msg.to_lowercase().contains("no running"),
+        "refusal must name zero running jobs, got: {zero_msg}"
+    );
+
+    let mbox1 = job_mailbox(dir.path(), "job-1");
+    std::fs::write(mbox1.join("brief-1.txt"), "brief").unwrap();
+    let mbox2 = job_mailbox(dir.path(), "job-2");
+    std::fs::write(mbox2.join("brief-1.txt"), "brief").unwrap();
+
+    let run_multi = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            execute_tool_call(
+                dir.path(),
+                TOKEN,
+                "bee_steer",
+                json!({"text": "guidance text"}),
+            ),
+        ],
+    );
+    let multi_res = &run_multi.results[1];
+    assert!(multi_res.threw, "bee_steer with multiple running jobs must throw");
+    let multi_msg = multi_res.message.as_deref().unwrap_or("");
+    assert!(
+        multi_msg.contains("job-1") && multi_msg.contains("job-2"),
+        "refusal must list running job ids, got: {multi_msg}"
+    );
+
+    write_result(&mbox2, 1, &result_envelope("ok", "finished", "cargo test"));
+
+    let run_one = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            execute_tool_call(
+                dir.path(),
+                TOKEN,
+                "bee_steer",
+                json!({"text": "guidance text"}),
+            ),
+        ],
+    );
+    let one_res = &run_one.results[1];
+    assert!(!one_res.threw, "bee_steer with exactly 1 running job must succeed, got: {:?}", one_res.message);
+
+    let steer_calls: Vec<&Value> = run_one
+        .exec_calls
+        .iter()
+        .filter(|c| {
+            c["args"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|arg| arg == "steer"))
+        })
+        .collect();
+    assert_eq!(steer_calls.len(), 1, "must call bee herding steer: {:?}", run_one.exec_calls);
+    let args: Vec<&str> = steer_calls[0]["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(args, vec!["herding", "steer", "job-1", "--text", "guidance text", "--json"]);
+}
+
 
 
 
