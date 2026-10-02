@@ -609,6 +609,11 @@
     "route-class",
     "doc-structure",
     "contract:playbook-per-class-file",
-    "playbook-file-split"
+    "playbook-file-split",
+    "pi-1-0-upgrade",
+    "named-guess",
+    "harness-native",
+    "redirect",
+    "mid-run-input"
   ]
 }
