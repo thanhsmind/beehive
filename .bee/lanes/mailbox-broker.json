@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"mailbox-broker\" started at phase \"exploring\".",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 47764e6; reload the product and test \"mailbox-broker\", then either approve uat (\"bee gate --name uat --approved true --lane mailbox-broker\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-03T11:12:19.017Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "mailbox-broker: 4 shaping questions",
-    "asked_at": "2026-10-03T11:12:41.518Z",
-    "session": "51e108b6-3bcc-4072-a86f-7a61ade666e7"
+    "kind": "gate",
+    "subject": "uat: mailbox-broker",
+    "asked_at": "2026-10-03T12:55:34.112Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -871,17 +871,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-03T12:52:58.077Z",
-    "branch": "wt/mailbox-broker",
-    "worktree_id": "beehive--wt--mailbox-broker",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt",
-      "judge-debt",
-      "routing",
-      "doc-deferral"
-    ]
   }
 }
