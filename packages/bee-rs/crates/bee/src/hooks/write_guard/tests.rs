@@ -6133,3 +6133,44 @@ use std::process::ExitCode;
         write_state(&fx.root, &st);
         assert_eq!(pi_lock_run(&fx, pi(edit("src/app.rs")), None).code, 0);
     }
+
+    #[test]
+    fn cross_worktree_denials_name_runnable_or_in_worktree_fixes() {
+        let lx = build_linked(true);
+
+        let main_src = lx.main_root.join("src").join("main-only.txt");
+        let expected_wt_src = lx.work_root.join("src").join("main-only.txt");
+        let e_src = expect_done(
+            edit(&main_src.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_src.code, 2, "{}", e_src.stderr);
+        assert!(e_src.stderr.contains(&expected_wt_src.to_string_lossy().to_string()), "{}", e_src.stderr);
+        assert!(e_src.stderr.contains("write "), "{}", e_src.stderr);
+        assert!(e_src.stderr.contains(" instead."), "{}", e_src.stderr);
+
+        let main_bee = lx.main_root.join(".bee").join("state.json");
+        let e_bee = expect_done(
+            edit(&main_bee.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_bee.code, 2, "{}", e_bee.stderr);
+        assert!(e_bee.stderr.contains("bee --help --json"), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(&lx.work_root.to_string_lossy().to_string()), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(&lx.main_root.to_string_lossy().to_string()), "{}", e_bee.stderr);
+        assert!(!e_bee.stderr.contains(" instead."), "{}", e_bee.stderr);
+
+        let sibling = add_sibling_worktree(&lx.main_root, "other");
+        let grants_path = lx.main_root.join(".bee").join("runtime").join("worktree-grants.json");
+        std::fs::create_dir_all(grants_path.parent().unwrap()).unwrap();
+        std::fs::write(&grants_path, "{\"other\":true}\n").unwrap();
+        let sib_file = sibling.root.join("src").join("sib.txt");
+        let e_sib = expect_done(
+            edit(&sib_file.to_string_lossy()),
+            &lx.work_root,
+        );
+        assert_eq!(e_sib.code, 2, "{}", e_sib.stderr);
+        assert!(e_sib.stderr.contains(&lx.work_root.to_string_lossy().to_string()), "{}", e_sib.stderr);
+        assert!(!e_sib.stderr.contains("open a session"), "{}", e_sib.stderr);
+        assert!(!e_sib.stderr.contains("bee worktree merge"), "{}", e_sib.stderr);
+    }
