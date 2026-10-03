@@ -106,7 +106,7 @@ iteration's child: no prompt, no model, default 30 s (contract `d3031edb`).
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"Discovery is done."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"Discovery is done."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
-    {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
+    {"stage":"independent-review","classification":"required","role":"review","reason":"The standard-lane slice judge for behavior_change cell mb-4 dispatches the review role; the user-invoked review session is untouched."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"Standard lane; the hat wave is the plan check."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop runs here."},
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One shape, no competing designs."},
