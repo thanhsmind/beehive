@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-slp-measurement",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-slp-measurement\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"pi-slp-measurement\" (lane).",
+  "created_at": "2026-10-03T05:16:45.215Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "docs",
+    "lane": "docs",
+    "flags": [],
+    "product_files": 0,
+    "rationale": null,
+    "updated_at": "2026-10-03T05:16:45.246Z",
+    "feature": "pi-slp-measurement"
+  }
+}
