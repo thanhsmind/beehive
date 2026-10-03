@@ -1473,5 +1473,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-10-03T06:26:49.786Z"
+  },
+  "pi-slp-operations": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-03T06:26:52.295Z"
   }
 }

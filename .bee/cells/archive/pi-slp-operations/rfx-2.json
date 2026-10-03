@@ -1,0 +1,136 @@
+{
+  "id": "rfx-2",
+  "feature": "pi-slp-operations",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "refactor",
+  "title": "Name a runnable fix when a feature or cell is already taken",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D4",
+    "b9a6dfe6-4762-4025-9918-910a371a8a24",
+    "d361a53f-2317-4fca-b919-be571e88bc73",
+    "b1be5bf9-cfad-4144-ad21-7564f927bb07",
+    "66f4fd2d-2327-4efd-a3af-942936133e6d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/tests/concurrency.rs",
+    "docs/product-description/lifecycle/execution.md",
+    "docs/product-description/verification/lifecycle.md"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-operations/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/product-description/lifecycle/execution.md",
+    "docs/product-description/verification/lifecycle.md"
+  ],
+  "action": "Per D1 and D2, one command per refusal. In packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs the startFeature refusal (about line 311) ends `FIX: close or resolve that workflow before starting a new one for the same feature.`; replace that FIX with the one command that continues the live workflow, `bee state session bind --lane <feature> --session-id <session id>` (fill the feature; fill the session id only if the function holds it). Per D4, in packages/bee-rs/crates/bee/src/verbs/cells/claims.rs the CLAIMED refusal (about line 751, `is already claimed by session \\\"{owner}\\\" ({}).`): the calling session is already in scope in claim_cell_file as `session`. When the holder session and the caller session are BOTH present and equal, say the caller already holds this claim and name `bee dispatch prepare --runtime <runtime> --kind cell --cell <id> --worker <worker> --json` without --claim (fill the cell id); in every other case — another session, or either side sessionless — keep the holder text and name `bee cells claim-next`. Keep the code `CLAIMED`, the text before the new FIX, and every return path unchanged (D2). Tests red first: in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs for startFeature (the bind command present), and in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs for CLAIMED with the same session, another session, and a sessionless holder. Find pins of the old text with `rg -n \"live workflow already exists|already claimed by session\" packages/bee-rs/crates/bee/src packages/bee-rs/crates/bee/tests` and update them, including tests/concurrency.rs if it pins the text. Update the two product docs that pin the exact CLAIMED shape (docs/product-description/lifecycle/execution.md:40 and docs/product-description/verification/lifecycle.md:199) to the new text. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells && cargo test --release -p bee --test concurrency",
+  "must_haves": {
+    "truths": [
+      "the startFeature refusal names bee state session bind --lane with the feature",
+      "a CLAIMED refusal held by the calling session says so and names the full cell dispatch prepare form without --claim",
+      "a CLAIMED refusal held by another session or a sessionless claim names bee cells claim-next",
+      "the CLAIMED code and every return path are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+        "substantive": "startFeature fix names session bind"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+        "substantive": "CLAIMED text branches on the holder"
+      }
+    ],
+    "key_links": [
+      "the CLAIMED text reads the caller session it compares against the holder"
+    ],
+    "prohibitions": [
+      "No change to when a claim is refused",
+      "No change to the CLAIMED code"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-rfx-2",
+    "outcome": "startFeature names session bind; CLAIMED names the full cell prepare form when the caller holds it, else claim-next",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/product-description/lifecycle/execution.md",
+      "docs/product-description/verification/lifecycle.md"
+    ],
+    "deviations": [
+      "no test for a sessionless holder; the code treats it as another session (equal only when both sessions are present), checked by reading claims.rs — something else had to be fixed first",
+      "sync-ack: only refusal fix wording changed; no workflow-state skill quotes these refusal texts (rg over skills/ found none)"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T03:23:42.810Z",
+    "behavior_change": false,
+    "verification_evidence": "state_group 242, cells 355, concurrency 19; same-session and other-session CLAIMED asserted",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells && cargo test --release -p bee --test concurrency",
+    "claimed_at": "2026-10-03T03:00:03.972Z",
+    "sync_ack": "only refusal fix wording changed; no workflow-state skill quotes these refusal texts (rg over skills/ found none)",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "startFeature names session bind; CLAIMED names the full cell prepare form when the caller holds it, else claim-next",
+      "commit": "6a8f6af20",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/product-description/lifecycle/execution.md",
+        "docs/product-description/verification/lifecycle.md"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells && cargo test --release -p bee --test concurrency — green:unit — state_group 242, cells 355, concurrency 19; same-session and other-session CLAIMED asserted",
+      "deviations": [
+        "no test for a sessionless holder; the code treats it as another session (equal only when both sessions are present), checked by reading claims.rs — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the startFeature refusal names bee state session bind --lane with the feature",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs"
+          },
+          {
+            "requirement": "a CLAIMED refusal held by the calling session says so and names the full cell dispatch prepare form without --claim",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+          },
+          {
+            "requirement": "a CLAIMED refusal held by another session or a sessionless claim names bee cells claim-next",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+          },
+          {
+            "requirement": "the CLAIMED code and every return path are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T03:25:14.957Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

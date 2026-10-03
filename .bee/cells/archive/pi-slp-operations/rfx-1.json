@@ -1,0 +1,120 @@
+{
+  "id": "rfx-1",
+  "feature": "pi-slp-operations",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "refactor",
+  "title": "Name a runnable fix in the deployment dispatch refusals",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "b9a6dfe6-4762-4025-9918-910a371a8a24",
+    "d361a53f-2317-4fca-b919-be571e88bc73",
+    "66f4fd2d-2327-4efd-a3af-942936133e6d"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-operations/CONTEXT.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1 and D2, rewrite only the `fix` strings of these refusals in packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, one command each. Find each with rg. (1) `stage deployment requires an approved v2 plan with a role plan.` (about line 1635, reason role_plan_required): name `docs/history/<feature>/plan.md` with the resolved feature, its `## Role assignments` section, then the one command `bee gate --preview`. (2) `this dispatch authorization has already been consumed; dispatch a new deployment run.` (about lines 4220 and 4556, reason deploy_authorization_consumed) and `dispatch authorization expired (> 2 hours old); dispatch a new deployment run.` (about line 4351): name one command, `bee dispatch prepare --runtime <runtime> --kind <kind> --stage deployment --feature <feature> --release-version <version> --json`, filling every value the enclosing function holds (it holds release_version at the first consumed site; it does not hold runtime) and leaving an angle-bracket placeholder for each value it does not hold. Check `.bee/bin/bee dispatch prepare --help` and an existing deployment dispatch test for the exact required flags and the kind a deployment dispatch uses; the command must be one prepare would accept once placeholders are filled. (3) `feature \\\"{feat}\\\" lane file not found in store.` (about line 4411) and `dispatch record is missing feature name.` (about line 4400), reason deploy_authorization_wrong_feature: name the one command `bee state lanes` and say to run it from main, then dispatch for a feature it lists. Keep every `reason` key, `type`, and return path unchanged (D2). Tests red first in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs: for each rewritten refusal, assert the reason key is unchanged and the fix contains its command (`bee gate --preview`, `bee dispatch prepare --runtime`, `bee state lanes`). Find existing pins with `rg -n \"role_plan_required|deploy_authorization_consumed|deploy_authorization_wrong_feature|authorization expired\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs` and update any that pin the old text. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "role_plan_required names the feature plan file and bee gate --preview",
+      "deploy_authorization_consumed and the expired refusal name one bee dispatch prepare --runtime command with held values filled and placeholders for the rest",
+      "deploy_authorization_wrong_feature names bee state lanes run from main",
+      "every reason key and return path is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "rewritten fix strings at the four refusal families"
+      }
+    ],
+    "key_links": [
+      "drivers tests assert each new fix command beside the unchanged reason key"
+    ],
+    "prohibitions": [
+      "No change to when any refusal fires",
+      "No change to any reason key"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-rfx-1",
+    "outcome": "Deployment dispatch refusals name one runnable command: bee gate --preview, the full deployment prepare form, or bee state lanes from main",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "round 1 named the deployment prepare form without --role deploy, which the deploy permit requires; round 2 added it (525d6e7e2) — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T03:23:32.295Z",
+    "behavior_change": false,
+    "verification_evidence": "429 passed; asserts for gate --preview, prepare --runtime with --role deploy, and state lanes added to existing refusal tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+    "claimed_at": "2026-10-03T03:00:03.792Z",
+    "mistakes": [
+      {
+        "wrong": "plan.md rfx-1 action listed the deployment prepare flags without --role deploy",
+        "better": "read test_deploy_authorization_cli_routing for the full form before writing the cell",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Deployment dispatch refusals name one runnable command: bee gate --preview, the full deployment prepare form, or bee state lanes from main",
+      "commit": "525d6e7e2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers — green:unit — 429 passed; asserts for gate --preview, prepare --runtime with --role deploy, and state lanes added to existing refusal tests",
+      "deviations": [
+        "round 1 named the deployment prepare form without --role deploy, which the deploy permit requires; round 2 added it (525d6e7e2) — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "plan.md rfx-1 action listed the deployment prepare flags without --role deploy — read test_deploy_authorization_cli_routing for the full form before writing the cell — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "role_plan_required names the feature plan file and bee gate --preview",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "deploy_authorization_consumed and the expired refusal name one bee dispatch prepare --runtime command with held values filled and placeholders for the rest",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "deploy_authorization_wrong_feature names bee state lanes run from main",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "every reason key and return path is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T03:25:14.950Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
