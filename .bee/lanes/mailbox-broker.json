@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "mailbox-broker",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"mailbox-broker\" started at phase \"exploring\".",
-  "next_action": "Merged into main at f3b4903; reload the product and test \"mailbox-broker\", then either approve uat (\"bee gate --name uat --approved true --lane mailbox-broker\") or fix it in the worktree and merge again.",
+  "next_action": "uat: mailbox-broker",
   "created_at": "2026-10-03T11:12:19.017Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: mailbox-broker",
-    "asked_at": "2026-10-03T13:06:12.447Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -871,5 +866,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "mailbox-broker",
+    "date": "2026-10-03",
+    "at": "2026-10-03T13:08:40.259Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "uat: mailbox-broker"
   }
 }
