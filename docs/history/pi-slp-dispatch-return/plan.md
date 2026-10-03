@@ -74,11 +74,11 @@ fields drifts from the first. Moving the cap into `herding run` — that makes
 bee accept a worker's word as completion, which the leader check forbids.
 
 Risk map:
-- worker-cell template / MEDIUM / psd-1 / native render byte-identical test plus herding render test
-- verdict tool / LOW / psd-2 / node-driven contract tests for each refusal
-- dispatch schema / LOW / psd-2 / contract test that stage and feature reach the prepare argv
+- worker-cell template / MEDIUM / psdr-1 / native render byte-identical test plus herding render test
+- verdict tool / LOW / psdr-2 / node-driven contract tests for each refusal
+- dispatch schema / LOW / psdr-2 / contract test that stage and feature reach the prepare argv
 
-Waves: psd-1 and psd-2 in parallel — disjoint files, no shared output.
+Waves: psdr-1 and psdr-2 in parallel — disjoint files, no shared output.
 
 ## Role assignments
 
@@ -88,7 +88,7 @@ Waves: psd-1 and psd-2 in parallel — disjoint files, no shared output.
   "runtime": "claude",
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"psd-1 and psd-2 change Rust and TypeScript with their tests."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"psdr-1 and psdr-2 change Rust and TypeScript with their tests."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Each code cell writes its own red-first tests."},
     {"stage":"documentation-and-capture","classification":"not-applicable","role":"docs","reason":"The leader captures at close."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
@@ -122,13 +122,13 @@ Phase plan:
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| psd-1 | Give a herded cell worker one order | prepare.rs, worker-cell.md, drivers/tests.rs | — | A herding cell brief has no bee commands; a native brief is unchanged | cargo test --release -p bee --bin bee verbs::drivers |
-| psd-2 | Bind Pi dispatch and verdict calls to their job | tool-dispatch.ts, tool-verdict.ts, result-inbox.ts, pi_plugin_contracts.rs | — | Pi sends stage and feature; the verdict tool refuses a guess or a blank proof; the leader is told to cap | cargo test --release -p bee --test pi_plugin_contracts |
+| psdr-1 | Give a herded cell worker one order | prepare.rs, worker-cell.md, drivers/tests.rs | — | A herding cell brief has no bee commands; a native brief is unchanged | cargo test --release -p bee --bin bee verbs::drivers |
+| psdr-2 | Bind Pi dispatch and verdict calls to their job | tool-dispatch.ts, tool-verdict.ts, result-inbox.ts, pi_plugin_contracts.rs | — | Pi sends stage and feature; the verdict tool refuses a guess or a blank proof; the leader is told to cap | cargo test --release -p bee --test pi_plugin_contracts |
 
 ```json
 [
   {
-    "id": "psd-1",
+    "id": "psdr-1",
     "feature": "pi-slp-dispatch-return",
     "lane": "standard",
     "role": "code",
@@ -165,7 +165,7 @@ Phase plan:
     }
   },
   {
-    "id": "psd-2",
+    "id": "psdr-2",
     "feature": "pi-slp-dispatch-return",
     "lane": "standard",
     "role": "code",
