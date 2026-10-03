@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pi-slp-dispatch-return\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at f767d7d; reload the product and test \"pi-slp-dispatch-return\", then either approve uat (\"bee gate --name uat --approved true --lane pi-slp-dispatch-return\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-03T01:36:40.442Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: pi-slp-dispatch-return",
+    "asked_at": "2026-10-03T02:02:09.815Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",
@@ -523,14 +528,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-03T02:01:43.033Z",
-    "branch": "wt/pi-slp-dispatch-return",
-    "worktree_id": "beehive--wt--pi-slp-dispatch-return",
-    "uat": "pending",
-    "blocked_by": [
-      "leader-check"
-    ]
   }
 }
