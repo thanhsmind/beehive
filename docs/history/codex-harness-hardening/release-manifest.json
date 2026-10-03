@@ -1823,7 +1823,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "1b88e15a4077a40ab57cb747ba7af43e0407b072419f2cca018b7b4809510027",
+      "sha256": "3b48979e212c727c228c2eceaf0a4f47cb5c9778f927bf8dffb7929ea54d18af",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
@@ -1865,7 +1865,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/tool-verdict.ts",
-      "sha256": "113e5903488148e31bb8a11bc8cebd272fa4e38c4bef1cd3bed145a3d89b9f63",
+      "sha256": "7469911d0e6d7c1560dd39d14e348003132b84f3968cfa3d8a192aa43fcddc69",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/tool-verdict.ts"
