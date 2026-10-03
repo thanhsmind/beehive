@@ -324,6 +324,7 @@ export async function drainResultInbox(pi: any, directory: string, token: string
     if (!latest) continue // still running — the marker stays pending
     const result = readJsonObject(latest.file)
     if (!result) continue // half-written or malformed: look again next tick
+    if (result.status === "question") continue
 
     // The claim, by atomic rename. Whoever wins the rename owns the delivery;
     // a loser skips to the next marker rather than delivering a second copy.

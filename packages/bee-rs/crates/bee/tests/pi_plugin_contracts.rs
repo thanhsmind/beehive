@@ -10686,3 +10686,203 @@ fn done_cell_injection_carries_cap_line_and_gather_does_not() {
         "gather injection must not carry cap line, got:\n{gather_msg}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn verdict_tool_writes_question_result_with_question_object_and_no_proof() {
+    node_or_skip!("verdict_tool_writes_question_result_with_question_object_and_no_proof");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-question-no-proof-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let verdict_args = json!({
+        "status": "question",
+        "summary": "need guidance on api design",
+        "files_changed": ["src/api.rs"],
+        "question": {
+            "text": "which interface should be used?",
+            "kind": "technical",
+        },
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-question-1",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(!exec_res.threw, "verdict execute with status question must not throw: {:?}", exec_res.message);
+    let result_file = mailbox.join("result-1.json");
+    assert!(result_file.is_file(), "result-1.json must be written");
+    let parsed: Value = serde_json::from_str(&std::fs::read_to_string(&result_file).unwrap()).unwrap();
+    assert_eq!(parsed["status"], "question");
+    assert_eq!(parsed["summary"], "need guidance on api design");
+    assert_eq!(parsed["files_changed"], json!(["src/api.rs"]));
+    assert_eq!(parsed["question"]["text"], "which interface should be used?");
+    assert_eq!(parsed["question"]["kind"], "technical");
+    assert!(parsed.get("proof").is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn verdict_tool_refuses_status_question_with_no_question_text() {
+    node_or_skip!("verdict_tool_refuses_status_question_with_no_question_text");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-question-empty-text-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let verdict_args = json!({
+        "status": "question",
+        "summary": "asking question without text",
+        "files_changed": [],
+        "question": {
+            "text": "   ",
+            "kind": "technical",
+        },
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-question-empty",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(exec_res.threw, "verdict execute must throw when status is question and question text is empty");
+    assert!(
+        !mailbox.join("result-1.json").exists(),
+        "result-1.json must not be written when validation fails"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn the_drain_leaves_a_marker_unclaimed_while_the_newest_result_is_a_question() {
+    node_or_skip!("the_drain_leaves_a_marker_unclaimed_while_the_newest_result_is_a_question");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-drain-question";
+    let mailbox = job_mailbox(dir.path(), "job-question-drain-1");
+    let envelope = json!({
+        "status": "question",
+        "summary": "asking for clarification",
+        "files_changed": [],
+        "question": {
+            "text": "proceed with option A or B?",
+            "kind": "technical",
+        },
+    });
+    write_result(&mailbox, 1, &envelope);
+    write_marker(dir.path(), TOKEN, "job-question-drain-1", &mailbox, Some("cell-q"));
+    let inbox = inbox_dir(dir.path(), TOKEN);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections_in_vain(1),
+            snapshot_step(&inbox),
+        ],
+    );
+
+    assert!(
+        run.messages.is_empty(),
+        "a job whose newest result is a question must not be injected: {:?}",
+        run.messages
+    );
+    assert_eq!(
+        run.snapshot(2),
+        vec!["job-question-drain-1.json".to_string()],
+        "marker must remain pending and unclaimed while newest result is question"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn the_drain_delivers_the_next_rounds_done_result_through_the_same_marker() {
+    node_or_skip!("the_drain_delivers_the_next_rounds_done_result_through_the_same_marker");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN: &str = "sess-drain-q-done";
+    let mailbox = job_mailbox(dir.path(), "job-question-drain-2");
+    let q_envelope = json!({
+        "status": "question",
+        "summary": "asking for clarification",
+        "files_changed": [],
+        "question": {
+            "text": "proceed with option A or B?",
+            "kind": "technical",
+        },
+    });
+    write_result(&mailbox, 1, &q_envelope);
+    write_marker(dir.path(), TOKEN, "job-question-drain-2", &mailbox, Some("cell-qd"));
+
+    let done_envelope = result_envelope("done", "landed after question answered", "cargo test — green:unit — test");
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections_in_vain(1),
+            json!({
+                "kind": "write_file",
+                "path": mailbox.join("result-2.json").to_string_lossy(),
+                "content": done_envelope.to_string(),
+            }),
+            await_injections(1),
+        ],
+    );
+
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "expected 1 injection for the round 2 done result, got: {:?}",
+        run.messages
+    );
+    let msg = &run.messages[0].text;
+    assert!(msg.contains("round: 2"), "injected message must name round 2, got:\n{msg}");
+    assert!(msg.contains("status: done"), "injected message must have status done, got:\n{msg}");
+    assert!(msg.contains("summary: landed after question answered"), "injected message must have summary, got:\n{msg}");
+}
+
