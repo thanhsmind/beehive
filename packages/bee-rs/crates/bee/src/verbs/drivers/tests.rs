@@ -9555,17 +9555,11 @@ advance_on — falling to another model there hides the defect (D11)"
             .join("..")
             .join("..");
         for name in ["worker-cell", "gather", "reviewer", "advisor"] {
-            if name == "worker-cell" {
-                let p = repo_root.join("packages").join("bee").join("prompts").join("worker-cell.md");
-                let disk = std::fs::read_to_string(&p).unwrap();
-                assert_eq!(normalize_template(&disk), normalize_template(embedded_prompt(name).unwrap()));
-            } else {
-                assert!(
-                    prompt_skew(&repo_root, name).is_none(),
-                    "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
-                     compiled-in template — run `bee dev regen` and rebuild"
-                );
-            }
+            assert!(
+                prompt_skew(&repo_root, name).is_none(),
+                "packages/bee/prompts/{name}.md or .bee/bin/prompts/{name}.md drifted from the \
+                 compiled-in template — run `bee dev regen` and rebuild"
+            );
             let template = load_prompt(name).unwrap();
             let at = template
                 .find("{{#if original_request}}")
