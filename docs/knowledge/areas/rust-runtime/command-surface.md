@@ -159,7 +159,7 @@ bought a smaller help output at the price of a blind guard.
   status` stays the repo-wide view. `next.command` comes from one function,
   `next_operation` in `verbs/status_full/orient.rs`, over plain facts, in this
   order: discovery resume (`bee discovery list --json`), a granted worktree
-  seen from main (`bee worktree enter --id <id>`), a handoff (`bee state
+  seen from main whose branch is not yet merged (`bee worktree enter --id <id>`; a branch that reached main through a merge commit gives no enter step, orient-merged-worktree D1), a handoff (`bee state
   handoff show --json`), ready cells under an approved execution gate (`bee
   dispatch wave --runtime <caller runtime> --feature <f> --json`), else null —
   never a literal placeholder, never "open your session at". `next.run_from`
