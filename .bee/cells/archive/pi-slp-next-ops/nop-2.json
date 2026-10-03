@@ -1,0 +1,141 @@
+{
+  "id": "nop-2",
+  "feature": "pi-slp-next-ops",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Show the runnable next command in the per-turn hint",
+  "deps": [
+    "nop-1"
+  ],
+  "decisions": [
+    "D2",
+    "D3",
+    "fbde3d6f-8a77-47ff-a90c-d08711a28db7",
+    "42a3429b-0408-46c4-ba43-95b813810044",
+    "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-next-ops/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D3: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs the hint pushes `lines.push(format!(\"next: {}\", jsjson::js_to_string(&next_action)));` (about line 940). Right after that line, when nop-1's pub(crate) next_operation function (verbs/status_full/orient.rs) yields a non-null command for the same record the hint already resolved, push one line `run: <command> (from <run_from>)`. Call that function; never copy its rule (D2). The hook holds only a StateRecord (phase, feature, mode, next_action, gates); fill the plain-facts struct with at most one read of the feature's cells (ready count) and one grant lookup (find_granted_worktree_for_feature), and pass none for facts it cannot read cheaply. The hint ends with `lines.truncate(4);` (about line 948): raise it to 5 so the run line never pushes out `gate pending` or `triggers due`. Add the command to the dedup hash fields only when it is non-null, so a new command re-injects and the existing hash tests stay unchanged. Nothing else in the hint changes. Tests red first in the #[cfg(test)] mod tests of the same file: a record with ready cells under an approved execution gate yields the run line with `bee dispatch wave`; a record with nothing to run yields no run line and the same hash as before; with a run line, gate pending and triggers due still print. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee prompt_context",
+  "must_haves": {
+    "truths": [
+      "the per-turn hint prints run: <command> (from <run_from>) when next_operation yields a command",
+      "the per-turn hint prints no run line and keeps its old hash when next_operation yields null",
+      "gate pending and triggers due still print beside a run line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "run line built from next_operation"
+      }
+    ],
+    "key_links": [
+      "prompt_context calls verbs::status_full next_operation"
+    ],
+    "prohibitions": [
+      "No copy of the next-command rule in the hook",
+      "No other hint line changes beside the run line and the five-line cap"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-nop-2",
+    "outcome": "The per-turn hint prints run: <command> (from <run_from>) from next_operation, with a five-line cap and the command in the dedup hash",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: no owned skill documents the per-turn hint lines or the deny texts (rg over skills/ found none); knowledge docs carry the rule"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T04:52:58.080Z",
+    "behavior_change": true,
+    "verification_evidence": "38 passed (35 at base); run line present, absent with old hash, and five-line cap with gate pending and triggers due",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --bin bee prompt_context",
+    "claimed_at": "2026-10-03T04:38:42.523Z",
+    "sync_ack": "no owned skill documents the per-turn hint lines or the deny texts (rg over skills/ found none); knowledge docs carry the rule",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The per-turn hint prints run: <command> (from <run_from>) from next_operation, with a five-line cap and the command in the dedup hash",
+      "commit": "2ad501988",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --bin bee prompt_context — green:unit — 38 passed (35 at base); run line present, absent with old hash, and five-line cap with gate pending and triggers due",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 180 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the per-turn hint prints run: <command> (from <run_from>) when next_operation yields a command",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "the per-turn hint prints no run line and keeps its old hash when next_operation yields null",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          },
+          {
+            "requirement": "gate pending and triggers due still print beside a run line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T04:54:07.375Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "the per-turn hint prints run: <command> (from <run_from>) when next_operation yields a command",
+            "status": "PASS",
+            "evidence": "hooks/prompt_context.rs:912-996 build_prompt_reminder fills crate::verbs::status_full::NextOpFacts (one ready_cells read, only when execution is approved, and one find_unmerged_granted_worktree_for_feature lookup, only on main) and calls status_full::next_operation (no copy of the rule); it pushes 'run: {cmd} (from {run_from})' right after 'next:'; test record_with_ready_cells_under_approved_execution_gate_yields_run_line asserts the 'bee dispatch wave --runtime claude --feature f1 --json' line and a hash that includes command; green in cargo test prompt_context (38 passed)"
+          },
+          {
+            "id": "the per-turn hint prints no run line and keeps its old hash when next_operation yields null",
+            "status": "PASS",
+            "evidence": "prompt_context.rs ~971-973 adds the 'command' hash field only when next_op.command is Some; test record_with_nothing_to_run_yields_no_run_line_and_same_hash asserts no 'run:' and sha1 of the old 4-field JSON; the existing hash tests (a_due_predicate_trigger_adds_the_due_line_and_changes_the_hash etc.) stay green"
+          },
+          {
+            "id": "gate pending and triggers due still print beside a run line",
+            "status": "PASS",
+            "evidence": "prompt_context.rs ~997-1004 the cap is raised to lines.truncate(5), so header+next+run+gate+triggers all fit; test with_run_line_gate_pending_and_triggers_due_still_print asserts 5 lines with 'gate pending: review' and 'triggers due: 2 — bee triggers list --due'. Robustness note, not a truth failure: the new tests rely on locate_caller resolving runtime=claude from CLAUDE_CODE_SESSION_ID. They hold a module-local session_env_lock (prompt_context.rs:2203) that is separate from status_full/tests.rs:978, which also mutates CLAUDE_CODE_SESSION_ID. They also do not clear CODEX_THREAD_ID/BEE_SESSION_ID+BEE_RUNTIME, so a full-suite parallel run or a Codex/herding host env could flake them (P3)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-03T06:39:51.055Z"
+      }
+    ]
+  }
+}

@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "pi-slp-next-ops",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pi-slp-next-ops\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 449758c; reload the product and test \"pi-slp-next-ops\", then either approve uat (\"bee gate --name uat --approved true --lane pi-slp-next-ops\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature pi-slp-next-ops",
   "created_at": "2026-10-03T04:03:04.704Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pi-slp-next-ops",
-    "asked_at": "2026-10-03T04:53:27.097Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -608,5 +603,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "pi-slp-next-ops",
+    "date": "2026-10-03",
+    "at": "2026-10-03T06:27:13.494Z",
+    "areas_synced": [
+      "rust-runtime"
+    ],
+    "next_action": "bee close --feature pi-slp-next-ops"
   }
 }
