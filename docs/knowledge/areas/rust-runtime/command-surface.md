@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime]
   required_context: [areas/rust-runtime/overview.md]
-  decisions: [harness-refocus-P2, 412e9b3a, harness-refocus-P4]
+  decisions: ["pi-slp-next-ops D1-D4 (orient reads the session record; one runnable next operation; the per-turn run line; no open-your-session text)", harness-refocus-P2, 412e9b3a, harness-refocus-P4]
   sources: [docs/specs/porcelain.md, docs/handbook/register.md, packages/bee-rs/crates/bee/src/router.rs, packages/bee-rs/crates/bee/src/generated/registry_payload.json]
   authoritative_for: "rust-runtime: the porcelain/plumbing command surface and the teach-at-point-of-contact contract"
 ---
@@ -152,6 +152,22 @@ bought a smaller help output at the price of a blind guard.
 - **`bee orient` never computes state a second way.** It reuses the status
   builder. A second derivation of "where am I" is a second answer waiting to
   disagree with the first.
+- **`bee orient` answers for the calling session, and its next step runs**
+  (pi-slp-next-ops D1-D4). A session bound to a lane reads that lane's record
+  (`env_session_id()` into `session_preamble::resolve_pipeline`); a broken
+  binding is a blocker with a null command, never the default record. `bee
+  status` stays the repo-wide view. `next.command` comes from one function,
+  `next_operation` in `verbs/status_full/orient.rs`, over plain facts, in this
+  order: discovery resume (`bee discovery list --json`), a granted worktree
+  seen from main (`bee worktree enter --id <id>`), a handoff (`bee state
+  handoff show --json`), ready cells under an approved execution gate (`bee
+  dispatch wave --runtime <caller runtime> --feature <f> --json`), else null —
+  never a literal placeholder, never "open your session at". `next.run_from`
+  is the control root, because every command it can name is a control-plane
+  verb. The per-turn `prompt-context` hint calls the same function and prints
+  `run: <command> (from <run_from>)`; its cap is five lines and the command
+  joins its dedup hash only when non-null. The worktree-first denies and route
+  notices name the same `bee worktree enter --id` step.
 - **Per-command text help renders the FULL flag surface.** `bee <command>
   --help` prints a `--flag*:type` line for every flag the registry declares —
   optional ones included — never only the required set; the always-accepted
