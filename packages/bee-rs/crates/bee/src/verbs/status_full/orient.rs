@@ -163,7 +163,7 @@ pub(crate) fn orient_worktree_context(ctx: &mut Ctx, status: &JMap) -> R<Option<
             other => jsjson::js_to_string(other),
         };
         let root = ctx.root.clone();
-        let Some((id, worktree_root)) = find_granted_worktree_for_feature(&root, &feature_str)
+        let Some((id, worktree_root)) = find_unmerged_granted_worktree_for_feature(&root, &feature_str)
         else {
             return Ok(None);
         };

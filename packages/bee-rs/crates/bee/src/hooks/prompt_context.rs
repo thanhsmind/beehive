@@ -929,7 +929,7 @@ fn build_prompt_reminder(
     let granted_worktree_id = if is_main {
         feature_str
             .and_then(|f| {
-                control_root.and_then(|cr| crate::verbs::status_full::find_granted_worktree_for_feature(cr, f))
+                control_root.and_then(|cr| crate::verbs::status_full::find_unmerged_granted_worktree_for_feature(cr, f))
             })
             .map(|(id, _)| id)
     } else {

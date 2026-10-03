@@ -788,6 +788,43 @@ use crate::version::BEE_VERSION;
             .is_none());
     }
 
+    #[test]
+    fn unmerged_granted_worktree_distinguishes_fresh_from_merged_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"demo\"}");
+        assert_eq!(
+            find_unmerged_granted_worktree_for_feature(&main, "demo"),
+            Some(("wt-granted".to_string(), granted.to_str().unwrap().to_string()))
+        );
+        let mut status_main = JMap::new();
+        status_main.insert("feature".into(), json!("demo"));
+        status_main.insert("route".into(), json!({"lane": "small"}));
+        assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .is_some());
+        write(&granted, "feature.txt", "feature content");
+        git(&granted, &["add", "feature.txt"]);
+        git(&granted, &["commit", "-qm", "feat"]);
+        git(&main, &["merge", "--no-ff", "-m", "merge feat", "wt/granted"]);
+        assert_eq!(
+            find_unmerged_granted_worktree_for_feature(&main, "demo"),
+            None
+        );
+        assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .is_none());
+        write(
+            &main,
+            ".git/worktrees/wt-granted/HEAD",
+            "0123456789abcdef0123456789abcdef01234567\n",
+        );
+        assert_eq!(
+            find_unmerged_granted_worktree_for_feature(&main, "demo"),
+            Some(("wt-granted".to_string(), granted.to_str().unwrap().to_string()))
+        );
+    }
+
     /// The whole orient packet from inside a granted worktree carries the
     /// `worktree` key — the exact block whose loss was the measured C2 break
     /// that kept this routing flip parked.
