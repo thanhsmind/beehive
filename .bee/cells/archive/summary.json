@@ -1458,5 +1458,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-02T23:31:33.112Z"
+  },
+  "refusal-followups": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-03T04:02:24.796Z"
   }
 }
