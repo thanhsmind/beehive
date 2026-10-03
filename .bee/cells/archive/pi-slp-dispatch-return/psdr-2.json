@@ -1,0 +1,140 @@
+{
+  "id": "psdr-2",
+  "feature": "pi-slp-dispatch-return",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "bugfix",
+  "title": "Bind Pi dispatch and verdict calls to their job",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "ee22fb67-deec-4013-807f-c2c7628c78c8",
+    "180c5b3c-8963-4790-8286-389c8890f54f",
+    "26c6bd37-c291-4d6f-a601-41643e343d38",
+    "28db2359-2edd-4310-b34b-13098b081147",
+    "7a46ddff-dd99-4e42-ac0d-fbbd5fa4160e"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/tool-dispatch.ts",
+    ".pi/extensions/bee-guard/tool-verdict.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+    ".pi/extensions/bee-guard/tool-dispatch.ts",
+    ".pi/extensions/bee-guard/tool-verdict.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2: in tool-dispatch.ts add `stage`, `feature`, `expertise` (strings) and `claim` (boolean) to the bee_dispatch parameters, and `stage`, `feature` to bee_advisor. Pass them through flagArgs (line 91: `runBeeDispatch(flagArgs(params, [\"kind\", \"role\", \"cell\", \"worker\", \"purpose\"]), ctx),`); `claim: true` becomes a bare `--claim`. No validation of values in TypeScript. Per D3: in tool-verdict.ts executeVerdictTool, delete the newest-mailbox fallback (the else branch with `dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)`, line 120); with no BEE_HERDING_JOB_ID throw an error that says the verdict tool works only inside a bee herding job and the fix is to finish with a normal final message. Throw when status is done and proof.trim() is empty, naming the fix: run the proof and pass `<command> — <result> — <scope reason>`. Throw when result-<round>.json already exists in the job mailbox, naming the fix: the result for this round is already recorded, end the turn. Each refusal writes nothing. Per D4: in result-inbox.ts renderResultInjection, when marker.cell_id is a non-empty string and result.status is done, append after the closing fence one fixed line: the cell <id> stays claimed until the leader checks the artifacts against the cell and caps it with `bee cells finish --id <id> --outcome <one line> --files <a,b> --report '<json with outcome, commit, files, tests, deviations, mistakes>'`, so the line names every required flag. Use headerValue for the id. Other results render byte-identically. Per D5: in runBeeDispatch the child exit notice (`stopped with exit code ${code} before it reported.`) becomes a notice that the job exited with that code and that its result, if any, arrives in this session; for a cell job add that a done cell exits non-zero until the leader caps it. Tests red first in pi_plugin_contracts.rs (it drives the TypeScript with node; follow the node_or_skip! pattern and the job_mailbox / write_marker / write_result helpers near `fn job_mailbox(`): verdict with no job id refuses and writes no file even when an unrelated mailbox exists; done with blank proof refuses; a second call for a round with an existing result refuses; a valid call still writes result-<round>.json; bee_dispatch with stage and feature puts `--stage` and `--feature` in the prepare argv; the done-cell injection carries the cap line and a gather injection does not. Write no code comments.",
+  "verify": "cd packages/bee-rs && cargo test --release -p bee --test pi_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "verdict with no BEE_HERDING_JOB_ID refuses and writes no file",
+      "verdict with status done and a blank proof refuses",
+      "verdict refuses a second result for the same round",
+      "bee_dispatch forwards stage, feature, claim and expertise to dispatch prepare",
+      "a done cell result injection tells the leader to check and cap the cell",
+      "the bee_dispatch exit notice no longer says the job stopped before it reported"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/tool-verdict.ts",
+        "substantive": "no newest-mailbox fallback; three refusals each naming a fix"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/tool-dispatch.ts",
+        "substantive": "schemas carry the new inputs and pass them through"
+      }
+    ],
+    "key_links": [
+      "bee_dispatch execute passes the new keys to runBeeDispatch",
+      "renderResultInjection adds the cap line only for a done result with a cell_id"
+    ],
+    "prohibitions": [
+      "No workflow rule in the Pi extension beyond these refusals",
+      "No change to the inbox claim, requeue or dedupe logic",
+      "Injection of non-cell results byte-identical"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-psdr-2",
+    "outcome": "Pi bee_dispatch passes stage, feature, expertise and claim; verdict binds to its job and refuses blank proof and repeats; done cell results name the cap step",
+    "files_changed": [
+      ".pi/extensions/bee-guard/tool-dispatch.ts",
+      ".pi/extensions/bee-guard/tool-verdict.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T02:01:43.007Z",
+    "behavior_change": false,
+    "verification_evidence": "110 passed (104 at base); new verdict refusal, dispatch flag and injection tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+    "verify_command": "cd packages/bee-rs && cargo test --release -p bee --test pi_plugin_contracts",
+    "claimed_at": "2026-10-03T01:44:07.641Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi bee_dispatch passes stage, feature, expertise and claim; verdict binds to its job and refuses blank proof and repeats; done cell results name the cap step",
+      "commit": "9bdf20399",
+      "files": [
+        ".pi/extensions/bee-guard/tool-dispatch.ts",
+        ".pi/extensions/bee-guard/tool-verdict.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "tests": "cd packages/bee-rs && cargo test --release -p bee --test pi_plugin_contracts — green:unit — 110 passed (104 at base); new verdict refusal, dispatch flag and injection tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "verdict with no BEE_HERDING_JOB_ID refuses and writes no file",
+            "artifact": ".pi/extensions/bee-guard/tool-verdict.ts"
+          },
+          {
+            "requirement": "verdict with status done and a blank proof refuses",
+            "artifact": ".pi/extensions/bee-guard/tool-verdict.ts"
+          },
+          {
+            "requirement": "verdict refuses a second result for the same round",
+            "artifact": ".pi/extensions/bee-guard/tool-verdict.ts"
+          },
+          {
+            "requirement": "bee_dispatch forwards stage, feature, claim and expertise to dispatch prepare",
+            "artifact": ".pi/extensions/bee-guard/tool-dispatch.ts"
+          },
+          {
+            "requirement": "a done cell result injection tells the leader to check and cap the cell",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "the bee_dispatch exit notice no longer says the job stopped before it reported",
+            "artifact": ".pi/extensions/bee-guard/tool-dispatch.ts"
+          }
+        ],
+        "recorded_at": "2026-10-03T02:02:55.251Z",
+        "recorded_by": "db52a73c-18e5-4fa4-838b-1563220e1b7a",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
