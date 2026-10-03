@@ -31,6 +31,15 @@ so it does not wait for them.
   outside the data fence: the cell stays claimed until the leader checks
   the artifacts and caps it with `bee cells finish`. Other results render
   as before.
+- **D5 — The cap refusal stays, with a new reader** (store `28db2359`,
+  touches herding-cap-check D1 `85e32ca2`). After D1 a done herded cell
+  always ends with the non-zero refusal that names the cell and
+  `bee cells finish`. That refusal is now the leader's planned cap signal,
+  not a worker failure. The Pi `bee_dispatch` exit notice stops claiming the
+  job stopped before it reported. `run.rs` is unchanged.
+
+CLI-transport cell dispatches keep the bee-build body and the cap order; D1
+names the herding transport only.
 
 ## Out of scope
 
