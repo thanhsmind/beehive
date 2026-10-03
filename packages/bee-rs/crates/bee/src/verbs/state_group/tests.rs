@@ -230,7 +230,7 @@ use std::time::Instant;
         assert_eq!(check_no_live_workflow_for_feature(&workflows, "done"), None);
         assert_eq!(
             check_no_live_workflow_for_feature(&workflows, "taken").unwrap(),
-            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: close or resolve that workflow before starting a new one for the same feature."
+            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: bee state session bind --lane taken --session-id <session id>."
         );
 
         let cells = vec![

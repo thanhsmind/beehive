@@ -1253,6 +1253,7 @@ use std::time::Instant;
                     "cell \"c-1\" is already claimed by session \"no session (sessionless claim)\""
                 ));
                 assert!(reason.contains("expires "));
+                assert!(reason.contains("FIX: bee cells claim-next."));
             }
             _ => panic!("second claim must refuse"),
         }
@@ -1499,6 +1500,14 @@ use std::time::Instant;
             "{refusal}"
         );
         assert!(!refusal.contains("NO_ROUTE_RECORD"), "{refusal}");
+        assert!(
+            refusal.contains("you already hold this claim"),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("bee dispatch prepare --runtime <runtime> --kind cell --cell race-1 --worker <worker> --json"),
+            "{refusal}"
+        );
         // The already-claimed refusal never advances the no-route count.
         assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
 
@@ -1507,6 +1516,10 @@ use std::time::Instant;
         let refusal2 = thrown(claim_cell_from_flags(root, "race-1", "w2", Some("sess-2"), None));
         assert!(
             refusal2.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal2}"
+        );
+        assert!(
+            refusal2.contains("FIX: bee cells claim-next."),
             "{refusal2}"
         );
         assert_eq!(no_route_claim_count(root, "race", Some("sess-2")).unwrap(), 0);

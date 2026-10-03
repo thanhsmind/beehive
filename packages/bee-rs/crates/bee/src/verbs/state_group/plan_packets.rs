@@ -721,68 +721,58 @@ pub(crate) fn check_cell_matches_approved_preview(
         ));
     };
 
+    let mismatch = |field: &str| -> String {
+        format!(
+            "addCells: cell \"{id}\" differs from approved preview packet ({field} mismatch). FIX: copy {field} for cell {id} verbatim from the approved packet in docs/history/{feature}/plan.md."
+        )
+    };
+
     let inc_action = cell.get("action").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     let app_action = approved.get("action").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     if inc_action != app_action {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (action mismatch)."
-        ));
+        return Err(mismatch("action"));
     }
 
     let inc_verify = cell.get("verify").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     let app_verify = approved.get("verify").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     if inc_verify != app_verify {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (verify mismatch)."
-        ));
+        return Err(mismatch("verify"));
     }
 
     let inc_files = cell.get("files");
     let app_files = approved.get("files");
     if inc_files != app_files {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (files mismatch)."
-        ));
+        return Err(mismatch("files"));
     }
 
     let inc_rf = cell.get("read_first");
     let app_rf = approved.get("read_first");
     if inc_rf != app_rf {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (read_first mismatch)."
-        ));
+        return Err(mismatch("read_first"));
     }
 
     let inc_mh = cell.get("must_haves");
     let app_mh = approved.get("must_haves");
     if inc_mh != app_mh {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (must_haves mismatch)."
-        ));
+        return Err(mismatch("must_haves"));
     }
 
     let inc_title = cell.get("title").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     let app_title = approved.get("title").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     if inc_title != app_title {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (title mismatch)."
-        ));
+        return Err(mismatch("title"));
     }
 
     let inc_lane = cell.get("lane").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     let app_lane = approved.get("lane").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     if inc_lane != app_lane {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (lane mismatch)."
-        ));
+        return Err(mismatch("lane"));
     }
 
     let inc_role = cell.get("role").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     let app_role = approved.get("role").and_then(|v| v.as_str()).map(str::trim).unwrap_or("");
     if inc_role != app_role {
-        return Err(format!(
-            "addCells: cell \"{id}\" differs from approved preview packet (role mismatch)."
-        ));
+        return Err(mismatch("role"));
     }
 
     Ok(())
@@ -1651,5 +1641,67 @@ mode: standard
         let Out::Emit(val, text, 0) = out else { panic!("expected Out::Emit") };
         assert!(val.get("role_plan").is_none(), "legacy preview must have no role_plan key");
         assert!(!text.contains("Role plan"), "legacy text output must not contain Role plan");
+    }
+
+    #[test]
+    fn test_preview_mismatch_refusals_name_field_and_plan_path() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let base_cell = json!({
+            "id": "c1",
+            "feature": "feat-preview",
+            "title": "Title 1",
+            "lane": "standard",
+            "role": "code",
+            "action": "Action 1",
+            "files": ["src/lib.rs"],
+            "read_first": ["docs/spec.md"],
+            "must_haves": { "truths": ["truth 1"] },
+            "verify": "cargo test -p bee"
+        });
+        write_state_file(
+            root,
+            &serde_json::to_string(&json!({
+                "schema_version": "1.0",
+                "phase": "planning",
+                "feature": "feat-preview",
+                "mode": "standard",
+                "approved_cell_packet": {
+                    "feature": "feat-preview",
+                    "cells": [base_cell]
+                }
+            })).unwrap(),
+        );
+
+        let test_cases: [(&str, Value); 8] = [
+            ("action", json!("Action diff")),
+            ("verify", json!("cargo test diff")),
+            ("files", json!(["src/diff.rs"])),
+            ("read_first", json!(["docs/diff.md"])),
+            ("must_haves", json!({ "truths": ["truth diff"] })),
+            ("title", json!("Title diff")),
+            ("lane", json!("tiny")),
+            ("role", json!("test")),
+        ];
+
+        for (field, diff_val) in test_cases {
+            let mut incoming = base_cell.clone();
+            incoming[field] = diff_val;
+            let err = check_cell_matches_approved_preview(root, "feat-preview", &incoming).unwrap_err();
+            let expected_prefix = format!("addCells: cell \"c1\" differs from approved preview packet ({field} mismatch).");
+            assert!(
+                err.starts_with(&expected_prefix),
+                "expected prefix {expected_prefix}, got {err}"
+            );
+            let expected_fix = format!("FIX: copy {field} for cell c1 verbatim from the approved packet in docs/history/feat-preview/plan.md.");
+            assert!(
+                err.contains(&expected_fix),
+                "expected fix {expected_fix}, got {err}"
+            );
+            assert!(
+                err.contains("docs/history/feat-preview/plan.md"),
+                "expected plan path in {err}"
+            );
+        }
     }
 }

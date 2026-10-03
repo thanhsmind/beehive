@@ -1632,7 +1632,16 @@ pub(crate) fn prepare_dispatch_wire(
                 r.insert("feature".into(), Value::String(feat.to_string()));
             }
             r.insert("stage".into(), Value::String("deployment".into()));
-            r.insert("fix".into(), Value::String("stage deployment requires an approved v2 plan with a role plan.".into()));
+            let plan_path = match resolved_feature.as_deref() {
+                Some(feat) => format!("docs/history/{feat}/plan.md"),
+                None => "docs/history/<feature>/plan.md".to_string(),
+            };
+            r.insert(
+                "fix".into(),
+                Value::String(format!(
+                    "stage deployment requires an approved v2 plan with a role plan; add a ## Role assignments section to {plan_path} and run bee gate --preview."
+                )),
+            );
             return Ok(Prepared::Value(Value::Object(r)));
         }
     }
@@ -4217,7 +4226,12 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert("type".into(), Value::String("refused".into()));
         r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
         r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
-        r.insert("fix".into(), Value::String("this dispatch authorization has already been consumed; dispatch a new deployment run.".into()));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+            )),
+        );
         return Err(Value::Object(r));
     }
 
@@ -4348,7 +4362,12 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert("type".into(), Value::String("refused".into()));
         r.insert("reason".into(), Value::String("deploy_authorization_stale".into()));
         r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
-        r.insert("fix".into(), Value::String("dispatch authorization expired (> 2 hours old); dispatch a new deployment run.".into()));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "dispatch authorization expired (> 2 hours old); dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+            )),
+        );
         return Err(Value::Object(r));
     }
 
@@ -4397,7 +4416,12 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert("type".into(), Value::String("refused".into()));
         r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
         r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
-        r.insert("fix".into(), Value::String("dispatch record is missing feature name.".into()));
+        r.insert(
+            "fix".into(),
+            Value::String(
+                "dispatch record is missing feature name; run bee state lanes from main, then dispatch for a feature it lists.".into(),
+            ),
+        );
         return Err(Value::Object(r));
     }
     let lane_path = root.join(".bee").join("lanes").join(format!("{feat}.json"));
@@ -4408,7 +4432,12 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert("reason".into(), Value::String("deploy_authorization_wrong_feature".into()));
         r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
         r.insert("feature".into(), Value::String(feat.to_string()));
-        r.insert("fix".into(), Value::String(format!("feature \"{feat}\" lane file not found in store.")));
+        r.insert(
+            "fix".into(),
+            Value::String(format!(
+                "feature \"{feat}\" lane file not found in store; run bee state lanes from main, then dispatch for a feature it lists."
+            )),
+        );
         return Err(Value::Object(r));
     }
 
@@ -4553,7 +4582,12 @@ pub(crate) fn authorize_dispatch_permit(
             r.insert("type".into(), Value::String("refused".into()));
             r.insert("reason".into(), Value::String("deploy_authorization_consumed".into()));
             r.insert("dispatch_id".into(), Value::String(dispatch_id.to_string()));
-            r.insert("fix".into(), Value::String("this dispatch authorization has already been consumed; dispatch a new deployment run.".into()));
+            r.insert(
+                "fix".into(),
+                Value::String(format!(
+                    "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
+                )),
+            );
             return Err(Value::Object(r));
         }
         Err(e) => {

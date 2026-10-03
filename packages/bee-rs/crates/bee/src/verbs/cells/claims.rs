@@ -745,10 +745,23 @@ pub(crate) fn claim_cell_file(
                 Some(Value::Null) | None => "no session (sessionless claim)".to_string(),
                 Some(v) => jsjson::js_to_string(v),
             };
+            let is_same_session = match &session {
+                Some(s) if holder.as_ref().and_then(|h| h.get("session")).is_some_and(|v| !v.is_null()) => {
+                    s == &owner
+                }
+                _ => false,
+            };
+            let fix = if is_same_session {
+                format!(
+                    "FIX: you already hold this claim — bee dispatch prepare --runtime <runtime> --kind cell --cell {cell} --worker <worker> --json."
+                )
+            } else {
+                "FIX: bee cells claim-next.".to_string()
+            };
             Ok(ClaimFileOutcome::Refused {
                 code: "CLAIMED",
                 reason: format!(
-                    "cell \"{cell}\" is already claimed by session \"{owner}\" ({}).",
+                    "cell \"{cell}\" is already claimed by session \"{owner}\" ({}). {fix}",
                     claim_expiry(holder.as_ref())?
                 ),
             })

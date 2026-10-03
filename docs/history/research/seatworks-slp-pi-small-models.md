@@ -127,7 +127,7 @@ A missing result stays pending. A "complete" report alone never closes a cell.
 - **Evidence gap:** no small model was run. All gains are hypotheses until slice 4 runs.
 - **Unreproduced:** finding 2 is a code trace. Reproduce it before slice 1 depends on it.
 - **Decision risk:** a worker write-scope guard touches D3. It needs a recorded amendment, not a silent change.
-- **Open for the user:** which small model is the target, and is there a failing transcript? Slice 1's shape depends on the answer.
+- **Answered 2026-10-03:** the targets and five failing transcripts came from the repo; see "Transcript evidence" below.
 
 ### Evidence
 
@@ -144,6 +144,36 @@ This proves the function behavior. It does not prove that a real session wrote t
 Not run: the configured read worker (Herdr returned `Operation not permitted`, so the leader read the sources itself), the full Rust suite, and any live model evaluation. No source file changed. File pointers were rechecked against both pinned revisions.
 
 Discarded suspicions: Bee does not lack a dispatch tool, a structured result tool or restart-aware result delivery. A generic task-board rewrite or an extra scheduler has no support in this reading.
+
+### Transcript evidence (added 2026-10-03)
+
+The open question above is now answered from the repo. The Pi leader runs
+`deepseek-flash` (`~/.pi/agent/settings.json`); herded workers run
+`gemini-3.8-flash` (`bee team show`). An advisor-tier pass mined five leader
+sessions of this repo (about 2,700 timeline rows; deepseek-v4-flash and
+gemini-3.8-flash; `gate_bypass=full` in all). Limits: every session predates
+the Pi `bee_dispatch` and `verdict` tools, none is a worker transcript, and
+there is no strong-model baseline, so model size is not shown to be the cause.
+
+| Failure class | Count | Would prevent |
+|---|---|---|
+| Ran the worker's job itself instead of the returned dispatch payload | 3 episodes | an allowed-next-operation list |
+| Worked around a guard refusal (python writes, git plumbing, hand `rm` of state) | 15 episodes | a runnable fix; guard accuracy |
+| Gate record problems (`--actor user` under bypass, another feature's record, rubber-stamp verdicts) | 6 episodes | identity-derived actor and record |
+| Same call again after the same refusal | 9 episodes | a runnable fix |
+| Refusal with no usable fix, then reading Rust source or editing state | 5 episodes | a runnable fix |
+| Wrong flags or invented commands | about 32 calls | per-step argument schema |
+| Worktree vs. main directory confusion | 35 refusals | a run-from field |
+
+The deciding fact: fixes that named a command (the CLI-shape correction, the
+conflict derive, `--owner`) were followed within one or two calls. Fixes that
+named no command (`role_plan_required`, `deploy_authorization_wrong_feature`,
+"close or resolve that workflow", the preview mismatch) or an act an agent
+cannot do ("open a session with cwd=") were repeated or worked around.
+
+Consequence: slice 2 became "one runnable fix per refusal"
+(`docs/history/pi-slp-operations/CONTEXT.md`); the allowed-operations packet
+and identity-derived actor, record and directory move to slice 3.
 
 ### Principles applied
 

@@ -10985,6 +10985,10 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(res_replay.is_err());
         let ref_replay = res_replay.unwrap_err();
         assert_eq!(ref_replay.get("reason"), Some(&json!("deploy_authorization_consumed")));
+        let fix_replay = ref_replay.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_replay.contains("bee dispatch prepare --runtime"));
+        assert!(fix_replay.contains("--role deploy"));
+        assert!(fix_replay.contains("--release-version 2.39.0"));
     }
 
     #[test]
@@ -11210,6 +11214,10 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         });
         let err_stale = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
         assert_eq!(err_stale.get("reason"), Some(&json!("deploy_authorization_stale")));
+        let fix_stale = err_stale.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_stale.contains("bee dispatch prepare --runtime"));
+        assert!(fix_stale.contains("--role deploy"));
+        assert!(fix_stale.contains("--release-version 2.40.0"));
 
         // 4. Malformed expiry (invalid RFC3339 in expires_at)
         mutate_last_record(&|r| {
@@ -11296,6 +11304,17 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         });
         let err_feat = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
         assert_eq!(err_feat.get("reason"), Some(&json!("deploy_authorization_wrong_feature")));
+        let fix_feat = err_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_feat.contains("bee state lanes"));
+        assert!(fix_feat.contains("run bee state lanes from main"));
+        mutate_last_record(&|r| {
+            r.as_object_mut().unwrap().remove("feature");
+        });
+        let err_missing_feat = authorize_dispatch_permit(&root, dispatch_id, "2.40.0", Some("sess-matrix")).unwrap_err();
+        assert_eq!(err_missing_feat.get("reason"), Some(&json!("deploy_authorization_wrong_feature")));
+        let fix_missing_feat = err_missing_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_missing_feat.contains("bee state lanes"));
+        assert!(fix_missing_feat.contains("run bee state lanes from main"));
         mutate_last_record(&|r| {
             r["feature"] = json!("feat-matrix");
         });
@@ -11715,6 +11734,10 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert_eq!(ref_no_plan.get("ok"), Some(&json!(false)));
         assert_eq!(ref_no_plan.get("type"), Some(&json!("refused")));
         assert_eq!(ref_no_plan.get("reason"), Some(&json!("role_plan_required")));
+        let fix_no_plan = ref_no_plan.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_no_plan.contains("bee gate --preview"));
+        assert!(fix_no_plan.contains("docs/history/feat-no-plan/plan.md"));
+        assert!(fix_no_plan.contains("## Role assignments"));
 
         // 2. Deployment request without feature
         let Prepared::Value(ref_no_feat) = prepare_dispatch_wire(
@@ -11725,4 +11748,8 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert_eq!(ref_no_feat.get("ok"), Some(&json!(false)));
         assert_eq!(ref_no_feat.get("type"), Some(&json!("refused")));
         assert_eq!(ref_no_feat.get("reason"), Some(&json!("role_plan_required")));
+        let fix_no_feat = ref_no_feat.get("fix").and_then(Value::as_str).unwrap();
+        assert!(fix_no_feat.contains("bee gate --preview"));
+        assert!(fix_no_feat.contains("docs/history/<feature>/plan.md"));
+        assert!(fix_no_feat.contains("## Role assignments"));
     }

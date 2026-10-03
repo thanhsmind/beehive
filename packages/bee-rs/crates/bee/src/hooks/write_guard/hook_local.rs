@@ -546,12 +546,22 @@ pub(crate) fn describe_cross_worktree_target(root: &str, cwd: &str, raw: &Value)
             None => return Ok(None),
         },
     };
+    let canonical_root = realpath_any(root).unwrap_or_else(|| root.to_string());
     if current.is_some() && is_under_root(&main_root, &target_real)? {
-        return Ok(Some(
+        let rel = np_relative(&main_root, &target_real)?;
+        let rel_norm = rel.replace('\\', "/");
+        if rel_norm == ".bee" || rel_norm.starts_with(".bee/") {
+            return Ok(Some(
+                "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
+this path belongs to the main checkout, not this worktree. FIX: bee state changes only through `bee` verbs run from main (see `bee --help --json`)."
+                    .to_string(),
+            ));
+        }
+        let in_worktree_path = np_resolve2(&canonical_root, &rel)?;
+        return Ok(Some(format!(
             "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
-this path belongs to the main checkout, not this worktree. FIX: run this from a session rooted there."
-                .to_string(),
-        ));
+this path belongs to the main checkout, not this worktree. FIX: write {in_worktree_path} instead."
+        )));
     }
     for id in read_granted_worktree_ids(&main_root) {
         if let Some((_, cur_id)) = &current {
@@ -563,8 +573,7 @@ this path belongs to the main checkout, not this worktree. FIX: run this from a 
             if is_under_root(&worktree_root, &target_real)? {
                 return Ok(Some(format!(
                     "bee write guard denied this target: it could not be canonically contained inside the physical worktree — \
-it resolves inside worktree \"{id}\". FIX: open a session with cwd={worktree_root} to work there, or merge it \
-back from main via `bee worktree merge --id {id}`."
+it resolves inside worktree \"{id}\". FIX: the file belongs to worktree {id}; leave it, and write only inside your own worktree ({canonical_root})."
                 )));
             }
         }

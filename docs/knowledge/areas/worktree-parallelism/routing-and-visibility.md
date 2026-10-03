@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: ["worktree-first (docs/specs/worktree-first.md, 2026-07-31, owner-approved)", "worktree-session-routing D9 (the routing rule is prose, not a hook)", D9a (a live cross-session heartbeat plus a non-idle phase in the shared store), "cross-worktree-holds D7 (lane-first: the grant is taken at Gate 2's execution component — the old standalone execution gate, folded in by validation-diet D2 — and only on genuine file overlap; superseded by worktree-first)", "worktree-ux (2026-07-21, GH #30/#31 — the ungranted-worktree notice and the containment-deny message)"]
+  decisions: ["pi-slp-operations D3 (amended aa4db1c5: a containment deny names a writable path, never an act an agent cannot do)", "worktree-first (docs/specs/worktree-first.md, 2026-07-31, owner-approved)", "worktree-session-routing D9 (the routing rule is prose, not a hook)", D9a (a live cross-session heartbeat plus a non-idle phase in the shared store), "cross-worktree-holds D7 (lane-first: the grant is taken at Gate 2's execution component — the old standalone execution gate, folded in by validation-diet D2 — and only on genuine file overlap; superseded by worktree-first)", "worktree-ux (2026-07-21, GH #30/#31 — the ungranted-worktree notice and the containment-deny message)"]
   sources: [docs/specs/worktree-first.md, docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-routing-rule-d9-prose-not-a-hook"]
   authoritative_for: "worktree-parallelism: the worktree-first routing rule, its exemptions, and worktree visibility notices"
 ---
@@ -62,10 +62,20 @@ fallback for the last:
    of any work step, compares the effective cwd against `worktree_root` and
    returns `[BLOCKED: session cwd is not the worktree]` with zero edit
    attempts on a mismatch — the existing Location block still serves
-   pane/cockpit workers whose cwd already IS the worktree.
-3. **The write guard denies.** Unchanged: the containment check
+   pane/cockpit workers whose cwd already IS the worktree. A herding cell
+   brief skips this check (pi-slp-dispatch-return D1): the run already sets
+   the pane cwd, and a bare `[BLOCKED]` token is not a result file.
+3. **The write guard denies.** The containment check
    (`hooks/write_guard/hook_local.rs`) is the backstop no annotation or
-   self-check can race past.
+   self-check can race past. Its deny names something the caller can do
+   (pi-slp-operations D3): a main-checkout path names the same relative path
+   inside the current worktree ("write <path> instead"); a main `.bee/` path
+   names `bee --help --json`, run from main, never a path, because a path
+   would invite a hand edit of bee state; a path inside another granted
+   worktree says the file belongs to that worktree and names the caller's own
+   worktree root. It never says "open a session" — an agent cannot — and never
+   suggests merging a sibling worktree. Which targets are denied did not
+   change (D2).
 
 No refusal was added at claim time itself — a v1 draft that refused `cells
 claim` inside a granted worktree deadlocked against the narrow door (claim
