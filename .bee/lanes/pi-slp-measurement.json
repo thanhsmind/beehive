@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-slp-measurement",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": false,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-slp-measurement\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 19c1ec1; capture what settled, then bee close --feature pi-slp-measurement.",
+  "next_action": "bee close finished \"pi-slp-measurement\" — feature is closed.",
   "created_at": "2026-10-03T05:16:45.215Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "docs",

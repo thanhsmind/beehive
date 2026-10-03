@@ -640,6 +640,7 @@
     "orient",
     "next-op",
     "prompt-context",
-    "contract:next-op-runnable"
+    "contract:next-op-runnable",
+    "contract:orient-merged-worktree"
   ]
 }
