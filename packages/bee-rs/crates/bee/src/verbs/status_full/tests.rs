@@ -4980,6 +4980,24 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
+    fn next_operation_wayfinding_resume_with_granted_worktree_id() {
+        let mock_root = Path::new("/mock/control/root");
+        let facts = NextOpFacts {
+            granted_worktree_id: Some("wt-99"),
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-wt"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: true,
+        };
+        let op = next_operation(&facts);
+        assert_eq!(op.command.as_deref(), Some("bee discovery list --json"));
+        assert_eq!(op.run_from.as_deref(), Some(mock_root));
+    }
+
+    #[test]
     fn render_orient_text_includes_run_line_when_command_present() {
         let mut packet = JMap::new();
         let mut where_ = JMap::new();

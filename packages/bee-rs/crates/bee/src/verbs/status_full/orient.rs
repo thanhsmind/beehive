@@ -50,6 +50,12 @@ pub(crate) struct NextOperation {
 }
 
 pub(crate) fn next_operation(facts: &NextOpFacts<'_>) -> NextOperation {
+    if facts.wayfinding_resume {
+        return NextOperation {
+            command: Some("bee discovery list --json".to_string()),
+            run_from: facts.control_root.map(Path::to_path_buf),
+        };
+    }
     if let Some(id) = facts.granted_worktree_id.filter(|s| !s.is_empty()) {
         return NextOperation {
             command: Some(format!("bee worktree enter --id {id}")),
@@ -75,12 +81,6 @@ pub(crate) fn next_operation(facts: &NextOpFacts<'_>) -> NextOperation {
         return NextOperation {
             command: None,
             run_from: None,
-        };
-    }
-    if facts.wayfinding_resume {
-        return NextOperation {
-            command: Some("bee discovery list --json".to_string()),
-            run_from: facts.control_root.map(Path::to_path_buf),
         };
     }
     NextOperation {
