@@ -248,6 +248,145 @@ fn no_pane_success_writes_report_and_result_files() {
 }
 
 #[test]
+fn no_pane_worker_written_question_result_is_preserved() {
+    let tmp = tempdir().unwrap();
+    let bee_dir = tmp.path().join(".bee");
+    std::fs::create_dir_all(&bee_dir).unwrap();
+
+    let question_json = serde_json::json!({
+        "status": "question",
+        "summary": "need guidance",
+        "files_changed": ["src/main.rs"],
+        "question": {
+            "text": "should we use async?",
+            "kind": "technical"
+        }
+    });
+    let result_content = question_json.to_string();
+
+    let script = format!(
+        "printf '%s' '{}' > .bee/mailbox/job-q-test/result-1.json",
+        result_content.replace('\'', "'\\''")
+    );
+
+    let cfg = serde_json::json!({
+        "herding": {
+            "agents": {
+                "mock-worker": [
+                    "sh",
+                    "-c",
+                    script
+                ]
+            }
+        }
+    });
+    std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+    let opts = Options {
+        task: "do question task".to_string(),
+        cwd: tmp.path().to_path_buf(),
+        job_id: "job-q-test".to_string(),
+        idle_timeout_secs: 60,
+        ceiling_secs: 30,
+        close_always: false,
+        main_root: tmp.path().to_path_buf(),
+        json: true,
+        dry_run: false,
+        is_continue: false,
+        ready_wait_secs: 60,
+        agent: Some("mock-worker".to_string()),
+        expertise: vec![],
+        has_explicit_expertise: false,
+        caller_is_worker: false,
+        nickname: "worker-test".to_string(),
+        cell_id: Some("cell-1".to_string()),
+        seat: Some("hat-test".to_string()),
+        inbox_session: None,
+        pane_env_passthrough: BTreeMap::new(),
+        no_pane: true,
+        question_of: None,
+        question_round: 0,
+        allow_question: true,
+    };
+
+    let result = execute_no_pane(&opts);
+    assert_eq!(outcome_label(&result.outcome), "question");
+
+    let res_path = mailbox::result_path(&bee_dir, "job-q-test", 1);
+    let disk_content = std::fs::read_to_string(&res_path).expect("result file must exist");
+    assert_eq!(disk_content, result_content);
+}
+
+#[test]
+fn no_pane_worker_written_blocked_result_is_preserved() {
+    let tmp = tempdir().unwrap();
+    let bee_dir = tmp.path().join(".bee");
+    std::fs::create_dir_all(&bee_dir).unwrap();
+
+    let blocked_json = serde_json::json!({
+        "status": "blocked",
+        "summary": "missing dependencies",
+        "files_changed": [],
+        "proof": "cargo build failed",
+        "options": ["install pkg", "skip feature"],
+        "leaning": "install pkg"
+    });
+    let result_content = blocked_json.to_string();
+
+    let script = format!(
+        "printf '%s' '{}' > .bee/mailbox/job-b-test/result-1.json",
+        result_content.replace('\'', "'\\''")
+    );
+
+    let cfg = serde_json::json!({
+        "herding": {
+            "agents": {
+                "mock-worker": [
+                    "sh",
+                    "-c",
+                    script
+                ]
+            }
+        }
+    });
+    std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+    let opts = Options {
+        task: "do blocked task".to_string(),
+        cwd: tmp.path().to_path_buf(),
+        job_id: "job-b-test".to_string(),
+        idle_timeout_secs: 60,
+        ceiling_secs: 30,
+        close_always: false,
+        main_root: tmp.path().to_path_buf(),
+        json: true,
+        dry_run: false,
+        is_continue: false,
+        ready_wait_secs: 60,
+        agent: Some("mock-worker".to_string()),
+        expertise: vec![],
+        has_explicit_expertise: false,
+        caller_is_worker: false,
+        nickname: "worker-test".to_string(),
+        cell_id: Some("cell-1".to_string()),
+        seat: Some("hat-test".to_string()),
+        inbox_session: None,
+        pane_env_passthrough: BTreeMap::new(),
+        no_pane: true,
+        question_of: None,
+        question_round: 0,
+        allow_question: true,
+    };
+
+    let result = execute_no_pane(&opts);
+    assert_eq!(outcome_label(&result.outcome), "blocked");
+
+    let res_path = mailbox::result_path(&bee_dir, "job-b-test", 1);
+    let disk_content = std::fs::read_to_string(&res_path).expect("result file must exist");
+    assert_eq!(disk_content, result_content);
+}
+
+#[test]
 fn parse_options_handles_no_pane_and_runner_flags() {
     let opts1 = parse_options(&["--task", "test", "--no-pane"]).unwrap();
     assert!(opts1.no_pane);

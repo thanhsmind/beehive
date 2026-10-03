@@ -3181,9 +3181,21 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     let output = parse_child_jsonl(&stdout_str);
 
     let report_path = mailbox::report_path(&bee_dir, &opts.job_id, 1);
-    if let Err(e) = crate::fsutil::write_text_atomic(&report_path, &output.assistant_text) {
+    if !report_path.exists() {
+        if let Err(e) = crate::fsutil::write_text_atomic(&report_path, &output.assistant_text) {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!("could not write report {}: {e}", report_path.display())),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    }
+
+    let res_file_path = mailbox::result_path(&bee_dir, &opts.job_id, 1);
+    if res_file_path.exists() {
+        let outcome = read_result_for_round(&bee_dir, &opts.job_id, 1);
         return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!("could not write report {}: {e}", report_path.display())),
+            outcome,
             pane_id: None,
             closed_pane: false,
         };
@@ -3231,7 +3243,6 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         "proof": proof,
         "report_path": res.report_path,
     });
-    let res_file_path = mailbox::result_path(&bee_dir, &opts.job_id, 1);
     if let Err(e) = crate::fsutil::write_json_atomic(&res_file_path, &res_value) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("could not write result {}: {e}", res_file_path.display())),
