@@ -321,22 +321,29 @@ use crate::version::BEE_VERSION;
         std::fs::create_dir_all(root.join("docs").join("history").join("f1")).unwrap();
         write(root, "docs/history/f1/CONTEXT.md", "# ctx");
         let mut ctx = ctx_for(root);
-        let packet = build_orient(&mut ctx).unwrap();
-        // exec approved + one ready cell -> ready recommendation + command.
+        let packet = with_session_env(None, Some("claude-test"), || {
+            build_orient(&mut ctx).unwrap()
+        });
         let next = packet.get("next").unwrap();
         assert_eq!(
             vget(next, "action"),
             Some(&json!("1 ready cell(s): c-1 — orchestrator assigns them."))
         );
         assert_eq!(vget(next, "skill"), Some(&json!("bee-swarming")));
-        assert_eq!(vget(next, "command"), Some(&json!("bee cells ready --json")));
+        assert_eq!(
+            vget(next, "command"),
+            Some(&json!("bee dispatch wave --runtime claude --feature f1 --json"))
+        );
+        assert_eq!(
+            vget(next, "run_from"),
+            Some(&json!(root.to_str().unwrap()))
+        );
         let decisions = packet.get("decisions").unwrap();
         assert_eq!(vget(decisions, "context_md"), Some(&json!("docs/history/f1/CONTEXT.md")));
         assert_eq!(vget(decisions, "active_count"), Some(&json!(0)));
         let work = packet.get("work").unwrap();
         assert_eq!(vget(work, "ready"), Some(&json!(["c-1"])));
         assert_eq!(vget(work, "blockers"), Some(&json!([])));
-        // Text renderer.
         let text = render_orient_text(&packet);
         let lines: Vec<&str> = text.split('\n').collect();
         assert_eq!(
@@ -347,6 +354,10 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[2], "work: open=1 claimed=0 capped=0 | ready: c-1");
         assert_eq!(lines[3], "skill: bee-swarming");
         assert_eq!(lines[4], "next: 1 ready cell(s): c-1 — orchestrator assigns them.");
+        assert_eq!(
+            lines[5],
+            format!("run: bee dispatch wave --runtime claude --feature f1 --json (from {})", root.display())
+        );
     }
 
     /// expertise-principles D2: orient's second caller of the ONE shared
@@ -769,7 +780,7 @@ use crate::version::BEE_VERSION;
             .expect("main-side worktree block");
         assert_eq!(block.get("location"), Some(&json!("main")));
         assert_eq!(block.get("id"), Some(&json!("wt-granted")));
-        assert!(tpl(block.get("guidance")).starts_with("open your session at "));
+        assert_eq!(tpl(block.get("guidance")), "bee worktree enter --id wt-granted");
         // A docs lane is exempt -> no block, byte-unchanged orient.
         status_main.insert("route".into(), json!({"lane": "docs"}));
         assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
@@ -4802,4 +4813,199 @@ use crate::version::BEE_VERSION;
             serde_json::to_string(status.get("models").expect("models section")).unwrap(),
             serde_json::to_string(&before).unwrap()
         );
+    }
+
+    #[test]
+    fn orient_lane_bound_session_reports_lane_feature_and_phase() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"feature":"default-feat","phase":"idle"}"#);
+        let lanes = root.join(".bee/lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        write(
+            root,
+            ".bee/lanes/lane-feat.json",
+            r#"{"feature":"lane-feat","phase":"planning","approved_gates":{"context":true}}"#,
+        );
+        let sessions = root.join(".bee/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        write(
+            root,
+            ".bee/sessions/s-bound.json",
+            r#"{"id":"s-bound","lane":"lane-feat"}"#,
+        );
+        let packet = with_session_env(Some("s-bound"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let where_ = packet.get("where").unwrap();
+        assert_eq!(where_.get("feature"), Some(&json!("lane-feat")));
+        assert_eq!(where_.get("phase"), Some(&json!("planning")));
+
+        let unbound_packet = with_session_env(None, None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let unbound_where = unbound_packet.get("where").unwrap();
+        assert_eq!(unbound_where.get("feature"), Some(&json!("default-feat")));
+        assert_eq!(unbound_where.get("phase"), Some(&json!("idle")));
+    }
+
+    #[test]
+    fn orient_broken_lane_binding_gives_blocker_and_null_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"feature":"default-feat","phase":"swarming"}"#);
+        let sessions = root.join(".bee/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        write(
+            root,
+            ".bee/sessions/s-broken.json",
+            r#"{"id":"s-broken","lane":"missing-lane"}"#,
+        );
+        let packet = with_session_env(Some("s-broken"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+        let where_ = packet.get("where").unwrap();
+        assert_ne!(where_.get("feature"), Some(&json!("default-feat")));
+        let work = packet.get("work").unwrap();
+        let blockers = work.get("blockers").and_then(Value::as_array).unwrap();
+        assert!(blockers.iter().any(|b| b.as_str().map(|s| s.contains("broken") || s.contains("lane")).unwrap_or(false)));
+        let next = packet.get("next").unwrap();
+        assert_eq!(next.get("command"), Some(&Value::Null));
+        assert_eq!(next.get("run_from"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn next_operation_branches_return_expected_command_and_run_from() {
+        let mock_root = Path::new("/mock/control/root");
+
+        let facts_wt = NextOpFacts {
+            granted_worktree_id: Some("wt-99"),
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-wt"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_wt = next_operation(&facts_wt);
+        assert_eq!(op_wt.command.as_deref(), Some("bee worktree enter --id wt-99"));
+        assert_eq!(op_wt.run_from.as_deref(), Some(mock_root));
+
+        let facts_handoff = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: true,
+            ready_count: 3,
+            execution_gate_approved: true,
+            feature: Some("feat-h"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_handoff = next_operation(&facts_handoff);
+        assert_eq!(op_handoff.command.as_deref(), Some("bee state handoff show --json"));
+        assert_eq!(op_handoff.run_from.as_deref(), Some(mock_root));
+
+        let facts_wave = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: true,
+            feature: Some("feat-wave"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_wave = next_operation(&facts_wave);
+        assert_eq!(op_wave.command.as_deref(), Some("bee dispatch wave --runtime claude --feature feat-wave --json"));
+        assert_eq!(op_wave.run_from.as_deref(), Some(mock_root));
+
+        let facts_no_rt = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: true,
+            feature: Some("feat-wave"),
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_no_rt = next_operation(&facts_no_rt);
+        assert_eq!(op_no_rt.command, None);
+        assert_eq!(op_no_rt.run_from, None);
+
+        let facts_gate_unapproved = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 2,
+            execution_gate_approved: false,
+            feature: Some("feat-wave"),
+            caller_runtime: Some("claude"),
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_unapproved = next_operation(&facts_gate_unapproved);
+        assert_eq!(op_unapproved.command, None);
+        assert_eq!(op_unapproved.run_from, None);
+
+        let facts_wf = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 0,
+            execution_gate_approved: false,
+            feature: None,
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: true,
+        };
+        let op_wf = next_operation(&facts_wf);
+        assert_eq!(op_wf.command.as_deref(), Some("bee discovery list --json"));
+        assert_eq!(op_wf.run_from.as_deref(), Some(mock_root));
+
+        let facts_none = NextOpFacts {
+            granted_worktree_id: None,
+            handoff: false,
+            ready_count: 0,
+            execution_gate_approved: false,
+            feature: None,
+            caller_runtime: None,
+            control_root: Some(mock_root),
+            wayfinding_resume: false,
+        };
+        let op_none = next_operation(&facts_none);
+        assert_eq!(op_none.command, None);
+        assert_eq!(op_none.run_from, None);
+    }
+
+    #[test]
+    fn render_orient_text_includes_run_line_when_command_present() {
+        let mut packet = JMap::new();
+        let mut where_ = JMap::new();
+        where_.insert("phase".into(), json!("planning"));
+        where_.insert("feature".into(), json!("demo"));
+        where_.insert("mode".into(), json!("standard"));
+        where_.insert("gates".into(), json!({"execution": true}));
+        where_.insert("gate_bypass_level".into(), json!("off"));
+        packet.insert("where".into(), Value::Object(where_));
+        let mut decisions = JMap::new();
+        decisions.insert("active_count".into(), json!(0));
+        packet.insert("decisions".into(), Value::Object(decisions));
+        let mut work = JMap::new();
+        let mut cells = JMap::new();
+        cells.insert("open".into(), json!(1));
+        cells.insert("claimed".into(), json!(0));
+        cells.insert("capped".into(), json!(0));
+        work.insert("cells".into(), Value::Object(cells));
+        packet.insert("work".into(), Value::Object(work));
+        let mut next = JMap::new();
+        next.insert("action".into(), json!("Prepare current-slice cells."));
+        next.insert("skill".into(), json!("bee-planning"));
+        next.insert("command".into(), json!("bee dispatch wave --runtime claude --feature demo --json"));
+        next.insert("run_from".into(), json!("/path/to/repo"));
+        packet.insert("next".into(), Value::Object(next));
+
+        let rendered = render_orient_text(&packet);
+        assert!(rendered.contains("run: bee dispatch wave --runtime claude --feature demo --json (from /path/to/repo)"));
     }

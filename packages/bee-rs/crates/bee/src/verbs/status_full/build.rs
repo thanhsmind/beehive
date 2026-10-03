@@ -109,6 +109,10 @@ fn models_with_descriptions(normalized: &JMap, raw_models: Option<&Value>) -> JM
 
 pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     let state = read_state_full(ctx)?;
+    build_status_with_state(ctx, lanes_full, state)
+}
+
+pub(crate) fn build_status_with_state(ctx: &mut Ctx, lanes_full: bool, state: JMap) -> R<JMap> {
     let onboarding_raw = read_onboarding(ctx)?.unwrap_or(Value::Null);
     let handoff = read_handoff(ctx)?.unwrap_or(Value::Null);
     let cells = list_cells(ctx, None, None)?;
