@@ -118,6 +118,7 @@ mod split_lock;
 // interrupt sends Escape and keeps the pane; cancel captures foreground pid,
 // closes the pane, and confirms exit within 5 s. See job_verbs.rs.
 pub(crate) mod job_verbs;
+pub(crate) mod broker;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
@@ -146,6 +147,8 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "interrupt" => Some(job_verbs::interrupt(rest)),
         "cancel" => Some(job_verbs::cancel(rest)),
         "steer" => Some(job_verbs::steer(rest)),
+        "broker" => broker::route_broker(rest),
+        "answer" => Some(broker::answer(rest)),
         _ => None,
     }
 }

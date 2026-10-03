@@ -239,8 +239,8 @@ pub(crate) const KNOWN_KINDS: [&str; 2] = ["observation", "silence"];
 /// consult to the struggling session's own lead, which reads it at its next
 /// turn boundary and decides for itself. The supervisor still only writes
 /// records — 704b691c holds untouched.
-pub(crate) const MAILBOX_KINDS: [&str; 4] =
-    ["intervention", "escalation", "urgent", "advisor-nudge"];
+pub(crate) const MAILBOX_KINDS: [&str; 5] =
+    ["intervention", "escalation", "urgent", "advisor-nudge", "broker-notice"];
 
 /// The mailbox kinds the frequency cap COUNTS AGAINST. A kind outside this set
 /// is never refused for repeating a point: escalation IS the remedy the cap
@@ -255,8 +255,8 @@ const CAPPED_KINDS: [&str; 2] = ["intervention", "advisor-nudge"];
 
 /// Every kind `record` accepts, in the order its refusal names them.
 /// `all_kinds_is_the_two_sets` keeps this from drifting out of the two above.
-pub(crate) const ALL_KINDS: [&str; 6] =
-    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge"];
+pub(crate) const ALL_KINDS: [&str; 7] =
+    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge", "broker-notice"];
 
 /// The two waiting-on kinds that mean a HUMAN is being waited on. `turn-end`
 /// is deliberately not one of them: it is the ordinary end of a turn with
@@ -308,6 +308,17 @@ pub(crate) const KNOWN_SIGNALS: [&str; 7] = [
     "same-region-resubmit",
     "dead-lead",
     "none",
+];
+
+pub(crate) const INTERVENTION_SIGNALS: [&str; 8] = [
+    "struggling-loop",
+    "big-decision",
+    "danger-op",
+    "budget-overrun",
+    "same-region-resubmit",
+    "dead-lead",
+    "none",
+    "worker-question",
 ];
 
 /// The bound on one note. Two sentences fit in a fraction of it; the cap
@@ -618,7 +629,7 @@ impl Intervention {
             return None;
         }
         let signal = m.get("signal")?.as_str()?.to_string();
-        if !KNOWN_SIGNALS.contains(&signal.as_str()) {
+        if !INTERVENTION_SIGNALS.contains(&signal.as_str()) {
             return None;
         }
         let non_empty = |name: &str| {
@@ -829,8 +840,8 @@ pub(crate) fn record_intervention_into(
         return Err(closed_set_error(cmd, "kind", kind, &MAILBOX_KINDS));
     }
     let signal = signal.unwrap_or("none");
-    if !KNOWN_SIGNALS.contains(&signal) {
-        return Err(closed_set_error(cmd, "signal", signal, &KNOWN_SIGNALS));
+    if !INTERVENTION_SIGNALS.contains(&signal) {
+        return Err(closed_set_error(cmd, "signal", signal, &INTERVENTION_SIGNALS));
     }
     let target_session = target_session.map(one_line).filter(|s| !s.is_empty());
     let Some(target_session) = target_session else {
@@ -1259,6 +1270,8 @@ fn notify_urgent(control: &Path, row: &Intervention) -> Option<Vec<String>> {
 pub(crate) fn delivery_line(row: &Intervention) -> String {
     if row.kind == "escalation" || row.kind == "urgent" {
         format!("bee supervisor URGENT: {}", row.question)
+    } else if row.kind == "broker-notice" {
+        format!("bee broker: {}", row.question)
     } else {
         format!("bee supervisor: {}", row.question)
     }
@@ -4478,6 +4491,14 @@ mod tests {
         let still_pending: Vec<&str> =
             pending_for(&after, "sess-1").iter().map(|r| r.id.as_str()).collect();
         assert_eq!(still_pending, vec![calm.id.as_str()], "only the stamped row leaves the list");
+    }
+
+    #[test]
+    fn delivery_line_formats_broker_notice() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let notice = ask(control, "broker-notice", "sess-1", "child-done", "Job child-1 finished round 1 with status done.").unwrap();
+        assert_eq!(delivery_line(&notice), "bee broker: Job child-1 finished round 1 with status done.");
     }
 
     // ─── the presence mark (Phase 3, 9f5cd250) ──────────────────────────

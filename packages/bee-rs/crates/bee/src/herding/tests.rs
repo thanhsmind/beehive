@@ -162,6 +162,9 @@ fn non_zero_exit_surfaces_stderr_and_fails() {
         inbox_session: None,
         pane_env_passthrough: BTreeMap::new(),
         no_pane: true,
+        question_of: None,
+        question_round: 0,
+        allow_question: true,
     };
 
     let result = execute_no_pane(&opts);
@@ -223,6 +226,9 @@ fn no_pane_success_writes_report_and_result_files() {
         inbox_session: None,
         pane_env_passthrough: BTreeMap::new(),
         no_pane: true,
+        question_of: None,
+        question_round: 0,
+        allow_question: true,
     };
 
     let result = execute_no_pane(&opts);

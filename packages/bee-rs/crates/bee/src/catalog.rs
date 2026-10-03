@@ -816,7 +816,7 @@ mod tests {
         // the same reflection — what to have done instead — and a layer is
         // not an instead. `--severity` and `--type` (backlog.add) rank and
         // shape a row; neither says where a fix belongs.
-        const PINNED_FLAG_COUNT: usize = 211;
+        const PINNED_FLAG_COUNT: usize = 212;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
@@ -941,6 +941,24 @@ mod tests {
         assert!(entry.unavailable.is_none());
         assert_eq!(missing_required(entry, &[]), vec!["text".to_string()]);
         assert!(missing_required(entry, &["--text".to_string(), "hello".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn herding_broker_tick_resolves() {
+        let (entry, rest) = resolve(&["herding", "broker", "tick"]).expect("herding.broker is in the registry");
+        assert_eq!(entry.invoke, "bee herding broker");
+        assert_eq!(rest, vec!["tick"]);
+        assert!(entry.unavailable.is_none());
+    }
+
+    #[test]
+    fn herding_answer_resolves_and_declares_required_flags() {
+        let (entry, rest) = resolve(&["herding", "answer"]).expect("herding.answer is in the registry");
+        assert_eq!(entry.invoke, "bee herding answer");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["job".to_string(), "text".to_string()]);
+        assert!(missing_required(entry, &["--job".to_string(), "job-1".to_string(), "--text".to_string(), "ok".to_string()]).is_empty());
     }
 }
 

@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "9dc44743bde0083d377ef6877e7508e100dfd3bc4b49a523e275c9537f073d89",
+      "sha256": "c0155177a694be819a0163b256a86de2f9b50eae5ca78c68448eaccdd883e671",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -332,7 +332,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "f9276e4e5f65f6804575e8edf243e479c4bb2a9d995261cd8960d38a13c24cc3",
+      "sha256": "d89a340cab9f72b456f27a4cf77ee9bf3ea11784e98f30db15ca24864565431e",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/SKILL.md"
@@ -955,7 +955,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "c480db190e2ceb47ff3b35d3e1772ed5844e6f9dbb84a808a62f766ba90d53f4",
+      "sha256": "0bd078eff5ab97056ed3327a3cf0737ab3ecd2853ad8f485f29b1b94926cf7ae",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1151,7 +1151,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "f9276e4e5f65f6804575e8edf243e479c4bb2a9d995261cd8960d38a13c24cc3",
+      "sha256": "d89a340cab9f72b456f27a4cf77ee9bf3ea11784e98f30db15ca24864565431e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/SKILL.md"
@@ -1823,7 +1823,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "1b88e15a4077a40ab57cb747ba7af43e0407b072419f2cca018b7b4809510027",
+      "sha256": "3b48979e212c727c228c2eceaf0a4f47cb5c9778f927bf8dffb7929ea54d18af",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
@@ -1865,7 +1865,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/tool-verdict.ts",
-      "sha256": "113e5903488148e31bb8a11bc8cebd272fa4e38c4bef1cd3bed145a3d89b9f63",
+      "sha256": "7469911d0e6d7c1560dd39d14e348003132b84f3968cfa3d8a192aa43fcddc69",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/tool-verdict.ts"
@@ -2286,7 +2286,7 @@
     },
     {
       "path": "skills/bee-herding/SKILL.md",
-      "sha256": "f9276e4e5f65f6804575e8edf243e479c4bb2a9d995261cd8960d38a13c24cc3",
+      "sha256": "d89a340cab9f72b456f27a4cf77ee9bf3ea11784e98f30db15ca24864565431e",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/SKILL.md"

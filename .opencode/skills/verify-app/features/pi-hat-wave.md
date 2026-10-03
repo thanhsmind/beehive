@@ -144,7 +144,22 @@ The candidate was vendored into the sandbox, and a feature `demo` was started at
 - **`/reload` undoes narrowing only until the next turn.** In RPC mode `/reload` is not a command; Pi sends it to the model as plain text. In the interactive TUI (tmux): before `/reload` the probe showed `["read","bash"]`; right after `/reload` it showed all nine tools; after the next turn the narrowing notice fired again and the probe showed `["read","bash"]`. Write-guard blocks writes in every one of these states.
 - **Relocation lands in the worktree.** `/bee-worktree-new --feature demo` notified `Relocated session to worktree repo--wt--demo (.../repo--wt--demo)`, and `/probe-tools` then showed `cwd=.../repo--wt--demo`. This ran after Pi 0.87's deferred `agent_settled` change.
 - **A bee worker runs on Pi 1.0.** `bee dispatch prepare --runtime pi --kind gather --role read --json` returned `"tool": "Bash"` with `bee herding run ... --agent "pi" --no-pane --seat "read"`. A `herding run --agent pi --no-pane --ceiling 300` worker returned `outcome: "done"`, `pane_id: null`, job `job-1790924377574-2982323-1`, summary `Verdict recorded: done (Read README.md and reported its first line: "# sandbox")`, in 4 s.
-- **Not run on 1.0:** the five-seat hat wave with seat injection into a leader session. The 2026-09-19 run on Pi 0.85.1 above is still the newest evidence for that part.
+- **Leader-session wave on 1.0:** see the next evidence section. The five-seat `--no-pane` wave of the third run was not re-run on 1.0.
+
+### Evidence, Pi 1.0.0 leader-session wave (run 20261003-164226-3799197, 2026-10-03, bee 2.49.0, Pi 1.0.0, agent `pi-gpt-5.6-luna`)
+
+The sandbox `team.pi` slots and the leader all named `pi-gpt-5.6-luna` = `["pi","-a","--model","openai-codex/gpt-5.6-luna:high"]`. Leader log: `<run>/repo--wt--hat-demo/evidence/wave-log.md`. Pi session log: `~/.pi/agent/sessions/--home-thanhsmind-.local-state-bee-verify-run-20261003-164226-3799197-repo--wt--hat-demo--/2026-10-03T09-43-48-988Z_01a10125-fbfc-74f5-87e9-33666f8f601f.jsonl`.
+
+- Token: `PI_SESSION_ID=01a10125-fbfc-74f5-87e9-33666f8f601f`. It equals the session log id and the folder `<run>/repo/.bee/result-inbox/01a10125-fbfc-74f5-87e9-33666f8f601f/`, which is empty after the drain.
+- Prepares: each of `hat-facts-gaps`, `hat-alternatives`, `hat-user-impact` returned `"tool": "Bash"`, `transport_ready: true`, and a command with the worktree `--cwd`, `--seat "<seat>"`, `--ceiling 600`, and `--no-pane`. On 2.49.0 a pi advisor payload carries `--no-pane`, so the hats run as child processes and no pane layout check applies.
+- Detached launch at 09:45:07Z: three lines with `"outcome":"detached"` and `inbox_session` equal to the token, jobs `job-1791020707130-3809590-1` (`hat-facts-gaps`), `…-3809592-1` (`hat-alternatives`), `…-3809594-1` (`hat-user-impact`). Each `job.json` has `cwd` = the worktree.
+- Injection: three user messages, one per seat, at 09:46:09Z, 09:46:18Z, and 09:46:23Z. Each holds a `bee-result` block with `job_id`, `round: 1`, `seat`, `status: done`, `summary`, `proof`, and `report_path`.
+- Reports read: the leader's `read` tool calls name each of the three `report-1.md` paths once.
+- Budget: launch 09:45:07Z, last report 09:46:17Z. That is 1 min 10 s.
+- Advisor record, exact output: `Recorded advisor_ref (advisor "hat-wave:live-check", feature "hat-demo").`
+- Leader envelope: `"outcome":"done"`, `"pane_id":"w1:pEW"`, `"closed_pane":true` (evidence `006-bee-herding-run-*.out`).
+- Seen weakness: the `hat-user-impact` summary row read `### Paths read`, the first line of the report, not a verdict line.
+- First attempt failed outside bee: the plain `pi` agent's default model `deepseek-flash` answered `402 Insufficient Balance` to every pointer. `herding run` reported `spawn_failed` as "an unanswered prompt" and never named the provider error (evidence `005-bee-herding-run-*.out`).
 
 ## Gotchas
 

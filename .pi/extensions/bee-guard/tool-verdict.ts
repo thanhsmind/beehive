@@ -21,8 +21,8 @@ export const VERDICT_TOOL_PARAMETERS = {
   properties: {
     status: {
       type: "string",
-      enum: ["done", "blocked"],
-      description: "Final status of the work: done or blocked",
+      enum: ["done", "blocked", "question"],
+      description: "Final status of the work: done, blocked, or question",
     },
     summary: {
       type: "string",
@@ -36,6 +36,15 @@ export const VERDICT_TOOL_PARAMETERS = {
     proof: {
       type: "string",
       description: "Command or evidence backing the outcome",
+    },
+    question: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        kind: { type: "string", enum: ["technical", "product", "gate"] },
+      },
+      required: ["text", "kind"],
+      description: "Optional question object when asking a question instead of finishing",
     },
     options: {
       type: "array",
@@ -61,7 +70,7 @@ export const VERDICT_TOOL_PARAMETERS = {
       description: "Optional structured disagreement with the task",
     },
   },
-  required: ["status", "summary", "files_changed", "proof"],
+  required: ["status", "summary", "files_changed"],
 }
 
 export async function executeVerdictTool(
@@ -74,14 +83,14 @@ export async function executeVerdictTool(
   if (!params || typeof params !== "object") {
     throw new Error("Verdict parameters must be an object")
   }
-  const required = ["status", "summary", "files_changed", "proof"]
+  const required = ["status", "summary", "files_changed"]
   for (const field of required) {
     if (params[field] === undefined || params[field] === null) {
       throw new Error(`Missing required field: ${field}`)
     }
   }
-  if (params.status !== "done" && params.status !== "blocked") {
-    throw new Error(`Invalid status: ${params.status} (expected 'done' or 'blocked')`)
+  if (params.status !== "done" && params.status !== "blocked" && params.status !== "question") {
+    throw new Error(`Invalid status: ${params.status} (expected 'done', 'blocked', or 'question')`)
   }
   if (typeof params.summary !== "string") {
     throw new Error("Field 'summary' must be a string")
@@ -89,11 +98,35 @@ export async function executeVerdictTool(
   if (!Array.isArray(params.files_changed)) {
     throw new Error("Field 'files_changed' must be an array of strings")
   }
-  if (typeof params.proof !== "string") {
+  if (params.status === "done") {
+    if (typeof params.proof !== "string" || params.proof.trim().length === 0) {
+      throw new Error("Verdict with status 'done' requires proof. Fix: run the proof and pass `<command> — <result> — <scope reason>`.")
+    }
+  } else if (params.proof !== undefined && params.proof !== null && typeof params.proof !== "string") {
     throw new Error("Field 'proof' must be a string")
   }
-  if (params.status === "done" && params.proof.trim().length === 0) {
-    throw new Error("Verdict with status 'done' requires proof. Fix: run the proof and pass `<command> — <result> — <scope reason>`.")
+  if (params.status === "question") {
+    if (!params.question || typeof params.question !== "object" || Array.isArray(params.question)) {
+      throw new Error("Verdict with status 'question' requires a question object")
+    }
+    if (typeof params.question.text !== "string" || params.question.text.trim().length === 0) {
+      throw new Error("Verdict with status 'question' requires non-empty question.text")
+    }
+    const validKinds = ["technical", "product", "gate"]
+    if (!validKinds.includes(params.question.kind)) {
+      throw new Error(`Invalid question.kind: ${params.question.kind} (expected 'technical', 'product', or 'gate')`)
+    }
+  } else if (params.question !== undefined && params.question !== null) {
+    if (typeof params.question !== "object" || Array.isArray(params.question)) {
+      throw new Error("Field 'question' must be an object")
+    }
+    if (typeof params.question.text !== "string" || params.question.text.trim().length === 0) {
+      throw new Error("Field 'question.text' must be a non-empty string")
+    }
+    const validKinds = ["technical", "product", "gate"]
+    if (!validKinds.includes(params.question.kind)) {
+      throw new Error(`Invalid question.kind: ${params.question.kind} (expected 'technical', 'product', or 'gate')`)
+    }
   }
 
   const directory = directoryOf(ctx)
@@ -137,7 +170,15 @@ export async function executeVerdictTool(
     status: params.status,
     summary: params.summary,
     files_changed: params.files_changed,
-    proof: params.proof,
+  }
+  if (typeof params.proof === "string") {
+    resultPayload.proof = params.proof
+  }
+  if (params.question && typeof params.question === "object") {
+    resultPayload.question = {
+      text: params.question.text.trim(),
+      kind: params.question.kind,
+    }
   }
   if (Array.isArray(params.options)) {
     resultPayload.options = params.options

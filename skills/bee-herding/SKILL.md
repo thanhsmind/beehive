@@ -63,6 +63,12 @@ routable worktrees with scrollback dedup. Route is the one role whose
 whole contract is its prompt file, as the supervisor's is. Protocol:
 `references/route-prompt.md`.
 
+**Broker** — a code-only control-loop role (`bee herding control-loop --role broker`):
+wakes cold, routes herded worker questions to the advisor role or to the
+human via supervisor interventions, and starts child jobs when answers
+arrive; it never answers questions itself. Concept:
+`docs/knowledge/areas/bee-herding/the-mailbox-broker.md`.
+
 ## Role boundary
 
 Bootstrap only builds the cockpit and starts the loops — never picks a
@@ -71,7 +77,9 @@ starts work — never merges, deletes a worktree, or closes a pane.
 Merge only retires finished work — never picks a PBI, creates a
 worktree, or starts an agent. Route only reads and reports — never
 merges, never picks a PBI, never starts a coder or creates a pane, and
-never touches main. About to take another role's action?
+never touches main. Broker only routes worker questions and starts child
+jobs — never answers questions itself, never merges, never starts coder
+panes from backlog, and never touches main. About to take another role's action?
 Stop — wrong section.
 
 ## Safety boundaries

@@ -69,6 +69,7 @@ pub(crate) enum Role {
     /// a CHANGES verdict to the coder's open pane, and stops cold on anything
     /// it cannot classify.
     Route,
+    Broker,
 }
 
 impl Role {
@@ -78,6 +79,7 @@ impl Role {
             "merge" => Some(Role::Merge),
             "supervisor" => Some(Role::Supervisor),
             "route" => Some(Role::Route),
+            "broker" => Some(Role::Broker),
             _ => None,
         }
     }
@@ -88,6 +90,7 @@ impl Role {
             Role::Merge => "merge",
             Role::Supervisor => "supervisor",
             Role::Route => "route",
+            Role::Broker => "broker",
         }
     }
 
@@ -103,6 +106,7 @@ impl Role {
             // not a measurement. Nobody has measured how long a review takes
             // in this repo; dispatch/merge run at 60s and supervisor at 900s.
             Role::Route => ROUTE_DEFAULT_INTERVAL,
+            Role::Broker => BROKER_DEFAULT_INTERVAL,
         }
     }
 }
@@ -113,6 +117,7 @@ const SUPERVISOR_DEFAULT_INTERVAL: u64 = 900;
 /// measurement: dispatch/merge run at 60s and supervisor at 900s, and nobody
 /// has measured how long a review takes in this repo.
 const ROUTE_DEFAULT_INTERVAL: u64 = 300;
+const BROKER_DEFAULT_INTERVAL: u64 = 30;
 const DEFAULT_TIMEOUT: u64 = 900;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES: u64 = 20;
 const DEFAULT_TURN_CEILING: u64 = 50;
@@ -165,7 +170,7 @@ impl Options {
                 "--role" => {
                     let v = need_value(flag, flags, i)?;
                     role = Some(Role::parse(v).ok_or_else(|| {
-                        format!("unknown role '{v}' (expected dispatch, merge, supervisor or route)")
+                        format!("unknown role '{v}' (expected dispatch, merge, supervisor, route or broker)")
                     })?);
                     i += 2;
                 }
@@ -207,7 +212,7 @@ impl Options {
             }
         }
 
-        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor|route is required".to_string())?;
+        let role = role.ok_or_else(|| "--role dispatch|merge|supervisor|route|broker is required".to_string())?;
         Ok(Options {
             role,
             main_root,
@@ -237,7 +242,7 @@ fn positive_int(flag: &str, raw: &str) -> Result<u64, String> {
 
 fn print_usage() {
     eprintln!(
-        "Usage: bee herding control-loop --role dispatch|merge|supervisor|route [--main-root PATH] \
+        "Usage: bee herding control-loop --role dispatch|merge|supervisor|route|broker [--main-root PATH] \
          [--interval N] [--timeout N] [--max-iterations N] \
          [--max-consecutive-failures N] [--turn-ceiling N] [--once]"
     );
@@ -306,6 +311,7 @@ fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
         (Role::Merge, TransportKind::Tmux) => {
             "Bash(tmux:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read"
         }
+        (Role::Broker, _) => unreachable!("Role::Broker has no allowed tools"),
     }
 }
 
@@ -430,6 +436,7 @@ fn model_for(main_root: &Path, role: Role) -> String {
     match role {
         Role::Dispatch | Role::Merge | Role::Route => DEFAULT_MODEL.to_string(),
         Role::Supervisor => supervisor_model(main_root),
+        Role::Broker => unreachable!("Role::Broker has no model"),
     }
 }
 
@@ -541,6 +548,17 @@ fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
 /// (`RealArgvProvider`) and the D13 tests call this exact function — never a
 /// second, drifted copy.
 pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
+    if role == Role::Broker {
+        let exe = std::env::current_exe()
+            .map_err(|e| format!("could not resolve the bee executable: {e}"))?;
+        return Ok(vec![
+            exe.to_string_lossy().to_string(),
+            "herding".to_string(),
+            "broker".to_string(),
+            "tick".to_string(),
+            "--json".to_string(),
+        ]);
+    }
     let prompt = read_prompt_file(main_root, role)?;
     // The transport picks the allowlist (tmux-herding-cockpit D1). A missing
     // key reads as herdr, so a repo with no key spawns the byte-identical
@@ -1357,6 +1375,87 @@ mod tests {
         ] {
             assert!(body.contains(needle), "route-prompt.md is missing {needle:?}");
         }
+    }
+
+    #[test]
+    fn broker_is_a_parsed_role_that_names_itself_broker() {
+        assert_eq!(Role::parse("broker"), Some(Role::Broker));
+        assert_eq!(Role::Broker.as_str(), "broker");
+        let err = Options::parse(&["--role", "nope"]).unwrap_err();
+        assert!(err.contains("broker"), "{err}");
+        let missing = Options::parse(&[]).unwrap_err();
+        assert!(missing.contains("broker"), "{missing}");
+    }
+
+    #[test]
+    fn broker_role_parses_off_the_real_flag_line_with_the_30s_default() {
+        let opts = Options::parse(&["--role", "broker"]).expect("parses");
+        assert_eq!(opts.role, Role::Broker);
+        assert_eq!(opts.interval, 30);
+        assert_eq!(
+            Options::parse(&["--role", "broker", "--interval", "15"]).unwrap().interval,
+            15
+        );
+    }
+
+    #[test]
+    fn broker_iteration_argv_is_the_bee_binary_with_herding_broker_tick_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Broker, 50).expect("argv resolves");
+        let exe = std::env::current_exe().expect("current exe");
+        assert_eq!(
+            argv,
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn broker_iteration_needs_no_broker_prompt_file_and_ignores_template() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(
+            bee_dir.join("config.json"),
+            r#"{"herding":{"control_command":["custom","template"]}}"#,
+        )
+        .unwrap();
+        let argv = resolve_iteration_argv(tmp.path(), Role::Broker, 50).expect("argv resolves");
+        let exe = std::env::current_exe().expect("current exe");
+        assert_eq!(
+            argv,
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn stop_file_ends_a_broker_loop_like_any_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let parsed = Options::parse(&["--role", "broker"]).expect("parses");
+        let provider = RealArgvProvider {
+            main_root: tmp.path().to_path_buf(),
+            role: parsed.role,
+            turn_ceiling: parsed.turn_ceiling,
+        };
+        let stop_file = tmp.path().join("stop");
+        std::fs::write(&stop_file, b"").unwrap();
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
     }
 
     // ── the transport swaps exactly one allowlist entry ───────────────────
