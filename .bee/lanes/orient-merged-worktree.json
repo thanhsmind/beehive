@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"orient-merged-worktree\" started at phase \"exploring\" (lane).",
-  "next_action": "Dispatch omw-1.",
+  "next_action": "Merged into main at b380455; capture what settled, then bee close --feature orient-merged-worktree.",
   "created_at": "2026-10-03T05:18:02.923Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -107,12 +107,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-03T05:27:36.921Z",
-    "branch": "wt/orient-merged-worktree",
-    "worktree_id": "beehive--wt--orient-merged-worktree",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
