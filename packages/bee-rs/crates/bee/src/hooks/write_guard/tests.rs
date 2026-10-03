@@ -1607,6 +1607,8 @@ use std::process::ExitCode;
         let traversal = expect_done(edit("../outside.txt"), &lx.work_root);
         assert_eq!(traversal.code, 2);
         assert_eq!(traversal.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert!(traversal.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!traversal.stderr.contains("open your session at"));
         let win_traversal = expect_done(edit("..\\outside-win.txt"), &lx.work_root);
         assert_eq!(win_traversal.code, 2);
         let absolute_main = expect_done(
@@ -1917,11 +1919,15 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("worktree-first"));
         assert!(e.stderr.contains(&*wtf.wt_root.file_name().unwrap().to_string_lossy()));
         assert!(e.stderr.contains(&format!("bee worktree merge --id {}", wtf.id)));
+        assert!(e.stderr.contains(&format!("bee worktree enter --id {}", wtf.id)));
+        assert!(!e.stderr.contains("open your session at"));
         assert!(e.stderr.contains("worktree_first: \"off\""));
         assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"standard\""));
         // Bash-extracted target too.
         let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
         assert_eq!(eb.code, 2);
+        assert!(eb.stderr.contains(&format!("bee worktree enter --id {}", wtf.id)));
+        assert!(!eb.stderr.contains("open your session at"));
     }
 
     #[test]
@@ -2092,12 +2098,16 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
         assert!(e.stderr.contains("bee worktree new --feature demo"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee worktree enter --id"), "{}", e.stderr);
+        assert!(!e.stderr.contains("open your session at"), "{}", e.stderr);
         assert!(e.stderr.contains("MAIN checkout"), "{}", e.stderr);
         assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"standard\""), "{}", e.stderr);
         assert!(e.stderr.contains("worktree_first: \"off\""), "{}", e.stderr);
         // Bash-extracted target too.
         let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
         assert_eq!(eb.code, 2, "{}", eb.stderr);
+        assert!(eb.stderr.contains("bee worktree enter --id"), "{}", eb.stderr);
+        assert!(!eb.stderr.contains("open your session at"), "{}", eb.stderr);
     }
 
     #[test]
@@ -5154,6 +5164,8 @@ use std::process::ExitCode;
         let e = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &hx.roots);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert_eq!(e.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert!(e.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!e.stderr.contains("open your session at"));
 
         // Bash shape keeps its deny too.
         let bash_target = target.to_string_lossy().replace('\\', "/");
@@ -5164,6 +5176,8 @@ use std::process::ExitCode;
         );
         assert_eq!(b.code, 2, "{}", b.stderr);
         assert_eq!(b.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+        assert!(b.stderr.contains("A path outside this project belongs to the user \u{2014} ask them to change it, never write it through another tool."));
+        assert!(!b.stderr.contains("open your session at"));
     }
 
     #[test]

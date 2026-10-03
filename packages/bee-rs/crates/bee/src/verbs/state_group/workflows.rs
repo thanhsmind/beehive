@@ -736,7 +736,7 @@ pub(crate) fn route_worktree_block(
             "lane \"{lane}\" is code-touching and feature \"{feature}\" already holds a granted worktree (id {id}) \u{2014} continue work there, not in the MAIN checkout."
         )));
         block.insert("notice".into(), json!(format!(
-            "\u{26a0} WORKTREE EXISTS: lane \"{lane}\" is code-touching and feature \"{feature}\" already has a granted worktree (id {id}) at {worktree_root}. NEXT: open your session at {worktree_root} \u{2014} main stays for integration, docs-lane, and release work; a granted worktree's feature source edits are refused from here."
+            "\u{26a0} WORKTREE EXISTS: lane \"{lane}\" is code-touching and feature \"{feature}\" already has a granted worktree (id {id}) at {worktree_root}. NEXT: bee worktree enter --id {id} \u{2014} main stays for integration, docs-lane, and release work; a granted worktree's feature source edits are refused from here."
         )));
     } else {
         let command = format!("bee worktree new --feature {feature}");
@@ -745,7 +745,7 @@ pub(crate) fn route_worktree_block(
             "lane \"{lane}\" is code-touching and this is the MAIN checkout \u{2014} feature work branches at feature start (worktree-first)"
         )));
         block.insert("notice".into(), json!(format!(
-            "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then open your session at the printed worktree path \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
+            "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then bee worktree enter --id <the id it prints> \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
         )));
     }
     Some(Value::Object(block))

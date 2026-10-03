@@ -2066,9 +2066,12 @@ use std::time::Instant;
             jget(&block, "command"),
             Some(&json!("bee worktree new --feature f1"))
         );
-        assert!(js_disp_opt(jget(&block, "notice")).starts_with(
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.starts_with(
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
+        assert!(notice.contains("then bee worktree enter --id <the id it prints>"));
+        assert!(!notice.contains("open your session at"));
     }
 
     // ── ct-1 (D5): the granted-worktree arm of `route --set` ───────────────
@@ -2155,6 +2158,8 @@ use std::time::Instant;
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
         assert!(!notice.contains("wt-foreign"), "notice: {notice}");
+        assert!(notice.contains("then bee worktree enter --id <the id it prints>"));
+        assert!(!notice.contains("open your session at"));
     }
 
     /// Requirement 2: a grant for the TARGET feature routes the `worktree`
@@ -2177,6 +2182,8 @@ use std::time::Instant;
             notice.to_lowercase().contains("already"),
             "notice must say the worktree already exists: {notice}"
         );
+        assert!(notice.contains("NEXT: bee worktree enter --id wt-target"));
+        assert!(!notice.contains("open your session at"));
     }
 
     /// Requirement 3: no path through this arm ever declines (`Err2::Ex`)

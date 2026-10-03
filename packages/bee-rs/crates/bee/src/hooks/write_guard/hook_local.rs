@@ -16,11 +16,13 @@ use std::process::ExitCode;
 
 pub(crate) const GENERIC_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied this target: it could not be canonically contained inside the physical worktree. \
-FIX: use a plain in-worktree path without traversal, outside absolute paths, or symlink escapes.";
+FIX: use a plain in-worktree path without traversal, outside absolute paths, or symlink escapes. \
+A path outside this project belongs to the user — ask them to change it, never write it through another tool.";
 
 pub(crate) const GENERIC_BASH_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied Bash: one or more extracted targets could not be canonically contained inside the physical worktree. \
-FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes.";
+FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes. \
+A path outside this project belongs to the user — ask them to change it, never write it through another tool.";
 
 // ─── unresolvable shell syntax (guard-refusal-wording D1/D2) ─────────────
 
@@ -814,7 +816,7 @@ pub(crate) fn check_worktree_first(
                 "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the active \
 feature \"{feature}\" (lane \"{lane}\") holds granted worktree \"{grant_id}\" — code-touching feature work \
 lives in its worktree from the start; main stays clean for integration, docs-lane, and release work \
-(docs/specs/worktree-first.md). FIX: open your session at {grant_root} and make this edit there, \
+(docs/specs/worktree-first.md). FIX: run `bee worktree enter --id {grant_id}` and make this edit in {grant_root} after it, \
 then land it from main with `bee worktree merge --id {grant_id}`. Deliberate override: set \
 worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded, visible choice)."
             )));
@@ -904,8 +906,8 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
         "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the \
 active feature \"{feature}\" (lane \"{lane}\") holds no granted worktree — lane \"{lane}\" is code-touching and \
 this is the MAIN checkout — feature work branches at feature start (worktree-first). \
-FIX: run `bee worktree new --feature {feature}`, then open your session at the printed worktree path and make \
-this edit there. Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
+FIX: run `bee worktree new --feature {feature}`, then `bee worktree enter --id <the id it prints>`. \
+Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
 (a recorded, visible choice)."
     )))
 }
