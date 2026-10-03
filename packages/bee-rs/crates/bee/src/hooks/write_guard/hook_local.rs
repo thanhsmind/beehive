@@ -546,10 +546,7 @@ pub(crate) fn describe_cross_worktree_target(root: &str, cwd: &str, raw: &Value)
             None => return Ok(None),
         },
     };
-    let canonical_root = match realpath_any(root) {
-        Some(r) => r,
-        None => return Ok(None),
-    };
+    let canonical_root = realpath_any(root).unwrap_or_else(|| root.to_string());
     if current.is_some() && is_under_root(&main_root, &target_real)? {
         let rel = np_relative(&main_root, &target_real)?;
         let rel_norm = rel.replace('\\', "/");
