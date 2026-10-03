@@ -3431,3 +3431,16 @@ use std::time::Instant;
         );
     }
 
+
+    #[test]
+    fn lane_mid_flight_refusal_names_the_bind_command() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_lane_file(root, "busy", r#"{"feature":"busy","phase":"swarming"}"#);
+        let refusal = match crate::verbs::state_group::policy::start_lane(root, root, "busy", None, "planning", None, &[], &[]) {
+            Ok(Err(msg)) => msg,
+            other => panic!("a mid-flight lane must refuse, got {:?}", other.map(|r| r.is_ok())),
+        };
+        assert!(refusal.contains("is mid-flight at phase \"swarming\""), "{refusal}");
+        assert!(refusal.contains("FIX: bee state session bind --lane busy --session-id <session id>."), "{refusal}");
+    }

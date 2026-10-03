@@ -42,7 +42,7 @@ that met a CLAIMED held by its own session deleted its own claim file by hand.
 
 The same rule covers the neighboring refusals (pi-slp-operations D1, text only
 under D2 — no trigger, code or reason key moved): a `startFeature` with a live
-workflow names `bee state session bind --lane <feature>`; a preview-packet
+workflow or a mid-flight lane names `bee state session bind --lane <feature>` (refusal-followups D1); a preview-packet
 mismatch at `cells add` names the field and `docs/history/<feature>/plan.md`;
 the deployment dispatch refusals name `bee gate --preview`, the full
 `bee dispatch prepare … --stage deployment --role deploy` form, or
