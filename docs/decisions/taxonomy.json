@@ -634,6 +634,8 @@
     "contract:pi-guard-folder-doctor",
     "contract:pi-guard-folder-onboard",
     "contract:herded-cell-brief",
-    "contract:pi-verdict-dispatch"
+    "contract:pi-verdict-dispatch",
+    "refusal",
+    "contract:refusal-runnable-fix"
   ]
 }
