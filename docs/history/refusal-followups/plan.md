@@ -8,6 +8,13 @@ the CLAIMED fix when neither side has a session.
 
 Mode: `tiny` — 0 risk flags. One product file, text only.
 
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | the mid-flight refusal names no command | read | packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs:293 | FIX: finish or explicitly wind down that lane first, then retry. |
+| 2 | session bind takes --lane | ran | .bee/bin/bee state session bind --help | --lane (str) — Lane feature name to bind the session to. |
+
 ## Cells — current slice (preview)
 
 | id | title | files | deps | you see | proof |
