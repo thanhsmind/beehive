@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-slp-measurement\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"pi-slp-measurement\" (lane).",
+  "next_action": "Merged into main at 19c1ec1; capture what settled, then bee close --feature pi-slp-measurement.",
   "created_at": "2026-10-03T05:16:45.215Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "docs",
