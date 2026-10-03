@@ -1149,7 +1149,7 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 5] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 10] = [
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
         // plan carries this span as a cell TITLE naming the verb the cell adds
         // ("Add bee cells rebind-session --from --to") — a name for the flag
@@ -1182,6 +1182,11 @@ mod documented_invocations {
         // anyone ran or should copy; the plan is immutable history, so the
         // line is pinned here instead of rewritten.
         r#"bee state advisor-ref record and show: find where they reach emit_unsupported_root (rg -n emit_unsupported_root packages/bee-rs/crates/bee/src/verbs/state_group) and serve those two from main_root only. Every other verb keeps its refusal. For a non-cell dispatch with no --feature, resolve the feature in this order: the session's bound lane (today, prepare.rs session_binding), then the granted worktree the command runs in (new), then main's default .bee/state.json feature (today, unchanged). Write the tests first: prepare run from a granted worktree returns the same payload as the same call from main; a non-cell dispatch from that worktree with no --feature and no bound lane carries --cwd of that worktree even when main's state.json names another feature; advisor-ref show from the worktree returns the same result as from main; another state verb still refuses there.""#,
+        r#"bee dispatch prepare --runtime"#,
+        r#"bee dispatch prepare --runtime command with held values filled and placeholders for the rest""#,
+        r#"bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
+        r#"bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
+        r#"bee worktree enter --id"#,
     ];
 
     #[test]
