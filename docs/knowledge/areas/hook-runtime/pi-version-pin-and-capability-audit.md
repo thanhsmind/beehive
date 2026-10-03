@@ -30,7 +30,7 @@ governs this audit too.
 |---|---|
 | Claimed version | The version the belt's own comments name: `0.84.3` (`.pi/extensions/bee-guard/` module `index.ts` header comments and `tool-map.ts`). |
 | Actual floor | `0.84.4`. The belt registers `ui_prompt_start` and `ui_prompt_end` (`.pi/extensions/bee-guard/` module `events.ts`), and Pi added both events in 0.84.4. The belt cannot be the belt for 0.84.3. |
-| Last live-evidence version | `1.0.0` — run `20261002-135348-2965648`, 2026-10-02 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`). This is the proven ceiling the belt header names. The five-seat hat wave with seat injection was not re-run on 1.0.0; its newest evidence is still the 0.85.1 run `20260915-180023-56873`. |
+| Last live-evidence version | `1.0.0` — run `20261002-135348-2965648`, 2026-10-02 (`.bee/verify/verify-app/features/pi-hat-wave.md:136`). This is the proven ceiling the belt header names. The leader-session hat wave with seat injection was re-run on 1.0.0 with three seats in run `20261003-164226-3799197`, 2026-10-03 (`pi-hat-wave.md`, "Pi 1.0.0 leader-session wave"). The five-seat `--no-pane` wave was not; its newest evidence is still the 0.85.1 run `20260919-073214-2866155`. |
 | `PI_BUILTIN_TOOLS` | The named list of eight Pi built-in tool names the write guard routes on (`.pi/extensions/bee-guard/` module `tool-map.ts`). Its comment keeps it a named list, not a switch default, "because the fail-safe below depends on knowing exactly which names are enumerated". |
 | Pi attestation | None. `bee doctor attest --runtime pi` refuses by design (`packages/bee-rs/crates/bee/src/doctor.rs:899`): "Pi has no trust-unknown rows, so mechanical green already reaches ready there — there is nothing to attest." |
 
