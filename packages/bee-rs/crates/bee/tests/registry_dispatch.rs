@@ -433,7 +433,13 @@ fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
         served.push(format!("bee dev {verb}"));
     }
     for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
-        served.push(format!("bee herding {verb}"));
+        if verb == "broker" {
+            for sub in match_arm_verbs(&crate_src("herding/broker.rs"), "pub(crate) fn route_broker", 1) {
+                served.push(format!("bee herding broker {sub}"));
+            }
+        } else {
+            served.push(format!("bee herding {verb}"));
+        }
     }
     // `bee blind …` — a whole TOP-LEVEL namespace, which is invisible to more
     // of this file's checks than a new sub-verb is: without an arm here the
