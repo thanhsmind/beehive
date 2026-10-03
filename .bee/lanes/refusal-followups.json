@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0",
+  "feature": "refusal-followups",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"refusal-followups\" started at phase \"exploring\" (lane).",
+  "next_action": "Run rfu-1 inline.",
+  "created_at": "2026-10-03T03:57:48.374Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "refactor",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-10-03T03:58:11.724Z",
+    "feature": "refusal-followups"
+  },
+  "gate_preview": {
+    "feature": "refusal-followups",
+    "plan_sha256": "788939be760b5566febd316dc2dd04a51e4deb541989ab5d3c7a3dd5c9c6d3ba",
+    "previewed_at": "2026-10-03T03:58:45.755Z",
+    "cells": [
+      {
+        "id": "rfu-1",
+        "feature": "refusal-followups",
+        "lane": "tiny",
+        "role": "code",
+        "change_class": "refactor",
+        "title": "Name the bind command in the lane-mid-flight refusal",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "75db2633-545a-47a3-8daa-5e492eed6568",
+          "a18203fc-18a0-4461-bc47-bb147395d171"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1: in packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs replace `FIX: finish or explicitly wind down that lane first, then retry.` in the lane-mid-flight startFeature refusal with `FIX: bee state session bind --lane {feature} --session-id <session id>.`; keep the text before FIX and the trigger unchanged. Add a test in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs that a mid-flight lane refusal names that command. In packages/bee-rs/crates/bee/src/verbs/cells/tests.rs add a case where both caller and holder are sessionless and the CLAIMED reason names `FIX: bee cells claim-next.`. Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells",
+        "must_haves": {
+          "truths": [
+            "the lane-mid-flight startFeature refusal names bee state session bind --lane with the feature",
+            "a CLAIMED refusal with both sides sessionless names bee cells claim-next"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "refusal-followups",
+    "plan_sha256": "788939be760b5566febd316dc2dd04a51e4deb541989ab5d3c7a3dd5c9c6d3ba",
+    "previewed_at": "2026-10-03T03:58:45.755Z",
+    "cells": [
+      {
+        "id": "rfu-1",
+        "feature": "refusal-followups",
+        "lane": "tiny",
+        "role": "code",
+        "change_class": "refactor",
+        "title": "Name the bind command in the lane-mid-flight refusal",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "75db2633-545a-47a3-8daa-5e492eed6568",
+          "a18203fc-18a0-4461-bc47-bb147395d171"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+          "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1: in packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs replace `FIX: finish or explicitly wind down that lane first, then retry.` in the lane-mid-flight startFeature refusal with `FIX: bee state session bind --lane {feature} --session-id <session id>.`; keep the text before FIX and the trigger unchanged. Add a test in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs that a mid-flight lane refusal names that command. In packages/bee-rs/crates/bee/src/verbs/cells/tests.rs add a case where both caller and holder are sessionless and the CLAIMED reason names `FIX: bee cells claim-next.`. Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells",
+        "must_haves": {
+          "truths": [
+            "the lane-mid-flight startFeature refusal names bee state session bind --lane with the feature",
+            "a CLAIMED refusal with both sides sessionless names bee cells claim-next"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-03T04:01:41.485Z",
+    "branch": "wt/refusal-followups",
+    "worktree_id": "beehive--wt--refusal-followups",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

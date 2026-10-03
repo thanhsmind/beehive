@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pi-slp-operations\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at dfbfa8e; reload the product and test \"pi-slp-operations\", then either approve uat (\"bee gate --name uat --approved true --lane pi-slp-operations\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-03T02:45:59.199Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: pi-slp-operations",
-    "asked_at": "2026-10-03T03:24:30.639Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: pi-slp-dispatch-return and pi-slp-operations",
+    "asked_at": "2026-10-03T03:25:40.494Z",
+    "session": "db52a73c-18e5-4fa4-838b-1563220e1b7a"
   },
   "route": {
     "class": "refactor",
