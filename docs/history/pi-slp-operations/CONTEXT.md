@@ -29,11 +29,14 @@ named no command, or named an act an agent cannot do.
 - **D2 — Text only** (store `d361a53f`). Only the fix wording and the JSON
   `fix` field change. Which calls refuse, every reason or code key, and every
   exit code stay as they are.
-- **D3 — Write-guard fixes an agent can act on** (store `cb57963d`). A
-  main-checkout path denied in a worktree session names the same relative
-  path inside the current worktree. A path inside another granted worktree
-  drops "open a session with cwd=" and names `bee worktree merge --id <id>`,
-  run from main.
+- **D3 — Write-guard fixes an agent can act on** (store `aa4db1c5`, amended
+  after the hat wave; supersedes `cb57963d`). A main-checkout path denied in
+  a worktree session names the same relative path inside the current
+  worktree; a `.bee/` path names `bee --help --json` run from main instead,
+  never a path. A path inside another granted worktree drops "open a
+  session with cwd=", says the file belongs to that worktree, and names the
+  caller's own worktree root as the place to write. It never suggests
+  merging the other worktree.
 - **D4 — CLAIMED names who holds it** (store `b1be5bf9`). Held by the calling
   session: the text says so and names the next step without `--claim`. Held by
   another session: the text names `bee cells claim-next`.

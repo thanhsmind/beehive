@@ -18,9 +18,9 @@ Mode: `standard` — 2 risk flags: covered-contract-change, multi-domain
 Why this is the least workflow that protects the work: four disjoint text-only cells, each with the tests that pin its words.
 
 ## Requirements (from CONTEXT.md)
-- D1: seven refusal families each end with one runnable bee command or one concrete path built from values the code holds.
+- D1: seven refusal families each end with one runnable bee command or one concrete path built from values the code holds. Plan reading (hat wave): exactly one command per refusal; a value the code does not hold is an angle-bracket placeholder; a command that refuses inside a worktree says "run from main".
 - D2: text only; refusal triggers, reason and code keys, exit codes unchanged.
-- D3: write-guard denies name the in-worktree path, or `bee worktree merge --id <id>` from main; never "open a session".
+- D3 (amended after the hat wave): a main-path deny names the in-worktree path (a `.bee/` path names `bee --help --json` instead); another worktree's deny says to leave the file and write only inside the caller's own worktree root; never "open a session", never a merge of another worktree.
 - D4: CLAIMED says whether the caller holds the claim and names the next step or `bee cells claim-next`.
 
 ## Load-bearing claims
@@ -37,6 +37,15 @@ Labels: `read` (opened at the anchor). Evidence is a verbatim substring of the a
 | 7 | the other-worktree deny asks the agent to open a session | read | packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs:566 | FIX: open a session with cwd={worktree_root} to work there |
 | 8 | the main-path deny names no path | read | packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs:552 | FIX: run this from a session rooted there. |
 | 9 | the preview mismatch names no fix | read | packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs:728 | differs from approved preview packet (action mismatch). |
+| 10 | the expired authorization names no command | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:4351 | dispatch a new deployment run. |
+| 11 | the missing-feature record names no command | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:4400 | dispatch record is missing feature name. |
+| 12 | the worktree helper returns main root and id, not the worktree root | read | packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs:466 | pub(crate) fn derive_current_worktree(root: &str) -> R<Option<(String, String)>> { |
+| 13 | dispatch prepare requires --runtime | ran | .bee/bin/bee dispatch prepare --help | --runtime* (str) — Target runtime the payload is shaped for. |
+| 14 | a cell dispatch requires --cell and --worker | ran | .bee/bin/bee dispatch prepare --help | --worker (str) — Requesting worker identity — required when --kind cell |
+| 15 | session bind takes --lane | ran | .bee/bin/bee state session bind --help | --lane (str) — Lane feature name to bind the session to. |
+| 16 | gate has --preview | ran | .bee/bin/bee gate --help | --preview (boo) — Preview current-slice cell packets |
+| 17 | the CLAIMED text is pinned in two product docs | read | docs/product-description/lifecycle/execution.md:40 | is already claimed by session "<owner>" (<expiry>). |
+| 18 | bee state lanes lists the lane records | ran | .bee/bin/bee state lanes --help | List every per-feature lane record with its phase, gates |
 
 ## Discovery
 Five Pi sessions of this repo were mined at the advisor tier (research report,
@@ -50,6 +59,15 @@ Playbook: `skills/bee-planning/playbooks/refactor.md` (class refactor: wording
 only, behavior kept). Each cell rewrites its fix strings and updates the tests
 that pin them, red first: a new assert for the runnable command fails on the
 old text.
+
+One command per refusal (hat wave): role_plan_required → `bee gate --preview`
+after naming the plan file; consumed and expired → the deployment
+`bee dispatch prepare` form; wrong_feature and missing feature →
+`bee state lanes`, run from main; startFeature → `bee state session bind
+--lane <feature>`; CLAIMED by the caller → the full cell `dispatch prepare`
+form; CLAIMED by another session → `bee cells claim-next`; preview mismatch
+→ the plan.md path. Rejected: echoing expected and incoming values in the
+preview mismatch — not asked by D1, and multi-line fields need cutting.
 
 Rejected: one shared "refusal builder" for all seven — the families live in
 four modules with different return shapes (JSON `fix`, `Err(String)`, typed
@@ -106,9 +124,9 @@ Phase plan:
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
 | rfx-1 | Name a runnable fix in the deployment dispatch refusals | prepare.rs, drivers/tests.rs | — | role_plan_required, consumed and wrong_feature name the command to run | cargo test --release -p bee --bin bee verbs::drivers |
-| rfx-2 | Name a runnable fix when a feature or cell is already taken | feature.rs, claims.rs, state_group/tests.rs, cells/tests.rs, tests/concurrency.rs | — | startFeature names bind or close; CLAIMED says who holds it and what to run | state_group, cells and concurrency tests |
-| rfx-3 | Name a writable path or a merge command in write-guard denies | hook_local.rs, write_guard/tests.rs | — | a main path deny names the worktree path; another worktree's deny names the merge | cargo test --release -p bee --bin bee hooks::write_guard |
-| rfx-4 | Show the mismatch and the fix in a preview-packet refusal | plan_packets.rs | — | the refusal shows expected vs got and the command that reopens the shape | cargo test --release -p bee --bin bee verbs::state_group::plan_packets |
+| rfx-2 | Name a runnable fix when a feature or cell is already taken | feature.rs, claims.rs, state_group/tests.rs, cells/tests.rs, tests/concurrency.rs, two product docs | — | startFeature names session bind; CLAIMED says who holds it and what to run | state_group, cells and concurrency tests |
+| rfx-3 | Name a writable path in write-guard denies | hook_local.rs, write_guard/tests.rs | — | a main path deny names the worktree path; another worktree's deny names the caller's own worktree root | cargo test --release -p bee --bin bee hooks::write_guard |
+| rfx-4 | Name the plan file in a preview-packet refusal | plan_packets.rs | — | the refusal names the field and the plan file to copy it from | cargo test --release -p bee --bin bee verbs::state_group::plan_packets |
 
 ```json
 [
@@ -120,7 +138,13 @@ Phase plan:
     "change_class": "refactor",
     "title": "Name a runnable fix in the deployment dispatch refusals",
     "deps": [],
-    "decisions": ["D1", "D2", "b9a6dfe6-4762-4025-9918-910a371a8a24", "d361a53f-2317-4fca-b919-be571e88bc73", "66f4fd2d-2327-4efd-a3af-942936133e6d"],
+    "decisions": [
+      "D1",
+      "D2",
+      "b9a6dfe6-4762-4025-9918-910a371a8a24",
+      "d361a53f-2317-4fca-b919-be571e88bc73",
+      "66f4fd2d-2327-4efd-a3af-942936133e6d"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
@@ -130,20 +154,28 @@ Phase plan:
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per D1 and D2, rewrite only the `fix` strings of these refusals in packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs. Find each with rg: (1) `r.insert(\"fix\".into(), Value::String(\"stage deployment requires an approved v2 plan with a role plan.\".into()));` (about line 1635, reason role_plan_required): name the plan file `docs/history/<feature>/plan.md` with the resolved feature, its `## Role assignments` section, and the next command `bee gate --preview`. (2) both `this dispatch authorization has already been consumed; dispatch a new deployment run.` sites (about lines 4220 and 4556, reason deploy_authorization_consumed): name `bee dispatch prepare --stage deployment` with every flag value the function holds (feature, release version, runtime when known); use an angle-bracket placeholder only for a value it does not hold. (3) `feature \\\"{feat}\\\" lane file not found in store.` (about line 4411, reason deploy_authorization_wrong_feature) and `dispatch record is missing feature name.` (same function): name `bee state lanes` to list live lanes, then `bee dispatch prepare --stage deployment --feature <live lane>`. Keep every `reason` key, `type`, and return path unchanged (D2). Tests red first in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs: for each rewritten refusal, assert the reason key is unchanged and the fix contains the named command (`bee gate --preview`, `bee dispatch prepare --stage deployment`, `bee state lanes`). Find existing tests with `rg -n \"role_plan_required|deploy_authorization_consumed|deploy_authorization_wrong_feature\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs` and update any that pin the old text. Write no code comments.",
+    "action": "Per D1 and D2, rewrite only the `fix` strings of these refusals in packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs, one command each. Find each with rg. (1) `stage deployment requires an approved v2 plan with a role plan.` (about line 1635, reason role_plan_required): name `docs/history/<feature>/plan.md` with the resolved feature, its `## Role assignments` section, then the one command `bee gate --preview`. (2) `this dispatch authorization has already been consumed; dispatch a new deployment run.` (about lines 4220 and 4556, reason deploy_authorization_consumed) and `dispatch authorization expired (> 2 hours old); dispatch a new deployment run.` (about line 4351): name one command, `bee dispatch prepare --runtime <runtime> --kind <kind> --stage deployment --feature <feature> --release-version <version> --json`, filling every value the enclosing function holds (it holds release_version at the first consumed site; it does not hold runtime) and leaving an angle-bracket placeholder for each value it does not hold. Check `.bee/bin/bee dispatch prepare --help` and an existing deployment dispatch test for the exact required flags and the kind a deployment dispatch uses; the command must be one prepare would accept once placeholders are filled. (3) `feature \\\"{feat}\\\" lane file not found in store.` (about line 4411) and `dispatch record is missing feature name.` (about line 4400), reason deploy_authorization_wrong_feature: name the one command `bee state lanes` and say to run it from main, then dispatch for a feature it lists. Keep every `reason` key, `type`, and return path unchanged (D2). Tests red first in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs: for each rewritten refusal, assert the reason key is unchanged and the fix contains its command (`bee gate --preview`, `bee dispatch prepare --runtime`, `bee state lanes`). Find existing pins with `rg -n \"role_plan_required|deploy_authorization_consumed|deploy_authorization_wrong_feature|authorization expired\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs` and update any that pin the old text. Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
     "must_haves": {
       "truths": [
         "role_plan_required names the feature plan file and bee gate --preview",
-        "deploy_authorization_consumed names bee dispatch prepare --stage deployment with the values the code holds",
-        "deploy_authorization_wrong_feature names bee state lanes and a dispatch prepare for a live lane",
+        "deploy_authorization_consumed and the expired refusal name one bee dispatch prepare --runtime command with held values filled and placeholders for the rest",
+        "deploy_authorization_wrong_feature names bee state lanes run from main",
         "every reason key and return path is unchanged"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "substantive": "rewritten fix strings at the four refusal families"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "substantive": "rewritten fix strings at the four refusal families"
+        }
       ],
-      "key_links": ["drivers tests assert each new fix command beside the unchanged reason key"],
-      "prohibitions": ["No change to when any refusal fires", "No change to any reason key"]
+      "key_links": [
+        "drivers tests assert each new fix command beside the unchanged reason key"
+      ],
+      "prohibitions": [
+        "No change to when any refusal fires",
+        "No change to any reason key"
+      ]
     }
   },
   {
@@ -154,34 +186,58 @@ Phase plan:
     "change_class": "refactor",
     "title": "Name a runnable fix when a feature or cell is already taken",
     "deps": [],
-    "decisions": ["D1", "D2", "D4", "b9a6dfe6-4762-4025-9918-910a371a8a24", "d361a53f-2317-4fca-b919-be571e88bc73", "b1be5bf9-cfad-4144-ad21-7564f927bb07", "66f4fd2d-2327-4efd-a3af-942936133e6d"],
+    "decisions": [
+      "D1",
+      "D2",
+      "D4",
+      "b9a6dfe6-4762-4025-9918-910a371a8a24",
+      "d361a53f-2317-4fca-b919-be571e88bc73",
+      "b1be5bf9-cfad-4144-ad21-7564f927bb07",
+      "66f4fd2d-2327-4efd-a3af-942936133e6d"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
       "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
-      "packages/bee-rs/crates/bee/tests/concurrency.rs"
+      "packages/bee-rs/crates/bee/tests/concurrency.rs",
+      "docs/product-description/lifecycle/execution.md",
+      "docs/product-description/verification/lifecycle.md"
     ],
     "read_first": [
       "docs/history/pi-slp-operations/CONTEXT.md"
     ],
     "affects_skills": [],
-    "affects_specs": [],
-    "action": "Per D1 and D2. In packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs the startFeature refusal (about line 311) ends `FIX: close or resolve that workflow before starting a new one for the same feature.`; replace that FIX with two runnable commands built from the values in hand: continue it with `bee state session bind --lane <feature>` (add `--session-id <id>` only if the function holds the session id), or end it with `bee state workflows close` naming the workflow id (check `bee state workflows close --help` for its exact flags). Per D4, in packages/bee-rs/crates/bee/src/verbs/cells/claims.rs the CLAIMED refusal (about line 751, `is already claimed by session \\\"{owner}\\\" ({}).`): when the holder session equals the calling session, say the caller already holds this claim and name the next step without --claim (`bee dispatch prepare --cell <id>` with the cell id); otherwise name `bee cells claim-next` to pick other work. Thread the caller session into that function only if it is not already there. Keep the code `CLAIMED` and every return path unchanged (D2). Tests red first: in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs for startFeature (both commands present), and in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs for CLAIMED with the same session and with another session. Find pins of the old text with `rg -n \"live workflow already exists|already claimed by session\" packages/bee-rs/crates/bee/src packages/bee-rs/crates/bee/tests` and update them, including tests/concurrency.rs if it pins the text. Write no code comments.",
+    "affects_specs": [
+      "docs/product-description/lifecycle/execution.md",
+      "docs/product-description/verification/lifecycle.md"
+    ],
+    "action": "Per D1 and D2, one command per refusal. In packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs the startFeature refusal (about line 311) ends `FIX: close or resolve that workflow before starting a new one for the same feature.`; replace that FIX with the one command that continues the live workflow, `bee state session bind --lane <feature> --session-id <session id>` (fill the feature; fill the session id only if the function holds it). Per D4, in packages/bee-rs/crates/bee/src/verbs/cells/claims.rs the CLAIMED refusal (about line 751, `is already claimed by session \\\"{owner}\\\" ({}).`): the calling session is already in scope in claim_cell_file as `session`. When the holder session and the caller session are BOTH present and equal, say the caller already holds this claim and name `bee dispatch prepare --runtime <runtime> --kind cell --cell <id> --worker <worker> --json` without --claim (fill the cell id); in every other case — another session, or either side sessionless — keep the holder text and name `bee cells claim-next`. Keep the code `CLAIMED`, the text before the new FIX, and every return path unchanged (D2). Tests red first: in packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs for startFeature (the bind command present), and in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs for CLAIMED with the same session, another session, and a sessionless holder. Find pins of the old text with `rg -n \"live workflow already exists|already claimed by session\" packages/bee-rs/crates/bee/src packages/bee-rs/crates/bee/tests` and update them, including tests/concurrency.rs if it pins the text. Update the two product docs that pin the exact CLAIMED shape (docs/product-description/lifecycle/execution.md:40 and docs/product-description/verification/lifecycle.md:199) to the new text. Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group && cargo test --release -p bee --bin bee verbs::cells && cargo test --release -p bee --test concurrency",
     "must_haves": {
       "truths": [
-        "the startFeature refusal names bee state session bind and bee state workflows close",
-        "a CLAIMED refusal held by the calling session says so and names the next step without --claim",
-        "a CLAIMED refusal held by another session names bee cells claim-next",
+        "the startFeature refusal names bee state session bind --lane with the feature",
+        "a CLAIMED refusal held by the calling session says so and names the full cell dispatch prepare form without --claim",
+        "a CLAIMED refusal held by another session or a sessionless claim names bee cells claim-next",
         "the CLAIMED code and every return path are unchanged"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs", "substantive": "startFeature fix names bind and close"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs", "substantive": "CLAIMED text branches on the holder"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+          "substantive": "startFeature fix names session bind"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+          "substantive": "CLAIMED text branches on the holder"
+        }
       ],
-      "key_links": ["the CLAIMED text reads the caller session it compares against the holder"],
-      "prohibitions": ["No change to when a claim is refused", "No change to the CLAIMED code"]
+      "key_links": [
+        "the CLAIMED text reads the caller session it compares against the holder"
+      ],
+      "prohibitions": [
+        "No change to when a claim is refused",
+        "No change to the CLAIMED code"
+      ]
     }
   },
   {
@@ -190,9 +246,17 @@ Phase plan:
     "lane": "standard",
     "role": "code",
     "change_class": "refactor",
-    "title": "Name a writable path or a merge command in write-guard denies",
+    "title": "Name a writable path in write-guard denies",
     "deps": [],
-    "decisions": ["D1", "D2", "D3", "b9a6dfe6-4762-4025-9918-910a371a8a24", "d361a53f-2317-4fca-b919-be571e88bc73", "cb57963d-b94d-4a67-bfc1-2d724fa2a569", "66f4fd2d-2327-4efd-a3af-942936133e6d"],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3",
+      "b9a6dfe6-4762-4025-9918-910a371a8a24",
+      "d361a53f-2317-4fca-b919-be571e88bc73",
+      "aa4db1c5-c0fa-478f-b41c-e5b5ee7bade2",
+      "66f4fd2d-2327-4efd-a3af-942936133e6d"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
@@ -202,19 +266,28 @@ Phase plan:
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per D3. In packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs two deny texts sit in one function: (a) `this path belongs to the main checkout, not this worktree. FIX: run this from a session rooted there.` (about line 552): replace the FIX with the same relative path inside the current worktree — compute the target's path relative to main_root and join it onto the current worktree root the function already resolved; say `write <that path> instead`. (b) `it resolves inside worktree \\\"{id}\\\". FIX: open a session with cwd={worktree_root} to work there, or merge it back from main via `bee worktree merge --id {id}`.` (about line 566): drop the open-a-session clause; the FIX names `bee worktree merge --id {id}` run from main, and says the file belongs to that worktree. Keep the opening words `bee write guard denied this target: it could not be canonically contained inside the physical worktree` unchanged, keep when each deny fires unchanged (D2). Tests red first in packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs: a main-checkout path from a worktree session yields a deny containing the in-worktree path; another worktree's path yields a deny containing `bee worktree merge --id` and not `open a session`. Find existing pins with `rg -n \"session rooted there|open a session with cwd\" packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` and update them. Write no code comments.",
+    "action": "Per D3. In packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs two deny texts sit in one function. derive_current_worktree (about line 466) returns only (main_root, id); the current worktree root is that function's `root` parameter — canonicalize it the same way main_root and target_real are before you strip and join. (a) `this path belongs to the main checkout, not this worktree. FIX: run this from a session rooted there.` (about line 552): replace the FIX with the same relative path inside the current worktree — strip main_root from target_real and join the rest onto the canonical worktree root; say `write <that path> instead`. Exception: when the relative path starts with `.bee/`, never offer a path (that would steer a hand edit of bee state); the FIX says bee state changes only through `bee` verbs run from main and names `bee --help --json`. (b) `it resolves inside worktree \\\"{id}\\\". FIX: open a session with cwd={worktree_root} to work there, or merge it back from main via `bee worktree merge --id {id}`.` (about line 566): replace the whole FIX: the file belongs to worktree {id}; leave it, and write only inside your own worktree, naming the caller's canonical worktree root as a path. Never name a merge of that other worktree and never `open a session`. Keep the opening words `bee write guard denied this target: it could not be canonically contained inside the physical worktree` unchanged, keep when each deny fires unchanged (D2). Tests red first in packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs: a main-checkout source path from a worktree session yields a deny containing the in-worktree path; a main `.bee/state.json` yields no path and names `bee --help --json`; another worktree's path yields a deny containing the caller's own worktree root and neither `open a session` nor `bee worktree merge`. Find existing pins with `rg -n \"session rooted there|open a session with cwd\" packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` and update them. Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee hooks::write_guard",
     "must_haves": {
       "truths": [
         "a main-checkout path denied in a worktree session names the same relative path inside the current worktree",
-        "another worktree's path deny names bee worktree merge --id and never open a session",
+        "a main .bee/ path deny names no path and names bee --help --json",
+        "another worktree's path deny names the caller's own worktree root and never open a session or a merge of that worktree",
         "when each deny fires is unchanged"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs", "substantive": "both deny texts carry an actionable fix"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "substantive": "both deny texts carry an actionable fix"
+        }
       ],
-      "key_links": ["the in-worktree path is computed from the target relative to main_root"],
-      "prohibitions": ["No change to which targets are denied", "No change to the deny opening words"]
+      "key_links": [
+        "the in-worktree path is computed from target_real relative to main_root, joined onto the canonical root parameter"
+      ],
+      "prohibitions": [
+        "No change to which targets are denied",
+        "No change to the deny opening words"
+      ]
     }
   },
   {
@@ -223,9 +296,15 @@ Phase plan:
     "lane": "standard",
     "role": "code",
     "change_class": "refactor",
-    "title": "Show the mismatch and the fix in a preview-packet refusal",
+    "title": "Name the plan file in a preview-packet refusal",
     "deps": [],
-    "decisions": ["D1", "D2", "b9a6dfe6-4762-4025-9918-910a371a8a24", "d361a53f-2317-4fca-b919-be571e88bc73", "66f4fd2d-2327-4efd-a3af-942936133e6d"],
+    "decisions": [
+      "D1",
+      "D2",
+      "b9a6dfe6-4762-4025-9918-910a371a8a24",
+      "d361a53f-2317-4fca-b919-be571e88bc73",
+      "66f4fd2d-2327-4efd-a3af-942936133e6d"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs"
     ],
@@ -234,18 +313,27 @@ Phase plan:
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per D1 and D2. In packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs the eight refusals `addCells: cell \\\"{id}\\\" differs from approved preview packet (<field> mismatch).` (about lines 728-784, fields action, verify, files, read_first, must_haves, title, lane, role) name no fix. Keep each first sentence byte-identical, then append: the expected value from the approved packet and the incoming value, each cut to 120 characters, and `FIX: copy <field> for cell <id> from the approved packet in docs/history/<feature>/plan.md, or reopen the shape with bee gate --name shape --approved false` (use the feature the function holds; a placeholder only if it holds none). Prefer one small local helper over eight copies of the same format. Keep the refusal trigger and return type unchanged (D2). Tests red first in the inline test module of the same file: a mismatch refusal still starts with the old sentence and contains the expected value, the incoming value and `bee gate --name shape --approved false`. Write no code comments.",
+    "action": "Per D1 and D2. In packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs the eight refusals `addCells: cell \\\"{id}\\\" differs from approved preview packet (<field> mismatch).` (about lines 728-784, fields action, verify, files, read_first, must_haves, title, lane, role) name no fix. check_cell_matches_approved_preview holds the feature. Keep each first sentence byte-identical, then append one fix: `FIX: copy <field> for cell <id> verbatim from the approved packet in docs/history/<feature>/plan.md.` One small local helper is fine for the eight sites. Do not echo the values. Keep the refusal trigger and return type unchanged (D2). Tests red first in the inline test module of the same file: a mismatch refusal still starts with the old sentence and contains `docs/history/<feature>/plan.md` with the real feature and the field name. Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::state_group::plan_packets",
     "must_haves": {
       "truths": [
-        "a preview mismatch refusal keeps its first sentence and adds expected and incoming values",
-        "a preview mismatch refusal names copying from plan.md or bee gate --name shape --approved false"
+        "a preview mismatch refusal keeps its first sentence",
+        "a preview mismatch refusal names copying the field from docs/history/<feature>/plan.md with the real feature"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs", "substantive": "mismatch refusals carry values and a fix"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/state_group/plan_packets.rs",
+          "substantive": "mismatch refusals carry the plan file fix"
+        }
       ],
-      "key_links": ["every field mismatch uses the same helper"],
-      "prohibitions": ["No change to when a mismatch refuses", "No change to the first sentence"]
+      "key_links": [
+        "every field mismatch uses the same fix wording"
+      ],
+      "prohibitions": [
+        "No change to when a mismatch refuses",
+        "No change to the first sentence",
+        "No echo of field values"
+      ]
     }
   }
 ]
