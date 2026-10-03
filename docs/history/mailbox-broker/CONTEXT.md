@@ -67,21 +67,23 @@ a silent edit.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Settled At Planning
 
-- [ ] How a worker signals `question` on each runtime (a result field, a verdict tool status, or a file) — read `tool-verdict.ts` and the result file contract.
-- [ ] How the advisor answer marks "not sure" so D4 can route it to the human — a fixed field in the advisor result.
-- [ ] How the broker tells a product or gate question from a technical one (D4) — a worker-set kind field versus the advisor's call.
-- [ ] Round limit: how many question rounds one cell may take before it is treated as blocked.
-- [ ] Whether the broker runs as a new control-loop role or as a step of an existing role.
+All five were answered in `docs/history/mailbox-broker/plan.md` ("Approach"):
 
-## Deferred Ideas
+- [x] How a worker signals `question` on each runtime — `result-N.json` status `question`, and the Pi verdict tool status.
+- [x] How the advisor answer marks "not sure" — the advisor's own `blocked` result.
+- [x] How the broker tells a product or gate question from a technical one — the worker sets `question.kind`.
+- [x] Round limit — `broker.max_question_rounds`, default 2.
+- [x] Where the broker runs — a new code-only control-loop role.
 
-- Leader questions through the mailbox — out by D2.
-- Answer injection into a live worker — out by D3.
+## Out Of Scope
+
+- Leader questions through the mailbox — excluded by D2.
+- Answer injection into a live worker — excluded by D3.
 
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
-decisions, code context, canonical references, and deferred-to-planning questions.
+decisions, code context, canonical references, and the questions settled at planning.
 Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
