@@ -1257,6 +1257,14 @@ use std::time::Instant;
             }
             _ => panic!("second claim must refuse"),
         }
+        match claim_cell_file(control, None, "c-1", None).unwrap() {
+            ClaimFileOutcome::Refused { code, reason } => {
+                assert_eq!(code, "CLAIMED");
+                assert!(!reason.contains("you already hold this claim"), "{reason}");
+                assert!(reason.contains("FIX: bee cells claim-next."), "{reason}");
+            }
+            _ => panic!("a sessionless caller must not win a sessionless claim"),
+        }
         // Owner-matched release removes the file; a mismatched owner leaves it.
         release_claim(control, Some("someone-else"), "c-1").unwrap();
         assert!(claims_dir(control).join("c-1.json").exists());
