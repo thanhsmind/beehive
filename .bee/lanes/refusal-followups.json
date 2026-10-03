@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"refusal-followups\" started at phase \"exploring\" (lane).",
-  "next_action": "Run rfu-1 inline.",
+  "next_action": "Merged into main at 66de038; capture what settled, then bee close --feature refusal-followups.",
   "created_at": "2026-10-03T03:57:48.374Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "refactor",
@@ -101,12 +101,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-03T04:01:41.485Z",
-    "branch": "wt/refusal-followups",
-    "worktree_id": "beehive--wt--refusal-followups",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
