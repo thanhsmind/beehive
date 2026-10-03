@@ -37,7 +37,7 @@ stateDiagram-v2
 
 - Before the lane's own Gate 2: `claimCell: lane "<lane>" gate "execution" is not approved — cells of this feature cannot be claimed before ITS lane passes Gate 2 … Surface Gate 2 to the user for lane "<lane>" ….`
 - Not open: `claimCell: cell "<id>" is "<status>", not "open" — only open cells can be claimed. Run bee cells ready to list claimable cells.`
-- Already claimed (the file layer): `claim: CLAIMED — cell "<id>" is already claimed by session "<owner>" (<expiry>).`
+- Already claimed (the file layer): `claim: CLAIMED — cell "<id>" is already claimed by session "<owner>" (<expiry>). FIX: bee cells claim-next.`
 - Budget exhausted or repeated failure: the claim door is closed until an audited reset ([cells](cells.md)).
 - A sessionless claim while another session is live refuses — anonymous ownership defeats the sweep.
 
