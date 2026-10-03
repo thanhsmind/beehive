@@ -3,7 +3,7 @@
 Seats: hat-facts-gaps (Opus, native), hat-alternatives (Opus, native),
 hat-user-impact (herding, report
 `/home/thanhsmind/Projects/goglbe/beehive/.bee/mailbox/job-1791026711370-4073025-1/report-1.md`).
-Brief: the open problems of CONTEXT.md "Deferred To Planning", as a LaneBrief.
+Brief: the open problems CONTEXT.md listed for planning (now "Settled At Planning"), as a LaneBrief.
 
 ## Where the seats agreed
 
