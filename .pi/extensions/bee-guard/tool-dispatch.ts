@@ -9,9 +9,16 @@ import { tokenizeArgv } from "./transition.ts"
 export const HERDING_RUN_ARGV = [".bee/bin/bee", "herding", "run"]
 
 export function flagArgs(params: any, keys: string[]): string[] {
-  return keys.flatMap((key) =>
-    typeof params?.[key] === "string" && params[key].length > 0 ? [`--${key}`, params[key]] : [],
-  )
+  return keys.flatMap((key) => {
+    const val = params?.[key]
+    if (typeof val === "boolean") {
+      return val ? [`--${key}`] : []
+    }
+    if (typeof val === "string" && val.length > 0) {
+      return [`--${key}`, val]
+    }
+    return []
+  })
 }
 
 export function notifySafely(ctx: any, message: string): void {
@@ -49,8 +56,12 @@ export async function runBeeDispatch(prepareArgs: string[], ctx: any) {
     stdio: ["pipe", "ignore", "ignore"],
   })
   child.on("error", (err) => notifySafely(ctx, `bee_dispatch job ${jobId} did not start: ${err.message}`))
+  const isCellJob = prepareArgs.includes("--cell") || (prepareArgs.indexOf("--kind") !== -1 && prepareArgs[prepareArgs.indexOf("--kind") + 1] === "cell")
   child.on("exit", (code) => {
-    if (code) notifySafely(ctx, `bee_dispatch job ${jobId} stopped with exit code ${code} before it reported.`)
+    if (code) {
+      const cellNote = isCellJob ? "; a done cell exits non-zero until the leader caps it." : "."
+      notifySafely(ctx, `bee_dispatch job ${jobId} exited with code ${code}. Its result, if any, arrives in this session${cellNote}`)
+    }
   })
   child.stdin?.on("error", () => {})
   child.stdin?.end(typeof parsed.payload.stdin === "string" ? parsed.payload.stdin : "")
@@ -84,11 +95,15 @@ export const beeDispatchTool = {
       cell: { type: "string", description: "Cell id, required when kind is cell" },
       worker: { type: "string", description: "The worker name that holds the cell's claim, required when kind is cell" },
       purpose: { type: "string", description: "One line on what a non-cell job is for" },
+      stage: { type: "string", description: "Optional lifecycle stage for the worker" },
+      feature: { type: "string", description: "Optional feature name" },
+      expertise: { type: "string", description: "Optional worker expertise or track" },
+      claim: { type: "boolean", description: "Optional flag to claim the cell during dispatch" },
     },
     required: ["kind"],
   },
   execute: (_toolCallId: string, params: any, _signal?: any, _onUpdate?: any, ctx?: any) =>
-    runBeeDispatch(flagArgs(params, ["kind", "role", "cell", "worker", "purpose"]), ctx),
+    runBeeDispatch(flagArgs(params, ["kind", "role", "cell", "worker", "purpose", "stage", "feature", "expertise", "claim"]), ctx),
 }
 
 export const beeAdvisorTool = {
@@ -103,10 +118,12 @@ export const beeAdvisorTool = {
     properties: {
       role: { type: "string", description: "Advisor seat, for example advisor or hat-risks" },
       purpose: { type: "string", description: "One line on what the consult is for" },
+      stage: { type: "string", description: "Optional lifecycle stage" },
+      feature: { type: "string", description: "Optional feature name" },
     },
     required: ["role", "purpose"],
   },
   execute: (_toolCallId: string, params: any, _signal?: any, _onUpdate?: any, ctx?: any) =>
-    runBeeDispatch(["--kind", "advisor", ...flagArgs(params, ["role", "purpose"])], ctx),
+    runBeeDispatch(["--kind", "advisor", ...flagArgs(params, ["role", "purpose", "stage", "feature"])], ctx),
 }
 

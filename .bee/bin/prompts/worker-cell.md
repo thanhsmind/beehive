@@ -10,6 +10,8 @@ Feature: {{feature}}
 Location — work here, the store is in the other checkout:
 - Work in: {{worktree_root}}
 - The bee store (cells, claims, reservations) lives in: {{control_root}}
+{{/if}}
+{{#if native_worktree_check}}
 
 Before any work step: self-check the effective working directory. If
 it is not inside {{worktree_root}}, stop with zero edit attempts and return
@@ -46,12 +48,17 @@ Address what blocked the last round before anything else.
 {{/if}}
 
 Contract:
+{{#if native_bookkeeping}}
 - Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+{{/if}}
 - Execute only the assigned cell. Do not select or accept other work.
+{{#if native_bookkeeping}}
 - The cell's listed files are reserved under your nickname by the claim that dispatched you, and the finish command releases them at cap; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
+{{/if}}
 - Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
 - Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
 - Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: {{cell_id}}` (the words "cell:" then the id — a bare id alone fails the cap).
+{{#if native_bookkeeping}}
 - Your report is a navigation aid, not completion evidence: the leader compares every approved requirement against the actual artifacts before accepting. Make that check fast — in `outcome` or `deviations`, name where each requirement landed (file, function, test, or proof line), never only that it did.
 - Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
 
@@ -66,3 +73,7 @@ A no-test-sentinel repo names the command segment `none`, with the reason naming
 ```
 
 Finish with: .bee/bin/bee cells finish --id {{cell_id}} --outcome "<one line>" --files <a,b> --report '<json>' — finish CAPS the cell and records the proof line you hand it; no door runs tests for you. You own the scope: run the narrowest proof this change type needs (code → the related tests, filtered to what you touched, never the whole declared suite; docs → parity/pointer checks; behavior → judge verdict), and run the cell's own `verify` when it carries one. A `red` result refuses the cap: the red is the work — fix it and re-run finish; never build on a red base. CI runs the project's declared commands.test on every push, the one deterministic net. The report also carries `mistakes` and optional `baseline` — the form and the timing are under Result form above (or record one as you go with `.bee/bin/bee mailbox reflect --wrong "<what went wrong>" --better "<what would have been better>" --fix-at <layer>`).
+{{/if}}
+{{#if herding}}
+- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.
+{{/if}}

@@ -10405,6 +10405,284 @@ fn bee_steer_leader_tool_contracts_and_refusals() {
     assert_eq!(args, vec!["herding", "steer", "job-1", "--text", "guidance text", "--json"]);
 }
 
+#[cfg(unix)]
+#[test]
+fn verdict_with_no_job_id_refuses_and_writes_no_file_even_when_unrelated_mailbox_exists() {
+    node_or_skip!("verdict_with_no_job_id_refuses_and_writes_no_file_even_when_unrelated_mailbox_exists");
 
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
 
+    let other_job_id = "job-unrelated-newest";
+    let other_mailbox = dir.path().join(".bee").join("mailbox").join(other_job_id);
+    std::fs::create_dir_all(&other_mailbox).expect("create mailbox");
+    std::fs::write(other_mailbox.join("brief-1.txt"), "brief").expect("write brief");
 
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell",
+        "files_changed": [".pi/extensions/bee-guard.ts"],
+        "proof": "cargo test -p bee — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-no-job",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(exec_res.threw, "verdict execute must throw when BEE_HERDING_JOB_ID is absent");
+    let msg = exec_res.message.as_deref().unwrap_or("");
+    assert!(
+        msg.contains("The verdict tool works only inside a bee herding job") || msg.contains("normal final message"),
+        "refusal message must explain verdict works only inside herding job, got: {msg}"
+    );
+    assert!(
+        !other_mailbox.join("result-1.json").exists(),
+        "verdict must not write result file when BEE_HERDING_JOB_ID is missing"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn verdict_with_status_done_and_blank_proof_refuses() {
+    node_or_skip!("verdict_with_status_done_and_blank_proof_refuses");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-blank-proof-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell",
+        "files_changed": [".pi/extensions/bee-guard.ts"],
+        "proof": "   ",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-blank-proof",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(exec_res.threw, "verdict execute must throw when status is done and proof is blank");
+    let msg = exec_res.message.as_deref().unwrap_or("");
+    assert!(
+        msg.contains("run the proof and pass `<command> — <result> — <scope reason>`"),
+        "refusal message must name the fix, got: {msg}"
+    );
+    assert!(
+        !mailbox.join("result-1.json").exists(),
+        "result-1.json must not be written when proof is blank"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn verdict_refuses_second_result_for_same_round() {
+    node_or_skip!("verdict_refuses_second_result_for_same_round");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-repeat-round-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell",
+        "files_changed": [".pi/extensions/bee-guard.ts"],
+        "proof": "cargo test — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-repeat-round",
+                    "verdict",
+                    verdict_args.clone(),
+                ),
+                execute_tool_call(
+                    dir.path(),
+                    "sess-repeat-round",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    assert!(!run.results[0].threw, "first verdict call should succeed: {:?}", run.results[0].message);
+    let exec_res2 = &run.results[1];
+    assert!(exec_res2.threw, "second verdict call for same round must throw");
+    let msg = exec_res2.message.as_deref().unwrap_or("");
+    assert!(
+        msg.contains("the result for this round is already recorded, end the turn"),
+        "refusal message must name the fix, got: {msg}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn verdict_valid_call_writes_result_round_json() {
+    node_or_skip!("verdict_valid_call_writes_result_round_json");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    let job_id = "job-valid-round-1";
+    let mailbox = dir.path().join(".bee").join("mailbox").join(job_id);
+    std::fs::create_dir_all(&mailbox).expect("create mailbox");
+    std::fs::write(mailbox.join("brief-1.txt"), "brief").expect("write brief");
+
+    let verdict_args = json!({
+        "status": "done",
+        "summary": "completed cell cleanly",
+        "files_changed": ["src/lib.rs"],
+        "proof": "cargo test — green:unit — test",
+    });
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({
+            "calls": [
+                execute_tool_call(
+                    dir.path(),
+                    "sess-valid",
+                    "verdict",
+                    verdict_args,
+                ),
+            ]
+        }),
+        &[("BEE_HERDING_JOB_ID", job_id)],
+    );
+
+    let exec_res = &run.results[0];
+    assert!(!exec_res.threw, "valid verdict call must not throw: {:?}", exec_res.message);
+    let result_file = mailbox.join("result-1.json");
+    assert!(result_file.is_file(), "result-1.json must be written");
+    let parsed: Value = serde_json::from_str(&std::fs::read_to_string(&result_file).unwrap()).unwrap();
+    assert_eq!(parsed["status"], "done");
+    assert_eq!(parsed["proof"], "cargo test — green:unit — test");
+}
+
+#[cfg(unix)]
+#[test]
+fn bee_dispatch_with_stage_and_feature_forwards_to_prepare_argv() {
+    node_or_skip!("bee_dispatch_with_stage_and_feature_forwards_to_prepare_argv");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let command =
+        ".bee/bin/bee herding run --task-file - --json --agent \"pi-worker-1\" --nickname $HOME;true --cell-id \"demo-1\"";
+    write_stub_bee(dir.path(), &StubBehavior::Dispatch { prepare: herding_prepare_answer(command), exit: 0 });
+
+    const TOKEN: &str = "sess-dispatch-flags";
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            execute_tool_call(
+                dir.path(),
+                TOKEN,
+                "bee_dispatch",
+                json!({
+                    "kind": "cell",
+                    "cell": "demo-1",
+                    "worker": "w-demo",
+                    "stage": "implementation",
+                    "feature": "pi-slp",
+                    "expertise": "code",
+                    "claim": true,
+                }),
+            ),
+        ],
+    );
+
+    let call = &run.results[1];
+    assert!(!call.threw, "bee_dispatch threw: {:?}", call.message);
+    let prepare = prepare_invocations(dir.path());
+    assert_eq!(prepare.len(), 1, "{prepare:?}");
+    let prep = &prepare[0];
+    assert!(prep.contains("--stage implementation"), "expected --stage implementation in: {prep}");
+    assert!(prep.contains("--feature pi-slp"), "expected --feature pi-slp in: {prep}");
+    assert!(prep.contains("--expertise code"), "expected --expertise code in: {prep}");
+    assert!(prep.contains("--claim"), "expected --claim in: {prep}");
+}
+
+#[cfg(unix)]
+#[test]
+fn done_cell_injection_carries_cap_line_and_gather_does_not() {
+    node_or_skip!("done_cell_injection_carries_cap_line_and_gather_does_not");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+
+    const TOKEN_CELL: &str = "sess-drain-cell";
+    let mbox_cell = job_mailbox(dir.path(), "job-cell-done");
+    write_result(&mbox_cell, 1, &result_envelope("done", "finished cell", "cargo test — green:unit — test"));
+    write_marker(dir.path(), TOKEN_CELL, "job-cell-done", &mbox_cell, Some("psdr-2"));
+
+    let run_cell = run_harness(&harness, vec![session_start(dir.path(), TOKEN_CELL, "new"), await_injections(1)]);
+    assert_eq!(run_cell.messages.len(), 1, "expected 1 cell injection, got {:?}", run_cell.messages);
+    let cell_msg = &run_cell.messages[0].text;
+    let expected_cap_line = "the cell psdr-2 stays claimed until the leader checks the artifacts against the cell and caps it with `bee cells finish --id psdr-2 --outcome <one line> --files <a,b> --report '<json with outcome, commit, files, tests, deviations, mistakes>'`";
+    assert!(
+        cell_msg.contains(expected_cap_line),
+        "done cell injection must carry cap line, got:\n{cell_msg}"
+    );
+
+    const TOKEN_GATHER: &str = "sess-drain-gather";
+    let mbox_gather = job_mailbox(dir.path(), "job-gather-done");
+    write_result(&mbox_gather, 1, &result_envelope("done", "gathered facts", "none — green:static — docs"));
+    write_marker(dir.path(), TOKEN_GATHER, "job-gather-done", &mbox_gather, None);
+
+    let run_gather = run_harness(&harness, vec![session_start(dir.path(), TOKEN_GATHER, "new"), await_injections(1)]);
+    assert_eq!(run_gather.messages.len(), 1, "expected 1 gather injection, got {:?}", run_gather.messages);
+    let gather_msg = &run_gather.messages[0].text;
+    assert!(
+        !gather_msg.contains("stays claimed until the leader checks"),
+        "gather injection must not carry cap line, got:\n{gather_msg}"
+    );
+}

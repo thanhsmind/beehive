@@ -7934,7 +7934,7 @@ advance_on — falling to another model there hides the defect (D11)"
     /// hab-2: a herding or cli payload prefixes the embedded agent template body
     /// when the kind maps to a known bee agent (bee-build, bee-gather, bee-review).
     fn expected_dispatched_body(runtime: &str, kind: &str, body: &str) -> String {
-        if runtime == "pi" || (runtime == "codex" && kind != "cell") {
+        if (runtime == "pi" && kind != "cell") || (runtime == "codex" && kind != "cell") {
             let pinned_type = match kind {
                 "cell" => "bee-build",
                 "gather" => "bee-gather",
@@ -10140,8 +10140,89 @@ advance_on — falling to another model there hides the defect (D11)"
         assert!(stdin.ends_with(&prompt));
     }
 
+    const GOLDEN_NATIVE_CELL_PROMPT: &str = r#"Nickname (reservation identity): w-golden
+Assigned cell id: c-golden
+Feature: feat-golden
+
+Location — work here, the store is in the other checkout:
+- Work in: /repo/wt-feat
+- The bee store (cells, claims, reservations) lives in: /repo/control
+
+Before any work step: self-check the effective working directory. If
+it is not inside /repo/wt-feat, stop with zero edit attempts and return
+`[BLOCKED: session cwd is not the worktree — enter it or spawn this worker
+from a session rooted there]`.
+
+Cell (authoritative — do not re-fetch):
+{
+  "id": "c-golden",
+  "feature": "feat-golden",
+  "title": "golden cell title",
+  "role": "code",
+  "status": "claimed",
+  "trace": {
+    "worker": "w-golden"
+  }
+}
+
+Inputs — read these; nothing else is provided:
+- AGENTS.md
+- docs/history/feat-golden/CONTEXT.md
+- docs/history/feat-golden/plan.md (when present)
+
+Advisor: fable
+
+Contract:
+- Load the bee-swarming skill (Execute section) for the full worker contract; the shape you were handed (native, pane, cli) is config, not a signal about the work.
+- Execute only the assigned cell. Do not select or accept other work.
+- The cell's listed files are reserved under your nickname by the claim that dispatched you, and the finish command releases them at cap; reserve any ADDITIONAL path before writing: .bee/bin/bee reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"
+- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.
+- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.
+- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: c-golden` (the words "cell:" then the id — a bare id alone fails the cap).
+- Your report is a navigation aid, not completion evidence: the leader compares every approved requirement against the actual artifacts before accepting. Make that check fast — in `outcome` or `deviations`, name where each requirement landed (file, function, test, or proof line), never only that it did.
+- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.
+
+Result form: beside the token, in the same message, emit exactly one fenced JSON block — never in place of the token — as the echo of having capped. `tests` is a proof string `<command> — <result> — <scope reason>` (three non-empty segments; the reason may itself contain the same separator, only the first two count) — e.g. `"cargo test -p bee — green:unit — touched close.rs"`. The result segment is closed over three values, and a bare `green` is refused:
+- `green:live` — the real product or command was driven and its observable result inspected.
+- `green:unit` — automated tests passed.
+- `green:static` — it compiled, type-checked, linted, or a parity/pointer check passed, with nothing executed.
+
+A no-test-sentinel repo names the command segment `none`, with the reason naming the parity/docs proof used (e.g. `none — green:static — docs pointer check`). A `red` result segment refuses the cap: fix first, then re-run. `deviations` carries one line per departure from the plan, each in THREE parts — `<what was done differently> — <why> — <kind>` — with the kind exactly one of: hit an unforeseen obstacle / found a better route / the plan was wrong about a fact / something else had to be fixed first. Write that line in plain language at the moment the departure happens, never composed from memory at the end. Followed the plan? Say so instead: one line reading `followed the plan` — silence and nothing-happened must not read alike. In a run that files a letter for the human, a cap that states neither is refused; any other run records what you write and refuses nothing. `mistakes` carries one entry per mistake you made, each in THREE parts — `<what went wrong> — <what would have been better> — <fix-at>`. The first part names a concrete thing: a file, a command, or something you observed, never "the approach"; `<fix-at>` is the required layer that stops it coming back — `architecture` (a code change makes the mistake impossible), `check` (a test, hook, guard or doctor row catches it), `doctrine` (only prose can carry it) or `none` (a one-off nobody would guard), picking the strongest layer someone would actually build now. Write each line at the moment you notice the mistake, never composed from memory at the end. Hit none? Send `[]`: an empty array SAYS this cell hit nothing, while leaving the key out records no answer at all and `bee close` refuses the feature naming this cell. `baseline` carries what the same proof command produced on the base commit before this change — optional, but expected whenever the proof command could have passed before the change.
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>", "..."], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>", "..."], "mistakes": ["<what went wrong> — <what would have been better> — <fix-at>", "..."], "baseline": "<optional: what the same proof produced on base>"}
+```
+
+Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --files <a,b> --report '<json>' — finish CAPS the cell and records the proof line you hand it; no door runs tests for you. You own the scope: run the narrowest proof this change type needs (code → the related tests, filtered to what you touched, never the whole declared suite; docs → parity/pointer checks; behavior → judge verdict), and run the cell's own `verify` when it carries one. A `red` result refuses the cap: the red is the work — fix it and re-run finish; never build on a red base. CI runs the project's declared commands.test on every push, the one deterministic net. The report also carries `mistakes` and optional `baseline` — the form and the timing are under Result form above (or record one as you go with `.bee/bin/bee mailbox reflect --wrong "<what went wrong>" --better "<what would have been better>" --fix-at <layer>`)."#;
+
     #[test]
-    fn herding_cell_payload_stdin_starts_with_agent_body_and_carries_worker_contract() {
+    fn native_cell_prompt_render_is_byte_identical_to_golden() {
+        let cell: serde_json::Value = serde_json::json!({
+            "id": "c-golden",
+            "feature": "feat-golden",
+            "title": "golden cell title",
+            "role": "code",
+            "status": "claimed",
+            "trace": { "worker": "w-golden" }
+        });
+        let rendered = prompt_body_for(
+            std::path::Path::new("/unused"),
+            "cell",
+            Some(&cell),
+            Some("w-golden"),
+            Some(("/repo/wt-feat", "/repo/control")),
+            None,
+            None,
+            Some("fable"),
+            None,
+            None,
+            None,
+            false,
+        ).unwrap().unwrap();
+        assert_eq!(rendered, GOLDEN_NATIVE_CELL_PROMPT);
+    }
+
+    #[test]
+    fn herding_cell_dispatch_stdin_contains_no_bee_commands_and_has_three_part_proof() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, BRIEF_HOST);
         w(
@@ -10157,13 +10238,19 @@ advance_on — falling to another model there hides the defect (D11)"
         };
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         let stdin = v.get("payload").unwrap().get("stdin").unwrap().as_str().unwrap();
-        let build_body = embedded_agent_body("bee-build").expect("bee-build body");
-        assert!(stdin.starts_with(build_body));
-        assert!(stdin.contains("Contract:\n- Load the bee-swarming skill (Execute section) for the full worker contract"));
-        assert!(stdin.contains("Assigned cell id: c-1"));
+        assert!(!stdin.contains("cells finish"));
+        assert!(!stdin.contains(".bee/bin/bee"));
+        assert!(!stdin.contains("You are a bee execution worker"));
+        assert!(!stdin.contains("bee cells"));
+        assert!(!stdin.contains("reservations reserve"));
+        assert!(!stdin.contains("mailbox reflect"));
+        assert!(!stdin.contains("Contract:\n- Load the bee-swarming skill"));
+        assert!(stdin.contains("cell: c-1"));
+        assert!(stdin.contains("<command> — <green:unit|green:live|green:static> — <scope reason>"));
     }
 
     #[test]
+
     fn herding_general_purpose_advisor_payload_stdin_is_byte_identical() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, BRIEF_HOST);
