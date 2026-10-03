@@ -13,8 +13,13 @@
   "summary": "Feature \"pi-1-0-upgrade\" started at phase \"planning\".",
   "next_action": "bee close finished \"pi-1-0-upgrade\" — feature is closed.",
   "created_at": "2026-10-02T05:39:29.330Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Ranh giới nên giữ: **Waggle lo agent chạy và liên lạc; Bee lo công việc được làm đúng quy trình và có bằng chứng.**",
+    "asked_at": "2026-10-03T00:22:16.891Z",
+    "session": "01a0ff18-abeb-7e92-ad4b-7d11c7d94d26"
+  },
   "advisor_ref": {
     "consulted_at": "2026-10-02T12:23:28.410Z",
     "feature": "pi-1-0-upgrade",

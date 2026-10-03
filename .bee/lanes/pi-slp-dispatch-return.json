@@ -1,0 +1,536 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-slp-dispatch-return",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-slp-dispatch-return\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-03T01:36:40.442Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-10-03T01:36:40.470Z",
+    "feature": "pi-slp-dispatch-return"
+  },
+  "gate_preview": {
+    "feature": "pi-slp-dispatch-return",
+    "plan_sha256": "f55266231ccd2ba7887d98b55717ef3edc5fd7e7385e0948242f8a43eda48b5e",
+    "previewed_at": "2026-10-03T01:43:02.213Z",
+    "cells": [
+      {
+        "id": "psdr-1",
+        "feature": "pi-slp-dispatch-return",
+        "lane": "standard",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Give a herded cell worker one order",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "4029e89b-67d7-4599-812d-6bef59a39dac"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1. In prepare_dispatch, the pane prompt is built at `let pane_prompt = if is_deployment {` (prepare.rs:2351); its else arm is `Some(body) => format!(\"{body}\\n\\n{prompt_body}\"),` (prepare.rs:2359). When the kind is cell and the resolved transport is `Resolved::Herding { .. }`, do not prepend the bee-build body. prompt_body_for (prepare.rs:1071, `pub(crate) fn prompt_body_for(`) renders worker-cell at `let Some(template) = load_prompt(\"worker-cell\")` (prepare.rs:1125). Templates support only `{{#if NAME}}` blocks: no else, no not, no nesting, and the block eats the newline before its marker (prompt.rs:149). A var the template declares must be supplied on every render (see the note near prepare.rs:1105). So add TWO vars to the worker-cell render: `native_bookkeeping` (non-empty for every non-herding cell render) and `herding` (non-empty only for a herding cell render); pass the transport fact into prompt_body_for to choose. In packages/bee/prompts/worker-cell.md wrap ONLY the bee bookkeeping lines in `{{#if native_bookkeeping}}`: the `Load the bee-swarming skill` bullet, the `reserve any ADDITIONAL path` bullet, the `Your report is a navigation aid` bullet, the `Return exactly one final status token` bullet, the whole `Result form:` paragraph with its json block, and the `Finish with:` paragraph. The `{{#if worktree_root}}` block holds a cwd self-check that ends in a `[BLOCKED: ...]` text token; a herded worker must not get that token (the herding run already sets --cwd and waits for a result file). Nesting is refused, so split that block: keep the Location lines under `{{#if worktree_root}}`, and move the self-check paragraph into its own `{{#if native_worktree_check}}` block, a third var that is non-empty only when worktree_root is non-empty AND the render is native. The native render must stay byte-identical (the golden test proves it). Keep the shared bullets shared (execute only the assigned cell, never reinterpret a decision, shape and no comments, commit once with the `cell: {{cell_id}}` trailer). Add one `{{#if herding}}` block that says: run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell. The herding block must not repeat the commit-trailer rule and must not contain `bee cells`, `.bee/bin/bee`, `reservations reserve` or `mailbox reflect`. Tests red first in drivers/tests.rs: (a) GOLDEN — before you edit the template, render a native cell prompt for a fixed fixture, store those exact bytes in the test, and assert_eq! the post-change render against them; (b) a herding cell dispatch stdin contains no `cells finish`, no `.bee/bin/bee`, no `You are a bee execution worker`, and does contain the `cell: <id>` trailer rule and the three-part proof instruction. Existing herding fixtures: `rg -n \"herding\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs`. tests.rs:126 checks the template has no trailing newline; keep that true. Do not touch herding/run.rs (per D5). Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+        "must_haves": {
+          "truths": [
+            "A cell dispatched on a herding role carries a stdin with no bee command and no bee-build agent body",
+            "The herding cell stdin tells the worker to commit with the cell trailer and return a three-part proof line",
+            "A native cell dispatch prompt is byte-identical to before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "native-only and herding-only blocks; herding block has no bee command"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "herding cell path skips the bee-build body and sets the herding flag"
+            }
+          ],
+          "key_links": [
+            "prepare_dispatch passes the transport fact into prompt_body_for, which sets native_bookkeeping or herding for kind cell"
+          ],
+          "prohibitions": [
+            "No change to the herding wrapper in mailbox.rs",
+            "No change to herding/run.rs",
+            "No byte change to native, Agent-tool or CLI cell prompts",
+            "No new prompt file"
+          ]
+        }
+      },
+      {
+        "id": "psdr-2",
+        "feature": "pi-slp-dispatch-return",
+        "lane": "standard",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Bind Pi dispatch and verdict calls to their job",
+        "deps": [],
+        "decisions": [
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "ee22fb67-deec-4013-807f-c2c7628c78c8",
+          "180c5b3c-8963-4790-8286-389c8890f54f",
+          "26c6bd37-c291-4d6f-a601-41643e343d38",
+          "28db2359-2edd-4310-b34b-13098b081147"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2: in tool-dispatch.ts add `stage`, `feature`, `expertise` (strings) and `claim` (boolean) to the bee_dispatch parameters, and `stage`, `feature` to bee_advisor. Pass them through flagArgs (line 91: `runBeeDispatch(flagArgs(params, [\"kind\", \"role\", \"cell\", \"worker\", \"purpose\"]), ctx),`); `claim: true` becomes a bare `--claim`. No validation of values in TypeScript. Per D3: in tool-verdict.ts executeVerdictTool, delete the newest-mailbox fallback (the else branch with `dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)`, line 120); with no BEE_HERDING_JOB_ID throw an error that says the verdict tool works only inside a bee herding job and the fix is to finish with a normal final message. Throw when status is done and proof.trim() is empty, naming the fix: run the proof and pass `<command> — <result> — <scope reason>`. Throw when result-<round>.json already exists in the job mailbox, naming the fix: the result for this round is already recorded, end the turn. Each refusal writes nothing. Per D4: in result-inbox.ts renderResultInjection, when marker.cell_id is a non-empty string and result.status is done, append after the closing fence one fixed line: the cell <id> stays claimed until the leader checks the artifacts against the cell and caps it with `bee cells finish --id <id> --outcome <one line> --files <a,b> --report '<json with outcome, commit, files, tests, deviations, mistakes>'`, so the line names every required flag. Use headerValue for the id. Other results render byte-identically. Per D5: in runBeeDispatch the child exit notice (`stopped with exit code ${code} before it reported.`) becomes a notice that the job exited with that code and that its result, if any, arrives in this session; for a cell job add that a done cell exits non-zero until the leader caps it. Tests red first in pi_plugin_contracts.rs (it drives the TypeScript with node; follow the node_or_skip! pattern and the job_mailbox / write_marker / write_result helpers near `fn job_mailbox(`): verdict with no job id refuses and writes no file even when an unrelated mailbox exists; done with blank proof refuses; a second call for a round with an existing result refuses; a valid call still writes result-<round>.json; bee_dispatch with stage and feature puts `--stage` and `--feature` in the prepare argv; the done-cell injection carries the cap line and a gather injection does not. Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "verdict with no BEE_HERDING_JOB_ID refuses and writes no file",
+            "verdict with status done and a blank proof refuses",
+            "verdict refuses a second result for the same round",
+            "bee_dispatch forwards stage, feature, claim and expertise to dispatch prepare",
+            "a done cell result injection tells the leader to check and cap the cell",
+            "the bee_dispatch exit notice no longer says the job stopped before it reported"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/tool-verdict.ts",
+              "substantive": "no newest-mailbox fallback; three refusals each naming a fix"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/tool-dispatch.ts",
+              "substantive": "schemas carry the new inputs and pass them through"
+            }
+          ],
+          "key_links": [
+            "bee_dispatch execute passes the new keys to runBeeDispatch",
+            "renderResultInjection adds the cap line only for a done result with a cell_id"
+          ],
+          "prohibitions": [
+            "No workflow rule in the Pi extension beyond these refusals",
+            "No change to the inbox claim, requeue or dedupe logic",
+            "Injection of non-cell results byte-identical"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "psdr-1 and psdr-2 change Rust and TypeScript with their tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own red-first tests."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader captures at close."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; the hat wave is the plan check."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-03T01:43:02.325Z",
+    "feature": "pi-slp-dispatch-return",
+    "newest_decision_id": "2c50a708-e3b0-4df9-bff3-034e69ae4066",
+    "plan_sha256": "f55266231ccd2ba7887d98b55717ef3edc5fd7e7385e0948242f8a43eda48b5e",
+    "advisor": "hat-wave:facts-gaps,alternatives,user-impact",
+    "digest_head": "# Hat wave — pi-slp-dispatch-return plan check\n\nSeats: hat-facts-gaps (native, opus), hat-alternatives (native, opus),\nhat-user-impact (herding, agy-flash; report at main\n`.bee/mailbox/job-1790991453296-2136087-1/report-1.md`). Standard lane, three\ndefault seats; all three returned, one past the 10-minute budget.\n\n## Synthesis\n\n| Finding | Seat | Severity | Leader decision |\n|---|---|---|---|\n| D1 makes every done herded cell exit through herding-cap-check D1's non-zero refusal (`run.rs:4197`); "
+  },
+  "approved_cell_packet": {
+    "feature": "pi-slp-dispatch-return",
+    "plan_sha256": "f55266231ccd2ba7887d98b55717ef3edc5fd7e7385e0948242f8a43eda48b5e",
+    "previewed_at": "2026-10-03T01:43:02.213Z",
+    "cells": [
+      {
+        "id": "psdr-1",
+        "feature": "pi-slp-dispatch-return",
+        "lane": "standard",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Give a herded cell worker one order",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "4029e89b-67d7-4599-812d-6bef59a39dac"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee/prompts/worker-cell.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1. In prepare_dispatch, the pane prompt is built at `let pane_prompt = if is_deployment {` (prepare.rs:2351); its else arm is `Some(body) => format!(\"{body}\\n\\n{prompt_body}\"),` (prepare.rs:2359). When the kind is cell and the resolved transport is `Resolved::Herding { .. }`, do not prepend the bee-build body. prompt_body_for (prepare.rs:1071, `pub(crate) fn prompt_body_for(`) renders worker-cell at `let Some(template) = load_prompt(\"worker-cell\")` (prepare.rs:1125). Templates support only `{{#if NAME}}` blocks: no else, no not, no nesting, and the block eats the newline before its marker (prompt.rs:149). A var the template declares must be supplied on every render (see the note near prepare.rs:1105). So add TWO vars to the worker-cell render: `native_bookkeeping` (non-empty for every non-herding cell render) and `herding` (non-empty only for a herding cell render); pass the transport fact into prompt_body_for to choose. In packages/bee/prompts/worker-cell.md wrap ONLY the bee bookkeeping lines in `{{#if native_bookkeeping}}`: the `Load the bee-swarming skill` bullet, the `reserve any ADDITIONAL path` bullet, the `Your report is a navigation aid` bullet, the `Return exactly one final status token` bullet, the whole `Result form:` paragraph with its json block, and the `Finish with:` paragraph. The `{{#if worktree_root}}` block holds a cwd self-check that ends in a `[BLOCKED: ...]` text token; a herded worker must not get that token (the herding run already sets --cwd and waits for a result file). Nesting is refused, so split that block: keep the Location lines under `{{#if worktree_root}}`, and move the self-check paragraph into its own `{{#if native_worktree_check}}` block, a third var that is non-empty only when worktree_root is non-empty AND the render is native. The native render must stay byte-identical (the golden test proves it). Keep the shared bullets shared (execute only the assigned cell, never reinterpret a decision, shape and no comments, commit once with the `cell: {{cell_id}}` trailer). Add one `{{#if herding}}` block that says: run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell. The herding block must not repeat the commit-trailer rule and must not contain `bee cells`, `.bee/bin/bee`, `reservations reserve` or `mailbox reflect`. Tests red first in drivers/tests.rs: (a) GOLDEN — before you edit the template, render a native cell prompt for a fixed fixture, store those exact bytes in the test, and assert_eq! the post-change render against them; (b) a herding cell dispatch stdin contains no `cells finish`, no `.bee/bin/bee`, no `You are a bee execution worker`, and does contain the `cell: <id>` trailer rule and the three-part proof instruction. Existing herding fixtures: `rg -n \"herding\" packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs`. tests.rs:126 checks the template has no trailing newline; keep that true. Do not touch herding/run.rs (per D5). Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::drivers",
+        "must_haves": {
+          "truths": [
+            "A cell dispatched on a herding role carries a stdin with no bee command and no bee-build agent body",
+            "The herding cell stdin tells the worker to commit with the cell trailer and return a three-part proof line",
+            "A native cell dispatch prompt is byte-identical to before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/prompts/worker-cell.md",
+              "substantive": "native-only and herding-only blocks; herding block has no bee command"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "herding cell path skips the bee-build body and sets the herding flag"
+            }
+          ],
+          "key_links": [
+            "prepare_dispatch passes the transport fact into prompt_body_for, which sets native_bookkeeping or herding for kind cell"
+          ],
+          "prohibitions": [
+            "No change to the herding wrapper in mailbox.rs",
+            "No change to herding/run.rs",
+            "No byte change to native, Agent-tool or CLI cell prompts",
+            "No new prompt file"
+          ]
+        }
+      },
+      {
+        "id": "psdr-2",
+        "feature": "pi-slp-dispatch-return",
+        "lane": "standard",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Bind Pi dispatch and verdict calls to their job",
+        "deps": [],
+        "decisions": [
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "ee22fb67-deec-4013-807f-c2c7628c78c8",
+          "180c5b3c-8963-4790-8286-389c8890f54f",
+          "26c6bd37-c291-4d6f-a601-41643e343d38",
+          "28db2359-2edd-4310-b34b-13098b081147"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/pi-slp-dispatch-return/CONTEXT.md",
+          ".pi/extensions/bee-guard/tool-dispatch.ts",
+          ".pi/extensions/bee-guard/tool-verdict.ts"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D2: in tool-dispatch.ts add `stage`, `feature`, `expertise` (strings) and `claim` (boolean) to the bee_dispatch parameters, and `stage`, `feature` to bee_advisor. Pass them through flagArgs (line 91: `runBeeDispatch(flagArgs(params, [\"kind\", \"role\", \"cell\", \"worker\", \"purpose\"]), ctx),`); `claim: true` becomes a bare `--claim`. No validation of values in TypeScript. Per D3: in tool-verdict.ts executeVerdictTool, delete the newest-mailbox fallback (the else branch with `dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)`, line 120); with no BEE_HERDING_JOB_ID throw an error that says the verdict tool works only inside a bee herding job and the fix is to finish with a normal final message. Throw when status is done and proof.trim() is empty, naming the fix: run the proof and pass `<command> — <result> — <scope reason>`. Throw when result-<round>.json already exists in the job mailbox, naming the fix: the result for this round is already recorded, end the turn. Each refusal writes nothing. Per D4: in result-inbox.ts renderResultInjection, when marker.cell_id is a non-empty string and result.status is done, append after the closing fence one fixed line: the cell <id> stays claimed until the leader checks the artifacts against the cell and caps it with `bee cells finish --id <id> --outcome <one line> --files <a,b> --report '<json with outcome, commit, files, tests, deviations, mistakes>'`, so the line names every required flag. Use headerValue for the id. Other results render byte-identically. Per D5: in runBeeDispatch the child exit notice (`stopped with exit code ${code} before it reported.`) becomes a notice that the job exited with that code and that its result, if any, arrives in this session; for a cell job add that a done cell exits non-zero until the leader caps it. Tests red first in pi_plugin_contracts.rs (it drives the TypeScript with node; follow the node_or_skip! pattern and the job_mailbox / write_marker / write_result helpers near `fn job_mailbox(`): verdict with no job id refuses and writes no file even when an unrelated mailbox exists; done with blank proof refuses; a second call for a round with an existing result refuses; a valid call still writes result-<round>.json; bee_dispatch with stage and feature puts `--stage` and `--feature` in the prepare argv; the done-cell injection carries the cap line and a gather injection does not. Write no code comments.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "verdict with no BEE_HERDING_JOB_ID refuses and writes no file",
+            "verdict with status done and a blank proof refuses",
+            "verdict refuses a second result for the same round",
+            "bee_dispatch forwards stage, feature, claim and expertise to dispatch prepare",
+            "a done cell result injection tells the leader to check and cap the cell",
+            "the bee_dispatch exit notice no longer says the job stopped before it reported"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/tool-verdict.ts",
+              "substantive": "no newest-mailbox fallback; three refusals each naming a fix"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/tool-dispatch.ts",
+              "substantive": "schemas carry the new inputs and pass them through"
+            }
+          ],
+          "key_links": [
+            "bee_dispatch execute passes the new keys to runBeeDispatch",
+            "renderResultInjection adds the cap line only for a done result with a cell_id"
+          ],
+          "prohibitions": [
+            "No workflow rule in the Pi extension beyond these refusals",
+            "No change to the inbox claim, requeue or dedupe logic",
+            "Injection of non-cell results byte-identical"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "psdr-1 and psdr-2 change Rust and TypeScript with their tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own red-first tests."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader captures at close."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Independent review stays user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Standard lane; the hat wave is the plan check."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, no competing designs."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-03T02:01:43.033Z",
+    "branch": "wt/pi-slp-dispatch-return",
+    "worktree_id": "beehive--wt--pi-slp-dispatch-return",
+    "uat": "pending",
+    "blocked_by": [
+      "leader-check"
+    ]
+  }
+}

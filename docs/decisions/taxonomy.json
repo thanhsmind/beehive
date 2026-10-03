@@ -632,6 +632,8 @@
     "plan-rev",
     "contract:probe-x",
     "contract:pi-guard-folder-doctor",
-    "contract:pi-guard-folder-onboard"
+    "contract:pi-guard-folder-onboard",
+    "contract:herded-cell-brief",
+    "contract:pi-verdict-dispatch"
   ]
 }
