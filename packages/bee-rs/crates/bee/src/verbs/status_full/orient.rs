@@ -31,15 +31,62 @@ use crate::version::BEE_VERSION;
 
 // ─── orient (bee.mjs ~1229-1373) ───────────────────────────────────────────
 
-/// bee.mjs orientNextCommand.
-pub(crate) fn orient_next_command(status: &JMap, ready_ids: &[Value]) -> Value {
-    if opt_truthy(status.get("handoff")) {
-        return json!("bee state handoff show --json");
+#[derive(Debug, Clone, Default)]
+pub(crate) struct NextOpFacts<'a> {
+    pub(crate) wayfinding_resume: bool,
+    pub(crate) handoff: bool,
+    pub(crate) ready_count: usize,
+    pub(crate) execution_gate_approved: bool,
+    pub(crate) feature: Option<&'a str>,
+    pub(crate) granted_worktree_id: Option<&'a str>,
+    pub(crate) caller_runtime: Option<&'a str>,
+    pub(crate) control_root: Option<&'a Path>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NextOperation {
+    pub(crate) command: Option<String>,
+    pub(crate) run_from: Option<PathBuf>,
+}
+
+pub(crate) fn next_operation(facts: &NextOpFacts<'_>) -> NextOperation {
+    if facts.wayfinding_resume {
+        return NextOperation {
+            command: Some("bee discovery list --json".to_string()),
+            run_from: facts.control_root.map(Path::to_path_buf),
+        };
     }
-    if !ready_ids.is_empty() {
-        return json!("bee cells ready --json");
+    if let Some(id) = facts.granted_worktree_id.filter(|s| !s.is_empty()) {
+        return NextOperation {
+            command: Some(format!("bee worktree enter --id {id}")),
+            run_from: facts.control_root.map(Path::to_path_buf),
+        };
     }
-    Value::Null
+    if facts.handoff {
+        return NextOperation {
+            command: Some("bee state handoff show --json".to_string()),
+            run_from: facts.control_root.map(Path::to_path_buf),
+        };
+    }
+    if facts.ready_count > 0 && facts.execution_gate_approved {
+        if let (Some(rt), Some(feature)) = (
+            facts.caller_runtime.filter(|s| !s.is_empty()),
+            facts.feature.filter(|s| !s.is_empty()),
+        ) {
+            return NextOperation {
+                command: Some(format!("bee dispatch wave --runtime {rt} --feature {feature} --json")),
+                run_from: facts.control_root.map(Path::to_path_buf),
+            };
+        }
+        return NextOperation {
+            command: None,
+            run_from: None,
+        };
+    }
+    NextOperation {
+        command: None,
+        run_from: None,
+    }
 }
 
 /// bee.mjs orientDecisionLine — first line, 160-CHAR cap with '...' (decision
@@ -125,7 +172,7 @@ pub(crate) fn orient_worktree_context(ctx: &mut Ctx, status: &JMap) -> R<Option<
         m.insert("id".into(), json!(id));
         m.insert("feature".into(), feature);
         m.insert("path".into(), json!(worktree_root.clone()));
-        m.insert("guidance".into(), json!(format!("open your session at {worktree_root}")));
+        m.insert("guidance".into(), json!(format!("bee worktree enter --id {id}")));
         Ok(Some(m))
     };
     match attempt(ctx) {
@@ -349,14 +396,31 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // D1 (sweep-at-every-door): orient's own sweep door, before anything
     // below reads cell counts — see `sweep_on_orient`'s header.
     let sweep_blocker = sweep_on_orient(ctx)?;
-    let status = build_status(ctx, false)?;
+    let session_id = crate::session_identity::env_session_id();
+    let pipeline = crate::hooks::session_preamble::resolve_pipeline(&ctx.root, session_id.as_deref());
+    let mut lane_binding_blocker: Option<String> = None;
+    let status = if !pipeline.ok {
+        let control_root = crate::hooks::session_preamble::control_root_for(&ctx.root);
+        let bound_lane = session_id.as_deref().and_then(|sid| {
+            crate::hooks::session_preamble::read_session(&control_root, sid)
+        }).and_then(|s| s.get("lane").cloned()).and_then(|v| match v {
+            Value::String(s) => Some(s),
+            _ => None,
+        }).unwrap_or_default();
+        lane_binding_blocker = Some(format!(
+            "broken lane binding: session is bound to lane \"{bound_lane}\", which is invalid, missing, or corrupt"
+        ));
+        build_status_with_state(ctx, false, JMap::new())?
+    } else if pipeline.source == "lane" {
+        build_status_with_state(ctx, false, pipeline.record)?
+    } else {
+        build_status(ctx, false)?
+    };
     let feature = match status.get("feature") {
         None | Some(Value::Null) => Value::Null,
         Some(v) => v.clone(),
     };
     let context_md: Value = if truthy(&feature) {
-        // path.join(root, 'docs', 'history', feature) — a non-string feature
-        // would throw in Node's path.join -> bail (Node re-run reproduces).
         let Value::String(feature_str) = &feature else {
             return Err(Ex::Bail);
         };
@@ -375,19 +439,22 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     } else {
         Value::Null
     };
-    let feature_arg = if truthy(&feature) { Some(feature.clone()) } else { None };
-    let ready_ids: Vec<Value> = ready_cells(ctx, feature_arg.as_ref())?
-        .iter()
-        .take(5)
-        .map(|c| vget(c, "id").cloned().unwrap_or(Value::Null))
-        .collect();
-    // D5: computed once, reused by both the report-only blocker below (mid-
-    // feature) and the `next` override further down (idle) — never two
-    // different reads of the same D4 scan.
+    let (ready_count, ready_ids): (usize, Vec<Value>) = if !pipeline.ok {
+        (0, Vec::new())
+    } else {
+        let feature_arg = if truthy(&feature) { Some(feature.clone()) } else { None };
+        let cells = ready_cells(ctx, feature_arg.as_ref())?;
+        let count = cells.len();
+        let ids = cells.iter().take(5).map(|c| vget(c, "id").cloned().unwrap_or(Value::Null)).collect();
+        (count, ids)
+    };
     let wayfinding_idle = pipeline_idle_for_wayfinding(&status);
     let wayfinding_frontier = first_frontier_effort(&status);
     let mut blockers: Vec<Value> = Vec::new();
     if let Some(line) = sweep_blocker {
+        blockers.push(json!(line));
+    }
+    if let Some(line) = lane_binding_blocker {
         blockers.push(json!(line));
     }
     if opt_truthy(status.get("handoff")) {
@@ -477,7 +544,11 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             }
         }
     }
-    let worktree = orient_worktree_context(ctx, &status)?;
+    let worktree = if !pipeline.ok {
+        None
+    } else {
+        orient_worktree_context(ctx, &status)?
+    };
 
     let mut packet = JMap::new();
     {
@@ -496,10 +567,6 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             "gate_bypass_level".into(),
             status.get("gate_bypass_level").cloned().unwrap_or(Value::Null),
         );
-        // D1 (awaiting-human): the structured mark beside the text blocker
-        // above — a reader that wants the subject/kind without parsing the
-        // blocker string reads it here, same additive shape `status` itself
-        // carries it in.
         where_.insert("waiting_on".into(), status.get("waiting_on").cloned().unwrap_or(Value::Null));
         packet.insert("where".into(), Value::Object(where_));
     }
@@ -532,12 +599,6 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     if let Some(worktree) = &worktree {
         packet.insert("worktree".into(), Value::Object(worktree.clone()));
     }
-    // expertise-principles D2: the routed principles, read from the SAME
-    // recorded route `orient_worktree_context` takes its lane from. The class
-    // filter lives in `crate::principles`, shared with the session preamble.
-    // The key is OMITTED when nothing matches — no recorded route, a class no
-    // row claims, or an absent index — so neither the JSON packet nor
-    // `render_orient_text` ever carries an empty header.
     {
         let class = match status.get("route") {
             Some(route) if truthy(route) => vget(route, "class").and_then(Value::as_str),
@@ -549,11 +610,6 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         }
     }
     {
-        // D5: idle + an open map with frontier tickets overrides the
-        // ORIENT_PHASE_SKILL lookup below deterministically — this is the
-        // hard resume path, not a suggestion competing with it.
-        // `pipeline_idle_for_wayfinding` already refuses while a handoff is
-        // pending, so the handoff rule always wins first.
         let wayfinding_resume = if wayfinding_idle { wayfinding_frontier.as_ref() } else { None };
         let mut next = JMap::new();
         if let Some((name, frontier)) = wayfinding_resume {
@@ -564,7 +620,6 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
                 )),
             );
             next.insert("skill".into(), json!("bee-wayfinding"));
-            next.insert("command".into(), json!("bee discovery list --json"));
         } else {
             next.insert(
                 "action".into(),
@@ -581,14 +636,55 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
                 })
                 .unwrap_or("bee-hive");
             next.insert("skill".into(), json!(skill));
-            let command = match &worktree {
-                Some(w) if str_eq(w.get("location"), "main") => {
-                    w.get("guidance").cloned().unwrap_or(Value::Null)
-                }
-                _ => orient_next_command(&status, &ready_ids),
-            };
-            next.insert("command".into(), command);
         }
+
+        let control_root = crate::hooks::session_preamble::control_root_for(&ctx.root);
+        let granted_id = match &worktree {
+            Some(w) if str_eq(w.get("location"), "main") => {
+                w.get("id").and_then(Value::as_str)
+            }
+            _ => None,
+        };
+        let caller = crate::session_identity::locate_caller();
+        let caller_runtime = caller.as_ref().map(|c| c.runtime.as_str());
+        let execution_gate_approved = status
+            .get("gates")
+            .and_then(|g| vget(g, "execution"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let feature_str = feature.as_str();
+
+        let facts = NextOpFacts {
+            wayfinding_resume: wayfinding_resume.is_some(),
+            handoff: opt_truthy(status.get("handoff")),
+            ready_count,
+            execution_gate_approved,
+            feature: feature_str,
+            granted_worktree_id: granted_id,
+            caller_runtime,
+            control_root: Some(&control_root),
+        };
+
+        let next_op = if pipeline.ok {
+            next_operation(&facts)
+        } else {
+            NextOperation {
+                command: None,
+                run_from: None,
+            }
+        };
+
+        next.insert(
+            "command".into(),
+            next_op.command.map(Value::String).unwrap_or(Value::Null),
+        );
+        next.insert(
+            "run_from".into(),
+            next_op
+                .run_from
+                .and_then(|p| p.to_str().map(|s| Value::String(s.to_string())))
+                .unwrap_or(Value::Null),
+        );
         packet.insert("next".into(), Value::Object(next));
     }
     Ok(packet)
@@ -679,6 +775,13 @@ pub(crate) fn render_orient_text(packet: &JMap) -> String {
     }
     lines.push(format!("skill: {}", tpl(vget(&next, "skill"))));
     lines.push(format!("next: {}", tpl(vget(&next, "action"))));
+    if !nullish(vget(&next, "command")) {
+        lines.push(format!(
+            "run: {} (from {})",
+            tpl(vget(&next, "command")),
+            tpl(vget(&next, "run_from"))
+        ));
+    }
     lines.join("\n")
 }
 
