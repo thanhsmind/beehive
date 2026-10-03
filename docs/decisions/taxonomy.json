@@ -636,6 +636,10 @@
     "contract:herded-cell-brief",
     "contract:pi-verdict-dispatch",
     "refusal",
-    "contract:refusal-runnable-fix"
+    "contract:refusal-runnable-fix",
+    "orient",
+    "next-op",
+    "prompt-context",
+    "contract:next-op-runnable"
   ]
 }
