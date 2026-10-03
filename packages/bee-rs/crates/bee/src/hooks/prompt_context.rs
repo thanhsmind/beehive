@@ -292,7 +292,8 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 
     // inject.mjs buildPromptReminder — fields + stableHash(sha1(JSON)).
     let triggers_due = crate::verbs::triggers::due_count_for_prompt(&control_root);
-    let (reminder_text, reminder_hash) = build_prompt_reminder(&record, triggers_due);
+    let (reminder_text, reminder_hash) =
+        build_prompt_reminder(&record, triggers_due, Some(root), Some(&control_root));
     let inject_key = match &session_id {
         Some(sid) => format!("prompt:{sid}"),
         None => "prompt".to_string(),
@@ -909,10 +910,53 @@ fn first_open_gate(record: &StateRecord) -> Option<&'static str> {
 /// inject.mjs buildPromptReminder → (text, stableHash). A non-zero
 /// `triggers_due` (predicate triggers only) adds one line and one hashed
 /// field; at zero the text and hash are the JS shape, byte for byte.
-fn build_prompt_reminder(record: &StateRecord, triggers_due: usize) -> (String, String) {
+fn build_prompt_reminder(
+    record: &StateRecord,
+    triggers_due: usize,
+    root: Option<&Path>,
+    control_root: Option<&Path>,
+) -> (String, String) {
     let mode = nullish_or_null(Some(&record.mode));
     let next_action = nullish_or_null(Some(&record.next_action));
     let gate = first_open_gate(record);
+
+    let feature_str = match &record.feature {
+        Value::String(s) if !s.trim().is_empty() => Some(s.trim()),
+        _ => None,
+    };
+    let execution_gate_approved = matches!(record.gates.get("execution"), Some(Value::Bool(true)));
+    let is_main = root.is_none() || root == control_root;
+    let granted_worktree_id = if is_main {
+        feature_str
+            .and_then(|f| {
+                control_root.and_then(|cr| crate::verbs::status_full::find_granted_worktree_for_feature(cr, f))
+            })
+            .map(|(id, _)| id)
+    } else {
+        None
+    };
+    let ready_count = if execution_gate_approved {
+        feature_str
+            .and_then(|f| control_root.and_then(|cr| crate::verbs::cells::ready_cells(cr, Some(f)).ok()))
+            .map(|cells| cells.len())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let caller = crate::session_identity::locate_caller();
+    let caller_runtime = caller.as_ref().map(|c| c.runtime.as_str());
+
+    let facts = crate::verbs::status_full::NextOpFacts {
+        wayfinding_resume: false,
+        handoff: false,
+        ready_count,
+        execution_gate_approved,
+        feature: feature_str,
+        granted_worktree_id: granted_worktree_id.as_deref(),
+        caller_runtime,
+        control_root,
+    };
+    let next_op = crate::verbs::status_full::next_operation(&facts);
 
     let mut fields = Map::new();
     fields.insert("phase".into(), record.phase.clone());
@@ -924,6 +968,9 @@ fn build_prompt_reminder(record: &StateRecord, triggers_due: usize) -> (String, 
     );
     if triggers_due > 0 {
         fields.insert("triggers_due".into(), Value::from(triggers_due as u64));
+    }
+    if let Some(cmd) = &next_op.command {
+        fields.insert("command".into(), Value::String(cmd.clone()));
     }
     let hash = sha1_hex(&jsjson::stringify(&Value::Object(fields)));
 
@@ -939,13 +986,21 @@ fn build_prompt_reminder(record: &StateRecord, triggers_due: usize) -> (String, 
     if js_truthy(&next_action) {
         lines.push(format!("next: {}", jsjson::js_to_string(&next_action)));
     }
+    if let Some(cmd) = &next_op.command {
+        let run_from = next_op
+            .run_from
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        lines.push(format!("run: {cmd} (from {run_from})"));
+    }
     if let Some(g) = gate {
         lines.push(format!("gate pending: {g}"));
     }
     if triggers_due > 0 {
         lines.push(format!("triggers due: {triggers_due} — bee triggers list --due"));
     }
-    lines.truncate(4);
+    lines.truncate(5);
     (lines.join("\n"), hash)
 }
 
@@ -2061,7 +2116,7 @@ mod tests {
             r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":false,"review":false}}"#,
         );
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, hash) = build_prompt_reminder(&record, 0);
+        let (text, hash) = build_prompt_reminder(&record, 0, None, None);
         assert_eq!(text, "bee: phase=swarming mode=standard\nnext: do x\ngate pending: execution");
         // stableHash = sha1(JSON.stringify({phase, mode, next_action, first_open_gate}))
         let expected = sha1_hex(
@@ -2076,7 +2131,7 @@ mod tests {
         bee_repo(tmp.path());
         // Missing state.json → defaultState(): idle, default next_action.
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, _) = build_prompt_reminder(&record, 0);
+        let (text, _) = build_prompt_reminder(&record, 0, None, None);
         assert_eq!(text, "bee: phase=idle\nnext: No active bee work — awaiting a user request.");
     }
 
@@ -2107,7 +2162,7 @@ mod tests {
         let p = plan_for(tmp.path());
         assert_eq!(p.reminder_text, format!("{IDLE_TEXT}\ntriggers due: 1 — bee triggers list --due"));
         let record = read_state(tmp.path()).ok().unwrap();
-        assert_ne!(p.reminder_hash, build_prompt_reminder(&record, 0).1, "a changed N must re-inject");
+        assert_ne!(p.reminder_hash, build_prompt_reminder(&record, 0, None, None).1, "a changed N must re-inject");
     }
 
     #[test]
@@ -2120,7 +2175,7 @@ mod tests {
             r#"{"phase":"swarming","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true}}"#,
         );
         let record = read_state(tmp.path()).ok().unwrap();
-        let (text, _) = build_prompt_reminder(&record, 2);
+        let (text, _) = build_prompt_reminder(&record, 2, None, None);
         assert_eq!(text.lines().count(), 4);
         assert_eq!(text.lines().last(), Some("triggers due: 2 — bee triggers list --due"));
     }
@@ -2143,6 +2198,117 @@ mod tests {
             r#"{"phase":"idle","mode":null,"next_action":"No active bee work — awaiting a user request.","first_open_gate":null}"#,
         );
         assert_eq!(p.reminder_hash, expected);
+    }
+
+    fn session_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn with_session_env<T>(claude: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = session_env_lock();
+        let prev_claude = std::env::var_os("CLAUDE_CODE_SESSION_ID");
+        // SAFETY: serialized by session_env_lock
+        unsafe {
+            match claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        let res = f();
+        // SAFETY: serialized by session_env_lock
+        unsafe {
+            match prev_claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        res
+    }
+
+    #[test]
+    fn record_with_ready_cells_under_approved_execution_gate_yields_run_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":true,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, hash) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 0, Some(tmp.path()), Some(tmp.path()))
+        });
+        let expected_cmd = "bee dispatch wave --runtime claude --feature f1 --json";
+        let expected_run = format!("run: {expected_cmd} (from {})", tmp.path().display());
+        assert!(text.contains(&expected_run));
+        let expected_hash = sha1_hex(&jsjson::stringify(&json!({
+            "phase": "swarming",
+            "mode": "standard",
+            "next_action": "do x",
+            "first_open_gate": Value::Null,
+            "command": expected_cmd,
+        })));
+        assert_eq!(hash, expected_hash);
+    }
+
+    #[test]
+    fn record_with_nothing_to_run_yields_no_run_line_and_same_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":false,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, hash) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 0, Some(tmp.path()), Some(tmp.path()))
+        });
+        assert!(!text.contains("run:"));
+        let expected_hash = sha1_hex(
+            r#"{"phase":"swarming","mode":"standard","next_action":"do x","first_open_gate":"execution"}"#,
+        );
+        assert_eq!(hash, expected_hash);
+    }
+
+    #[test]
+    fn with_run_line_gate_pending_and_triggers_due_still_print() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/state.json",
+            r#"{"phase":"reviewing","feature":"f1","mode":"standard","next_action":"do x","approved_gates":{"context":true,"shape":true,"execution":true,"review":false}}"#,
+        );
+        write(
+            tmp.path(),
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","deps":[]}"#,
+        );
+        let record = read_state(tmp.path()).ok().unwrap();
+        let (text, _) = with_session_env(Some("claude-test"), || {
+            build_prompt_reminder(&record, 2, Some(tmp.path()), Some(tmp.path()))
+        });
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[0], "bee: phase=reviewing mode=standard");
+        assert_eq!(lines[1], "next: do x");
+        assert!(lines[2].starts_with("run: bee dispatch wave"));
+        assert_eq!(lines[3], "gate pending: review");
+        assert_eq!(lines[4], "triggers due: 2 — bee triggers list --due");
     }
 
     #[test]
