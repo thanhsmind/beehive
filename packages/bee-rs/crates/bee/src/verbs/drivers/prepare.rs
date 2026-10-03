@@ -1090,6 +1090,7 @@ pub(crate) fn prompt_body_for(
     // pi-stage-dispatch D5: the `hat-*` seat this non-cell dispatch runs
     // as, `None` for every other role. Only the advisor template reads it.
     seat: Option<&str>,
+    is_herding: bool,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -1140,6 +1141,9 @@ pub(crate) fn prompt_body_for(
     // then nothing — never the `default` key.
     let original_request =
         original_request_block(root, if feature.is_empty() { None } else { Some(&feature) });
+    let native_bookkeeping = if is_herding { "" } else { "1" };
+    let herding = if is_herding { "1" } else { "" };
+    let native_worktree_check = if !is_herding && !worktree_root.is_empty() { "1" } else { "" };
     Ok(render(
         &template,
         &[
@@ -1154,6 +1158,9 @@ pub(crate) fn prompt_body_for(
             ("worktree_root", worktree_root),
             ("control_root", control_root),
             ("original_request", &original_request),
+            ("native_bookkeeping", native_bookkeeping),
+            ("herding", herding),
+            ("native_worktree_check", native_worktree_check),
         ],
     ))
 }
@@ -2302,6 +2309,7 @@ pub(crate) fn prepare_dispatch_wire(
         .flatten()
         .filter(|seat| seat.starts_with("hat-"));
 
+    let is_herding = matches!(resolved, Resolved::Herding { .. });
     let prompt_body = match prompt_body_for(
         root,
         kind,
@@ -2314,6 +2322,7 @@ pub(crate) fn prepare_dispatch_wire(
         purpose,
         lane_feature.as_deref(),
         hat_seat,
+        is_herding,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -2354,6 +2363,8 @@ pub(crate) fn prepare_dispatch_wire(
             .and_then(|v| v.release_version.as_deref())
             .unwrap_or_default();
         deployment_prompt(ver)
+    } else if kind == "cell" && is_herding {
+        prompt_body.clone()
     } else {
         match embedded_agent_body(pinned_type) {
             Some(body) => format!("{body}\n\n{prompt_body}"),
