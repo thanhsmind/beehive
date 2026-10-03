@@ -203,6 +203,9 @@ struct Options {
     /// `--no-pane` / `--runner no-pane`: run the worker as a direct child
     /// process instead of splitting a tmux pane (pnsd-2, D11).
     pub(crate) no_pane: bool,
+    pub(crate) question_of: Option<String>,
+    pub(crate) question_round: u32,
+    pub(crate) allow_question: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -303,6 +306,9 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut seat: Option<&str> = None;
     let mut inbox_session: Option<&str> = None;
     let mut no_pane = false;
+    let mut question_of: Option<&str> = None;
+    let mut question_round: u32 = 0;
+    let mut allow_question = true;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -390,6 +396,20 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 }
                 i += 2;
             }
+            "--question-of" => {
+                question_of = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--question-round" => {
+                if let Some(n) = flags.get(i + 1).and_then(|s| s.parse().ok()) {
+                    question_round = n;
+                }
+                i += 2;
+            }
+            "--no-question" => {
+                allow_question = false;
+                i += 1;
+            }
             _ => i += 1,
         }
     }
@@ -441,6 +461,9 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         inbox_session: inbox_session.map(str::to_string),
         pane_env_passthrough: resolve_pane_env_passthrough_from(|k| std::env::var(k).ok()),
         no_pane,
+        question_of: question_of.map(str::to_string),
+        question_round,
+        allow_question,
     })
 }
 
@@ -2459,6 +2482,74 @@ fn wait_for_round_driven(
     )
 }
 
+fn resolve_leader_session() -> Option<String> {
+    resolve_leader_session_from(|k| std::env::var(k).ok())
+}
+
+fn resolve_leader_session_from<F>(get_env: F) -> Option<String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let get_clean = |key: &str| {
+        get_env(key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    get_clean("BEE_SESSION_ID")
+        .or_else(|| get_clean("CLAUDE_CODE_SESSION_ID"))
+        .or_else(|| get_clean("PI_SESSION_ID"))
+}
+
+fn is_broker_running(main_root: &Path) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    is_broker_running_at(main_root, now)
+}
+
+fn is_broker_running_at(main_root: &Path, now_epoch_secs: i64) -> bool {
+    let heartbeat_path = main_root.join(".bee").join("supervisor").join("broker-heartbeat.json");
+    let content = match std::fs::read_to_string(&heartbeat_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let val: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let ts_val = match val.get("ts") {
+        Some(v) => v,
+        None => return false,
+    };
+    let ts_epoch_secs = if let Some(s) = ts_val.as_str() {
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+            dt.timestamp()
+        } else if let Ok(n) = s.parse::<i64>() {
+            if n > 1_000_000_000_000 {
+                n / 1000
+            } else {
+                n
+            }
+        } else {
+            return false;
+        }
+    } else if let Some(n) = ts_val.as_i64() {
+        if n > 1_000_000_000_000 {
+            n / 1000
+        } else {
+            n
+        }
+    } else if let Some(f) = ts_val.as_f64() {
+        if f > 1_000_000_000_000.0 {
+            (f / 1000.0) as i64
+        } else {
+            f as i64
+        }
+    } else {
+        return false;
+    };
+    let age = now_epoch_secs - ts_epoch_secs;
+    age <= 90 && age >= -5
+}
+
 /// A fresh spawn: split a pane off the caller's own, `agent start` into it,
 /// then wait for round 1.
 fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
@@ -2474,6 +2565,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         expertise: &opts.expertise,
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
+        allow_question: opts.allow_question,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -2487,6 +2579,14 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         "close_always": opts.close_always,
         "created_at": chrono::Utc::now().to_rfc3339(),
         "expertise": opts.expertise,
+        "agent": opts.agent,
+        "seat": opts.seat,
+        "cell_id": opts.cell_id,
+        "no_pane": opts.no_pane,
+        "inbox_session": opts.inbox_session,
+        "leader_session": resolve_leader_session(),
+        "question_of": opts.question_of,
+        "question_round": opts.question_round,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -2918,6 +3018,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         expertise: &opts.expertise,
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
+        allow_question: opts.allow_question,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -2931,6 +3032,14 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         "close_always": opts.close_always,
         "created_at": chrono::Utc::now().to_rfc3339(),
         "expertise": opts.expertise,
+        "agent": opts.agent,
+        "seat": opts.seat,
+        "cell_id": opts.cell_id,
+        "no_pane": opts.no_pane,
+        "inbox_session": opts.inbox_session,
+        "leader_session": resolve_leader_session(),
+        "question_of": opts.question_of,
+        "question_round": opts.question_round,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3112,6 +3221,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         dissent: None,
         report_path: Some(report_path.display().to_string()),
         report_note: None,
+        question: None,
     };
 
     let res_value = serde_json::json!({
@@ -3367,6 +3477,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         expertise: &expertise,
         nickname: &opts.nickname,
         cell_id: opts.cell_id.as_deref(),
+        allow_question: opts.allow_question,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -3506,6 +3617,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::Result(r) => match r.status {
             MailboxStatus::Done => "done",
             MailboxStatus::Blocked => "blocked",
+            MailboxStatus::Question => "question",
         },
         RunOutcome::Malformed { .. } => "malformed_result",
         RunOutcome::TimedOutIdle(_) => "timed_out_idle",
@@ -3761,7 +3873,9 @@ fn result_envelope(
                 "files_changed".into(),
                 Value::Array(r.files_changed.iter().cloned().map(Value::String).collect()),
             );
-            m.insert("proof".into(), Value::String(r.proof.clone()));
+            if !r.proof.is_empty() || r.status != MailboxStatus::Question {
+                m.insert("proof".into(), Value::String(r.proof.clone()));
+            }
             if let Some(git) = git_block(&opts.cwd, &opts.main_root) {
                 m.insert("git".into(), git);
             }
@@ -3787,6 +3901,21 @@ fn result_envelope(
             }
             if let Some(leaning) = &r.leaning {
                 m.insert("leaning".into(), Value::String(leaning.clone()));
+            }
+            if let Some(q) = &r.question {
+                let mut qm = Map::new();
+                qm.insert("text".into(), Value::String(q.text.clone()));
+                qm.insert("kind".into(), Value::String(q.kind.clone()));
+                m.insert("question".into(), Value::Object(qm));
+            }
+            if r.status == MailboxStatus::Question {
+                m.insert("broker_running".into(), Value::Bool(is_broker_running(&opts.main_root)));
+                m.insert(
+                    "next".into(),
+                    Value::String(
+                        "the broker owns the job and the final result arrives as a new job".to_string(),
+                    ),
+                );
             }
             // slp-followup-gaps D5: a carried dissent ALWAYS rides the
             // envelope — on the happy path so the orchestrator sees what was
@@ -3871,6 +4000,11 @@ fn emit_result(opts: &Options, result: &ExecResult, transport: &str, dissent: Op
             outcome_label(&result.outcome),
             if result.closed_pane { " (pane closed)" } else { "" }
         );
+        if let RunOutcome::Result(r) = &result.outcome {
+            if r.status == MailboxStatus::Question {
+                println!("next: the broker owns the job and the final result arrives as a new job");
+            }
+        }
     }
 }
 
@@ -5554,6 +5688,9 @@ mod tests {
             pane_env_passthrough: BTreeMap::new(),
             caller_is_worker: false,
             no_pane: false,
+            question_of: None,
+            question_round: 0,
+            allow_question: true,
         }
     }
 
@@ -5634,6 +5771,9 @@ mod tests {
             pane_env_passthrough: BTreeMap::new(),
             caller_is_worker: false,
             no_pane: false,
+            question_of: None,
+            question_round: 0,
+            allow_question: true,
         }
     }
 
@@ -7053,6 +7193,7 @@ mod tests {
                 dissent: None,
                 report_path: None,
                 report_note: None,
+                question: None,
             }),
             RunOutcome::Interrupted,
             RunOutcome::Cancelled,
@@ -7090,6 +7231,7 @@ mod tests {
                 dissent: None,
                 report_path: None,
                 report_note: None,
+                question: None,
             }),
             pane_id: None,
             closed_pane: true,
@@ -9271,6 +9413,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                question: None,
             }),
             pane_id: Some("p1".to_string()),
             closed_pane: true,
@@ -9294,6 +9437,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                question: None,
             }),
             pane_id: Some("p1".to_string()),
             closed_pane: false,
@@ -9326,6 +9470,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                question: None,
             }),
             pane_id: None,
             closed_pane: false,
@@ -9966,6 +10111,7 @@ mod tests {
             dissent: None,
             report_path: None,
             report_note: None,
+            question: None,
         })
     }
 
@@ -10013,6 +10159,7 @@ mod tests {
             dissent: None,
             report_path: None,
             report_note: None,
+            question: None,
         });
 
         // Cap check proceeds (does not refuse); exit_code_for handles the blocked outcome
@@ -10081,6 +10228,196 @@ mod tests {
             postflight_cap_check(main_root, Some("cell-1"), &RunOutcome::DryRun("brief".to_string())),
             PostflightCapAction::Proceed
         );
+    }
+
+    #[test]
+    fn parse_options_question_flags() {
+        let flags = [
+            "--job-id", "job-1",
+            "--task", "do work",
+            "--question-of", "job-parent",
+            "--question-round", "3",
+            "--no-question",
+        ];
+        let opts = parse_options(&flags).expect("parse flags");
+        assert_eq!(opts.question_of.as_deref(), Some("job-parent"));
+        assert_eq!(opts.question_round, 3);
+        assert!(!opts.allow_question);
+
+        let default_flags = ["--job-id", "job-2", "--task", "do work"];
+        let default_opts = parse_options(&default_flags).expect("parse flags");
+        assert_eq!(default_opts.question_of, None);
+        assert_eq!(default_opts.question_round, 0);
+        assert!(default_opts.allow_question);
+    }
+
+    #[test]
+    fn resolve_leader_session_precedence() {
+        let map = std::collections::HashMap::from([
+            ("BEE_SESSION_ID", "bee-1"),
+            ("CLAUDE_CODE_SESSION_ID", "claude-1"),
+            ("PI_SESSION_ID", "pi-1"),
+        ]);
+        assert_eq!(
+            resolve_leader_session_from(|k| map.get(k).map(|s| s.to_string())),
+            Some("bee-1".to_string())
+        );
+
+        let map_no_bee = std::collections::HashMap::from([
+            ("BEE_SESSION_ID", "   "),
+            ("CLAUDE_CODE_SESSION_ID", "claude-1"),
+            ("PI_SESSION_ID", "pi-1"),
+        ]);
+        assert_eq!(
+            resolve_leader_session_from(|k| map_no_bee.get(k).map(|s| s.to_string())),
+            Some("claude-1".to_string())
+        );
+
+        let map_pi_only = std::collections::HashMap::from([
+            ("PI_SESSION_ID", "pi-1"),
+        ]);
+        assert_eq!(
+            resolve_leader_session_from(|k| map_pi_only.get(k).map(|s| s.to_string())),
+            Some("pi-1".to_string())
+        );
+
+        assert_eq!(
+            resolve_leader_session_from(|_| None),
+            None
+        );
+    }
+
+    #[test]
+    fn is_broker_running_heartbeat_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        assert!(!is_broker_running_at(main_root, 1000));
+
+        let sup_dir = main_root.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&sup_dir).unwrap();
+        let hb_path = sup_dir.join("broker-heartbeat.json");
+
+        std::fs::write(&hb_path, r#"{"ts": 950}"#).unwrap();
+        assert!(is_broker_running_at(main_root, 1000));
+
+        std::fs::write(&hb_path, r#"{"ts": 909}"#).unwrap();
+        assert!(!is_broker_running_at(main_root, 1000));
+
+        std::fs::write(&hb_path, r#"{"ts": "2026-10-03T12:00:00Z"}"#).unwrap();
+        let now_epoch = chrono::DateTime::parse_from_rfc3339("2026-10-03T12:01:00Z").unwrap().timestamp();
+        assert!(is_broker_running_at(main_root, now_epoch));
+
+        let stale_epoch = chrono::DateTime::parse_from_rfc3339("2026-10-03T12:02:00Z").unwrap().timestamp();
+        assert!(!is_broker_running_at(main_root, stale_epoch));
+    }
+
+    #[test]
+    fn result_envelope_carries_question_and_broker_running_and_next() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.job_id = "job-question-1".to_string();
+
+        let sup_dir = main_root.join(".bee").join("supervisor");
+        std::fs::create_dir_all(&sup_dir).unwrap();
+        let now_str = chrono::Utc::now().to_rfc3339();
+        std::fs::write(sup_dir.join("broker-heartbeat.json"), format!(r#"{{"ts":"{now_str}"}}"#)).unwrap();
+
+        let question_res = ExecResult {
+            outcome: RunOutcome::Result(MailboxResult {
+                round: 1,
+                status: MailboxStatus::Question,
+                summary: "need assistance".to_string(),
+                files_changed: vec!["foo.rs".to_string()],
+                proof: "".to_string(),
+                options: vec![],
+                leaning: None,
+                dissent: None,
+                report_path: None,
+                report_note: None,
+                question: Some(mailbox::MailboxQuestion {
+                    text: "what is the policy?".to_string(),
+                    kind: "technical".to_string(),
+                }),
+            }),
+            pane_id: None,
+            closed_pane: false,
+        };
+
+        let env = result_envelope(&opts, &question_res, "herdr", None);
+        assert_eq!(env.get("outcome").and_then(Value::as_str), Some("question"));
+        assert_eq!(
+            env.get("question").and_then(|q| q.get("text")).and_then(Value::as_str),
+            Some("what is the policy?")
+        );
+        assert_eq!(
+            env.get("question").and_then(|q| q.get("kind")).and_then(Value::as_str),
+            Some("technical")
+        );
+        assert_eq!(env.get("broker_running").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            env.get("next").and_then(Value::as_str),
+            Some("the broker owns the job and the final result arrives as a new job")
+        );
+        assert!(env.get("proof").is_none());
+    }
+
+    #[test]
+    fn execute_records_question_and_session_facts_to_job_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, true);
+        opts.job_id = "job-pane-facts".to_string();
+        opts.agent = Some("agent-alpha".to_string());
+        opts.seat = Some("seat-beta".to_string());
+        opts.cell_id = Some("cell-gamma".to_string());
+        opts.no_pane = false;
+        opts.inbox_session = Some("sess-delta".to_string());
+        opts.question_of = Some("job-parent".to_string());
+        opts.question_round = 2;
+
+        let res = execute_new(&opts, &PanicHerdr);
+        assert!(matches!(res.outcome, RunOutcome::DryRun(_)));
+
+        let job_json_path = mailbox::job_path(&main_root.join(".bee"), &opts.job_id);
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(job_json_path).unwrap()).unwrap();
+        assert_eq!(job_data.get("agent").and_then(Value::as_str), Some("agent-alpha"));
+        assert_eq!(job_data.get("seat").and_then(Value::as_str), Some("seat-beta"));
+        assert_eq!(job_data.get("cell_id").and_then(Value::as_str), Some("cell-gamma"));
+        assert_eq!(job_data.get("no_pane").and_then(Value::as_bool), Some(false));
+        assert_eq!(job_data.get("inbox_session").and_then(Value::as_str), Some("sess-delta"));
+        assert!(job_data.get("leader_session").is_some());
+        assert_eq!(job_data.get("question_of").and_then(Value::as_str), Some("job-parent"));
+        assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
+    }
+
+    #[test]
+    fn execute_no_pane_records_question_and_session_facts_to_job_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, true);
+        opts.job_id = "job-nopane-facts".to_string();
+        opts.agent = Some("agent-alpha".to_string());
+        opts.seat = Some("seat-beta".to_string());
+        opts.cell_id = Some("cell-gamma".to_string());
+        opts.no_pane = true;
+        opts.inbox_session = Some("sess-delta".to_string());
+        opts.question_of = Some("job-parent".to_string());
+        opts.question_round = 2;
+
+        let res = execute_no_pane(&opts);
+        assert!(matches!(res.outcome, RunOutcome::DryRun(_)));
+
+        let job_json_path = mailbox::job_path(&main_root.join(".bee"), &opts.job_id);
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(job_json_path).unwrap()).unwrap();
+        assert_eq!(job_data.get("agent").and_then(Value::as_str), Some("agent-alpha"));
+        assert_eq!(job_data.get("seat").and_then(Value::as_str), Some("seat-beta"));
+        assert_eq!(job_data.get("cell_id").and_then(Value::as_str), Some("cell-gamma"));
+        assert_eq!(job_data.get("no_pane").and_then(Value::as_bool), Some(true));
+        assert_eq!(job_data.get("inbox_session").and_then(Value::as_str), Some("sess-delta"));
+        assert!(job_data.get("leader_session").is_some());
+        assert_eq!(job_data.get("question_of").and_then(Value::as_str), Some("job-parent"));
+        assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
     }
 }
 

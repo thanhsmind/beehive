@@ -272,6 +272,7 @@ pub(crate) struct BriefSpec<'a> {
     /// omitted from the ack schema entirely when `None`, never rendered as
     /// a null.
     pub cell_id: Option<&'a str>,
+    pub allow_question: bool,
 }
 
 /// Render the full worker-facing prompt: task text, absolute paths, file
@@ -338,6 +339,25 @@ and expected — they do not pull you into any workflow.\n\n",
     if let Some(cmd) = proof_command {
         proof_command_block.push_str(&format!("# Proof command\n\n{cmd}\n\n"));
     }
+
+    let question_section = if spec.allow_question {
+        format!(
+            "# Questions\n\n\
+When you cannot go on without an answer, you may end the round with status\n\
+question and one question. You must first write your partial work to the\n\
+report before writing the result file:\n\n\
+{{\n\
+  \"status\": \"question\",\n\
+  \"summary\": \"<one line: what is needed>\",\n\
+  \"files_changed\": [\"<path>\", \"...\"],\n\
+  \"question\": {{ \"text\": \"<what you need to know>\", \"kind\": \"technical\" | \"product\" | \"gate\" }},\n\
+  \"report_path\": \"{report_file}\"\n\
+}}\n\n",
+            report_file = report_file.display(),
+        )
+    } else {
+        String::new()
+    };
 
     format!(
         "# Before any other step — write your delivery ack\n\n\
@@ -423,6 +443,7 @@ is wrong with it, \"alternative\" says what you would do instead, and \
 \"severity\" is \"blocker\" when the work should stop until someone answers or \
 \"consider\" when it should not; leave \"dissent\" out entirely when you agree \
 with the task.\n\n\
+{question_section}\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
 then RENAME the temp file onto the result file's exact final name. Never write\n\
@@ -449,6 +470,7 @@ signal; nothing else is read to decide whether you finished.\n\n\
         report_tmp_name = report_tmp_name,
         report_file = report_file.display(),
         expertise_clause = expertise_clause,
+        question_section = question_section,
     )
 }
 
@@ -527,13 +549,15 @@ pub(crate) struct MailboxResult {
     /// FACT, so only the resolving reader can write one. Never a silent
     /// drop and never a silent attach.
     pub report_note: Option<String>,
+    pub question: Option<MailboxQuestion>,
 }
 
-/// One carried dissent — the three fields `record_dissent` needs, and
-/// nothing else. `severity` is a PLAIN STRING here on purpose (D4): the
-/// closed set (`blocker` / `consider`) is checked by `record_dissent` alone,
-/// and a second copy of a closed set is the drift a boundary listed twice
-/// always earns.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct MailboxQuestion {
+    pub text: String,
+    pub kind: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MailboxDissent {
     pub claim: String,
@@ -545,22 +569,17 @@ pub(crate) struct MailboxDissent {
 pub(crate) enum MailboxStatus {
     Done,
     Blocked,
+    Question,
 }
 
-/// Every way reading a mailbox result can fail — missing or malformed is
-/// always a typed error, never a silent green.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MailboxError {
-    /// No entry matching `result-N.json` exists in the given listing.
     NoResultFile,
-    /// The file at the given round is not valid JSON.
     NotJson { round: u32, detail: String },
-    /// The parsed JSON is not an object.
     NotAnObject { round: u32 },
-    /// A required field is absent or the wrong type.
     MissingField { round: u32, field: &'static str },
-    /// `status` is present but not `"done"` or `"blocked"`.
     InvalidStatus { round: u32, value: String },
+    InvalidQuestion { round: u32, detail: String },
 }
 
 impl std::fmt::Display for MailboxError {
@@ -581,6 +600,9 @@ impl std::fmt::Display for MailboxError {
                     f,
                     "result-{round}.json has invalid status \"{value}\" (want \"done\" or \"blocked\")"
                 )
+            }
+            MailboxError::InvalidQuestion { round, detail } => {
+                write!(f, "result-{round}.json has invalid question: {detail}")
             }
         }
     }
@@ -658,9 +680,42 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .get("status")
         .and_then(Value::as_str)
         .ok_or(MailboxError::MissingField { round, field: "status" })?;
-    let status = match status_str {
-        "done" => MailboxStatus::Done,
-        "blocked" => MailboxStatus::Blocked,
+    let (status, question) = match status_str {
+        "done" => (MailboxStatus::Done, None),
+        "blocked" => (MailboxStatus::Blocked, None),
+        "question" => {
+            let q_obj = obj
+                .get("question")
+                .and_then(Value::as_object)
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "missing or non-object question field".to_string(),
+                })?;
+            let text = q_obj
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "question text must be a non-empty string".to_string(),
+                })?
+                .to_string();
+            let kind = q_obj
+                .get("kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| MailboxError::InvalidQuestion {
+                    round,
+                    detail: "question kind must be technical, product, or gate".to_string(),
+                })?;
+            if kind != "technical" && kind != "product" && kind != "gate" {
+                return Err(MailboxError::InvalidQuestion {
+                    round,
+                    detail: format!("unknown question kind \"{kind}\" (want technical, product, or gate)"),
+                });
+            }
+            (MailboxStatus::Question, Some(MailboxQuestion { text, kind: kind.to_string() }))
+        }
         other => return Err(MailboxError::InvalidStatus { round, value: other.to_string() }),
     };
 
@@ -679,11 +734,11 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         .map(|v| v.as_str().unwrap_or_default().to_string())
         .collect();
 
-    let proof = obj
-        .get("proof")
-        .and_then(Value::as_str)
-        .ok_or(MailboxError::MissingField { round, field: "proof" })?
-        .to_string();
+    let proof = match obj.get("proof").and_then(Value::as_str) {
+        Some(p) => p.to_string(),
+        None if status == MailboxStatus::Question => String::new(),
+        None => return Err(MailboxError::MissingField { round, field: "proof" }),
+    };
 
     // StopAndAsk: both fields are OPTIONAL and never checked for membership —
     // absent, wrong-typed, or a leaning matching no option all parse, exactly
@@ -724,6 +779,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         dissent,
         report_path,
         report_note: None,
+        question,
     })
 }
 
@@ -974,6 +1030,7 @@ mod tests {
             expertise: &[],
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         }
     }
 
@@ -1325,6 +1382,7 @@ the report file's exact final name"),
             expertise: &expertise,
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         };
         let text = render_brief(&spec);
 
@@ -1358,6 +1416,7 @@ the report file's exact final name"),
             expertise: &[],
             nickname: "w-job-42",
             cell_id: None,
+            allow_question: true,
         };
         let text = render_brief(&spec_no_exp);
         assert!(!text.contains("# Expertise"));
@@ -1705,6 +1764,82 @@ the report file's exact final name"),
         let err = MailboxError::MissingField { round: 9, field: "proof" };
         assert!(err.to_string().contains("result-9.json"));
         assert!(err.to_string().contains("proof"));
+    }
+
+    #[test]
+    fn parse_result_text_accepts_status_question_with_valid_question() {
+        let text = r#"{"status":"question","summary":"need clarification","files_changed":["a.rs"],"question":{"text":"what API to use?","kind":"technical"}}"#;
+        let result = parse_result_text(1, text).expect("valid question result should parse");
+        assert_eq!(result.status, MailboxStatus::Question);
+        assert_eq!(result.summary, "need clarification");
+        assert_eq!(result.files_changed, vec!["a.rs".to_string()]);
+        assert_eq!(
+            result.question,
+            Some(MailboxQuestion {
+                text: "what API to use?".to_string(),
+                kind: "technical".to_string(),
+            })
+        );
+        assert!(result.proof.is_empty());
+    }
+
+    #[test]
+    fn parse_result_text_accepts_question_with_proof() {
+        let text = r#"{"status":"question","summary":"need clarification","files_changed":[],"proof":"cargo check — green","question":{"text":"gate or product?","kind":"gate"}}"#;
+        let result = parse_result_text(1, text).expect("question with proof should parse");
+        assert_eq!(result.status, MailboxStatus::Question);
+        assert_eq!(result.proof, "cargo check — green");
+        assert_eq!(
+            result.question,
+            Some(MailboxQuestion {
+                text: "gate or product?".to_string(),
+                kind: "gate".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_result_text_refuses_done_result_with_no_proof() {
+        let text = r#"{"status":"done","summary":"all good","files_changed":[]}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert_eq!(err, MailboxError::MissingField { round: 1, field: "proof" });
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_missing_question_object() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[]}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_empty_text() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[],"question":{"text":"   ","kind":"technical"}}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn parse_result_text_refuses_question_with_unknown_kind() {
+        let text = r#"{"status":"question","summary":"need help","files_changed":[],"question":{"text":"which one?","kind":"unknown"}}"#;
+        let err = parse_result_text(1, text).unwrap_err();
+        assert!(matches!(err, MailboxError::InvalidQuestion { round: 1, .. }));
+    }
+
+    #[test]
+    fn render_brief_offers_question_status_by_default_and_omits_under_no_question() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let mut spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        spec.allow_question = true;
+        let text = render_brief(&spec);
+        assert!(text.contains("status question") || text.contains("\"question\""));
+
+        spec.allow_question = false;
+        let text_no_q = render_brief(&spec);
+        assert!(!text_no_q.contains("# Questions"));
+        assert!(!text_no_q.contains("\"question\""));
     }
 
     // ── activity record (herding-activity-hook D2/D3) ────────────────────
