@@ -10987,6 +10987,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert_eq!(ref_replay.get("reason"), Some(&json!("deploy_authorization_consumed")));
         let fix_replay = ref_replay.get("fix").and_then(Value::as_str).unwrap();
         assert!(fix_replay.contains("bee dispatch prepare --runtime"));
+        assert!(fix_replay.contains("--role deploy"));
         assert!(fix_replay.contains("--release-version 2.39.0"));
     }
 
@@ -11215,6 +11216,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert_eq!(err_stale.get("reason"), Some(&json!("deploy_authorization_stale")));
         let fix_stale = err_stale.get("fix").and_then(Value::as_str).unwrap();
         assert!(fix_stale.contains("bee dispatch prepare --runtime"));
+        assert!(fix_stale.contains("--role deploy"));
         assert!(fix_stale.contains("--release-version 2.40.0"));
 
         // 4. Malformed expiry (invalid RFC3339 in expires_at)

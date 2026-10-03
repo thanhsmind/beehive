@@ -4229,7 +4229,7 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert(
             "fix".into(),
             Value::String(format!(
-                "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --stage deployment --feature <feature> --release-version {release_version} --json"
+                "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
             )),
         );
         return Err(Value::Object(r));
@@ -4365,7 +4365,7 @@ pub(crate) fn authorize_dispatch_permit(
         r.insert(
             "fix".into(),
             Value::String(format!(
-                "dispatch authorization expired (> 2 hours old); dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --stage deployment --feature <feature> --release-version {release_version} --json"
+                "dispatch authorization expired (> 2 hours old); dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
             )),
         );
         return Err(Value::Object(r));
@@ -4585,7 +4585,7 @@ pub(crate) fn authorize_dispatch_permit(
             r.insert(
                 "fix".into(),
                 Value::String(format!(
-                    "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --stage deployment --feature <feature> --release-version {release_version} --json"
+                    "this dispatch authorization has already been consumed; dispatch a new deployment run: bee dispatch prepare --runtime <runtime> --kind gather --feature <feature> --stage deployment --role deploy --release-version {release_version} --json"
                 )),
             );
             return Err(Value::Object(r));
