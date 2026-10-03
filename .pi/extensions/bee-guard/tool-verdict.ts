@@ -1,4 +1,4 @@
-import { readdirSync, renameSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { candidateRoots, isDirectory, mainCheckoutRoot } from "./locate.ts"
 import { directoryOf } from "./session.ts"
@@ -92,6 +92,9 @@ export async function executeVerdictTool(
   if (typeof params.proof !== "string") {
     throw new Error("Field 'proof' must be a string")
   }
+  if (params.status === "done" && params.proof.trim().length === 0) {
+    throw new Error("Verdict with status 'done' requires proof. Fix: run the proof and pass `<command> — <result> — <scope reason>`.")
+  }
 
   const directory = directoryOf(ctx)
   const mainRoot = mainCheckoutRoot(directory)
@@ -100,32 +103,15 @@ export async function executeVerdictTool(
     throw new Error("No .bee store found to record verdict")
   }
 
-  const mailboxRoot = path.join(store, "mailbox")
-  let jobId = typeof process.env.BEE_HERDING_JOB_ID === "string" ? process.env.BEE_HERDING_JOB_ID.trim() : ""
-  let mailboxDir: string | null = null
-  if (jobId) {
-    const candidate = path.join(mailboxRoot, jobId)
-    if (!isDirectory(candidate)) {
-      throw new Error(`Job mailbox directory not found for job: ${jobId}`)
-    }
-    mailboxDir = candidate
-  } else {
-    if (isDirectory(mailboxRoot)) {
-      try {
-        const entries = readdirSync(mailboxRoot, { withFileTypes: true })
-        const dirs = entries
-          .filter((e) => e.isDirectory())
-          .map((e) => path.join(mailboxRoot, e.name))
-        if (dirs.length > 0) {
-          dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
-          mailboxDir = dirs[0]
-          jobId = path.basename(mailboxDir)
-        }
-      } catch {}
-    }
+  const jobId = typeof process.env.BEE_HERDING_JOB_ID === "string" ? process.env.BEE_HERDING_JOB_ID.trim() : ""
+  if (!jobId) {
+    throw new Error("The verdict tool works only inside a bee herding job. Fix: finish with a normal final message.")
   }
-  if (!mailboxDir) {
-    throw new Error("No job mailbox directory found under .bee/mailbox to record verdict")
+
+  const mailboxRoot = path.join(store, "mailbox")
+  const mailboxDir = path.join(mailboxRoot, jobId)
+  if (!isDirectory(mailboxDir)) {
+    throw new Error(`Job mailbox directory not found for job: ${jobId}`)
   }
 
   let round = 1
@@ -141,6 +127,11 @@ export async function executeVerdictTool(
     }
     if (maxRound > 0) round = maxRound
   } catch {}
+
+  const finalFile = path.join(mailboxDir, `result-${round}.json`)
+  if (existsSync(finalFile)) {
+    throw new Error(`result-${round}.json already exists in the job mailbox. Fix: the result for this round is already recorded, end the turn.`)
+  }
 
   const resultPayload: Record<string, unknown> = {
     status: params.status,
@@ -162,7 +153,6 @@ export async function executeVerdictTool(
   }
 
   const tmpFile = path.join(mailboxDir, `result-${round}.json.tmp`)
-  const finalFile = path.join(mailboxDir, `result-${round}.json`)
   try {
     writeFileSync(tmpFile, JSON.stringify(resultPayload, null, 2) + "\n", "utf8")
     renameSync(tmpFile, finalFile)
