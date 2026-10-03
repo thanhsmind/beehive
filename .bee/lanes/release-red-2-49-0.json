@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"release-red-2-49-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Run rr49-1 inline.",
+  "next_action": "Merged into main at 32c7609; capture what settled, then bee close --feature release-red-2-49-0.",
   "created_at": "2026-10-03T08:49:29.674Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -97,12 +97,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-03T08:51:08.910Z",
-    "branch": "wt/release-red-2-49-0",
-    "worktree_id": "beehive--wt--release-red-2-49-0",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
