@@ -29,6 +29,9 @@ pi-slp-dispatch-return D1, so "per role" here means the leader.
 
 Test contract: `contract:next-op-runnable` (store `80987a3f`).
 
+`bee status` keeps reading the default record: it is the repo-wide view, while
+`bee orient` answers for the calling session.
+
 ## Out of scope
 
 Binding the deploy permit to a worker identity (this repo's own release flow

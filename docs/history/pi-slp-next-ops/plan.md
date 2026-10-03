@@ -42,6 +42,11 @@ Labels: `read` or `ran`. Evidence is a verbatim substring of the anchored line.
 | 11 | the generic deny names no owner for outside paths | read | packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs:19 | FIX: use a plain in-worktree path without traversal |
 | 12 | worktree enter takes --id | ran | .bee/bin/bee worktree enter --help | --id* (str) — The granted worktree's git-verified id |
 | 13 | dispatch wave exists for a feature | ran | .bee/bin/bee --help --names | bee dispatch wave — Prepare cells of the CURRENT schedule wave |
+| 14 | the hint keeps only four lines today | read | packages/bee-rs/crates/bee/src/hooks/prompt_context.rs:948 | lines.truncate(4); |
+| 15 | a CLI verb gets its session id from the environment | read | packages/bee-rs/crates/bee/src/hooks/prompt_context.rs:1424 | crate::session_identity::env_session_id() |
+| 16 | Pi feeds the prompt-context delta into every turn | read | .pi/extensions/bee-guard/events.ts:120 | const delta = runAdvisoryHook(directory, "prompt-context", { |
+| 18 | the caller's runtime is resolvable | read | packages/bee-rs/crates/bee/src/session_identity.rs:140 | pub(crate) fn locate_caller() -> Option<CallerSession> { |
+| 17 | worktree enter prints the runtime's move instruction | read | packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs:136 | "enter-worktree" => format!("Call EnterWorktree with path={target}."), |
 
 ## Discovery
 A herding gather mapped every `next` producer and reader (report at main
@@ -58,6 +63,21 @@ makes `build_orient` use the session's lane record (D1, D2). nop-2 makes
 `prompt-context` call the same function for its record and print the run
 line (D3). nop-3 rewrites the worktree texts (D4). One home for the command
 rule: nop-2 calls nop-1's function, never a copy.
+
+Hat-wave rulings: `next_operation` takes plain facts (a small struct: wayfinding
+resume, handoff present, ready count, execution gate approved, feature,
+granted worktree id, control root) so orient and the hook each fill it from
+what they hold. orient's session id is `env_session_id()` and its resolver is
+`session_preamble::state::resolve_pipeline`; a broken lane binding
+(`ok:false`) is reported as an orient blocker with a null command, never the
+default record. The wayfinding branch stays (`bee discovery list --json`).
+run_from is the control root: every command it can name is a control-plane
+verb that refuses inside a granted worktree, and herding workers get their
+cwd from the payload. The hint cap rises from four to five lines and the
+dedup hash includes the command when non-null. The runtime in the dispatch
+command is the caller's (`session_identity::locate_caller()`); an unknown
+runtime gives a null command, never a literal `<runtime>`, which a shell
+reads as a redirect. Plain-text `bee orient` prints a `run:` line too.
 
 Rejected: a new `bee next` verb — orient already answers "what next"; a
 second verb is a second home. Rejected: making the Pi belt run the command
@@ -79,25 +99,120 @@ Waves: nop-1 and nop-3 in parallel (disjoint files); nop-2 after nop-1 (it calls
   "runtime": "claude",
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"nop-1 to nop-3 change Rust with their tests."},
-    {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Each code cell writes its own red-first tests."},
-    {"stage":"documentation-and-capture","classification":"not-applicable","role":"docs","reason":"The leader captures at close."},
-    {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
-    {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"A release is a separate user ask."},
-    {"stage":"read-only-gather","classification":"required","role":"read","reason":"The next-step map gather ran before the plan."},
-    {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"Discovery is done."},
-    {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
-    {"stage":"independent-review","classification":"not-applicable","role":"review","reason":"Independent review stays user-invoked."},
-    {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"Standard lane; the hat wave is the plan check."},
-    {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop runs here."},
-    {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One shape, no competing designs."},
-    {"stage":"blind-lane-2","classification":"not-applicable","role":"lane-2","reason":"One shape, no competing designs."},
-    {"stage":"blind-lane-3","classification":"not-applicable","role":"lane-3","reason":"One shape, no competing designs."},
-    {"stage":"hat-facts-gaps","classification":"required","role":"hat-facts-gaps","reason":"Plan-step hat wave."},
-    {"stage":"hat-risks","classification":"required","role":"hat-risks","reason":"Plan-step hat wave."},
-    {"stage":"hat-value","classification":"required","role":"hat-value","reason":"Plan-step hat wave."},
-    {"stage":"hat-alternatives","classification":"required","role":"hat-alternatives","reason":"Plan-step hat wave."},
-    {"stage":"hat-user-impact","classification":"required","role":"hat-user-impact","reason":"Plan-step hat wave."}
+    {
+      "stage": "implementation",
+      "classification": "required",
+      "role": "code",
+      "reason": "nop-1 to nop-3 change Rust with their tests."
+    },
+    {
+      "stage": "test-and-live-proof",
+      "classification": "not-applicable",
+      "role": "test",
+      "reason": "Each code cell writes its own red-first tests."
+    },
+    {
+      "stage": "documentation-and-capture",
+      "classification": "not-applicable",
+      "role": "docs",
+      "reason": "The leader captures at close."
+    },
+    {
+      "stage": "planning",
+      "classification": "not-applicable",
+      "role": "plan",
+      "reason": "The leader wrote this plan."
+    },
+    {
+      "stage": "deployment",
+      "classification": "not-applicable",
+      "role": "deploy",
+      "reason": "A release is a separate user ask."
+    },
+    {
+      "stage": "read-only-gather",
+      "classification": "required",
+      "role": "read",
+      "reason": "The next-step map gather ran before the plan."
+    },
+    {
+      "stage": "fact-extraction",
+      "classification": "not-applicable",
+      "role": "extraction",
+      "reason": "Discovery is done."
+    },
+    {
+      "stage": "generation-fallback",
+      "classification": "not-applicable",
+      "role": "generation",
+      "reason": "Every job has a specific role."
+    },
+    {
+      "stage": "independent-review",
+      "classification": "not-applicable",
+      "role": "review",
+      "reason": "Independent review stays user-invoked."
+    },
+    {
+      "stage": "generic-advisor",
+      "classification": "not-applicable",
+      "role": "advisor",
+      "reason": "Standard lane; the hat wave is the plan check."
+    },
+    {
+      "stage": "supervision",
+      "classification": "not-applicable",
+      "role": "supervisor",
+      "reason": "No unattended loop runs here."
+    },
+    {
+      "stage": "blind-lane-1",
+      "classification": "not-applicable",
+      "role": "lane-1",
+      "reason": "One shape, no competing designs."
+    },
+    {
+      "stage": "blind-lane-2",
+      "classification": "not-applicable",
+      "role": "lane-2",
+      "reason": "One shape, no competing designs."
+    },
+    {
+      "stage": "blind-lane-3",
+      "classification": "not-applicable",
+      "role": "lane-3",
+      "reason": "One shape, no competing designs."
+    },
+    {
+      "stage": "hat-facts-gaps",
+      "classification": "required",
+      "role": "hat-facts-gaps",
+      "reason": "Plan-step hat wave."
+    },
+    {
+      "stage": "hat-risks",
+      "classification": "not-applicable",
+      "role": "hat-risks",
+      "reason": "Standard lane runs the three default seats."
+    },
+    {
+      "stage": "hat-value",
+      "classification": "not-applicable",
+      "role": "hat-value",
+      "reason": "Standard lane runs the three default seats."
+    },
+    {
+      "stage": "hat-alternatives",
+      "classification": "required",
+      "role": "hat-alternatives",
+      "reason": "Plan-step hat wave."
+    },
+    {
+      "stage": "hat-user-impact",
+      "classification": "required",
+      "role": "hat-user-impact",
+      "reason": "Plan-step hat wave."
+    }
   ]
 }
 ```
@@ -127,7 +242,13 @@ Phase plan:
     "change_class": "feature",
     "title": "Give orient one runnable next command from the session's own record",
     "deps": [],
-    "decisions": ["D1", "D2", "b3f14c45-93a6-4d4e-855b-6518f4933ebb", "fbde3d6f-8a77-47ff-a90c-d08711a28db7", "80987a3f-83ae-4b51-a954-f40d1f1a259c"],
+    "decisions": [
+      "D1",
+      "D2",
+      "b3f14c45-93a6-4d4e-855b-6518f4933ebb",
+      "fbde3d6f-8a77-47ff-a90c-d08711a28db7",
+      "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
       "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
@@ -141,21 +262,32 @@ Phase plan:
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per D1: build_orient (verbs/status_full/orient.rs) gets its status from build_status(ctx, false), which starts with read_state_full(ctx) reading ctx.root/.bee/state.json (store.rs about line 270). For orient only, when the calling session is bound to a lane, read that lane's record instead, using the same resolution as resolve_pipeline in hooks/session_preamble/state.rs (about line 461, `pub(crate) fn resolve_pipeline(root: &Path, session_id: Option<&str>) -> Pipeline {`); find how prompt_context.rs obtains the session id it passes there and do the same. An unbound session, or a resolve that falls back to the default, reads the default record exactly as today. `bee status` keeps its current behavior. Per D2: replace orient_next_command (orient.rs about line 35) with one pub(crate) function next_operation returning the command and run_from: (a) when orient's worktree context says location main with a granted worktree id, `bee worktree enter --id <id>` with the real id; (b) a handoff keeps `bee state handoff show --json`; (c) ready cells with the execution gate approved give `bee dispatch wave --runtime <runtime> --feature <feature> --json` with the real feature (runtime stays a placeholder); (d) otherwise null. Keep the existing priority order between these unless a test pins another. run_from is the absolute main checkout root (the control root) whenever the command is non-null. build_orient adds next.run_from (null when command is null). Change the worktree guidance string at orient.rs about line 128 (`open your session at {worktree_root}`) to name the same `bee worktree enter --id <id>` command. Tests red first in verbs/status_full/tests.rs: a lane-bound session's orient reports its lane's feature, not the default record's; each next_operation branch returns its command and run_from; the guidance no longer starts with `open your session at` (update the pin at tests.rs about line 772). Write no code comments.",
+    "action": "Per D1: build_orient (verbs/status_full/orient.rs) gets its status from build_status(ctx, false), which starts with read_state_full(ctx) reading ctx.root/.bee/state.json (store.rs about line 270). For orient only, when the calling session is bound to a lane, read that lane's record instead, using the same resolution as resolve_pipeline in hooks/session_preamble/state.rs (about line 461, `pub(crate) fn resolve_pipeline(root: &Path, session_id: Option<&str>) -> Pipeline {`); take the session id from `crate::session_identity::env_session_id()` (a CLI verb has no hook payload). An unbound session reads the default record exactly as today. A bound session whose lane resolves `ok:false` (invalid, missing or corrupt binding) reads NO record: orient reports the binding problem as a blocker and next.command is null. `bee status` keeps its current behavior. Per D2: replace orient_next_command (orient.rs about line 35) with one pub(crate) function next_operation over a plain-facts struct (wayfinding resume with discovery map, handoff present, ready count, execution gate approved, feature, granted worktree id, control root) so any caller can fill it without a Ctx; it returns the command and run_from: (a) when orient's worktree context says location main with a granted worktree id, `bee worktree enter --id <id>` with the real id; (b) a handoff keeps `bee state handoff show --json`; (c) ready cells with the execution gate approved give `bee dispatch wave --runtime <rt> --feature <feature> --json` with the real feature and <rt> the caller's runtime from `crate::session_identity::locate_caller()` (the plain-facts struct carries it); when the runtime is unknown this branch yields null, never a literal placeholder; (d) the wayfinding resume branch keeps `bee discovery list --json`; (e) otherwise null. Keep the existing priority order between these unless a test pins another. run_from is the absolute main checkout root (the control root) whenever the command is non-null. build_orient adds next.run_from (null when command is null), and render_orient_text (about line 680) prints `run: <command> (from <run_from>)` after `next:` when the command is non-null. Change the worktree guidance string at orient.rs about line 128 (`open your session at {worktree_root}`) to name the same `bee worktree enter --id <id>` command. Tests red first in verbs/status_full/tests.rs: a lane-bound session's orient reports its lane's feature, not the default record's; a broken binding gives a blocker and a null command; each next_operation branch returns its command and run_from; the guidance no longer starts with `open your session at` (update the pin at tests.rs about line 772). Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee verbs::status_full",
     "must_haves": {
       "truths": [
         "a lane-bound session's orient reports its lane's feature and phase",
         "an unbound session's orient reads the default record as before",
-        "orient next.command is bee worktree enter --id, bee state handoff show --json, bee dispatch wave --runtime <runtime> --feature <feature> --json, or null",
+        "a broken lane binding gives an orient blocker and a null next.command, never the default record",
+        "orient next.command is bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null",
+        "orient never emits a literal <runtime> placeholder",
         "orient next.run_from is the main checkout root when next.command is non-null",
+        "plain-text bee orient prints a run line when next.command is non-null",
         "orient worktree guidance never says open your session at"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs", "substantive": "pub(crate) next_operation used by build_orient"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+          "substantive": "pub(crate) next_operation over a plain-facts struct, used by build_orient"
+        }
       ],
-      "key_links": ["build_orient reads the lane record through the resolve_pipeline resolution for a bound session"],
-      "prohibitions": ["No change to bee status output", "No second copy of the next-command rule"]
+      "key_links": [
+        "build_orient reads the lane record through the resolve_pipeline resolution for a bound session"
+      ],
+      "prohibitions": [
+        "No change to bee status output",
+        "No second copy of the next-command rule"
+      ]
     }
   },
   {
@@ -165,8 +297,16 @@ Phase plan:
     "role": "code",
     "change_class": "feature",
     "title": "Show the runnable next command in the per-turn hint",
-    "deps": ["nop-1"],
-    "decisions": ["D2", "D3", "fbde3d6f-8a77-47ff-a90c-d08711a28db7", "42a3429b-0408-46c4-ba43-95b813810044", "80987a3f-83ae-4b51-a954-f40d1f1a259c"],
+    "deps": [
+      "nop-1"
+    ],
+    "decisions": [
+      "D2",
+      "D3",
+      "fbde3d6f-8a77-47ff-a90c-d08711a28db7",
+      "42a3429b-0408-46c4-ba43-95b813810044",
+      "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
     ],
@@ -176,18 +316,27 @@ Phase plan:
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Per D3: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs the hint pushes `lines.push(format!(\"next: {}\", jsjson::js_to_string(&next_action)));` (about line 940). Right after that line, when nop-1's pub(crate) next_operation function (verbs/status_full/orient.rs) yields a non-null command for the same record the hint already resolved, push one line `run: <command> (from <run_from>)`. Call that function; never copy its rule (D2). If calling it needs facts the hook does not have, build them with the smallest read of the same sources orient uses, and keep the hook fast. Nothing else in the hint changes. Tests red first in the #[cfg(test)] mod tests of the same file: a record with ready cells under an approved execution gate yields the run line with `bee dispatch wave`; a record with nothing to run yields no run line. Write no code comments.",
+    "action": "Per D3: in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs the hint pushes `lines.push(format!(\"next: {}\", jsjson::js_to_string(&next_action)));` (about line 940). Right after that line, when nop-1's pub(crate) next_operation function (verbs/status_full/orient.rs) yields a non-null command for the same record the hint already resolved, push one line `run: <command> (from <run_from>)`. Call that function; never copy its rule (D2). The hook holds only a StateRecord (phase, feature, mode, next_action, gates); fill the plain-facts struct with at most one read of the feature's cells (ready count) and one grant lookup (find_granted_worktree_for_feature), and pass none for facts it cannot read cheaply. The hint ends with `lines.truncate(4);` (about line 948): raise it to 5 so the run line never pushes out `gate pending` or `triggers due`. Add the command to the dedup hash fields only when it is non-null, so a new command re-injects and the existing hash tests stay unchanged. Nothing else in the hint changes. Tests red first in the #[cfg(test)] mod tests of the same file: a record with ready cells under an approved execution gate yields the run line with `bee dispatch wave`; a record with nothing to run yields no run line and the same hash as before; with a run line, gate pending and triggers due still print. Write no code comments.",
     "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee prompt_context",
     "must_haves": {
       "truths": [
         "the per-turn hint prints run: <command> (from <run_from>) when next_operation yields a command",
-        "the per-turn hint prints no run line when next_operation yields null"
+        "the per-turn hint prints no run line and keeps its old hash when next_operation yields null",
+        "gate pending and triggers due still print beside a run line"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs", "substantive": "run line built from next_operation"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "substantive": "run line built from next_operation"
+        }
       ],
-      "key_links": ["prompt_context calls verbs::status_full next_operation"],
-      "prohibitions": ["No copy of the next-command rule in the hook", "No other hint line changes"]
+      "key_links": [
+        "prompt_context calls verbs::status_full next_operation"
+      ],
+      "prohibitions": [
+        "No copy of the next-command rule in the hook",
+        "No other hint line changes beside the run line and the five-line cap"
+      ]
     }
   },
   {
@@ -198,7 +347,11 @@ Phase plan:
     "change_class": "refactor",
     "title": "Name bee worktree enter in worktree denies and notices",
     "deps": [],
-    "decisions": ["D4", "dfd7ae10-e654-47c1-852f-49848bd930e4", "80987a3f-83ae-4b51-a954-f40d1f1a259c"],
+    "decisions": [
+      "D4",
+      "dfd7ae10-e654-47c1-852f-49848bd930e4",
+      "80987a3f-83ae-4b51-a954-f40d1f1a259c"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
@@ -219,11 +372,22 @@ Phase plan:
         "the generic containment denies say a path outside the project belongs to the user"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs", "substantive": "deny texts name worktree enter or the outside-project owner"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs", "substantive": "notices name worktree enter"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+          "substantive": "deny texts name worktree enter or the outside-project owner"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "substantive": "notices name worktree enter"
+        }
       ],
-      "key_links": ["write_guard and state_group tests pin the new texts"],
-      "prohibitions": ["No change to when any deny or notice fires", "Writes outside the project stay denied"]
+      "key_links": [
+        "write_guard and state_group tests pin the new texts"
+      ],
+      "prohibitions": [
+        "No change to when any deny or notice fires",
+        "Writes outside the project stay denied"
+      ]
     }
   }
 ]
