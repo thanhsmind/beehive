@@ -945,9 +945,9 @@ mod tests {
 
     #[test]
     fn herding_broker_tick_resolves() {
-        let (entry, rest) = resolve(&["herding", "broker", "tick"]).expect("herding.broker.tick is in the registry");
-        assert_eq!(entry.invoke, "bee herding broker tick");
-        assert!(rest.is_empty());
+        let (entry, rest) = resolve(&["herding", "broker", "tick"]).expect("herding.broker is in the registry");
+        assert_eq!(entry.invoke, "bee herding broker");
+        assert_eq!(rest, vec!["tick"]);
         assert!(entry.unavailable.is_none());
     }
 
