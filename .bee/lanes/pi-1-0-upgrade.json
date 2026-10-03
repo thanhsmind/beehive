@@ -15,10 +15,10 @@
   "created_at": "2026-10-02T05:39:29.330Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Ranh giới nên giữ: **Waggle lo agent chạy và liên lạc; Bee lo công việc được làm đúng quy trình và có bằng chứng.**",
-    "asked_at": "2026-10-03T00:22:16.891Z",
-    "session": "01a0ff18-abeb-7e92-ad4b-7d11c7d94d26"
+    "kind": "question",
+    "subject": "mailbox broker: option A (thin router) or B (resident supervisor answers)",
+    "asked_at": "2026-10-03T10:59:14.493Z",
+    "session": "51e108b6-3bcc-4072-a86f-7a61ade666e7"
   },
   "advisor_ref": {
     "consulted_at": "2026-10-02T12:23:28.410Z",

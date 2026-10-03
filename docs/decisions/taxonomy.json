@@ -643,6 +643,10 @@
     "contract:next-op-runnable",
     "contract:orient-merged-worktree",
     "cli-shape",
-    "contract:shipped-command-spelling"
+    "contract:shipped-command-spelling",
+    "contract:worker-question",
+    "contract:pi-question-drain",
+    "contract:broker-tick",
+    "contract:broker-role"
   ]
 }
