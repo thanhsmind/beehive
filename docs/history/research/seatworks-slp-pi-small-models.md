@@ -175,6 +175,12 @@ Consequence: slice 2 became "one runnable fix per refusal"
 (`docs/history/pi-slp-operations/CONTEXT.md`); the allowed-operations packet
 and identity-derived actor, record and directory move to slice 3.
 
+Slice 3 shipped as `docs/history/pi-slp-next-ops/CONTEXT.md` (orient reads the
+session's own record and names one runnable next command). Slice 4, the
+measurement, is `seatworks-slp-measurement.md`: 8 of 8 runs finished a tiny
+gated task on both versions; the task did not exercise the rewritten
+refusals, so it shows no difference between versions.
+
 ### Principles applied
 
 - `verify-before-reporting`: reproduced the mailbox fallback before reporting it; kept finding 2 labeled as a code trace.
