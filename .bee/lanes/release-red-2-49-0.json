@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-red-2-49-0",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-red-2-49-0\" started at phase \"exploring\" (lane).",
+  "next_action": "Run rr49-1 inline.",
+  "created_at": "2026-10-03T08:49:29.674Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-10-03T08:49:38.094Z",
+    "feature": "release-red-2-49-0"
+  },
+  "gate_preview": {
+    "feature": "release-red-2-49-0",
+    "plan_sha256": "4ab974d644ff217c36283010d06eabba9b21797a15b2c8ef82f0a3cdc9f2b415",
+    "previewed_at": "2026-10-03T08:50:05.048Z",
+    "cells": [
+      {
+        "id": "rr49-1",
+        "feature": "release-red-2-49-0",
+        "lane": "tiny",
+        "role": "code",
+        "change_class": "test",
+        "title": "Pin the five closed-plan spans as historical exceptions",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "ddc902c1-4f05-41ec-a1f8-9b605d70b236",
+          "0bbb7726-ace1-4dac-80da-df78e17c168d"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1: grow KNOWN_HISTORICAL_EXCEPTIONS in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs from 5 to 10 entries, adding the five spans the release suite printed, byte for byte. Write no code comments; the why lives in decision D1.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee cli_shape",
+        "must_haves": {
+          "truths": [
+            "no_shipped_command_spelling_is_refused_by_the_widened_guard passes",
+            "every pinned exception is still refused"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "release-red-2-49-0",
+    "plan_sha256": "4ab974d644ff217c36283010d06eabba9b21797a15b2c8ef82f0a3cdc9f2b415",
+    "previewed_at": "2026-10-03T08:50:05.048Z",
+    "cells": [
+      {
+        "id": "rr49-1",
+        "feature": "release-red-2-49-0",
+        "lane": "tiny",
+        "role": "code",
+        "change_class": "test",
+        "title": "Pin the five closed-plan spans as historical exceptions",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "ddc902c1-4f05-41ec-a1f8-9b605d70b236",
+          "0bbb7726-ace1-4dac-80da-df78e17c168d"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1: grow KNOWN_HISTORICAL_EXCEPTIONS in packages/bee-rs/crates/bee/src/hooks/cli_shape.rs from 5 to 10 entries, adding the five spans the release suite printed, byte for byte. Write no code comments; the why lives in decision D1.",
+        "verify": "cd packages/bee-rs && cargo test --release -p bee --bin bee cli_shape",
+        "must_haves": {
+          "truths": [
+            "no_shipped_command_spelling_is_refused_by_the_widened_guard passes",
+            "every pinned exception is still refused"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-03T08:51:08.910Z",
+    "branch": "wt/release-red-2-49-0",
+    "worktree_id": "beehive--wt--release-red-2-49-0",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

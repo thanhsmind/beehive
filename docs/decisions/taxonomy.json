@@ -641,6 +641,8 @@
     "next-op",
     "prompt-context",
     "contract:next-op-runnable",
-    "contract:orient-merged-worktree"
+    "contract:orient-merged-worktree",
+    "cli-shape",
+    "contract:shipped-command-spelling"
   ]
 }

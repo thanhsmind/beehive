@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pi-slp-next-ops",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pi-slp-next-ops\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature pi-slp-next-ops",
+  "next_action": "bee close finished \"pi-slp-next-ops\" — feature is closed.",
   "created_at": "2026-10-03T04:03:04.704Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
