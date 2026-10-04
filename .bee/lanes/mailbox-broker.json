@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "mailbox-broker",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"mailbox-broker\" started at phase \"exploring\".",
-  "next_action": "uat: mailbox-broker",
+  "next_action": "bee close finished \"mailbox-broker\" — feature is closed.",
   "created_at": "2026-10-03T11:12:19.017Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
