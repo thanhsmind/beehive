@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "mailbox-broker",
+  "closed_at": "2026-10-04T07:37:26.995Z",
+  "sessions": [
+    {
+      "session_id": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 636,
+          "output": 176065,
+          "cache_write": 1039878,
+          "cache_read": 96418170,
+          "new": 1216579,
+          "cached": 96418170,
+          "total": 97634749
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 70,
+          "output": 26143,
+          "cache_write": 194347,
+          "cache_read": 2023291,
+          "new": 220560,
+          "cached": 2023291,
+          "total": 2243851
+        }
+      },
+      "subagent_count": 3,
+      "started_ms": 1791018958312,
+      "ended_ms": 1791099443164,
+      "totals": {
+        "new": 1437139,
+        "cached": 98441461,
+        "total": 99878600
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 1216579,
+      "cached": 96418170,
+      "total": 97634749
+    },
+    "subagents": {
+      "new": 220560,
+      "cached": 2023291,
+      "total": 2243851
+    },
+    "total": {
+      "new": 1437139,
+      "cached": 98441461,
+      "total": 99878600
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "id": "mb-2",
+  "feature": "mailbox-broker",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "api",
+  "title": "Let a Pi worker ask through the verdict tool and keep the drain waiting for the final round",
+  "deps": [
+    "mb-1"
+  ],
+  "decisions": [
+    "D3",
+    "8e9a5eb0-0ca2-43eb-b36e-165bc6e97296"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/tool-verdict.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/mailbox-broker/plan.md",
+    ".pi/extensions/bee-guard/tool-verdict.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "action": "Red first in pi_plugin_contracts.rs, then implement contract pi-question-drain (store 8e9a5eb0). tool-verdict.ts: the status enum and check accept \"question\"; add an optional question parameter {text, kind: technical|product|gate}, required and validated when status is question; proof stays required only for done; the written result carries the question object. result-inbox.ts: when the newest result-N.json of a marked job has status question, do not claim, inject or delete the marker; leave it for the next round. No code comments.",
+  "must_haves": {
+    "truths": [
+      "the verdict tool writes a question result with the question object and no proof",
+      "the verdict tool refuses status question with no question text",
+      "the drain leaves a marker unclaimed while the newest result is a question",
+      "the drain delivers the next round's done result through the same marker",
+      "the existing pi_plugin_contracts tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/tool-verdict.ts",
+        "substantive": "the question status"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/result-inbox.ts",
+        "substantive": "the skip for question results"
+      }
+    ],
+    "key_links": [
+      "result-inbox.ts reads the status of latestResultFile before it claims"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "done and blocked delivery unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+  "affects_skills": [],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-mb-2",
+    "outcome": "Pi verdict tool accepts a question and the drain waits for the final round",
+    "files_changed": [
+      ".pi/extensions/bee-guard/tool-verdict.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+    ],
+    "deviations": [
+      "sync-ack: the bee-herding skill text lands once with mb-5, after the broker exists"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T12:12:57.319Z",
+    "behavior_change": false,
+    "verification_evidence": "114 pi contract tests incl. new verdict question and drain-skip tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+    "claimed_at": "2026-10-03T12:02:15.368Z",
+    "sync_ack": "the bee-herding skill text lands once with mb-5, after the broker exists",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Pi verdict tool accepts a question and the drain waits for the final round",
+      "files": [
+        ".pi/extensions/bee-guard/tool-verdict.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+      ],
+      "commit": "2e5f4b56e",
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts — green:unit — 114 pi contract tests incl. new verdict question and drain-skip tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the verdict tool writes a question result with the question object and no proof",
+            "artifact": ".pi/extensions/bee-guard/tool-verdict.ts"
+          },
+          {
+            "requirement": "the verdict tool refuses status question with no question text",
+            "artifact": ".pi/extensions/bee-guard/tool-verdict.ts"
+          },
+          {
+            "requirement": "the drain leaves a marker unclaimed while the newest result is a question",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "the drain delivers the next round's done result through the same marker",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "the existing pi_plugin_contracts tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T13:07:52.096Z",
+        "recorded_by": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1493,5 +1493,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-03T08:58:55.175Z"
+  },
+  "mailbox-broker": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-10-04T07:37:26.945Z"
   }
 }

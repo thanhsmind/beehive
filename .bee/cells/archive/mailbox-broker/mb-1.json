@@ -1,0 +1,142 @@
+{
+  "id": "mb-1",
+  "feature": "mailbox-broker",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "api",
+  "title": "Let a herded worker end a round with a question",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D6",
+    "f58bfe89-4ec9-45c6-9834-cbdfa28ddd5b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/mailbox-broker/CONTEXT.md",
+    "docs/history/mailbox-broker/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Red first, then implement contract worker-question (store f58bfe89). In mailbox.rs add MailboxStatus::Question; parse_result_text accepts status \"question\" only with a question object {text: non-empty string, kind: technical|product|gate}, makes proof optional for question and keeps it required for done and blocked; add a MailboxError for a missing or bad question. In the brief that render_brief builds, add one short section telling the worker it may end the round with status question and one question when it cannot go on without an answer, and that it must first write its partial work to the report; omit that section when a new BriefSpec field allow_question is false. In run.rs map the question result to outcome label \"question\"; the envelope carries the question object, broker_running (true when <control root>/.bee/supervisor/broker-heartbeat.json has a ts no older than 90 s) and a next line saying the broker owns the job and the final result arrives as a new job. job.json (pane and no-pane paths) records agent, seat, cell_id, no_pane, inbox_session, leader_session (from BEE_SESSION_ID, else CLAUDE_CODE_SESSION_ID, else PI_SESSION_ID, else null), question_of and question_round; add flags --question-of <job-id>, --question-round <n> and --no-question that set them and allow_question. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a result with status question and a valid question object parses as MailboxStatus::Question",
+      "a question result with no proof field parses",
+      "a done result with no proof field is still refused",
+      "a question result with an empty text or an unknown kind is refused",
+      "bee herding run reports outcome question with the question object, broker_running and next in its envelope",
+      "job.json records agent, seat, cell_id, no_pane, inbox_session, leader_session, question_of and question_round on the pane and the no-pane path",
+      "the brief offers the question status by default and omits it under --no-question"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "MailboxStatus::Question and its parse rules"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "the question outcome, envelope fields and job.json facts"
+      }
+    ],
+    "key_links": [
+      "outcome_label maps MailboxStatus::Question to \"question\""
+    ],
+    "prohibitions": [
+      "No code comments",
+      "done and blocked parsing unchanged",
+      "--continue behaviour unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mb1-rework",
+    "outcome": "Herded workers can end a round with a question on the pane and the no-pane path; envelope and job.json carry the broker facts",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/tests.rs"
+    ],
+    "deviations": [
+      "round 2: execute_no_pane no longer overwrites a worker-written result-1.json, found by the live sandbox run 20261003-195611-398120; this also stops Pi no-pane blocked verdicts being reported as done",
+      "sync-ack: the bee-herding skill text landed with mb-5"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T13:06:00.014Z",
+    "behavior_change": false,
+    "verification_evidence": "covered by the full declared suite after rework d35e76976 (cargo test --release --no-fail-fast: 37 binaries ok, 0 failed, 3958 in the bin incl. new no-pane question and blocked tests)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-10-03T12:57:13.498Z",
+    "sync_ack": "the bee-herding skill text landed with mb-5",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Herded workers can end a round with a question on the pane and the no-pane path; envelope and job.json carry the broker facts",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/tests.rs"
+      ],
+      "commit": "d35e76976",
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:unit — covered by the full declared suite after rework d35e76976 (cargo test --release --no-fail-fast: 37 binaries ok, 0 failed, 3958 in the bin incl. new no-pane question and blocked tests)",
+      "deviations": [
+        "round 2: execute_no_pane no longer overwrites a worker-written result-1.json, found by the live sandbox run 20261003-195611-398120; this also stops Pi no-pane blocked verdicts being reported as done"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-03T12:57:00.608Z",
+    "reopened_reason": "Live proof red (sandbox run 20261003-195611-398120, job-1791032184381-398911-1): on the no-pane path execute_no_pane in run.rs (~3190-3240) always writes its own result-1.json with status done after the child exits, overwriting the result the Pi verdict tool already wrote (status question); envelope said outcome done. Fix: after a successful child exit, if result-1.json already exists in the job mailbox and parses, use it as the round result (question, blocked or done) and keep the synthesized report only when the worker wrote none; synthesize status done only when no result file exists. Red first: a no-pane test whose fake child writes a question result-1.json then exits 0 must report outcome question.",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a result with status question and a valid question object parses as MailboxStatus::Question",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "a question result with no proof field parses",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "a done result with no proof field is still refused",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "a question result with an empty text or an unknown kind is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "bee herding run reports outcome question with the question object, broker_running and next in its envelope",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "job.json records agent, seat, cell_id, no_pane, inbox_session, leader_session, question_of and question_round on the pane and the no-pane path",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the brief offers the question status by default and omits it under --no-question",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T13:07:52.089Z",
+        "recorded_by": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

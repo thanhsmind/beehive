@@ -1,0 +1,171 @@
+{
+  "id": "mb-4",
+  "feature": "mailbox-broker",
+  "lane": "standard",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Run the broker as a code-only control-loop role",
+  "deps": [
+    "mb-1"
+  ],
+  "decisions": [
+    "D1",
+    "d3031edb-1f62-46b9-9a83-4df3f539e389"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/mailbox-broker/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "action": "Red first, then implement contract broker-role (store d3031edb). Add Role::Broker (parse \"broker\", as_str, default interval 30 s, usage text). For Broker, resolve_iteration_argv returns [current bee executable, \"herding\", \"broker\", \"tick\", \"--json\"] and reads no prompt file, no model and no control_command template; allowed_tools_for is not consulted. Interval, timeout, backoff, max iterations and the stop file behave as for every role. No code comments.",
+  "must_haves": {
+    "truths": [
+      "Role::parse(\"broker\") returns Role::Broker",
+      "the broker iteration argv is the bee binary with herding broker tick --json",
+      "a broker iteration needs no broker-prompt.md file",
+      "the other roles' argv are unchanged",
+      "the stop file ends a broker loop like any role"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "substantive": "Role::Broker and its code-only argv"
+      }
+    ],
+    "key_links": [
+      "resolve_iteration_argv branches on Role::Broker before reading a prompt file"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "Supervisor role unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-mb-4",
+    "outcome": "The broker runs as a code-only control-loop role",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [
+      "sync-ack: the bee-herding skill text for the broker role lands once with mb-5"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T12:12:57.431Z",
+    "behavior_change": true,
+    "verification_evidence": "65 control_loop tests incl. broker parse, code-only argv and no prompt file",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+    "claimed_at": "2026-10-03T12:02:15.831Z",
+    "sync_ack": "the bee-herding skill text for the broker role lands once with mb-5",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The broker runs as a code-only control-loop role",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "commit": "02e2eee2d",
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop — green:unit — 65 control_loop tests incl. broker parse, code-only argv and no prompt file",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "role_broker_added_and_parsed",
+            "status": "PASS",
+            "evidence": "control_loop.rs:72 enum, :82 parse, :93 as_str, :173/:215/:245 errors and usage; test broker_is_a_parsed_role_that_names_itself_broker :1380-1388"
+          },
+          {
+            "id": "default_interval_30s",
+            "status": "PASS",
+            "evidence": "BROKER_DEFAULT_INTERVAL = 30 at :120, used at :109; test :1390-1399 checks 30 and --interval 15 override"
+          },
+          {
+            "id": "iteration_argv_is_bee_binary_broker_tick_json",
+            "status": "PASS",
+            "evidence": "resolve_iteration_argv early return :551-561 gives [current_exe, herding, broker, tick, --json]; test :1402-1418; herding.rs:150 routes broker"
+          },
+          {
+            "id": "no_prompt_no_model_no_template",
+            "status": "PASS",
+            "evidence": "early return precedes read_prompt_file :562, allowed_tools_for :567, control_command template :568, model_for :569; test :1420-1444"
+          },
+          {
+            "id": "stop_file_timeout_backoff_shared",
+            "status": "PASS",
+            "evidence": "run_loop role-independent: stop file :794, timeout :807, backoff :865; test stop_file_ends_a_broker_loop_like_any_role :1446-1461"
+          },
+          {
+            "id": "other_roles_argv_unchanged",
+            "status": "PASS",
+            "evidence": "no change to Dispatch/Merge/Route/Supervisor arms; herding::control_loop 65 passed incl. pin tests :938, :966, :1029, :1291"
+          },
+          {
+            "id": "supervisor_unchanged",
+            "status": "PASS",
+            "evidence": "model_for Supervisor arm unchanged at :438; allowlist tests :1055-1087 pass"
+          },
+          {
+            "id": "unreachable_arms_not_reachable",
+            "status": "PASS",
+            "evidence": "allowed_tools_for :293 and model_for :435 are private; only caller resolve_iteration_argv :567/:569 after the Broker early return :551"
+          },
+          {
+            "id": "no_code_comments",
+            "status": "PASS",
+            "evidence": "git show 02e2eee2d adds no comment lines"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-03T12:55:07.737Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Role::parse(\"broker\") returns Role::Broker",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the broker iteration argv is the bee binary with herding broker tick --json",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "a broker iteration needs no broker-prompt.md file",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the other roles' argv are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          },
+          {
+            "requirement": "the stop file ends a broker loop like any role",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+          }
+        ],
+        "recorded_at": "2026-10-03T13:07:52.114Z",
+        "recorded_by": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

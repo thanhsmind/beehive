@@ -1,0 +1,119 @@
+{
+  "id": "mb-5",
+  "feature": "mailbox-broker",
+  "lane": "standard",
+  "role": "docs",
+  "title": "Document the mailbox broker and the question outcome",
+  "deps": [
+    "mb-2",
+    "mb-3",
+    "mb-4"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/index.md"
+  ],
+  "read_first": [
+    "docs/history/mailbox-broker/CONTEXT.md",
+    "docs/history/mailbox-broker/plan.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/index.md"
+  ],
+  "action": "Write docs/knowledge/areas/bee-herding/the-mailbox-broker.md as a bee.area concept in the shape of the supervisor concept: what the broker is and is not, the question record, the routing table, the human answer verb, the round limit, the heartbeat, how to start it (bee herding control-loop --role broker), what is out (native Agent workers, leader questions), citing mailbox-broker D1-D6 and the four contract decisions by store id; Pointers name broker.rs, run.rs, mailbox.rs, control_loop.rs, tool-verdict.ts and result-inbox.ts. Add the question outcome to the-run-verb-and-worker-outcomes.md and link the new concept from index.md. Plain technical English.",
+  "must_haves": {
+    "truths": [
+      "the new concept cites mailbox-broker D1 through D6",
+      "the run-verb concept lists the question outcome",
+      "index.md links the new concept"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+        "substantive": "the broker concept"
+      }
+    ],
+    "key_links": [
+      "index.md links the-mailbox-broker.md"
+    ],
+    "prohibitions": [
+      "No promise of later work in the prose"
+    ]
+  },
+  "verify": "rg -n \"mailbox-broker D6\" docs/knowledge/areas/bee-herding/the-mailbox-broker.md && rg -n \"question\" docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n \"the-mailbox-broker.md\" docs/knowledge/areas/bee-herding/index.md",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mb5-worker",
+    "outcome": "The mailbox broker concept, the question outcome and the herding skill's Broker role are documented",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/areas/bee-herding/index.md",
+      "skills/bee-herding/SKILL.md"
+    ],
+    "deviations": [
+      "skills/bee-herding/SKILL.md gained the Broker paragraph promised by the mb-1 to mb-4 sync-acks; the worker also edited tests/registry_dispatch.rs to special-case the broker namespace, which the leader reverted in df0e068ad",
+      "sync-ack: skills/bee-herding/SKILL.md is the owned-skill sync the mb-1 to mb-4 caps promised; it was added to the brief by expertise, not to affects_skills"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-03T12:52:58.075Z",
+    "behavior_change": false,
+    "verification_evidence": "the three pointer checks the cell names, plus the full suite green after the docs commit",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+    "verify_command": "rg -n \"mailbox-broker D6\" docs/knowledge/areas/bee-herding/the-mailbox-broker.md && rg -n \"question\" docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n \"the-mailbox-broker.md\" docs/knowledge/areas/bee-herding/index.md",
+    "claimed_at": "2026-10-03T12:35:48.664Z",
+    "sync_ack": "skills/bee-herding/SKILL.md is the owned-skill sync the mb-1 to mb-4 caps promised; it was added to the brief by expertise, not to affects_skills",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The mailbox broker concept, the question outcome and the herding skill's Broker role are documented",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/areas/bee-herding/index.md",
+        "skills/bee-herding/SKILL.md"
+      ],
+      "commit": "85fcdf42f",
+      "tests": "rg -n \"mailbox-broker D6\" docs/knowledge/areas/bee-herding/the-mailbox-broker.md && rg -n \"question\" docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md && rg -n \"the-mailbox-broker.md\" docs/knowledge/areas/bee-herding/index.md — green:static — the three pointer checks the cell names, plus the full suite green after the docs commit",
+      "deviations": [
+        "skills/bee-herding/SKILL.md gained the Broker paragraph promised by the mb-1 to mb-4 sync-acks; the worker also edited tests/registry_dispatch.rs to special-case the broker namespace, which the leader reverted in df0e068ad"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the new concept cites mailbox-broker D1 through D6",
+            "artifact": "docs/knowledge/areas/bee-herding/the-mailbox-broker.md"
+          },
+          {
+            "requirement": "the run-verb concept lists the question outcome",
+            "artifact": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+          },
+          {
+            "requirement": "index.md links the new concept",
+            "artifact": "docs/knowledge/areas/bee-herding/index.md"
+          }
+        ],
+        "recorded_at": "2026-10-03T13:07:52.123Z",
+        "recorded_by": "51e108b6-3bcc-4072-a86f-7a61ade666e7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
