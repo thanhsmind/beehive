@@ -119,6 +119,7 @@ mod split_lock;
 // closes the pane, and confirms exit within 5 s. See job_verbs.rs.
 pub(crate) mod job_verbs;
 pub(crate) mod broker;
+pub(crate) mod paseo;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
