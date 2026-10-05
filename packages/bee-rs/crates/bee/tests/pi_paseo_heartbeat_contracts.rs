@@ -208,9 +208,10 @@ fn test_constants_and_read_paseo_settings() {
     run_js_test(
         "test_constants_and_read_paseo_settings",
         r#"
-const { HEARTBEAT_NAME, DEFAULT_CRON, readPaseoSettings } = mod;
+const { HEARTBEAT_NAME, DEFAULT_CRON, STALE_MARKER_MS, readPaseoSettings } = mod;
 assert.equal(HEARTBEAT_NAME, "bee-leader");
 assert.equal(DEFAULT_CRON, "*/5 * * * *");
+assert.equal(STALE_MARKER_MS, 120000);
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-test-settings-"));
 const defaultSettings = readPaseoSettings(tmpDir);
@@ -528,6 +529,121 @@ assert.equal(messages.length, 0, "quiet heartbeat settle must inject no continua
 await fire("agent_settled", {}, ctx);
 assert.equal(messages.length, 1, "subsequent settle with block verdict must inject continuation nudge");
 assert.equal(messages[0].text, "continuation nudge reason");
+"#,
+    );
+}
+
+#[test]
+fn test_empty_marker_200s_ago_retried_and_run_called_once() {
+    run_js_test(
+        "test_empty_marker_200s_ago_retried_and_run_called_once",
+        r#"
+const { ensureHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-stale-marker-"));
+const agentId = "agent-stale-200s";
+const settings = { command: "paseo", cron: "*/5 * * * *" };
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, "{}");
+const past = new Date(Date.now() - 200000);
+fs.utimesSync(marker, past, past);
+
+let calls = 0;
+const stubRun = async () => {
+  calls++;
+  return JSON.stringify({ id: "sched-retry-1" });
+};
+
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(calls, 1);
+assert.equal(res.created, true);
+assert.equal(res.id, "sched-retry-1");
+const updated = JSON.parse(fs.readFileSync(marker, "utf8"));
+assert.equal(updated.schedule_id, "sched-retry-1");
+"#,
+    );
+}
+
+#[test]
+fn test_empty_marker_10s_old_returns_exists_with_no_call() {
+    run_js_test(
+        "test_empty_marker_10s_old_returns_exists_with_no_call",
+        r#"
+const { ensureHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-fresh-marker-"));
+const agentId = "agent-fresh-10s";
+const settings = { command: "paseo", cron: "*/5 * * * *" };
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, "{}");
+const recent = new Date(Date.now() - 10000);
+fs.utimesSync(marker, recent, recent);
+
+let calls = 0;
+const stubRun = async () => {
+  calls++;
+  return JSON.stringify({ id: "sched-should-not-call" });
+};
+
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(calls, 0);
+assert.equal(res.created, false);
+assert.equal(res.reason, "exists");
+"#,
+    );
+}
+
+#[test]
+fn test_marker_with_schedule_id_200s_old_returns_exists_with_no_call() {
+    run_js_test(
+        "test_marker_with_schedule_id_200s_old_returns_exists_with_no_call",
+        r#"
+const { ensureHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-sched-200s-"));
+const agentId = "agent-sched-200s";
+const settings = { command: "paseo", cron: "*/5 * * * *" };
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, JSON.stringify({
+  agent_id: agentId,
+  schedule_id: "sched-existing",
+  cron: "*/5 * * * *",
+  created_at: new Date(Date.now() - 200000).toISOString()
+}));
+const past = new Date(Date.now() - 200000);
+fs.utimesSync(marker, past, past);
+
+let calls = 0;
+const stubRun = async () => {
+  calls++;
+  return JSON.stringify({ id: "sched-should-not-call" });
+};
+
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(calls, 0);
+assert.equal(res.created, false);
+assert.equal(res.reason, "exists");
+"#,
+    );
+}
+
+#[test]
+fn test_failed_create_reason_contains_herding_paseo_command() {
+    run_js_test(
+        "test_failed_create_reason_contains_herding_paseo_command",
+        r#"
+const { ensureHeartbeat } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-fail-reason-"));
+const agentId = "agent-fail-reason";
+const settings = { command: "paseo", cron: "*/5 * * * *" };
+const stubRun = async () => {
+  throw new Error("CLI process hung and died");
+};
+
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(res.created, false);
+assert.ok(res.reason.includes("herding.paseo.command"));
+assert.ok(res.reason.endsWith(" — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo binary"));
 "#,
     );
 }

@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 export const HEARTBEAT_NAME = "bee-leader"
 export const DEFAULT_CRON = "*/5 * * * *"
+export const STALE_MARKER_MS = 120000
 
 export interface PaseoSettings {
   command: string
@@ -130,9 +131,44 @@ export async function ensureHeartbeat(
       createdExclusiveFile = true
     } catch (err: any) {
       if (err?.code === "EEXIST") {
-        return { created: false, reason: "exists" }
+        let isStale = false
+        try {
+          const stat = statSync(marker)
+          let hasScheduleId = false
+          try {
+            const raw = readFileSync(marker, "utf8")
+            const parsed = JSON.parse(raw)
+            const scheduleId = parsed?.schedule_id ?? parsed?.id ?? parsed?.Id ?? parsed?.ID
+            if (scheduleId !== undefined && scheduleId !== null && String(scheduleId).length > 0) {
+              hasScheduleId = true
+            }
+          } catch {}
+          const ageMs = Date.now() - stat.mtimeMs
+          if (hasScheduleId || ageMs < STALE_MARKER_MS) {
+            return { created: false, reason: "exists" }
+          }
+          isStale = true
+        } catch {
+          return { created: false, reason: "exists" }
+        }
+
+        if (isStale) {
+          try {
+            unlinkSync(marker)
+          } catch {}
+          try {
+            writeFileSync(marker, "{}", { flag: "wx" })
+            createdExclusiveFile = true
+          } catch (retryErr: any) {
+            if (retryErr?.code === "EEXIST") {
+              return { created: false, reason: "exists" }
+            }
+            return { created: false, reason: retryErr?.message ? String(retryErr.message) : String(retryErr) }
+          }
+        }
+      } else {
+        return { created: false, reason: err?.message ? String(err.message) : String(err) }
       }
-      return { created: false, reason: err?.message ? String(err.message) : String(err) }
     }
 
     const stdout = await run(settings.command, [
@@ -170,7 +206,8 @@ export async function ensureHeartbeat(
         }
       } catch {}
     }
-    return { created: false, reason: err?.message ? String(err.message) : String(err) }
+    const base = err?.message ? String(err.message) : String(err)
+    return { created: false, reason: `${base} — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo binary` }
   }
 }
 
