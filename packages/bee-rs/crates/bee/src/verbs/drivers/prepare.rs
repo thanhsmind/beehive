@@ -252,6 +252,35 @@ pub(crate) fn is_pi_agent(cfg: &Value, agent_name: &str) -> bool {
     trimmed == "pi" || Path::new(trimmed).file_name().and_then(|f| f.to_str()) == Some("pi")
 }
 
+pub(crate) fn command_resolves_on_path(cmd: &str) -> bool {
+    command_resolves_on_path_in(cmd, std::env::var_os("PATH").as_deref())
+}
+
+pub(crate) fn command_resolves_on_path_in(cmd: &str, path_var: Option<&std::ffi::OsStr>) -> bool {
+    let p = Path::new(cmd);
+    if p.is_absolute() || cmd.contains('/') || (cfg!(windows) && cmd.contains('\\')) {
+        return p.is_file();
+    }
+    let Some(path_var) = path_var else {
+        return false;
+    };
+    for dir in std::env::split_paths(path_var) {
+        let candidate = dir.join(cmd);
+        if candidate.is_file() {
+            return true;
+        }
+        #[cfg(windows)]
+        {
+            for ext in [".exe", ".cmd", ".bat"] {
+                if dir.join(format!("{cmd}{ext}")).is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 // ─── the LaneBrief carrier (slp-blind-lanes E1/E2, decision 5981246b D2) ───
 //
 // `--brief-file <path>` is the FIRST caller text that reaches a non-cell
@@ -2570,9 +2599,31 @@ pub(crate) fn prepare_dispatch_wire(
                 // `worktree_location` above), never from sniffing the env. A
                 // bad value is reported as not-ready with the refusal text,
                 // never a panic.
-                let (transport_ready, transport_reason, _) = match transport_kind_at(root) {
-                    Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
-                    Err(reason) => (false, reason, None),
+                let (transport_ready, transport_reason) = match agent
+                    .as_deref()
+                    .and_then(|name| crate::herding::paseo::PaseoSpec::from_config(&cfg, name).map(|res| (name, res)))
+                {
+                    Some((name, Ok(_))) => {
+                        let cmd = crate::herding::paseo::paseo_command(&cfg);
+                        if command_resolves_on_path(&cmd) {
+                            (true, format!("paseo agent {name}: {cmd} on PATH"))
+                        } else {
+                            (
+                                false,
+                                format!(
+                                    "paseo agent {name}: {cmd} not found — FIX: npm i -g @getpaseo/cli"
+                                ),
+                            )
+                        }
+                    }
+                    Some((_, Err(err))) => (false, err),
+                    None => {
+                        let (ready, reason, _) = match transport_kind_at(root) {
+                            Ok(kind) => herding_transport_probe_for(kind, &|k| std::env::var(k).ok()),
+                            Err(reason) => (false, reason, None),
+                        };
+                        (ready, reason)
+                    }
                 };
                 payload.insert("transport_ready".into(), Value::Bool(transport_ready));
                 payload.insert("transport_reason".into(), Value::String(transport_reason));
@@ -5959,6 +6010,172 @@ mod pi_native_door_tests {
 
         // detached_delivery note is present
         assert!(payload.get("detached_delivery").is_some(), "payload must have detached_delivery");
+    }
+}
+
+#[cfg(test)]
+mod paseo_probe_tests {
+    use super::*;
+
+    fn repo(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        for (rel, body) in [(".bee/onboarding.json", "{\"version\":1}"), (".bee/config.json", config)] {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        }
+        root
+    }
+
+    fn w_cell(root: &Path, id: &str) {
+        let path = root.join(".bee").join("cells").join(format!("{id}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(r#"{{"id":"{id}","feature":"f","status":"claimed","trace":{{"worker":"w"}}}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn paseo_agent_ready_when_command_resolves_on_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub_paseo = bin_dir.join("stub-paseo");
+        std::fs::write(&stub_paseo, "").unwrap();
+
+        let cfg = format!(
+            r#"{{
+            "team": {{"pi": {{"code": {{"kind": "herding", "agent": "paseo-worker"}}}}}},
+            "herding": {{
+                "transport": "herdr",
+                "paseo": {{"command": "{}"}},
+                "agents": {{
+                    "paseo-worker": {{
+                        "paseo": {{
+                            "provider": "pi",
+                            "model": "deepseek-flash"
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            stub_paseo.display()
+        );
+        let root = repo(&tmp, &cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(true));
+        assert_eq!(
+            payload["transport_reason"],
+            Value::String(format!("paseo agent paseo-worker: {} on PATH", stub_paseo.display()))
+        );
+    }
+
+    #[test]
+    fn paseo_agent_not_ready_when_command_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "paseo-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "paseo": {"command": "definitely-not-on-path-paseo-12345"},
+                "agents": {
+                    "paseo-worker": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-flash"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        assert_eq!(
+            payload["transport_reason"],
+            Value::String("paseo agent paseo-worker: definitely-not-on-path-paseo-12345 not found — FIX: npm i -g @getpaseo/cli".into())
+        );
+    }
+
+    #[test]
+    fn paseo_agent_not_ready_on_malformed_paseo_block() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "bad-paseo"}}},
+            "herding": {
+                "agents": {
+                    "bad-paseo": {
+                        "paseo": {
+                            "model": "deepseek-flash"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        assert_eq!(payload["transport_ready"], Value::Bool(false));
+        let reason = payload["transport_reason"].as_str().expect("string");
+        assert!(reason.contains("bad-paseo"));
+        assert!(reason.contains("provider"));
+    }
+
+    #[test]
+    fn non_paseo_agent_keeps_today_probe_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = r#"{
+            "team": {"pi": {"code": {"kind": "herding", "agent": "normal-worker"}}},
+            "herding": {
+                "transport": "herdr",
+                "agents": {
+                    "normal-worker": ["pi", "-a"]
+                }
+            }
+        }"#;
+        let root = repo(&tmp, cfg);
+        w_cell(&root, "c-1");
+        let out = prepare_dispatch_with_role(
+            &root, "pi", "cell", Some("code"), Some("c-1"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap();
+        let Prepared::Value(v) = out else { panic!("expected prepared value") };
+        let payload = &v["payload"];
+        let (expected_ready, expected_reason, _) = herding_transport_probe(&|k| std::env::var(k).ok());
+        assert_eq!(payload["transport_ready"], Value::Bool(expected_ready));
+        assert_eq!(payload["transport_reason"], Value::String(expected_reason));
+    }
+
+    #[test]
+    fn command_resolves_on_path_in_checks_existence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let stub = bin_dir.join("test-bin");
+        std::fs::write(&stub, "").unwrap();
+
+        assert!(command_resolves_on_path_in("test-bin", Some(bin_dir.as_os_str())));
+        assert!(!command_resolves_on_path_in("missing-bin", Some(bin_dir.as_os_str())));
+        assert!(!command_resolves_on_path_in("test-bin", None));
     }
 }
 

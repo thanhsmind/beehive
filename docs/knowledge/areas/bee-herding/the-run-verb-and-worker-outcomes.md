@@ -751,6 +751,7 @@ verb's own default ceiling of 21600 s is far too loose to serve as one.
 - Control verbs `bee herding interrupt` and `bee herding cancel` are implemented in
   `packages/bee-rs/crates/bee/src/herding/job_verbs.rs`.
 - Question routing, the answer verb, and child job re-dispatch: [The Mailbox Broker](the-mailbox-broker.md) and `packages/bee-rs/crates/bee/src/herding/broker.rs`.
+- A worker carried as a Paseo agent instead of a pane: [The Paseo channel](the-paseo-channel.md) and `packages/bee-rs/crates/bee/src/herding/paseo.rs`.
 - Spellings this page states in business terms: continuing a job is
   `bee herding run --continue <job-id>`; interrupting a job is
   `bee herding interrupt <job-id>`; cancelling a job is
