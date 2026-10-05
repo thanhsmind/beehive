@@ -95,6 +95,80 @@ const mod = await import(pathToFileURL({:?}).href);
     }
 }
 
+fn run_extension_test(name: &str, env_vars: &[(&str, &str)], code: &str) {
+    node_or_skip!(name);
+    let extension_path = repo_root().join(".pi/extensions/bee-guard/index.ts");
+    let script = format!(
+        r#"
+import {{ pathToFileURL }} from "node:url";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import assert from "node:assert/strict";
+
+const handlers = new Map();
+const messages = [];
+const pi = {{
+  on(event, handler) {{
+    if (!handlers.has(event)) handlers.set(event, []);
+    handlers.get(event).push(handler);
+  }},
+  registerTool() {{}},
+  registerCommand() {{}},
+  getActiveTools() {{ return []; }},
+  setActiveTools() {{}},
+  getAllTools() {{ return []; }},
+  sendUserMessage: async (text, options) => {{
+    messages.push({{ text: String(text), options: options ?? null }});
+  }},
+}};
+
+const extMod = await import(pathToFileURL({:?}).href);
+await extMod.default(pi);
+
+const fire = async (event, eventArg, ctx) => {{
+  const list = handlers.get(event) ?? [];
+  let out = undefined;
+  for (const fn of list) {{
+    const r = await fn(eventArg, ctx);
+    if (r !== undefined && r !== null) out = r;
+  }}
+  return out;
+}};
+
+{}
+"#,
+        extension_path.to_str().expect("valid utf-8 path"),
+        code
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let script_path = dir.path().join("runner.mjs");
+    std::fs::write(&script_path, script).expect("write runner.mjs");
+
+    let mut cmd = Command::new("node");
+    cmd.arg(&script_path);
+    cmd.env_remove("BEE_HERDING_WORKER");
+    cmd.env_remove("PASEO_AGENT_ID");
+    for (k, v) in env_vars {
+        cmd.env(k, v);
+    }
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("spawn node");
+
+    if !output.status.success() {
+        panic!(
+            "Test {} failed (exit code {:?}):\nstdout:\n{}\nstderr:\n{}",
+            name,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 #[test]
 fn test_is_paseo_leader() {
     run_js_test(
@@ -272,6 +346,188 @@ assert.equal(textNoNews, "bee heartbeat: no news. Reply with the single word ok 
 
 const textNull = heartbeatText(null);
 assert.equal(textNull, "bee heartbeat: no news. Reply with the single word ok and do nothing else.");
+"#,
+    );
+}
+
+#[test]
+fn test_leader_session_start_calls_stub_paseo_once() {
+    run_extension_test(
+        "test_leader_session_start_calls_stub_paseo_once",
+        &[("PASEO_AGENT_ID", "agent-leader-1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-leader-start-"));
+const stubPaseo = path.join(tmpDir, "stub-paseo.sh");
+const callsLog = path.join(tmpDir, "paseo-calls.log");
+fs.writeFileSync(stubPaseo, `#!/bin/sh\nprintf '%s\n' "$*" >> "${callsLog}"\nprintf '{"id":"sched-hb-42"}'\n`);
+fs.chmodSync(stubPaseo, 0o755);
+
+const beeDir = path.join(tmpDir, ".bee");
+fs.mkdirSync(beeDir, { recursive: true });
+fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
+  herding: {
+    paseo: {
+      command: stubPaseo
+    }
+  }
+}));
+
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-1" };
+await fire("session_start", { reason: "new" }, ctx);
+
+const deadline = Date.now() + 2000;
+const markerPath = path.join(tmpDir, ".bee", "runtime", "paseo-heartbeat", "agent-leader-1.json");
+let marker = {};
+while (Date.now() < deadline) {
+  if (fs.existsSync(callsLog) && fs.existsSync(markerPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+      if (parsed.schedule_id) {
+        marker = parsed;
+        break;
+      }
+    } catch {}
+  }
+  await new Promise((r) => setTimeout(r, 20));
+}
+
+assert.ok(fs.existsSync(callsLog), "stub paseo must have been called");
+const lines1 = fs.readFileSync(callsLog, "utf8").trim().split("\n");
+assert.equal(lines1.length, 1);
+assert.equal(lines1[0], "heartbeat create --cron */5 * * * * --name bee-leader --json bee heartbeat");
+
+assert.ok(fs.existsSync(markerPath), "marker file must exist");
+assert.equal(marker.schedule_id, "sched-hb-42");
+
+await fire("session_start", { reason: "new" }, ctx);
+await new Promise((r) => setTimeout(r, 100));
+const lines2 = fs.readFileSync(callsLog, "utf8").trim().split("\n");
+assert.equal(lines2.length, 1, "stub paseo must only be called once");
+"#,
+    );
+}
+
+#[test]
+fn test_worker_session_start_makes_no_call() {
+    run_extension_test(
+        "test_worker_session_start_makes_no_call",
+        &[("PASEO_AGENT_ID", "agent-worker-1"), ("BEE_HERDING_WORKER", "1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-worker-start-"));
+const stubPaseo = path.join(tmpDir, "stub-paseo.sh");
+const callsLog = path.join(tmpDir, "paseo-calls.log");
+fs.writeFileSync(stubPaseo, `#!/bin/sh\nprintf '%s\n' "$*" >> "${callsLog}"\nprintf '{"id":"sched-hb-42"}'\n`);
+fs.chmodSync(stubPaseo, 0o755);
+
+const beeDir = path.join(tmpDir, ".bee");
+fs.mkdirSync(beeDir, { recursive: true });
+fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
+  herding: {
+    paseo: {
+      command: stubPaseo
+    }
+  }
+}));
+
+const ctx = { cwd: tmpDir, sessionId: "sess-worker-1" };
+await fire("session_start", { reason: "new" }, ctx);
+await new Promise((r) => setTimeout(r, 100));
+assert.equal(fs.existsSync(callsLog), false, "stub paseo must not be called in worker env");
+"#,
+    );
+}
+
+#[test]
+fn test_heartbeat_input_no_news_returns_transform_ok() {
+    run_extension_test(
+        "test_heartbeat_input_no_news_returns_transform_ok",
+        &[("PASEO_AGENT_ID", "agent-leader-1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-input-nonews-"));
+const beeBinDir = path.join(tmpDir, ".bee", "bin");
+fs.mkdirSync(beeBinDir, { recursive: true });
+const stubBee = path.join(beeBinDir, "bee");
+fs.writeFileSync(stubBee, `#!/bin/sh\nprintf '{"claimed":0,"notices_sent":0}'\n`);
+fs.chmodSync(stubBee, 0o755);
+
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-1" };
+const res = await fire("input", { text: '<paseo-system>Schedule "bee-leader" fired (id=x, run=1). bee heartbeat</paseo-system>' }, ctx);
+assert.deepEqual(res, {
+  action: "transform",
+  text: "bee heartbeat: no news. Reply with the single word ok and do nothing else."
+});
+"#,
+    );
+}
+
+#[test]
+fn test_heartbeat_input_with_news_returns_transform_news() {
+    run_extension_test(
+        "test_heartbeat_input_with_news_returns_transform_news",
+        &[("PASEO_AGENT_ID", "agent-leader-1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-input-news-"));
+const beeBinDir = path.join(tmpDir, ".bee", "bin");
+fs.mkdirSync(beeBinDir, { recursive: true });
+const stubBee = path.join(beeBinDir, "bee");
+fs.writeFileSync(stubBee, `#!/bin/sh\nprintf '{"claimed":1,"notices_sent":0}'\n`);
+fs.chmodSync(stubBee, 0o755);
+
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-1" };
+const res = await fire("input", { text: '<paseo-system>Schedule "bee-leader" fired (id=x, run=1). bee heartbeat</paseo-system>' }, ctx);
+assert.deepEqual(res, {
+  action: "transform",
+  text: "bee heartbeat: the broker routed 1 question(s) and sent 0 notice(s). Read them with bee orient and act."
+});
+"#,
+    );
+}
+
+#[test]
+fn test_normal_input_returns_continue() {
+    run_extension_test(
+        "test_normal_input_returns_continue",
+        &[("PASEO_AGENT_ID", "agent-leader-1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-input-normal-"));
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-1" };
+const res = await fire("input", { text: "hello please help me write some code" }, ctx);
+assert.deepEqual(res, { action: "continue" });
+"#,
+    );
+}
+
+#[test]
+fn test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge() {
+    run_extension_test(
+        "test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge",
+        &[("PASEO_AGENT_ID", "agent-leader-1")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-settle-nudge-"));
+const beeBinDir = path.join(tmpDir, ".bee", "bin");
+fs.mkdirSync(beeBinDir, { recursive: true });
+const stubBee = path.join(beeBinDir, "bee");
+fs.writeFileSync(stubBee, `#!/bin/sh
+if [ "$1" = "herding" ] && [ "$2" = "broker" ] && [ "$3" = "tick" ]; then
+  printf '{"claimed":0,"notices_sent":0}'
+  exit 0
+fi
+if [ "$1" = "hook" ] && [ "$2" = "session-close" ]; then
+  printf '{"decision":"block","reason":"continuation nudge reason"}'
+  exit 0
+fi
+exit 0
+`);
+fs.chmodSync(stubBee, 0o755);
+
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-1" };
+await fire("input", { text: '<paseo-system>Schedule "bee-leader" fired (id=x, run=1). bee heartbeat</paseo-system>' }, ctx);
+await fire("agent_settled", {}, ctx);
+assert.equal(messages.length, 0, "quiet heartbeat settle must inject no continuation nudge");
+
+await fire("agent_settled", {}, ctx);
+assert.equal(messages.length, 1, "subsequent settle with block verdict must inject continuation nudge");
+assert.equal(messages[0].text, "continuation nudge reason");
 "#,
     );
 }

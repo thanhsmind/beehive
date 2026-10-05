@@ -2,7 +2,15 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import cp, { execFile } from "node:child_process"
 import { rmSync } from "node:fs"
 import { directoryOf, sessionIdOf, sessionSource } from "./session.ts"
-import { beeStorePresent, resolveBeeBinary } from "./locate.ts"
+import { beeStorePresent, mainCheckoutRoot, resolveBeeBinary } from "./locate.ts"
+import {
+  ensureHeartbeat,
+  heartbeatText,
+  isHeartbeatPrompt,
+  isPaseoLeader,
+  parseTick,
+  readPaseoSettings,
+} from "./paseo-heartbeat.ts"
 import { mapToolCall, BEE_STAGE_TOOLS } from "./tool-map.ts"
 import { runBlockingHook, runAdvisoryHook } from "./hooks.ts"
 import { refreshModelUsageStatus } from "./model-usage.ts"
@@ -22,6 +30,9 @@ import {
 } from "./transition.ts"
 import { drainWorkerSteer } from "./tool-steer.ts"
 import { state } from "./state.ts"
+
+let quietHeartbeatTurn = false
+let tickRunning = false
 
 // ─── the belt ──────────────────────────────────────────────────────────────
 
@@ -81,6 +92,39 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         startResultDrain(pi, directory, sessionIdOf(ctx), ctx)
       } catch (err: any) {
         console.error(`bee result-inbox (advisory) could not start: ${err?.message ?? err}`)
+      }
+      if (isPaseoLeader()) {
+        const mainRoot = mainCheckoutRoot(directory)
+        ensureHeartbeat(
+          mainRoot,
+          process.env.PASEO_AGENT_ID ?? "",
+          readPaseoSettings(mainRoot),
+          (command, args) =>
+            new Promise((resolve, reject) => {
+              const child = cp.execFile(
+                command,
+                args,
+                { timeout: 30000, encoding: "utf8" },
+                (error, stdout) => {
+                  if (error) {
+                    reject(error)
+                  } else {
+                    resolve(String(stdout ?? ""))
+                  }
+                },
+              )
+              child.stdin?.on("error", () => {})
+              child.stdin?.end()
+            }),
+        )
+          .then((res) => {
+            if (!res.created && res.reason !== "exists") {
+              console.error(`bee paseo-heartbeat: ${res.reason}`)
+            }
+          })
+          .catch((err: any) => {
+            console.error(`bee paseo-heartbeat: ${err?.message ?? err}`)
+          })
       }
       const text = runAdvisoryHook(directory, "session-init", {
         hook_event_name: "SessionStart",
@@ -236,6 +280,47 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         }
       }
     } catch {}
+    const text = typeof event?.text === "string" ? event.text : ""
+    if (isPaseoLeader() && isHeartbeatPrompt(text)) {
+      if (tickRunning) {
+        quietHeartbeatTurn = true
+        return { action: "transform", text: heartbeatText(null) }
+      }
+      const directory = directoryOf(ctx)
+      const beeBinary = resolveBeeBinary(directory)
+      if (!beeBinary) {
+        quietHeartbeatTurn = true
+        return { action: "transform", text: heartbeatText(null) }
+      }
+      tickRunning = true
+      try {
+        const stdout = await new Promise<string>((resolve, reject) => {
+          const child = cp.execFile(
+            beeBinary,
+            ["herding", "broker", "tick", "--json"],
+            { cwd: directory, timeout: 120000, encoding: "utf8" },
+            (error, stdout) => {
+              if (error) {
+                reject(error)
+              } else {
+                resolve(String(stdout ?? ""))
+              }
+            },
+          )
+          child.stdin?.on("error", () => {})
+          child.stdin?.end()
+        })
+        const tick = parseTick(stdout)
+        quietHeartbeatTurn = !tick?.news
+        return { action: "transform", text: heartbeatText(tick) }
+      } catch (err: any) {
+        console.error(`bee broker tick (heartbeat): ${err?.message ?? err}`)
+        quietHeartbeatTurn = true
+        return { action: "transform", text: heartbeatText(null) }
+      } finally {
+        tickRunning = false
+      }
+    }
     return { action: "continue" }
   }) as any)
 
@@ -363,6 +448,8 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     const activeSessionId = sessionIdOf(ctx) ?? ""
     const hadForcedContinuation = forcedContinuationSessions.has(activeSessionId)
     forcedContinuationSessions.delete(activeSessionId)
+    const wasQuietHeartbeat = quietHeartbeatTurn
+    quietHeartbeatTurn = false
     try {
       promptDepths.delete(activeSessionId)
       state.selfBusy = false
@@ -423,6 +510,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           const parsed = JSON.parse(rawVerdict.trim())
           if (
             !hadForcedContinuation &&
+            !wasQuietHeartbeat &&
             parsed &&
             parsed.decision === "block" &&
             typeof parsed.reason === "string" &&
