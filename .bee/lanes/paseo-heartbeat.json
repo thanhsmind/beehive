@@ -2,24 +2,19 @@
   "schema_version": "1.0",
   "feature": "paseo-heartbeat",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"paseo-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 77af6f9; reload the product and test \"paseo-heartbeat\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-heartbeat\") or fix it in the worktree and merge again.",
+  "next_action": "User tests the Paseo leader heartbeat on main, then approves uat; slice 3 (paseo-pi D5 answers) follows",
   "created_at": "2026-10-05T23:23:08.569Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: paseo-heartbeat",
-    "asked_at": "2026-10-05T23:57:36.167Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -726,5 +721,14 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-05T23:41:55.659Z"
+  },
+  "last_scribing_run": {
+    "feature": "paseo-heartbeat",
+    "date": "2026-10-05",
+    "at": "2026-10-05T23:57:48.718Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "User tests the Paseo leader heartbeat on main, then approves uat; slice 3 (paseo-pi D5 answers) follows"
   }
 }
