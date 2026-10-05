@@ -654,6 +654,9 @@
     "heartbeat",
     "team",
     "spike",
-    "paseo-heartbeat"
+    "paseo-heartbeat",
+    "contract:paseo-heartbeat-helpers",
+    "contract:paseo-heartbeat-events",
+    "contract:paseo-heartbeat-stale-marker"
   ]
 }
