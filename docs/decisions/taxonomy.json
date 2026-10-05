@@ -647,6 +647,12 @@
     "contract:worker-question",
     "contract:pi-question-drain",
     "contract:broker-tick",
-    "contract:broker-role"
+    "contract:broker-role",
+    "paseo-pi",
+    "paseo",
+    "mailbox-broker",
+    "heartbeat",
+    "team",
+    "spike"
   ]
 }

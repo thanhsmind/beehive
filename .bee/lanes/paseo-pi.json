@@ -1,0 +1,726 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-pi",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-pi\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming: wave 1 ppi-1 and ppi-4, then ppi-2 and ppi-3.",
+  "created_at": "2026-10-05T15:02:43.605Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "paseo-pi: D3 heartbeat swallow stalls Paseo; use extension timer instead?",
+    "asked_at": "2026-10-05T15:43:44.549Z",
+    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "multi-domain",
+      "public-contracts"
+    ],
+    "product_files": 3,
+    "rationale": "Paseo daemon is an external provider (hard-gate flag); Rust herding plus Pi extension; new herding.agents config shape is a contract callers write",
+    "updated_at": "2026-10-05T15:48:38.279Z",
+    "feature": "paseo-pi"
+  },
+  "gate_preview": {
+    "feature": "paseo-pi",
+    "plan_sha256": "f0e67ecbb615e2a3ff069371c3c08038ef3bdf840f555263ddcf298243fa7c1e",
+    "previewed_at": "2026-10-05T15:54:22.203Z",
+    "cells": [
+      {
+        "id": "ppi-1",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Add the Paseo agent block, CLI argv and status reading",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/CONTEXT.md",
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "action": "Red first. Create packages/bee-rs/crates/bee/src/herding/paseo.rs and declare it with `pub(crate) mod paseo;` in herding.rs beside the other herding modules. Pure functions plus one injectable runner, all unit-tested in a #[cfg(test)] mod tests inside paseo.rs: (1) `PaseoSpec::from_config(cfg: &Value, agent: &str) -> Option<Result<PaseoSpec, String>>` reads `herding.agents.<agent>.paseo` when the entry is an object carrying a `paseo` object: `provider` required non-empty string; `model`, `thinking`, `mode` optional strings; None when the entry has no `paseo` block; Err naming the agent when `provider` is missing or not a string. (2) `paseo_command(cfg) -> String` reads `herding.paseo.command`, default `paseo`. (3) `run_argv(spec, job_id, cwd, env: &[(String,String)], prompt) -> Vec<String>` builds `run -d --json --provider <provider>[/<model>] [--thinking t] [--mode m] --cwd <cwd> --title <job_id> --label bee_job=<job_id> --env K=V ... <prompt>` in that order, one --env per pair. (4) `parse_run_agent_id(stdout) -> Result<String,String>` reads `agentId` from the first JSON object in stdout (Paseo prints lines before the JSON). (5) `PaseoState { Working, Idle, Blocked, Dead }` and `parse_inspect(stdout) -> Option<PaseoState>`: key `Status` (capitalized): running → Working unless `PendingPermissions` is a non-empty array → Blocked; idle → Idle; error and closed → Dead; any other value or unparseable body → None. (6) `version_at_least(output, (0,10,3)) -> bool` parses the last semver-looking token of `paseo --version` output; false when none parses. (7) `inspect_argv(id)`, `archive_argv(id)` = `archive --force <id>`, `logs_argv(id)`. (8) `trait PaseoCli { fn call(&self, args: &[String]) -> Result<String, String>; }` and `RealPaseoCli { command: String }` that runs the command with stdin null and returns stdout on exit 0, else Err with stderr. No code comments.",
+        "must_haves": {
+          "truths": [
+            "an agent entry with a paseo block parses into PaseoSpec with provider, model, thinking and mode",
+            "an agent entry with no paseo block returns None",
+            "a paseo block without provider returns Err naming the agent",
+            "run_argv joins provider and model with a slash and emits one --env per pair and the bee_job label",
+            "parse_run_agent_id reads agentId after leading non-JSON lines",
+            "parse_inspect maps running, idle, error and closed, maps non-empty PendingPermissions to Blocked, and returns None for an unknown status or bad body",
+            "version_at_least accepts 0.10.3 and newer and refuses 0.6.1 and unparseable output"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "PaseoSpec, argv builders, parse_inspect, version_at_least, PaseoCli"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding.rs",
+              "substantive": "the paseo module declaration"
+            }
+          ],
+          "key_links": [
+            "PaseoSpec::from_config reads herding.agents.<name>.paseo"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to TransportKind or herding.transport",
+            "No paseo send argv anywhere"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-2",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Run a herded worker as a Paseo agent",
+        "deps": [
+          "ppi-1"
+        ],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "action": "Red first. In run.rs add `execute_paseo(opts, spec, cli: &dyn PaseoCli) -> ExecResult`, shaped like `execute_no_pane` (run.rs:3005): write the inbox marker and job.json the same way plus `transport: \"paseo\"`; render the same brief; build env from `build_child_env` plus BEE_HERDING_WORKER=1 and BEE_HERDING_JOB_ID; before spawning, call `--version` and refuse SpawnFailed with a message containing `FIX:` and `0.10.3` when `version_at_least` is false; call `run_argv` with the same pointer prompt the pane path delivers; on Err refuse SpawnFailed with `FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)`; parse the agent id and write `paseo_agent_id` into job.json at once; wait for the round through the same file-mailbox wait the no-pane path uses, with liveness from `inspect_argv` + `parse_inspect` (None never counts as alive); read the result only from result-N.json; on exit call `archive_argv` only when `should_close_pane` (run.rs:1226) is true and the id differs from env PASEO_AGENT_ID, else keep the agent and report its id. In `run` (run.rs:4286 and 4315), when not no_pane and `PaseoSpec::from_config(read_main_config(main_root), agent)` is Some(Ok), skip the pane transport and call execute_paseo with RealPaseoCli; Some(Err) refuses before any job file; None keeps today's path byte-identical. Tests with a fake PaseoCli: happy path archives; failed result keeps; own PASEO_AGENT_ID is never archived; old version refuses before run; failed run refuses with FIX; job.json carries paseo_agent_id; an agent with no paseo block takes the old path. No code comments; no `send` call.",
+        "must_haves": {
+          "truths": [
+            "a run whose agent entry has a paseo block starts the worker through paseo run and never through a pane",
+            "job.json records transport paseo and paseo_agent_id before the wait begins",
+            "the result is read only from result-N.json",
+            "the agent is archived only when should_close_pane is true and never when its id equals PASEO_AGENT_ID",
+            "a paseo version below 0.10.3 refuses with a FIX line before any agent is created",
+            "a failed paseo run refuses with a FIX line naming paseo daemon start",
+            "an agent entry with no paseo block runs the existing herdr, tmux or no-pane path unchanged and the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "execute_paseo and its routing in run"
+            }
+          ],
+          "key_links": [
+            "run routes to execute_paseo when PaseoSpec::from_config returns Some(Ok)"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No paseo send call",
+            "No change to PaneTransport, RealHerdr or RealTmux"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-3",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Report a Paseo agent as ready in dispatch prepare",
+        "deps": [
+          "ppi-1"
+        ],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "action": "Red first. In prepare.rs where the herding payload sets transport_ready (prepare.rs:2573), when the resolved herding agent's entry has a paseo block (`crate::herding::paseo::PaseoSpec::from_config`), set transport_ready true with reason `paseo agent <name>: <command> on PATH` when the configured paseo command resolves on PATH, else false with reason `paseo agent <name>: <command> not found — FIX: npm i -g @getpaseo/cli`; a Some(Err) block is not ready with its message. Every other agent keeps today's probe byte-identical. Unit tests beside the existing prepare tests. No code comments.",
+        "must_haves": {
+          "truths": [
+            "a paseo-bound herding role is transport_ready true when the paseo command resolves on PATH, whatever herding.transport says",
+            "a paseo-bound role is not ready with a FIX reason when the command does not resolve",
+            "a role bound to a non-paseo herding agent gets the same transport_ready and reason as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "the paseo arm of the readiness probe"
+            }
+          ],
+          "key_links": [
+            "prepare calls PaseoSpec::from_config for the resolved herding agent"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "The returned command string stays byte-identical"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-4",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "docs",
+        "title": "Write the Paseo channel concept",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/CONTEXT.md",
+          "docs/history/paseo-pi/plan.md",
+          "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "action": "Write docs/knowledge/areas/bee-herding/the-paseo-channel.md with the same frontmatter shape as the-mailbox-broker.md (type bee.area, id bee-herding-the-paseo-channel, areas [bee-herding], decisions citing paseo-pi D1, D4, D5, D6 by name, owns.code naming packages/bee-rs/crates/bee/src/herding/paseo.rs and herding/run.rs). Body in ASD-STE100 style, short sections: what the channel is (D1); the herding.agents.<name>.paseo block and herding.paseo.command, with one JSON example; how a run goes (paseo run, job.json paseo_agent_id, the file mailbox, the bee_job label); the liveness states and what Unknown means; when the agent is archived and when it is kept; the two FIX lines (version below 0.10.3, daemon down); the environment facts from CONTEXT.md (npm CLI starts the daemon, the AppImage CLI cannot); and one line each pointing at slice 2 (D6 heartbeat) and slice 3 (D5 answers) as planned work. Add one line for the new concept to docs/knowledge/areas/bee-herding/index.md in the same style as its other entries.",
+        "must_haves": {
+          "truths": [
+            "the concept names the paseo block, its fields and its default command",
+            "the concept states the liveness mapping and that Unknown never counts as alive",
+            "the concept states the archive rule and the own-id guard",
+            "the concept gives both FIX lines",
+            "the bee-herding index links the new concept"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "the Paseo channel concept"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/index.md",
+              "substantive": "the index entry"
+            }
+          ],
+          "key_links": [
+            "index.md links the-paseo-channel.md"
+          ],
+          "prohibitions": [
+            "No change to any other concept file"
+          ]
+        },
+        "verify": ".bee/bin/bee knowledge check --json",
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ppi-1 to ppi-3 add the Paseo module, the executor and the readiness probe."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first; the leader drives the live run."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ppi-4 writes the Paseo channel concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "required",
+          "role": "review",
+          "reason": "The slice judge for the behavior cell ppi-2 dispatches the review role; the user-invoked review session is untouched."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the advisor consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-05T15:54:22.356Z",
+    "feature": "paseo-pi",
+    "newest_decision_id": "5274ce1e-e8e2-40a6-8507-bd2877975841",
+    "plan_sha256": "f0e67ecbb615e2a3ff069371c3c08038ef3bdf840f555263ddcf298243fa7c1e",
+    "advisor": "hat-wave:facts-gaps,risks,alternatives,value,user-impact",
+    "digest_head": "# paseo-pi — plan-step hat wave synthesis\n\nDate: 2026-10-05. Five seats, all returned inside the budget: hat-facts-gaps\n(opus), hat-risks (fable), hat-alternatives (opus), hat-value\n(agy-flash), hat-user-impact (agy-flash). The leader synthesized.\n\n## What changed the plan\n\n- **Shape (alternatives, value, facts-gaps).** No third `PaneTransport`.\n  Paseo gets its own executor shaped like `execute_no_pane`\n  (`herding/run.rs:3005`). Half the trait methods have no Paseo meaning.\n- **Per-agent selec"
+  },
+  "approved_cell_packet": {
+    "feature": "paseo-pi",
+    "plan_sha256": "f0e67ecbb615e2a3ff069371c3c08038ef3bdf840f555263ddcf298243fa7c1e",
+    "previewed_at": "2026-10-05T15:54:22.203Z",
+    "cells": [
+      {
+        "id": "ppi-1",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Add the Paseo agent block, CLI argv and status reading",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/CONTEXT.md",
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "action": "Red first. Create packages/bee-rs/crates/bee/src/herding/paseo.rs and declare it with `pub(crate) mod paseo;` in herding.rs beside the other herding modules. Pure functions plus one injectable runner, all unit-tested in a #[cfg(test)] mod tests inside paseo.rs: (1) `PaseoSpec::from_config(cfg: &Value, agent: &str) -> Option<Result<PaseoSpec, String>>` reads `herding.agents.<agent>.paseo` when the entry is an object carrying a `paseo` object: `provider` required non-empty string; `model`, `thinking`, `mode` optional strings; None when the entry has no `paseo` block; Err naming the agent when `provider` is missing or not a string. (2) `paseo_command(cfg) -> String` reads `herding.paseo.command`, default `paseo`. (3) `run_argv(spec, job_id, cwd, env: &[(String,String)], prompt) -> Vec<String>` builds `run -d --json --provider <provider>[/<model>] [--thinking t] [--mode m] --cwd <cwd> --title <job_id> --label bee_job=<job_id> --env K=V ... <prompt>` in that order, one --env per pair. (4) `parse_run_agent_id(stdout) -> Result<String,String>` reads `agentId` from the first JSON object in stdout (Paseo prints lines before the JSON). (5) `PaseoState { Working, Idle, Blocked, Dead }` and `parse_inspect(stdout) -> Option<PaseoState>`: key `Status` (capitalized): running → Working unless `PendingPermissions` is a non-empty array → Blocked; idle → Idle; error and closed → Dead; any other value or unparseable body → None. (6) `version_at_least(output, (0,10,3)) -> bool` parses the last semver-looking token of `paseo --version` output; false when none parses. (7) `inspect_argv(id)`, `archive_argv(id)` = `archive --force <id>`, `logs_argv(id)`. (8) `trait PaseoCli { fn call(&self, args: &[String]) -> Result<String, String>; }` and `RealPaseoCli { command: String }` that runs the command with stdin null and returns stdout on exit 0, else Err with stderr. No code comments.",
+        "must_haves": {
+          "truths": [
+            "an agent entry with a paseo block parses into PaseoSpec with provider, model, thinking and mode",
+            "an agent entry with no paseo block returns None",
+            "a paseo block without provider returns Err naming the agent",
+            "run_argv joins provider and model with a slash and emits one --env per pair and the bee_job label",
+            "parse_run_agent_id reads agentId after leading non-JSON lines",
+            "parse_inspect maps running, idle, error and closed, maps non-empty PendingPermissions to Blocked, and returns None for an unknown status or bad body",
+            "version_at_least accepts 0.10.3 and newer and refuses 0.6.1 and unparseable output"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "PaseoSpec, argv builders, parse_inspect, version_at_least, PaseoCli"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding.rs",
+              "substantive": "the paseo module declaration"
+            }
+          ],
+          "key_links": [
+            "PaseoSpec::from_config reads herding.agents.<name>.paseo"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to TransportKind or herding.transport",
+            "No paseo send argv anywhere"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-2",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Run a herded worker as a Paseo agent",
+        "deps": [
+          "ppi-1"
+        ],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "action": "Red first. In run.rs add `execute_paseo(opts, spec, cli: &dyn PaseoCli) -> ExecResult`, shaped like `execute_no_pane` (run.rs:3005): write the inbox marker and job.json the same way plus `transport: \"paseo\"`; render the same brief; build env from `build_child_env` plus BEE_HERDING_WORKER=1 and BEE_HERDING_JOB_ID; before spawning, call `--version` and refuse SpawnFailed with a message containing `FIX:` and `0.10.3` when `version_at_least` is false; call `run_argv` with the same pointer prompt the pane path delivers; on Err refuse SpawnFailed with `FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)`; parse the agent id and write `paseo_agent_id` into job.json at once; wait for the round through the same file-mailbox wait the no-pane path uses, with liveness from `inspect_argv` + `parse_inspect` (None never counts as alive); read the result only from result-N.json; on exit call `archive_argv` only when `should_close_pane` (run.rs:1226) is true and the id differs from env PASEO_AGENT_ID, else keep the agent and report its id. In `run` (run.rs:4286 and 4315), when not no_pane and `PaseoSpec::from_config(read_main_config(main_root), agent)` is Some(Ok), skip the pane transport and call execute_paseo with RealPaseoCli; Some(Err) refuses before any job file; None keeps today's path byte-identical. Tests with a fake PaseoCli: happy path archives; failed result keeps; own PASEO_AGENT_ID is never archived; old version refuses before run; failed run refuses with FIX; job.json carries paseo_agent_id; an agent with no paseo block takes the old path. No code comments; no `send` call.",
+        "must_haves": {
+          "truths": [
+            "a run whose agent entry has a paseo block starts the worker through paseo run and never through a pane",
+            "job.json records transport paseo and paseo_agent_id before the wait begins",
+            "the result is read only from result-N.json",
+            "the agent is archived only when should_close_pane is true and never when its id equals PASEO_AGENT_ID",
+            "a paseo version below 0.10.3 refuses with a FIX line before any agent is created",
+            "a failed paseo run refuses with a FIX line naming paseo daemon start",
+            "an agent entry with no paseo block runs the existing herdr, tmux or no-pane path unchanged and the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "execute_paseo and its routing in run"
+            }
+          ],
+          "key_links": [
+            "run routes to execute_paseo when PaseoSpec::from_config returns Some(Ok)"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No paseo send call",
+            "No change to PaneTransport, RealHerdr or RealTmux"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-3",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "api",
+        "title": "Report a Paseo agent as ready in dispatch prepare",
+        "deps": [
+          "ppi-1"
+        ],
+        "decisions": [
+          "D1",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+        ],
+        "action": "Red first. In prepare.rs where the herding payload sets transport_ready (prepare.rs:2573), when the resolved herding agent's entry has a paseo block (`crate::herding::paseo::PaseoSpec::from_config`), set transport_ready true with reason `paseo agent <name>: <command> on PATH` when the configured paseo command resolves on PATH, else false with reason `paseo agent <name>: <command> not found — FIX: npm i -g @getpaseo/cli`; a Some(Err) block is not ready with its message. Every other agent keeps today's probe byte-identical. Unit tests beside the existing prepare tests. No code comments.",
+        "must_haves": {
+          "truths": [
+            "a paseo-bound herding role is transport_ready true when the paseo command resolves on PATH, whatever herding.transport says",
+            "a paseo-bound role is not ready with a FIX reason when the command does not resolve",
+            "a role bound to a non-paseo herding agent gets the same transport_ready and reason as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "the paseo arm of the readiness probe"
+            }
+          ],
+          "key_links": [
+            "prepare calls PaseoSpec::from_config for the resolved herding agent"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "The returned command string stays byte-identical"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+        "affects_skills": [],
+        "affects_specs": []
+      },
+      {
+        "id": "ppi-4",
+        "feature": "paseo-pi",
+        "lane": "high-risk",
+        "role": "docs",
+        "title": "Write the Paseo channel concept",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi/CONTEXT.md",
+          "docs/history/paseo-pi/plan.md",
+          "docs/knowledge/areas/bee-herding/the-mailbox-broker.md",
+          "docs/knowledge/areas/bee-herding/index.md"
+        ],
+        "action": "Write docs/knowledge/areas/bee-herding/the-paseo-channel.md with the same frontmatter shape as the-mailbox-broker.md (type bee.area, id bee-herding-the-paseo-channel, areas [bee-herding], decisions citing paseo-pi D1, D4, D5, D6 by name, owns.code naming packages/bee-rs/crates/bee/src/herding/paseo.rs and herding/run.rs). Body in ASD-STE100 style, short sections: what the channel is (D1); the herding.agents.<name>.paseo block and herding.paseo.command, with one JSON example; how a run goes (paseo run, job.json paseo_agent_id, the file mailbox, the bee_job label); the liveness states and what Unknown means; when the agent is archived and when it is kept; the two FIX lines (version below 0.10.3, daemon down); the environment facts from CONTEXT.md (npm CLI starts the daemon, the AppImage CLI cannot); and one line each pointing at slice 2 (D6 heartbeat) and slice 3 (D5 answers) as planned work. Add one line for the new concept to docs/knowledge/areas/bee-herding/index.md in the same style as its other entries.",
+        "must_haves": {
+          "truths": [
+            "the concept names the paseo block, its fields and its default command",
+            "the concept states the liveness mapping and that Unknown never counts as alive",
+            "the concept states the archive rule and the own-id guard",
+            "the concept gives both FIX lines",
+            "the bee-herding index links the new concept"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "the Paseo channel concept"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/index.md",
+              "substantive": "the index entry"
+            }
+          ],
+          "key_links": [
+            "index.md links the-paseo-channel.md"
+          ],
+          "prohibitions": [
+            "No change to any other concept file"
+          ]
+        },
+        "verify": ".bee/bin/bee knowledge check --json",
+        "affects_skills": [],
+        "affects_specs": []
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "ppi-1 to ppi-3 add the Paseo module, the executor and the readiness probe."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first; the leader drives the live run."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "ppi-4 writes the Paseo channel concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "required",
+          "role": "review",
+          "reason": "The slice judge for the behavior cell ppi-2 dispatches the review role; the user-invoked review session is untouched."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the advisor consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape, chosen by the hat wave."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Plan-step hat wave, high-risk five seats."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-10-05T15:53:58.375Z"
+  },
+  "merge_ready": {
+    "since": "2026-10-05T16:16:30.477Z",
+    "branch": "wt/paseo-pi",
+    "worktree_id": "beehive--wt--paseo-pi",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
