@@ -17,7 +17,7 @@ heartbeat tick (slice 2) and answer steering (slice 3) come after it.
 Mode: `high-risk` — 3 risk flags: external systems (the Paseo daemon, a hard-gate flag), multi-domain (Rust and the Pi extension), public contracts (a new `herding.agents` config shape)
 Why this is the least workflow that protects the work: an outside daemon owns agent state that bee must track and clean up, so the hat wave and a live proof guard the one slice that creates agents.
 
-Playbook: `skills/bee-planning/playbooks/feature.md`. Step 1 (data shape first) is the `paseo` agent block below. Step 2 (walking skeleton) is slice 1. Step 3 (current slice only) holds: slices 2 and 3 are headlines. Step 4 (prove the user path) is the live `bee herding run` proof in pp-2's cap. Step 5 (sync knowledge) is pp-4.
+Playbook: `skills/bee-planning/playbooks/feature.md`. Step 1 (data shape first) is the `paseo` agent block below. Step 2 (walking skeleton) is slice 1. Step 3 (current slice only) holds: slices 2 and 3 are headlines. Step 4 (prove the user path) is the live `bee herding run` proof in ppi-2's cap. Step 5 (sync knowledge) is ppi-4.
 
 ## Requirements (from CONTEXT.md)
 
@@ -92,16 +92,16 @@ otherwise; a failed `paseo run` refuses with a FIX line that names
 
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
-| Config parse and argv build | LOW | pp-1 | unit tests over the parse and the argv |
-| Liveness mapping fails closed | MEDIUM | pp-1 | unit tests: inspect error and unknown status are not alive |
-| Orphan agents | MEDIUM | pp-2 | job.json carries `paseo_agent_id`; every run carries `--label bee_job=<id>` |
-| Archive deletes the wrong agent | HIGH | pp-2 | test: never archives its own `PASEO_AGENT_ID`; archives only under `should_close_pane` |
-| Herdr and tmux drift | MEDIUM | pp-2 | the existing herding tests stay green unchanged |
-| Dispatch says "not ready" in a Paseo session | MEDIUM | pp-3 | test: a paseo agent is ready when the CLI resolves, whatever `herding.transport` says |
-| Daemon down or old | MEDIUM | pp-2 | test: version below 0.10.3 and a failed run both refuse with a FIX line |
+| Config parse and argv build | LOW | ppi-1 | unit tests over the parse and the argv |
+| Liveness mapping fails closed | MEDIUM | ppi-1 | unit tests: inspect error and unknown status are not alive |
+| Orphan agents | MEDIUM | ppi-2 | job.json carries `paseo_agent_id`; every run carries `--label bee_job=<id>` |
+| Archive deletes the wrong agent | HIGH | ppi-2 | test: never archives its own `PASEO_AGENT_ID`; archives only under `should_close_pane` |
+| Herdr and tmux drift | MEDIUM | ppi-2 | the existing herding tests stay green unchanged |
+| Dispatch says "not ready" in a Paseo session | MEDIUM | ppi-3 | test: a paseo agent is ready when the CLI resolves, whatever `herding.transport` says |
+| Daemon down or old | MEDIUM | ppi-2 | test: version below 0.10.3 and a failed run both refuse with a FIX line |
 
-Waves: wave 1 runs pp-1 and pp-4 in parallel (disjoint files). Wave 2 runs
-pp-2 and pp-3 in parallel after pp-1, because both call its functions and
+Waves: wave 1 runs ppi-1 and ppi-4 in parallel (disjoint files). Wave 2 runs
+ppi-2 and ppi-3 in parallel after ppi-1, because both call its functions and
 touch disjoint files.
 
 ## Role assignments
@@ -112,15 +112,15 @@ touch disjoint files.
   "runtime": "claude",
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"pp-1 to pp-3 add the Paseo module, the executor and the readiness probe."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"ppi-1 to ppi-3 add the Paseo module, the executor and the readiness probe."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Each code cell writes its own tests red-first; the leader drives the live run."},
-    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"pp-4 writes the Paseo channel concept."},
+    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"ppi-4 writes the Paseo channel concept."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"A release is a separate user ask."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"Discovery is done."},
     {"stage":"fact-extraction","classification":"not-applicable","role":"extraction","reason":"Discovery is done."},
     {"stage":"generation-fallback","classification":"not-applicable","role":"generation","reason":"Every job has a specific role."},
-    {"stage":"independent-review","classification":"required","role":"review","reason":"The slice judge for the behavior_change cell pp-2 dispatches the review role; the user-invoked review session is untouched."},
+    {"stage":"independent-review","classification":"required","role":"review","reason":"The slice judge for the behavior cell ppi-2 dispatches the review role; the user-invoked review session is untouched."},
     {"stage":"generic-advisor","classification":"not-applicable","role":"advisor","reason":"The hat wave is the advisor consult."},
     {"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"No unattended loop runs here."},
     {"stage":"blind-lane-1","classification":"not-applicable","role":"lane-1","reason":"One shape, chosen by the hat wave."},
@@ -156,15 +156,15 @@ on each other once slice 1 lands.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| pp-1 | Add the Paseo agent block, CLI argv and status reading | packages/bee-rs/crates/bee/src/herding/paseo.rs (new); packages/bee-rs/crates/bee/src/herding.rs | — | nothing yet; unblocks pp-2 and pp-3 | herding::paseo unit tests green |
-| pp-2 | Run a herded worker as a Paseo agent | packages/bee-rs/crates/bee/src/herding/run.rs | pp-1 | `bee herding run --agent <paseo agent>` starts a Paseo agent, returns its result, and archives it | herding tests green, then a live run |
-| pp-3 | Report a Paseo agent as ready in dispatch prepare | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs | pp-1 | `bee dispatch prepare` for a paseo-bound role shows `transport_ready: true` when `paseo` resolves | prepare tests green |
-| pp-4 | Write the Paseo channel concept | docs/knowledge/areas/bee-herding/the-paseo-channel.md (new); docs/knowledge/areas/bee-herding/index.md | — | the knowledge bundle explains the paseo block, its states and its FIX lines | knowledge check green |
+| ppi-1 | Add the Paseo agent block, CLI argv and status reading | packages/bee-rs/crates/bee/src/herding/paseo.rs (new); packages/bee-rs/crates/bee/src/herding.rs | — | nothing yet; unblocks ppi-2 and ppi-3 | herding::paseo unit tests green |
+| ppi-2 | Run a herded worker as a Paseo agent | packages/bee-rs/crates/bee/src/herding/run.rs | ppi-1 | `bee herding run --agent <paseo agent>` starts a Paseo agent, returns its result, and archives it | herding tests green, then a live run |
+| ppi-3 | Report a Paseo agent as ready in dispatch prepare | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs | ppi-1 | `bee dispatch prepare` for a paseo-bound role shows `transport_ready: true` when `paseo` resolves | prepare tests green |
+| ppi-4 | Write the Paseo channel concept | docs/knowledge/areas/bee-herding/the-paseo-channel.md (new); docs/knowledge/areas/bee-herding/index.md | — | the knowledge bundle explains the paseo block, its states and its FIX lines | knowledge check green |
 
 ```json
 [
   {
-    "id": "pp-1",
+    "id": "ppi-1",
     "feature": "paseo-pi",
     "lane": "high-risk",
     "role": "code",
@@ -211,13 +211,13 @@ on each other once slice 1 lands.
     "affects_specs": []
   },
   {
-    "id": "pp-2",
+    "id": "ppi-2",
     "feature": "paseo-pi",
     "lane": "high-risk",
     "role": "code",
-    "change_class": "behavior_change",
+    "change_class": "behavior",
     "title": "Run a herded worker as a Paseo agent",
-    "deps": ["pp-1"],
+    "deps": ["ppi-1"],
     "decisions": ["D1", "D4"],
     "files": [
       "packages/bee-rs/crates/bee/src/herding/run.rs"
@@ -255,13 +255,13 @@ on each other once slice 1 lands.
     "affects_specs": []
   },
   {
-    "id": "pp-3",
+    "id": "ppi-3",
     "feature": "paseo-pi",
     "lane": "high-risk",
     "role": "code",
     "change_class": "api",
     "title": "Report a Paseo agent as ready in dispatch prepare",
-    "deps": ["pp-1"],
+    "deps": ["ppi-1"],
     "decisions": ["D1", "D4"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
@@ -294,11 +294,10 @@ on each other once slice 1 lands.
     "affects_specs": []
   },
   {
-    "id": "pp-4",
+    "id": "ppi-4",
     "feature": "paseo-pi",
     "lane": "high-risk",
     "role": "docs",
-    "change_class": "docs",
     "title": "Write the Paseo channel concept",
     "deps": [],
     "decisions": ["D1", "D4", "D5", "D6"],
@@ -345,17 +344,17 @@ High-risk: the applicable edge dimensions, each mapped to a cell truth.
 
 | Dimension | Probe | Cell | Pass when |
 |---|---|---|---|
-| Input extremes | paseo block with no provider, provider not a string | pp-1 | `from_config` returns Err naming the agent |
-| Input extremes | inspect body with unknown Status or not JSON | pp-1 | `parse_inspect` returns None |
-| Version and compatibility | `paseo --version` prints 0.6.1 | pp-1, pp-2 | the run refuses with a line containing `FIX:` and `0.10.3` and no agent is created |
-| External failure | `paseo run` exits non-zero (daemon down) | pp-2 | SpawnFailed with `FIX: start the daemon with paseo daemon start` |
-| State and lifecycle | worker writes a valid result | pp-2 | outcome done and one `archive --force <id>` call |
-| State and lifecycle | worker fails or times out | pp-2 | no archive call; the agent id is reported |
-| Authorization and identity | the agent id equals env PASEO_AGENT_ID | pp-2 | no archive call |
-| Concurrency and orphans | run returns an id | pp-2 | job.json holds `paseo_agent_id` before the wait; the argv holds `--label bee_job=<job id>` |
-| Regression | an agent with no paseo block | pp-2, pp-3 | existing herding and prepare tests pass unchanged |
-| Environment | paseo command not on PATH | pp-3 | transport_ready false with a FIX reason |
-| User-visible path | live run on a paseo agent | pp-2 cap | `bee herding run --agent <paseo agent>` prints `outcome done` and `paseo inspect <id>` shows Archived true |
+| Input extremes | paseo block with no provider, provider not a string | ppi-1 | `from_config` returns Err naming the agent |
+| Input extremes | inspect body with unknown Status or not JSON | ppi-1 | `parse_inspect` returns None |
+| Version and compatibility | `paseo --version` prints 0.6.1 | ppi-1, ppi-2 | the run refuses with a line containing `FIX:` and `0.10.3` and no agent is created |
+| External failure | `paseo run` exits non-zero (daemon down) | ppi-2 | SpawnFailed with `FIX: start the daemon with paseo daemon start` |
+| State and lifecycle | worker writes a valid result | ppi-2 | outcome done and one `archive --force <id>` call |
+| State and lifecycle | worker fails or times out | ppi-2 | no archive call; the agent id is reported |
+| Authorization and identity | the agent id equals env PASEO_AGENT_ID | ppi-2 | no archive call |
+| Concurrency and orphans | run returns an id | ppi-2 | job.json holds `paseo_agent_id` before the wait; the argv holds `--label bee_job=<job id>` |
+| Regression | an agent with no paseo block | ppi-2, ppi-3 | existing herding and prepare tests pass unchanged |
+| Environment | paseo command not on PATH | ppi-3 | transport_ready false with a FIX reason |
+| User-visible path | live run on a paseo agent | ppi-2 cap | `bee herding run --agent <paseo agent>` prints `outcome done` and `paseo inspect <id>` shows Archived true |
 
 ## Open Questions
 
