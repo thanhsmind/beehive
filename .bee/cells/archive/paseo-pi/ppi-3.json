@@ -1,0 +1,117 @@
+{
+  "id": "ppi-3",
+  "feature": "paseo-pi",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "api",
+  "title": "Report a Paseo agent as ready in dispatch prepare",
+  "deps": [
+    "ppi-1"
+  ],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Red first. In prepare.rs where the herding payload sets transport_ready (prepare.rs:2573), when the resolved herding agent's entry has a paseo block (`crate::herding::paseo::PaseoSpec::from_config`), set transport_ready true with reason `paseo agent <name>: <command> on PATH` when the configured paseo command resolves on PATH, else false with reason `paseo agent <name>: <command> not found — FIX: npm i -g @getpaseo/cli`; a Some(Err) block is not ready with its message. Every other agent keeps today's probe byte-identical. Unit tests beside the existing prepare tests. No code comments.",
+  "must_haves": {
+    "truths": [
+      "a paseo-bound herding role is transport_ready true when the paseo command resolves on PATH, whatever herding.transport says",
+      "a paseo-bound role is not ready with a FIX reason when the command does not resolve",
+      "a role bound to a non-paseo herding agent gets the same transport_ready and reason as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "the paseo arm of the readiness probe"
+      }
+    ],
+    "key_links": [
+      "prepare calls PaseoSpec::from_config for the resolved herding agent"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "The returned command string stays byte-identical"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-ppi-3",
+    "outcome": "Paseo readiness arm in dispatch prepare",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "deviations": [
+      "sync-ack: skills/bee-herding covers the cockpit roles, not dispatch readiness for a Paseo agent; the Paseo channel concept (ppi-4) is the owning doc"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-05T16:16:30.474Z",
+    "behavior_change": false,
+    "verification_evidence": "64 passed 0 failed 8 ignored (child-spawned tests); not driven live through a paseo-bound team role",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare",
+    "claimed_at": "2026-10-05T16:02:10.948Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:16:30.473Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-05T16:18:34.845Z"
+      }
+    ],
+    "sync_ack": "skills/bee-herding covers the cockpit roles, not dispatch readiness for a Paseo agent; the Paseo channel concept (ppi-4) is the owning doc",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "dispatch prepare reports a paseo-bound herding role ready when the paseo command resolves on PATH",
+      "commit": "9b1159f6f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prepare — green:unit — 64 passed 0 failed 8 ignored (child-spawned tests); not driven live through a paseo-bound team role",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "a paseo-bound herding role is transport_ready true when the paseo command resolves on PATH, whatever herding.transport says",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a paseo-bound role is not ready with a FIX reason when the command does not resolve",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a role bound to a non-paseo herding agent gets the same transport_ready and reason as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-10-05T16:18:34.845Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

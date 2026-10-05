@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "paseo-pi",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"paseo-pi\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 322289f; reload the product and test \"paseo-pi\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-pi\") or fix it in the worktree and merge again.",
+  "next_action": "User tests the Paseo worker path on main, then approves uat; slice 2 (D6 heartbeat) and slice 3 (D5 answers) follow",
   "created_at": "2026-10-05T15:02:43.605Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: paseo-pi",
-    "asked_at": "2026-10-05T16:17:54.854Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "paseo heartbeat slice: cadence and how it turns on",
+    "asked_at": "2026-10-05T23:16:09.670Z",
+    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
   },
   "route": {
     "class": "feature",
@@ -715,5 +715,14 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-05T15:53:58.375Z"
+  },
+  "last_scribing_run": {
+    "feature": "paseo-pi",
+    "date": "2026-10-05",
+    "at": "2026-10-05T16:18:41.858Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "User tests the Paseo worker path on main, then approves uat; slice 2 (D6 heartbeat) and slice 3 (D5 answers) follow"
   }
 }

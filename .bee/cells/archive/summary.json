@@ -1498,5 +1498,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-10-04T07:37:26.945Z"
+  },
+  "paseo-pi": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-05T23:22:49.091Z"
   }
 }
