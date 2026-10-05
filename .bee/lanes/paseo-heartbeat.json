@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-heartbeat",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"paseo-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "User tests the Paseo leader heartbeat on main, then approves uat; slice 3 (paseo-pi D5 answers) follows",
+  "next_action": "bee close finished \"paseo-heartbeat\" — feature is closed.",
   "created_at": "2026-10-05T23:23:08.569Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
