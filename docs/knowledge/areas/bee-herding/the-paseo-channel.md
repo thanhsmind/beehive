@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)"]
+  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D7 8ae5134d (the heartbeat fires every 5 minutes by default; a config key changes it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)"]
   sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
   owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs]
@@ -120,11 +120,31 @@ Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon. The AppImag
 
 Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface. Extensions in `.pi/extensions/` load inside a Paseo Pi agent and receive `PASEO_AGENT_ID`.
 
+## The leader heartbeat
+
+An agent is a leader when `PASEO_AGENT_ID` is set and `BEE_HERDING_WORKER` is unset.
+
+At session start, the extension creates one `bee-leader` heartbeat for the agent (paseo-pi D8, store `2aa8417a`). It creates the heartbeat only once per agent.
+
+The extension records the heartbeat in a marker file at `.bee/runtime/paseo-heartbeat/<agent id>.json`.
+
+Two configuration keys control the heartbeat:
+- `herding.paseo.heartbeat_cron`: Sets the cron schedule (paseo-pi D7, store `8ae5134d`). The default schedule is `*/5 * * * *`.
+- `herding.paseo.command`: Sets the CLI executable name. The default command is `paseo`.
+
+On each heartbeat firing, the extension executes the broker code tick. When the tick routes work, the extension transforms the heartbeat prompt into news text. When the tick routes no work, the extension transforms the heartbeat prompt into the one-word text `ok`.
+
+The extension never swallows a heartbeat prompt (paseo-pi D6, store `83f5caad`). A swallowed prompt stalls Paseo because Paseo keeps the agent status as running.
+
+Worker results do not wait for the heartbeat. The 2-second result drain processes worker results independently.
+
+A turn without news skips the continuation nudge at settle to prevent extra model turns.
+
+To stop the heartbeat, read the schedule ID from the marker file. Run the command `paseo heartbeat delete <id>` with that schedule ID. Then delete the marker file.
+
 ## Planned work
 
-Two planned slices extend the Paseo channel:
-
-Slice 2 implements the Paseo heartbeat tick (paseo-pi D6, store `83f5caad`). The Pi leader wakes from a Paseo heartbeat and runs the bee code tick.
+One planned slice extends the Paseo channel:
 
 Slice 3 implements worker answers through Paseo messaging (paseo-pi D5, store `b6dd8b33`). The runner steers answers into running workers that support steering, and uses stop-and-next-round for workers that cannot steer.
 
