@@ -653,6 +653,7 @@
     "mailbox-broker",
     "heartbeat",
     "team",
-    "spike"
+    "spike",
+    "paseo-heartbeat"
   ]
 }

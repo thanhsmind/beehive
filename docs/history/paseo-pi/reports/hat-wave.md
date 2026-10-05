@@ -25,7 +25,7 @@ Date: 2026-10-05. Five seats, all returned inside the budget: hat-facts-gaps
 - **Status values (facts-gaps A).** Probed live: `Status` is running, idle,
   error or closed; `PendingPermissions` marks blocked.
 
-## Carried to later slices (Open Questions in plan.md)
+## Next slices (Open Questions in plan.md)
 
 - Slice 2: leader-only tick guard, a per-tick drain lock, the heartbeat
   turn exempt from the continuation nudge, a minimal and quiet empty turn
@@ -42,7 +42,7 @@ Date: 2026-10-05. Five seats, all returned inside the budget: hat-facts-gaps
 - hat-alternatives "add `TransportKind::Paseo`" — dismissed: a repo-wide
   kind breaks the herdr-only callers facts-gaps E lists, and D1 asks for a
   per-team-config choice.
-- hat-value "defer slice 3" — dismissed as a deferral, kept as a smaller
+- hat-value "drop slice 3 from this feature" — dismissed, kept as a smaller
   slice 3: D5 is a locked decision, and the alternatives seat showed a
   shape without a Rust WebSocket client.
 - hat-user-impact "show `PASEO_AGENT_ID` in the workers widget" —

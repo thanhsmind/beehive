@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-pi",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"paseo-pi\" started at phase \"exploring\" (lane).",
-  "next_action": "User tests the Paseo worker path on main, then approves uat; slice 2 (D6 heartbeat) and slice 3 (D5 answers) follow",
+  "next_action": "bee close finished \"paseo-pi\" — feature is closed.",
   "created_at": "2026-10-05T15:02:43.605Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "paseo heartbeat slice: cadence and how it turns on",
-    "asked_at": "2026-10-05T23:16:09.670Z",
-    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
