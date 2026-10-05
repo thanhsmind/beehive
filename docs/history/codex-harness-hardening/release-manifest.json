@@ -1788,7 +1788,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/events.ts",
-      "sha256": "232416d3385692bf98e14b917815c8fe5f724f022d6b6cf481cce4336b7e2ccd",
+      "sha256": "dbf2cc37e57319b1d1b31170eae1fa528e23eb363fd42613ead714b18429e87d",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/events.ts"
@@ -1820,6 +1820,13 @@
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/model-usage.ts"
+    },
+    {
+      "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "sha256": "0bf465ab0b0f380ac978400b4bab40a273a36dd10ddb4aea9df55ed2a8a23e56",
+      "mode": "644",
+      "role": "pi_extension",
+      "packagePath": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
