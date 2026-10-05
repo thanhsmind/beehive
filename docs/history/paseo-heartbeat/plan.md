@@ -92,6 +92,7 @@ holds pure helpers; `events.ts` calls them in three places.
 | Heartbeat stalls Paseo | HIGH | phb-2 | live: two heartbeats fire and the leader is idle after each |
 | Nudge doubles each empty heartbeat | MEDIUM | phb-2 | test: no-news heartbeat turn skips the nudge |
 | Normal prompts change | MEDIUM | phb-2 | existing pi_plugin_contracts tests stay green |
+| A hung create leaves an empty marker and no heartbeat (found live) | HIGH | phb-4 | test: an empty marker older than 120 s is retried; a fresh one is not |
 
 Waves: wave 1 runs phb-1 and phb-3 in parallel (disjoint files); phb-2 runs after phb-1 because it calls phb-1's helpers and shares its test file.
 
@@ -141,6 +142,7 @@ Phase plan, one slice.
 | phb-1 | Add the Paseo heartbeat helpers | .pi/extensions/bee-guard/paseo-heartbeat.ts (new); packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs (new) | — | nothing yet; unblocks phb-2 | helper tests green |
 | phb-2 | Make the Pi leader create and answer its Paseo heartbeat | .pi/extensions/bee-guard/events.ts; packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs | phb-1 | a Pi leader in Paseo gets one `bee-leader` heartbeat, and each firing becomes a news prompt or one "ok" turn | tests green, then a live run |
 | phb-3 | Document the leader heartbeat | docs/knowledge/areas/bee-herding/the-paseo-channel.md | — | the concept explains the heartbeat, its keys and its turns | knowledge check green |
+| phb-4 | Retry a heartbeat whose create never finished | .pi/extensions/bee-guard/paseo-heartbeat.ts; packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs | phb-2 | a leader whose first heartbeat create hung gets its heartbeat at the next session start instead of never | heartbeat tests green |
 
 ```json
 [
@@ -152,7 +154,11 @@ Phase plan, one slice.
     "change_class": "api",
     "title": "Add the Paseo heartbeat helpers",
     "deps": [],
-    "decisions": ["D1", "D2", "D3"],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3"
+    ],
     "files": [
       ".pi/extensions/bee-guard/paseo-heartbeat.ts",
       "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
@@ -176,8 +182,14 @@ Phase plan, one slice.
         "heartbeatText gives the news text or the one-word ok text"
       ],
       "artifacts": [
-        {"path": ".pi/extensions/bee-guard/paseo-heartbeat.ts", "substantive": "the heartbeat helpers"},
-        {"path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs", "substantive": "node-run contract tests for the helpers"}
+        {
+          "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          "substantive": "the heartbeat helpers"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "substantive": "node-run contract tests for the helpers"
+        }
       ],
       "key_links": [
         "ensureHeartbeat uses an exclusive wx create of the marker before any paseo call"
@@ -199,8 +211,14 @@ Phase plan, one slice.
     "role": "code",
     "change_class": "behavior",
     "title": "Make the Pi leader create and answer its Paseo heartbeat",
-    "deps": ["phb-1"],
-    "decisions": ["D1", "D2", "D3"],
+    "deps": [
+      "phb-1"
+    ],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3"
+    ],
     "files": [
       ".pi/extensions/bee-guard/events.ts",
       "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
@@ -223,8 +241,14 @@ Phase plan, one slice.
         "the existing pi_plugin_contracts tests stay green"
       ],
       "artifacts": [
-        {"path": ".pi/extensions/bee-guard/events.ts", "substantive": "session_start, input and agent_settled heartbeat wiring"},
-        {"path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs", "substantive": "event-level heartbeat tests"}
+        {
+          "path": ".pi/extensions/bee-guard/events.ts",
+          "substantive": "session_start, input and agent_settled heartbeat wiring"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "substantive": "event-level heartbeat tests"
+        }
       ],
       "key_links": [
         "events.ts input returns transform for a bee-leader heartbeat"
@@ -246,7 +270,11 @@ Phase plan, one slice.
     "role": "docs",
     "title": "Document the leader heartbeat",
     "deps": [],
-    "decisions": ["D1", "D2", "D3"],
+    "decisions": [
+      "D1",
+      "D2",
+      "D3"
+    ],
     "files": [
       "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
     ],
@@ -264,7 +292,10 @@ Phase plan, one slice.
         "the frontmatter cites paseo-pi D6, D7, D8"
       ],
       "artifacts": [
-        {"path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md", "substantive": "the leader heartbeat section"}
+        {
+          "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "substantive": "the leader heartbeat section"
+        }
       ],
       "key_links": [
         "the section links nothing new; it extends the existing concept"
@@ -274,6 +305,58 @@ Phase plan, one slice.
       ]
     },
     "verify": ".bee/bin/bee knowledge check --json",
+    "affects_skills": [],
+    "affects_specs": []
+  },
+  {
+    "id": "phb-4",
+    "feature": "paseo-heartbeat",
+    "lane": "high-risk",
+    "role": "code",
+    "change_class": "bugfix",
+    "title": "Retry a heartbeat whose create never finished",
+    "deps": [
+      "phb-2"
+    ],
+    "decisions": [
+      "D3"
+    ],
+    "files": [
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "read_first": [
+      "docs/history/paseo-heartbeat/plan.md",
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "action": "Red first. Live run 2026-10-06: `paseo heartbeat create` through the AppImage CLI hung, its children were reparented, the run promise never settled, and the marker stayed `{}`, so every later session start saw EEXIST and the leader never got a heartbeat. In ensureHeartbeat (paseo-heartbeat.ts:116), on EEXIST read the marker: if it parses with a non-empty schedule_id, or its mtime is younger than STALE_MARKER_MS = 120000, return {created: false, reason: 'exists'} as today; otherwise it is stale: unlinkSync it and try the wx create once more (a loser of that second race returns exists), then continue with the create as usual. Add an exported STALE_MARKER_MS. When the create fails (catch branch), make the reason end with ` — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo binary`. Tests in pi_paseo_heartbeat_contracts.rs: an empty marker with mtime 200 s ago is retried and the stub run is called once; an empty marker 10 s old returns exists with no call; a marker with a schedule_id 200 s old returns exists with no call; a failed create's reason contains herding.paseo.command. No code comments; no change to events.ts.",
+    "must_haves": {
+      "truths": [
+        "an empty marker older than 120 seconds is removed and the create runs once",
+        "an empty marker younger than 120 seconds returns exists with no create",
+        "a marker with a schedule_id returns exists with no create, whatever its age",
+        "a failed create reason names herding.paseo.command"
+      ],
+      "artifacts": [
+        {
+          "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          "substantive": "the stale-marker retry"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "substantive": "stale-marker tests"
+        }
+      ],
+      "key_links": [
+        "ensureHeartbeat reads the marker on EEXIST before returning exists"
+      ],
+      "prohibitions": [
+        "No code comments",
+        "No change to events.ts"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts",
     "affects_skills": [],
     "affects_specs": []
   }
