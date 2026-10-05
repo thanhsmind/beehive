@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"paseo-heartbeat\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming: wave 1 phb-1 and phb-3, then phb-2.",
+  "next_action": "Merged into main at 77af6f9; reload the product and test \"paseo-heartbeat\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-heartbeat\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-05T23:23:08.569Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: paseo-heartbeat",
+    "asked_at": "2026-10-05T23:57:36.167Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -721,12 +726,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-05T23:41:55.659Z"
-  },
-  "merge_ready": {
-    "since": "2026-10-05T23:54:50.734Z",
-    "branch": "wt/paseo-heartbeat",
-    "worktree_id": "beehive--wt--paseo-heartbeat",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
