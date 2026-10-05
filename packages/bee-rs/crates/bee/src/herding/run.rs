@@ -57,6 +57,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxDissent, MailboxResult, MailboxStatus};
+use super::paseo::{self, PaseoCli, PaseoSpec, PaseoState, RealPaseoCli};
 use super::split_lock;
 use super::tmux::{RealTmux, TmuxSettings};
 use super::wave::{resolve_agent_command, WorkspaceTrust};
@@ -3258,6 +3259,328 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     }
 }
 
+pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
+    let bee_dir = opts.main_root.join(".bee");
+    if !opts.dry_run {
+        write_inbox_marker(&bee_dir, opts);
+    }
+    let files: Vec<String> = Vec::new();
+    let brief_spec = BriefSpec {
+        job_id: &opts.job_id,
+        task: &opts.task,
+        worktree_root: &opts.cwd,
+        files: &files,
+        bee_dir: &bee_dir,
+        round: 1,
+        expertise: &opts.expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
+        allow_question: opts.allow_question,
+    };
+    let brief = mailbox::render_brief(&brief_spec);
+
+    let mut job_value = serde_json::json!({
+        "job_id": opts.job_id,
+        "task": opts.task,
+        "cwd": opts.cwd.display().to_string(),
+        "round": 1,
+        "idle_timeout_secs": opts.idle_timeout_secs,
+        "ceiling_secs": opts.ceiling_secs,
+        "close_always": opts.close_always,
+        "created_at": chrono::Utc::now().to_rfc3339(),
+        "expertise": opts.expertise,
+        "agent": opts.agent,
+        "seat": opts.seat,
+        "cell_id": opts.cell_id,
+        "no_pane": opts.no_pane,
+        "inbox_session": opts.inbox_session,
+        "leader_session": resolve_leader_session(),
+        "question_of": opts.question_of,
+        "question_round": opts.question_round,
+        "transport": "paseo",
+    });
+    let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", job_file_path.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    if opts.dry_run {
+        return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
+    }
+
+    let brief_file = mailbox::brief_path(&bee_dir, &opts.job_id, 1);
+    if let Err(e) = crate::fsutil::write_text_atomic(&brief_file, &brief) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", brief_file.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+    let digest_file = mailbox::digest_path(&bee_dir, &opts.job_id, 1);
+    let digest = mailbox::dispatch_digest(&opts.task, &files);
+    if let Err(e) = crate::fsutil::write_text_atomic(&digest_file, &digest) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", digest_file.display())),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+    let pointer = mailbox::pointer_prompt(&brief_file);
+
+    let cfg = read_main_config(&opts.main_root);
+    let agent_env: BTreeMap<String, String> = cfg
+        .get("herding")
+        .and_then(|h| h.get("agents"))
+        .or_else(|| cfg.get("agents"))
+        .and_then(|a| a.get(opts.agent.as_deref().unwrap_or("")))
+        .and_then(|entry| entry.get("env"))
+        .and_then(Value::as_object)
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let child_env = build_child_env(
+        std::env::vars(),
+        &agent_env,
+        &opts.pane_env_passthrough,
+        &opts.job_id,
+    );
+    let env_pairs: Vec<(String, String)> = child_env.into_iter().collect();
+
+    let version_output = cli.call(&["--version".to_string()]);
+    let version_ok = match version_output {
+        Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),
+        Err(_) => false,
+    };
+    if !version_ok {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(
+                "paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)".to_string(),
+            ),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
+
+    let argv = paseo::run_argv(spec, &opts.job_id, &opts.cwd.display().to_string(), &env_pairs, &pointer);
+    let run_res = cli.call(&argv);
+    let stdout = match run_res {
+        Ok(out) => out,
+        Err(e) => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!(
+                    "{e} — FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"
+                )),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    };
+
+    let agent_id = match paseo::parse_run_agent_id(&stdout) {
+        Ok(id) => id,
+        Err(e) => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!("could not parse agent id: {e}")),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    };
+
+    if let Value::Object(ref mut m) = job_value {
+        m.insert("paseo_agent_id".into(), Value::String(agent_id.clone()));
+    }
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not update {}: {e}", job_file_path.display())),
+            pane_id: Some(agent_id),
+            closed_pane: false,
+        };
+    }
+
+    let started_at_ms = now_ms();
+    let decision = wait_for_round_paseo(
+        &bee_dir,
+        &opts.job_id,
+        &agent_id,
+        1,
+        started_at_ms,
+        opts.idle_timeout_secs,
+        opts.ceiling_secs,
+        cli,
+    );
+
+    let outcome = match decision {
+        PollDecision::ResultReady => read_result_for_round(&bee_dir, &opts.job_id, 1),
+        PollDecision::TimedOutIdle => {
+            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            RunOutcome::TimedOutIdle(generic)
+        }
+        PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::PausedLimit => RunOutcome::PausedLimit,
+        PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Blocked => {
+            RunOutcome::PaneBlocked(format!("herding: paseo agent {agent_id} blocked on permissions"))
+        }
+        PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
+        PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
+        PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
+        PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
+    };
+
+    let valid_result = matches!(outcome, RunOutcome::Result(_));
+    let is_own_agent = std::env::var("PASEO_AGENT_ID")
+        .map(|own| own.trim() == agent_id.trim())
+        .unwrap_or(false);
+
+    let should_archive = should_close_pane(valid_result, opts.close_always) && !is_own_agent;
+
+    let closed_pane = if should_archive {
+        let archive_args = paseo::archive_argv(&agent_id);
+        match cli.call(&archive_args) {
+            Ok(_) => true,
+            Err(e) => {
+                eprintln!("bee herding run: could not archive paseo agent {agent_id}: {e}");
+                false
+            }
+        }
+    } else {
+        eprintln!("bee herding run: keeping paseo agent {agent_id}");
+        false
+    };
+
+    ExecResult {
+        outcome,
+        pane_id: Some(agent_id),
+        closed_pane,
+    }
+}
+
+fn wait_for_round_paseo(
+    bee_dir: &Path,
+    job_id: &str,
+    agent_id: &str,
+    min_round: u32,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    cli: &dyn PaseoCli,
+) -> PollDecision {
+    wait_for_round_paseo_driven(
+        bee_dir,
+        job_id,
+        agent_id,
+        min_round,
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        cli,
+        POLL_INTERVAL,
+        |d| std::thread::sleep(d),
+        now_ms,
+    )
+}
+
+fn wait_for_round_paseo_driven(
+    bee_dir: &Path,
+    job_id: &str,
+    agent_id: &str,
+    min_round: u32,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    cli: &dyn PaseoCli,
+    poll_interval: Duration,
+    sleep: impl FnMut(Duration),
+    now: impl FnMut() -> i64,
+) -> PollDecision {
+    let log_file_path = mailbox::log_path(bee_dir, job_id);
+    let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
+    let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
+    let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    let mut last_ack_mtime: Option<std::time::SystemTime> = None;
+
+    run_poll_loop(
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        poll_interval,
+        |_heartbeat_already_stale| {
+            let result_ready = std::fs::read_dir(&mailbox_path)
+                .ok()
+                .map(|rd| {
+                    rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                        .collect::<Vec<_>>()
+                })
+                .and_then(|names| mailbox::latest_result_round(&names))
+                .is_some_and(|round| round >= min_round);
+
+            let mut heartbeat_fresh = false;
+            if let Ok(meta) = std::fs::metadata(&log_file_path) {
+                if let Ok(modified) = meta.modified() {
+                    if last_log_mtime.map_or(true, |prev| modified > prev) {
+                        last_log_mtime = Some(modified);
+                        heartbeat_fresh = true;
+                    }
+                }
+            }
+            if let Ok(meta) = std::fs::metadata(&ack_file_path) {
+                if let Ok(modified) = meta.modified() {
+                    if last_ack_mtime.map_or(true, |prev| modified > prev) {
+                        last_ack_mtime = Some(modified);
+                        heartbeat_fresh = true;
+                    }
+                }
+            }
+
+            let inspect_args = paseo::inspect_argv(agent_id);
+            let inspect_res = cli.call(&inspect_args);
+            let paseo_state = inspect_res.ok().and_then(|out| paseo::parse_inspect(&out));
+
+            let mut blocked = false;
+            let liveness = match paseo_state {
+                Some(PaseoState::Working) => {
+                    heartbeat_fresh = true;
+                    Some(Liveness::Alive { pid: 0 })
+                }
+                Some(PaseoState::Idle) => {
+                    Some(Liveness::Alive { pid: 0 })
+                }
+                Some(PaseoState::Blocked) => {
+                    blocked = true;
+                    Some(Liveness::Alive { pid: 0 })
+                }
+                Some(PaseoState::Dead) => {
+                    Some(Liveness::Absent)
+                }
+                None => {
+                    Some(Liveness::Unknown)
+                }
+            };
+
+            let mark = mailbox::read_mark(bee_dir, job_id).map(|(m, _)| m);
+            PollTick {
+                result_ready,
+                heartbeat_fresh,
+                pane_text: None,
+                liveness,
+                blocked,
+                mark,
+            }
+        },
+        sleep,
+        now,
+    )
+}
+
 fn parse_brief_filename(name: &str) -> Option<u32> {
     let digits = name.strip_prefix("brief-")?.strip_suffix(".txt")?;
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
@@ -4283,8 +4606,27 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     // before ANY side effect — an illegal `herding.transport` refuses with no
     // job file written and no pane split. When running in --no-pane mode (D11),
     // no pane multiplexer is needed.
+    let main_cfg = read_main_config(&opts.main_root);
+    let paseo_spec = if !opts.no_pane {
+        if let Some(agent_name) = opts.agent.as_deref() {
+            match PaseoSpec::from_config(&main_cfg, agent_name) {
+                Some(Ok(spec)) => Some(spec),
+                Some(Err(e)) => {
+                    eprintln!("bee herding run: {e}");
+                    return ExitCode::FAILURE;
+                }
+                None => None,
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let (transport, transport_name) = if opts.no_pane {
         (None, "no-pane")
+    } else if paseo_spec.is_some() {
+        (None, "paseo")
     } else {
         match transport_for_run(&opts.main_root) {
             Ok(t) => {
@@ -4314,6 +4656,10 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     }
     let result = if opts.no_pane {
         execute_no_pane(&opts)
+    } else if let Some(ref spec) = paseo_spec {
+        let cmd = paseo::paseo_command(&main_cfg);
+        let cli = RealPaseoCli::new(cmd);
+        execute_paseo(&opts, spec, &cli)
     } else {
         execute(&opts, transport.as_ref().unwrap().as_ref())
     };
@@ -10429,6 +10775,311 @@ mod tests {
         assert!(job_data.get("leader_session").is_some());
         assert_eq!(job_data.get("question_of").and_then(Value::as_str), Some("job-parent"));
         assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
+    }
+
+    struct FakePaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        version: Result<String, String>,
+        run: Result<String, String>,
+        inspect: Result<String, String>,
+        archive: Result<String, String>,
+    }
+
+    impl FakePaseoCli {
+        fn new(
+            version: Result<String, String>,
+            run: Result<String, String>,
+            inspect: Result<String, String>,
+            archive: Result<String, String>,
+        ) -> Self {
+            Self {
+                calls: std::sync::Mutex::new(Vec::new()),
+                version,
+                run,
+                inspect,
+                archive,
+            }
+        }
+    }
+
+    impl PaseoCli for FakePaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            if args.first().map(|s| s.as_str()) == Some("--version") {
+                self.version.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("run") {
+                self.run.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("inspect") {
+                self.inspect.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("archive") {
+                self.archive.clone()
+            } else {
+                Err(format!("unexpected command: {:?}", args))
+            }
+        }
+    }
+
+    #[test]
+    fn execute_paseo_happy_path_archives_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-flash".to_string()),
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-happy\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        assert!(res.closed_pane);
+        assert_eq!(res.pane_id, Some("paseo-agent-happy".to_string()));
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(calls.iter().any(|c| c == &["archive", "--force", "paseo-agent-happy"]));
+    }
+
+    #[test]
+    fn execute_paseo_failed_result_keeps_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            "not a valid json",
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-fail\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Malformed { .. }));
+        assert!(!res.closed_pane);
+        assert_eq!(res.pane_id, Some("paseo-agent-fail".to_string()));
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(!calls.iter().any(|c| c.first().map(|s| s.as_str()) == Some("archive")));
+    }
+
+    #[test]
+    fn execute_paseo_own_paseo_agent_id_is_never_archived() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"my-own-agent-id\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        unsafe { std::env::set_var("PASEO_AGENT_ID", "my-own-agent-id") };
+        let res = execute_paseo(&opts, &spec, &fake);
+        unsafe { std::env::remove_var("PASEO_AGENT_ID") };
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        assert!(!res.closed_pane);
+        assert_eq!(res.pane_id, Some("my-own-agent-id".to_string()));
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(!calls.iter().any(|c| c.first().map(|s| s.as_str()) == Some("archive")));
+    }
+
+    #[test]
+    fn execute_paseo_old_version_refuses_before_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.6.1\n".to_string()),
+            Ok("{\"agentId\":\"agent-1\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("FIX:"));
+                assert!(msg.contains("0.10.3"));
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(!res.closed_pane);
+
+        let calls = fake.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], vec!["--version"]);
+    }
+
+    #[test]
+    fn execute_paseo_failed_run_refuses_with_fix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("daemon unreachable".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"));
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(!res.closed_pane);
+    }
+
+    #[test]
+    fn execute_paseo_job_json_carries_transport_and_paseo_agent_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-job-test\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
+        let job_val: Value = serde_json::from_str(&std::fs::read_to_string(job_file_path).unwrap()).unwrap();
+        assert_eq!(job_val.get("transport").and_then(Value::as_str), Some("paseo"));
+        assert_eq!(job_val.get("paseo_agent_id").and_then(Value::as_str), Some("paseo-agent-job-test"));
+    }
+
+    #[test]
+    fn an_agent_with_no_paseo_block_takes_old_path() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "regular-agent": ["bash", "-c", "echo ok"]
+                }
+            }
+        });
+        assert!(PaseoSpec::from_config(&cfg, "regular-agent").is_none());
+    }
+
+    #[test]
+    fn run_refuses_when_paseo_config_is_invalid_before_job_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "broken-paseo": {
+                        "paseo": {
+                            "model": "deepseek-flash"
+                        }
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), serde_json::to_string(&cfg).unwrap()).unwrap();
+
+        let root_str = main_root.display().to_string();
+        let exit = run(&[
+            "--agent",
+            "broken-paseo",
+            "--job-id",
+            "job-broken",
+            "--task",
+            "broken task",
+            "--main-root",
+            &root_str,
+            "--json",
+        ]);
+        assert_eq!(exit, ExitCode::FAILURE);
+        assert!(!mailbox::job_path(&bee_dir, "job-broken").exists());
     }
 }
 
