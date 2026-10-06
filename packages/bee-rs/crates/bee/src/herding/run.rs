@@ -1200,6 +1200,7 @@ fn decide_poll(
     result_ready: bool,
     pane_text: Option<&str>,
     liveness_died: Option<Option<u32>>,
+    silent_idle: bool,
 ) -> PollDecision {
     if result_ready {
         return PollDecision::ResultReady;
@@ -1209,6 +1210,9 @@ fn decide_poll(
     }
     if let Some(pid) = liveness_died {
         return PollDecision::Died { pid };
+    }
+    if silent_idle {
+        return PollDecision::TimedOutIdle;
     }
     if now_ms.saturating_sub(last_heartbeat_ms) >= (idle_timeout_secs as i64).saturating_mul(1000) {
         if let Some(text) = pane_text {
@@ -1221,24 +1225,18 @@ fn decide_poll(
     PollDecision::Continue
 }
 
-/// D6's pane lifecycle, pure: a valid (well-formed) result closes the pane;
-/// a failure or timeout leaves it open as forensics; `close_always`
-/// overrides in every outcome.
 fn should_close_pane(valid_result: bool, close_always: bool) -> bool {
     close_always || valid_result
 }
 
-/// One poll tick's raw observations, gathered by the caller (real fs +
-/// herdr reads in production, a scripted fake in tests) and handed to
-/// `run_poll_loop` as a pure observation struct.
 struct PollTick {
     result_ready: bool,
     heartbeat_fresh: bool,
     pane_text: Option<String>,
     liveness: Option<Liveness>,
-    /// D3: this tick observed herdr's `blocked` status.
     blocked: bool,
     mark: Option<mailbox::Mark>,
+    silent_idle: bool,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -1300,6 +1298,7 @@ fn run_poll_loop(
             observed.result_ready,
             observed.pane_text.as_deref(),
             liveness_died,
+            observed.silent_idle,
         );
         if decision != PollDecision::Continue {
             return decision;
@@ -2476,7 +2475,7 @@ fn wait_for_round_driven(
             } else {
                 None
             };
-            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked, mark }
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked, mark, silent_idle: false }
         },
         sleep,
         now_ms,
@@ -3374,9 +3373,19 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
     let stdout = match run_res {
         Ok(out) => out,
         Err(e) => {
+            let label = format!("bee_job={}", opts.job_id);
+            let agent_msg = cli
+                .call(&paseo::ls_label_argv(&label))
+                .ok()
+                .and_then(|out| paseo::parse_ls_agents_checked(&out).or_else(|| Some(paseo::parse_ls_agents(&out))))
+                .and_then(|agents| {
+                    agents.into_iter().find(|(id, j, _)| !id.is_empty() && (j == &opts.job_id || j.is_empty() || j == &label))
+                })
+                .map(|(id, _, _)| format!(" — agent {id}"))
+                .unwrap_or_default();
             return ExecResult {
                 outcome: RunOutcome::SpawnFailed(format!(
-                    "{e} — FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"
+                    "{e}{agent_msg} — FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"
                 )),
                 pane_id: None,
                 closed_pane: false,
@@ -3410,6 +3419,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
     let kind = opts.agent.as_deref().unwrap_or("paseo");
     record_dispatch(&opts.main_root, opts, kind, &agent_id);
 
+    let silent_idle_occurred = std::cell::Cell::new(false);
     let started_at_ms = now_ms();
     let decision = wait_for_round_paseo(
         &bee_dir,
@@ -3420,12 +3430,20 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         opts.idle_timeout_secs,
         opts.ceiling_secs,
         cli,
+        Some(spec),
+        &silent_idle_occurred,
     );
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result_for_round(&bee_dir, &opts.job_id, 1),
         PollDecision::TimedOutIdle => {
-            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            let generic = if silent_idle_occurred.get() {
+                format!(
+                    "herding: paseo agent {agent_id} went idle twice with no result for round 1 — agent kept for inspection: paseo logs {agent_id}"
+                )
+            } else {
+                idle_timeout_message(opts.idle_timeout_secs)
+            };
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => {
@@ -3716,6 +3734,16 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
     let kind = job_value.get("kind").or_else(|| job_value.get("agent")).and_then(Value::as_str).unwrap_or("paseo");
     record_dispatch(&opts.main_root, opts, kind, &agent_id);
 
+    let main_cfg = read_main_config(&opts.main_root);
+    let agent_name = opts
+        .agent
+        .as_deref()
+        .or_else(|| job_value.get("agent").and_then(Value::as_str))
+        .or_else(|| job_value.get("kind").and_then(Value::as_str))
+        .unwrap_or(kind);
+    let continue_spec = PaseoSpec::from_config(&main_cfg, agent_name).and_then(Result::ok);
+    let silent_idle_occurred = std::cell::Cell::new(false);
+
     let started_at_ms = now_ms();
     let decision = wait_for_round_paseo(
         &bee_dir,
@@ -3726,12 +3754,20 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         opts.idle_timeout_secs,
         opts.ceiling_secs,
         cli,
+        continue_spec.as_ref(),
+        &silent_idle_occurred,
     );
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result_for_round(&bee_dir, job_id, next_round),
         PollDecision::TimedOutIdle => {
-            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            let generic = if silent_idle_occurred.get() {
+                format!(
+                    "herding: paseo agent {agent_id} went idle twice with no result for round {next_round} — agent kept for inspection: paseo logs {agent_id}"
+                )
+            } else {
+                idle_timeout_message(opts.idle_timeout_secs)
+            };
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => {
@@ -3762,6 +3798,56 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
     }
 }
 
+fn record_observed_model(
+    bee_dir: &Path,
+    job_id: &str,
+    agent_id: &str,
+    info: &paseo::PaseoInspect,
+    spec: Option<&PaseoSpec>,
+) {
+    let obs_model_str = info.model.clone().unwrap_or_else(|| "unverified".to_string());
+    let obs_thinking_str = info.thinking.clone().unwrap_or_else(|| "unverified".to_string());
+
+    let cfg_model = spec.and_then(|s| s.model.as_deref());
+    let cfg_thinking = spec.and_then(|s| s.thinking.as_deref());
+
+    let model_matches = match (cfg_model, info.model.as_deref()) {
+        (Some(cfg), Some(obs)) => {
+            cfg == obs || obs.ends_with(&format!("/{cfg}")) || cfg.ends_with(&format!("/{obs}"))
+        }
+        _ => true,
+    };
+
+    let thinking_matches = match (cfg_thinking, info.thinking.as_deref()) {
+        (Some(cfg), Some(obs)) => cfg.eq_ignore_ascii_case(obs),
+        _ => true,
+    };
+
+    let is_mismatch = !model_matches || !thinking_matches;
+
+    if is_mismatch {
+        let disp_obs_m = info.model.as_deref().unwrap_or("unverified");
+        let disp_obs_t = info.thinking.as_deref().unwrap_or("unverified");
+        let disp_cfg_m = cfg_model.unwrap_or("unverified");
+        let disp_cfg_t = cfg_thinking.unwrap_or("unverified");
+        eprintln!(
+            "herding: paseo agent {agent_id} runs model {disp_obs_m} (thinking {disp_obs_t}), configured {disp_cfg_m} (thinking {disp_cfg_t})"
+        );
+    }
+
+    let job_path = mailbox::job_path(bee_dir, job_id);
+    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) = crate::fsutil::read_json(&job_path) {
+        if !map.contains_key("paseo_model_observed") {
+            map.insert("paseo_model_observed".into(), Value::String(obs_model_str));
+            map.insert("paseo_thinking_observed".into(), Value::String(obs_thinking_str));
+            if is_mismatch {
+                map.insert("paseo_model_mismatch".into(), Value::Bool(true));
+            }
+            let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
+        }
+    }
+}
+
 fn wait_for_round_paseo(
     bee_dir: &Path,
     job_id: &str,
@@ -3771,6 +3857,8 @@ fn wait_for_round_paseo(
     idle_timeout_secs: u64,
     ceiling_secs: u64,
     cli: &dyn PaseoCli,
+    spec: Option<&PaseoSpec>,
+    silent_idle_occurred: &std::cell::Cell<bool>,
 ) -> PollDecision {
     wait_for_round_paseo_driven(
         bee_dir,
@@ -3781,6 +3869,8 @@ fn wait_for_round_paseo(
         idle_timeout_secs,
         ceiling_secs,
         cli,
+        spec,
+        silent_idle_occurred,
         POLL_INTERVAL,
         |d| std::thread::sleep(d),
         now_ms,
@@ -3796,6 +3886,8 @@ fn wait_for_round_paseo_driven(
     idle_timeout_secs: u64,
     ceiling_secs: u64,
     cli: &dyn PaseoCli,
+    spec: Option<&PaseoSpec>,
+    silent_idle_occurred: &std::cell::Cell<bool>,
     poll_interval: Duration,
     sleep: impl FnMut(Duration),
     now: impl FnMut() -> i64,
@@ -3805,13 +3897,30 @@ fn wait_for_round_paseo_driven(
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
     let mut last_log_mtime: Option<std::time::SystemTime> = None;
     let mut last_ack_mtime: Option<std::time::SystemTime> = None;
+    let mut last_inspect_ms: Option<i64> = None;
+    let mut seen_working = false;
+    let mut nudge_sent = false;
+    let mut nudge_sent_at_ms: Option<i64> = None;
+    let mut model_recorded = false;
+    let mut last_inspect_full: Option<paseo::PaseoInspect> = None;
 
-    run_poll_loop(
+    let current_time = std::rc::Rc::new(std::cell::Cell::new(started_at_ms));
+    let current_time_for_loop = current_time.clone();
+    let mut now = now;
+    let now_for_loop = move || {
+        let t = now();
+        current_time_for_loop.set(t);
+        t
+    };
+
+    let decision = run_poll_loop(
         started_at_ms,
         idle_timeout_secs,
         ceiling_secs,
         poll_interval,
         |_heartbeat_already_stale| {
+            let current_time_ms = current_time.get();
+
             let result_ready = std::fs::read_dir(&mailbox_path)
                 .ok()
                 .map(|rd| {
@@ -3839,28 +3948,69 @@ fn wait_for_round_paseo_driven(
                 }
             }
 
-            let inspect_args = paseo::inspect_argv(agent_id);
-            let inspect_res = cli.call(&inspect_args);
-            let paseo_state = inspect_res.ok().and_then(|out| paseo::parse_inspect(&out));
-
-            let liveness = match paseo_state {
-                Some(PaseoState::Working) => {
-                    heartbeat_fresh = true;
-                    Some(Liveness::Alive { pid: 0 })
-                }
-                Some(PaseoState::Idle) => {
-                    Some(Liveness::Alive { pid: 0 })
-                }
-                Some(PaseoState::Blocked) => {
-                    Some(Liveness::Alive { pid: 0 })
-                }
-                Some(PaseoState::Dead) => {
-                    Some(Liveness::Absent)
-                }
-                None => {
-                    Some(Liveness::Unknown)
-                }
+            let should_inspect = match last_inspect_ms {
+                None => true,
+                Some(t) => current_time_ms.saturating_sub(t) >= 3000,
             };
+
+            let mut liveness = None;
+            let mut silent_idle = false;
+
+            if should_inspect {
+                last_inspect_ms = Some(current_time_ms);
+                let inspect_args = paseo::inspect_argv(agent_id);
+                let inspect_res = cli.call(&inspect_args);
+                let inspect_full = inspect_res.ok().and_then(|out| paseo::parse_inspect_full(&out));
+                if inspect_full.is_some() {
+                    last_inspect_full = inspect_full.clone();
+                }
+
+                if !model_recorded {
+                    if let Some(ref info) = inspect_full {
+                        if info.model.is_some() || info.thinking.is_some() {
+                            model_recorded = true;
+                            record_observed_model(bee_dir, job_id, agent_id, info, spec);
+                        }
+                    }
+                }
+
+                let paseo_state = inspect_full.as_ref().and_then(|i| i.state);
+                match paseo_state {
+                    Some(PaseoState::Working) => {
+                        seen_working = true;
+                        heartbeat_fresh = true;
+                        liveness = Some(Liveness::Alive { pid: 0 });
+                    }
+                    Some(PaseoState::Idle) => {
+                        liveness = Some(Liveness::Alive { pid: 0 });
+                        if seen_working && !result_ready {
+                            if !nudge_sent {
+                                nudge_sent = true;
+                                nudge_sent_at_ms = Some(current_time_ms);
+                                let b_path = mailbox::brief_path(bee_dir, job_id, min_round);
+                                let r_path = mailbox::result_path(bee_dir, job_id, min_round);
+                                let text = format!("Round {min_round} brief: {}. Write your result to: {}", b_path.display(), r_path.display());
+                                let send_args = paseo::send_argv(agent_id, &text);
+                                let _ = cli.call(&send_args);
+                            } else if let Some(sent_at) = nudge_sent_at_ms {
+                                if current_time_ms.saturating_sub(sent_at) >= 3000 {
+                                    silent_idle = true;
+                                    silent_idle_occurred.set(true);
+                                }
+                            }
+                        }
+                    }
+                    Some(PaseoState::Blocked) => {
+                        liveness = Some(Liveness::Alive { pid: 0 });
+                    }
+                    Some(PaseoState::Dead) => {
+                        liveness = Some(Liveness::Absent);
+                    }
+                    None => {
+                        liveness = Some(Liveness::Unknown);
+                    }
+                }
+            }
 
             let mark = mailbox::read_mark(bee_dir, job_id).map(|(m, _)| m);
             PollTick {
@@ -3870,11 +4020,20 @@ fn wait_for_round_paseo_driven(
                 liveness,
                 blocked: false,
                 mark,
+                silent_idle,
             }
         },
         sleep,
-        now,
-    )
+        now_for_loop,
+    );
+
+    if !model_recorded {
+        if let Some(ref info) = last_inspect_full {
+            record_observed_model(bee_dir, job_id, agent_id, info, spec);
+        }
+    }
+
+    decision
 }
 
 fn parse_brief_filename(name: &str) -> Option<u32> {
@@ -4964,11 +5123,11 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
         execute_no_pane(&opts)
     } else if is_paseo_continue {
         let cmd = paseo::paseo_command(&main_cfg);
-        let cli = RealPaseoCli::new(cmd);
+        let cli = RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15));
         execute_continue_paseo(&opts, &cli)
     } else if let Some(ref spec) = paseo_spec {
         let cmd = paseo::paseo_command(&main_cfg);
-        let cli = RealPaseoCli::new(cmd);
+        let cli = RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15));
         execute_paseo(&opts, spec, &cli)
     } else {
         execute(&opts, transport.as_ref().unwrap().as_ref())
@@ -5375,35 +5534,32 @@ mod tests {
 
     #[test]
     fn decide_poll_reports_result_ready_regardless_of_timers() {
-        assert_eq!(decide_poll(0, 0, 0, 1, 1, true, None, None), PollDecision::ResultReady);
+        assert_eq!(decide_poll(0, 0, 0, 1, 1, true, None, None, false), PollDecision::ResultReady);
     }
 
     #[test]
     fn decide_poll_extends_on_a_fresh_heartbeat() {
-        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, None), PollDecision::Continue);
+        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, None, false), PollDecision::Continue);
     }
 
     #[test]
     fn decide_poll_times_out_idle_when_the_heartbeat_goes_stale() {
-        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false, None, None), PollDecision::TimedOutIdle);
+        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false, None, None, false), PollDecision::TimedOutIdle);
     }
 
     #[test]
     fn decide_poll_ceiling_caps_even_with_a_fresh_heartbeat() {
-        // last heartbeat one second ago (well inside a 60s idle timeout),
-        // but the run has now been alive for the full 3600s ceiling — the
-        // ceiling caps regardless of activity.
-        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, None), PollDecision::TimedOutCeiling);
+        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, None, false), PollDecision::TimedOutCeiling);
     }
 
     #[test]
     fn decide_poll_pauses_on_limit_when_heartbeat_stale_and_pane_matches_limit_pattern() {
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("You've hit your session limit · resets 6:20pm"), None),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("You've hit your session limit · resets 6:20pm"), None, false),
             PollDecision::PausedLimit
         );
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("warning: usage limit reached"), None),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("warning: usage limit reached"), None, false),
             PollDecision::PausedLimit
         );
     }
@@ -5411,7 +5567,7 @@ mod tests {
     #[test]
     fn decide_poll_keeps_waiting_with_fresh_heartbeat_even_if_pane_mentions_limit() {
         assert_eq!(
-            decide_poll(5_000, 0, 5_000, 60, 3_600, false, Some("hit your session limit"), None),
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, Some("hit your session limit"), None, false),
             PollDecision::Continue
         );
     }
@@ -5419,8 +5575,24 @@ mod tests {
     #[test]
     fn decide_poll_times_out_idle_when_heartbeat_stale_and_pane_does_not_match_limit() {
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("compilation error: mismatched types"), None),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("compilation error: mismatched types"), None, false),
             PollDecision::TimedOutIdle
+        );
+    }
+
+    #[test]
+    fn decide_poll_silent_idle_times_out_before_idle_timeout() {
+        assert_eq!(
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, None, true),
+            PollDecision::TimedOutIdle
+        );
+        assert_eq!(
+            decide_poll(0, 0, 0, 1, 1, true, None, None, true),
+            PollDecision::ResultReady
+        );
+        assert_eq!(
+            decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, None, true),
+            PollDecision::TimedOutCeiling
         );
     }
 
@@ -5435,7 +5607,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None, silent_idle: false }
             },
             |_| {},
             || {
@@ -5455,7 +5627,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false, mark: None, silent_idle: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -5473,7 +5645,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false, mark: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false, mark: None, silent_idle: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -5501,6 +5673,7 @@ mod tests {
                     liveness: None,
                     blocked: false,
                     mark: None,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -5515,9 +5688,6 @@ mod tests {
 
     #[test]
     fn run_poll_loop_ends_at_once_on_a_blocked_tick_without_burning_the_idle_timeout() {
-        // D3: a blocked observation ends the round poll immediately — a
-        // huge idle timeout and ceiling are never burned on a question
-        // nobody is going to answer.
         let mut ticks = 0u32;
         let mut clock = 0i64;
         let decision = run_poll_loop(
@@ -5527,7 +5697,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None }
+                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None, silent_idle: false }
             },
             |_| {},
             || {
@@ -5541,15 +5711,13 @@ mod tests {
 
     #[test]
     fn run_poll_loop_lets_a_same_tick_result_win_over_blocked() {
-        // A completed round already trumps a stale/simultaneous blocked
-        // read — the work finished, so ResultReady wins.
         let mut clock = 0i64;
         let decision = run_poll_loop(
             0,
             900,
             21_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None },
+            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true, mark: None, silent_idle: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -5574,6 +5742,7 @@ mod tests {
                 liveness: None,
                 blocked: false,
                 mark: Some(mailbox::Mark::Interrupted),
+                silent_idle: false,
             },
             |_| {},
             || {
@@ -5599,6 +5768,7 @@ mod tests {
                 liveness: None,
                 blocked: false,
                 mark: Some(mailbox::Mark::Cancelled),
+                silent_idle: false,
             },
             |_| {},
             || {
@@ -5632,6 +5802,7 @@ mod tests {
                     liveness: None,
                     blocked: false,
                     mark,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -9371,38 +9542,35 @@ mod tests {
     #[test]
     fn decide_poll_reports_died_when_liveness_armed() {
         assert_eq!(
-            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(Some(1234))),
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(Some(1234)), false),
             PollDecision::Died { pid: Some(1234) }
         );
         assert_eq!(
-            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(None)),
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(None), false),
             PollDecision::Died { pid: None }
         );
     }
 
     #[test]
     fn decide_poll_ceiling_takes_precedence_over_died_in_same_tick() {
-        // Ceiling passed AND armed-died in the same tick yields TimedOutCeiling
         assert_eq!(
-            decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, Some(Some(1234))),
+            decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, Some(Some(1234)), false),
             PollDecision::TimedOutCeiling
         );
     }
 
     #[test]
     fn decide_poll_result_ready_takes_precedence_over_died_in_same_tick() {
-        // Result present AND armed-died in the same tick yields ResultReady
         assert_eq!(
-            decide_poll(0, 0, 0, 1, 1, true, None, Some(Some(1234))),
+            decide_poll(0, 0, 0, 1, 1, true, None, Some(Some(1234)), false),
             PollDecision::ResultReady
         );
     }
 
     #[test]
     fn decide_poll_died_takes_precedence_over_stale_heartbeat_idle() {
-        // Died check sits before the stale-heartbeat check
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, None, Some(Some(1234))),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, None, Some(Some(1234)), false),
             PollDecision::Died { pid: Some(1234) }
         );
     }
@@ -9425,6 +9593,7 @@ mod tests {
                     liveness: Some(Liveness::Absent),
                     blocked: false,
                     mark: None,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -9441,7 +9610,6 @@ mod tests {
     fn run_poll_loop_unknown_resets_absent_counter_preventing_died_on_interleave() {
         let mut ticks = 0u32;
         let mut clock = 0i64;
-        // Interleave: Absent -> Absent -> Unknown -> Absent -> Absent -> ResultReady
         let liveness_sequence = [
             Some(Liveness::Absent),
             Some(Liveness::Absent),
@@ -9468,6 +9636,7 @@ mod tests {
                     liveness,
                     blocked: false,
                     mark: None,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -9505,6 +9674,7 @@ mod tests {
                     liveness,
                     blocked: false,
                     mark: None,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -9535,6 +9705,7 @@ mod tests {
                     liveness: Some(Liveness::Unknown),
                     blocked: false,
                     mark: None,
+                    silent_idle: false,
                 }
             },
             |_| {},
@@ -11092,9 +11263,11 @@ mod tests {
         version: Result<String, String>,
         run: Result<String, String>,
         inspect: Result<String, String>,
+        inspect_queue: std::sync::Mutex<std::collections::VecDeque<Result<String, String>>>,
         archive: Result<String, String>,
         send: Result<String, String>,
         logs: Result<String, String>,
+        ls: Result<String, String>,
         on_send: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
         on_inspect: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
     }
@@ -11111,9 +11284,11 @@ mod tests {
                 version,
                 run,
                 inspect,
+                inspect_queue: std::sync::Mutex::new(std::collections::VecDeque::new()),
                 archive,
                 send: Ok("sent\n".to_string()),
                 logs: Ok("logs output\n".to_string()),
+                ls: Ok("[]\n".to_string()),
                 on_send: None,
                 on_inspect: None,
             }
@@ -11133,6 +11308,16 @@ mod tests {
             self.logs = logs;
             self
         }
+
+        fn with_ls(mut self, ls: Result<String, String>) -> Self {
+            self.ls = ls;
+            self
+        }
+
+        fn with_inspect_queue(self, queue: Vec<Result<String, String>>) -> Self {
+            *self.inspect_queue.lock().unwrap() = std::collections::VecDeque::from(queue);
+            self
+        }
     }
 
     impl PaseoCli for FakePaseoCli {
@@ -11146,7 +11331,11 @@ mod tests {
                 if let Some(ref cb) = self.on_inspect {
                     cb();
                 }
-                self.inspect.clone()
+                if let Some(res) = self.inspect_queue.lock().unwrap().pop_front() {
+                    res
+                } else {
+                    self.inspect.clone()
+                }
             } else if args.first().map(|s| s.as_str()) == Some("archive") {
                 self.archive.clone()
             } else if args.first().map(|s| s.as_str()) == Some("send") {
@@ -11156,6 +11345,8 @@ mod tests {
                 self.send.clone()
             } else if args.first().map(|s| s.as_str()) == Some("logs") {
                 self.logs.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("ls") {
+                self.ls.clone()
             } else {
                 Err(format!("unexpected command: {:?}", args))
             }
@@ -11870,6 +12061,556 @@ mod tests {
         let row: Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(row["wave_id"], opts.job_id);
         assert_eq!(row["workers"][0]["pane_id"], "paseo-agent-ledger");
+    }
+
+    #[test]
+    fn wait_for_round_paseo_inspects_at_most_once_per_3_seconds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-cadence";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let inspect_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let count_clone = inspect_count.clone();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-c\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_on_inspect(move || {
+            count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        });
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-c",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 16 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(inspect_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn wait_for_round_paseo_one_dead_read_followed_by_working_keeps_run_going() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-dead-working";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-dw\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"closed\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+        ]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-dw",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 17 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+    }
+
+    #[test]
+    fn execute_paseo_working_then_idle_sends_nudge_and_second_silent_idle_times_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.job_id = "job-silent-idle-1".to_string();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-si\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+        ]);
+
+        let mut clock = 0i64;
+        let silent_idle_cell = std::cell::Cell::new(false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            &opts.job_id,
+            "agent-si",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            Some(&spec),
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::TimedOutIdle);
+        assert!(silent_idle_cell.get());
+
+        let calls = fake.calls.lock().unwrap();
+        let send_calls: Vec<_> = calls.iter().filter(|c| c.first().map(|s| s.as_str()) == Some("send")).collect();
+        assert_eq!(send_calls.len(), 1);
+        assert!(send_calls[0][3].contains("brief-1.txt"));
+        assert!(send_calls[0][3].contains("result-1.json"));
+    }
+
+    #[test]
+    fn execute_paseo_failed_send_still_lets_second_silent_idle_end_round() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.job_id = "job-failed-send".to_string();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let mut fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-fs\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+        ]);
+        fake.send = Err("failed to send".to_string());
+
+        let mut clock = 0i64;
+        let silent_idle_cell = std::cell::Cell::new(false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            &opts.job_id,
+            "agent-fs",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            Some(&spec),
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::TimedOutIdle);
+        assert!(silent_idle_cell.get());
+    }
+
+    #[test]
+    fn execute_paseo_result_after_nudge_returns_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.job_id = "job-result-after-nudge".to_string();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let dir_clone = dir.clone();
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-ran\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+        ])
+        .with_on_send(move || {
+            std::fs::write(
+                dir_clone.join("result-1.json"),
+                r#"{"status":"done","summary":"completed after nudge","files_changed":[],"proof":"ok"}"#,
+            )
+            .unwrap();
+        });
+
+        let mut clock = 0i64;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            &opts.job_id,
+            "agent-ran",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            Some(&spec),
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert!(!silent_idle_cell.get());
+    }
+
+    #[test]
+    fn execute_paseo_no_send_while_working_or_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.job_id = "job-no-send".to_string();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-ns\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+        ]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            &opts.job_id,
+            "agent-ns",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            Some(&spec),
+            &silent_idle_cell,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 33 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"ok"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        let calls = fake.calls.lock().unwrap();
+        let send_calls: Vec<_> = calls.iter().filter(|c| c.first().map(|s| s.as_str()) == Some("send")).collect();
+        assert_eq!(send_calls.len(), 0);
+    }
+
+    #[test]
+    fn execute_paseo_observed_model_and_thinking_land_in_job_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-chat".to_string()),
+            thinking: Some("high".to_string()),
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-obs\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"deepseek/deepseek-chat\",\"Thinking\":\"HIGH\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(mailbox::job_path(&bee_dir, &opts.job_id)).unwrap()).unwrap();
+        assert_eq!(job_data.get("paseo_model_observed").and_then(Value::as_str), Some("deepseek/deepseek-chat"));
+        assert_eq!(job_data.get("paseo_thinking_observed").and_then(Value::as_str), Some("HIGH"));
+        assert!(job_data.get("paseo_model_mismatch").is_none());
+    }
+
+    #[test]
+    fn execute_paseo_sentinels_write_unverified_with_no_warning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-chat".to_string()),
+            thinking: Some("high".to_string()),
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-sentinels\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"-\",\"Thinking\":\"auto\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(mailbox::job_path(&bee_dir, &opts.job_id)).unwrap()).unwrap();
+        assert_eq!(job_data.get("paseo_model_observed").and_then(Value::as_str), Some("unverified"));
+        assert_eq!(job_data.get("paseo_thinking_observed").and_then(Value::as_str), Some("unverified"));
+        assert!(job_data.get("paseo_model_mismatch").is_none());
+    }
+
+    #[test]
+    fn execute_paseo_provider_prefixed_equal_model_is_no_mismatch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("claude-3-5-sonnet".to_string()),
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-prefix\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"anthropic/claude-3-5-sonnet\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(mailbox::job_path(&bee_dir, &opts.job_id)).unwrap()).unwrap();
+        assert_eq!(job_data.get("paseo_model_observed").and_then(Value::as_str), Some("anthropic/claude-3-5-sonnet"));
+        assert!(job_data.get("paseo_model_mismatch").is_none());
+    }
+
+    #[test]
+    fn execute_paseo_real_mismatch_writes_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("claude-3-5-sonnet".to_string()),
+            thinking: Some("high".to_string()),
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-mismatch\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"gpt-4o\",\"Thinking\":\"low\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let job_data: Value = serde_json::from_str(&std::fs::read_to_string(mailbox::job_path(&bee_dir, &opts.job_id)).unwrap()).unwrap();
+        assert_eq!(job_data.get("paseo_model_observed").and_then(Value::as_str), Some("gpt-4o"));
+        assert_eq!(job_data.get("paseo_thinking_observed").and_then(Value::as_str), Some("low"));
+        assert_eq!(job_data.get("paseo_model_mismatch").and_then(Value::as_bool), Some(true));
+    }
+
+    #[test]
+    fn execute_paseo_timed_out_spawn_names_labelled_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let label = format!("bee_job={}", opts.job_id);
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-orphan-99",
+                "labels": [label]
+            }
+        ])
+        .to_string();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("paseo timed out after 15s".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_ls(Ok(ls_json));
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("agent-orphan-99"), "{msg}");
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
     }
 }
 
