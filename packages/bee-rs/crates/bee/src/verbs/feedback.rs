@@ -1923,7 +1923,7 @@ fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
 /// normalizeTitle (lib/feedback.mjs): strip the «…» datamark wrapper to fixed
 /// point, re-apply datamark's own cleaning transforms, then casefold and
 /// collapse whitespace.
-fn normalize_title(title: &Value) -> String {
+pub(crate) fn normalize_title(title: &Value) -> String {
     // String(title ?? '')
     let mut text = match title {
         Value::Null => String::new(),
