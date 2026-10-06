@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"herding-leader-toil\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 5a427f5; reload the product and test \"herding-leader-toil\", then either approve uat (\"bee gate --name uat --approved true --lane herding-leader-toil\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-06T07:05:11.557Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: herding-leader-toil",
+    "asked_at": "2026-10-06T10:01:49.286Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -1148,12 +1153,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-06T10:01:35.667Z",
-    "branch": "wt/herding-leader-toil",
-    "worktree_id": "beehive--wt--herding-leader-toil",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
