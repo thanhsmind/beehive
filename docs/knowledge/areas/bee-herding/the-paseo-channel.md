@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D7 8ae5134d (the heartbeat fires every 5 minutes by default; a config key changes it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)"]
+  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D7 8ae5134d (the heartbeat fires every 5 minutes by default; a config key changes it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2"]
   sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
   owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs]
@@ -142,11 +142,21 @@ A turn without news skips the continuation nudge at settle to prevent extra mode
 
 To stop the heartbeat, read the schedule ID from the marker file. Run the command `paseo heartbeat delete <id>` with that schedule ID. Then delete the marker file.
 
-## Planned work
+## Answers and steering
 
-One planned slice extends the Paseo channel:
+A Paseo worker that asks a question keeps its Paseo agent intact (paseo-answers D1, store `240f3db5`). The runner does not archive the agent on a question outcome.
 
-Slice 3 implements worker answers through Paseo messaging (paseo-pi D5, store `b6dd8b33`). The runner steers answers into running workers that support steering, and uses stop-and-next-round for workers that cannot steer.
+When the answer arrives, the broker sends the answer to that same agent. The answer runs as the next round of the same job. The broker sends the answer only when Paseo inspection shows the agent in the `Idle` state. If the agent is missing or is not `Idle`, the broker starts a fresh child job instead. The system never sends an answer into an active turn.
+
+The command `bee herding run --continue <job_id>` continues an existing Paseo job. The runner inspects the Paseo agent before it sends the next round prompt. If the agent is `Idle`, the runner sends the new brief pointer to the agent. If the agent is busy or in any state other than `Idle`, the runner refuses the command:
+
+```text
+FIX: wait for it to finish, then run bee herding run --continue <job>
+```
+
+The runner makes no send call when the agent is busy.
+
+The command `bee herding steer` steers a running turn on Paseo (paseo-answers D2, store `e13feabc`). The steer path depends on the provider of the Paseo agent. For `claude`, `codex`, and `opencode` providers, the command steers through the Paseo daemon helper. This daemon helper requires Node.js and the npm package `@getpaseo/cli`. The helper sends the steer message with `activeTurnBehavior: "steer"`. For a `pi` provider, the command writes a steer file to the mailbox as before. The runner refuses steer requests for other providers with an error and a `FIX:` message. The command never uses `paseo send` to steer because an ordinary send interrupts and replaces a running turn.
 
 ## Pointers
 

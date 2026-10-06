@@ -120,6 +120,7 @@ mod split_lock;
 pub(crate) mod job_verbs;
 pub(crate) mod broker;
 pub(crate) mod paseo;
+pub(crate) mod paseo_steer;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
