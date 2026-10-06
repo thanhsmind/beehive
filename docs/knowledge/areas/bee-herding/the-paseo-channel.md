@@ -171,7 +171,7 @@ Three environment facts apply from CONTEXT.md:
 
 First, Paseo 0.10.3 is the minimum required version. It supports steering for the Pi provider. Older versions do not support steering.
 
-Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon. The AppImage CLI cannot start the daemon.
+Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon. The AppImage CLI cannot start the daemon, and its `paseo run --json` prints no JSON object, so `bee herding run` fails with `spawn_failed` ("could not parse agent id") while `bee doctor` still reports `paseo_ready` ok (live run 2026-10-06; backlog finding filed). Set `herding.paseo.command` to the npm CLI path when a desktop AppImage wrapper comes first on `PATH`.
 
 Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface. Extensions in `.pi/extensions/` load inside a Paseo Pi agent and receive `PASEO_AGENT_ID`.
 
@@ -184,12 +184,14 @@ The timer runs every `herding.paseo.broker_tick_secs` seconds (default 30).
 The extension sends a message to the model through `pi.sendUserMessage` only when the tick reports news.
 If the leader is busy, the message delivers as a steer.
 The timer shares one in-flight execution flag with the heartbeat tick.
+The timer and the result drain send through one shared helper, so the busy and steer rule lives in one place.
+While an idle send is still opening its turn (the turn-start latch), the timer holds the news and sends it on the first tick after the latch clears; a newer news tick replaces the held text. The shared helper never sends a plain message while that latch is set, so a failed send cannot clear a latch the drain set. Held news is dropped when the timer stops at shutdown.
 
 The Paseo heartbeat remains as a backstop.
 The default schedule is `*/30 * * * *` (superseding paseo-pi D7, store `8ae5134d`).
 At session start, the extension creates one `bee-leader` heartbeat for the agent (paseo-pi D8, store `2aa8417a`).
 The extension records the heartbeat in a marker file at `.bee/runtime/paseo-heartbeat/<agent id>.json`.
-If the marker file contains a cron schedule that differs from configuration, `ensureHeartbeat` deletes the old heartbeat and creates a new one.
+If the marker file contains a cron schedule that differs from configuration, `ensureHeartbeat` deletes the old heartbeat and creates a new one. When that delete fails, the marker keeps the old schedule and records `delete_failed`, and no new heartbeat is created.
 
 The extension never swallows a heartbeat prompt (paseo-pi D6, store `83f5caad`). A swallowed prompt stalls Paseo because Paseo keeps the agent status as running.
 
