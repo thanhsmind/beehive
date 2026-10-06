@@ -1,0 +1,126 @@
+{
+  "id": "lcwr-1",
+  "feature": "leader-check-worktree-root",
+  "title": "Resolve leader-check artifacts against the feature worktree",
+  "lane": "tiny",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "7e738c47-e9fa-4d43-9d91-623e9b7b4ebf"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In record_leader_check, resolve the artifact root once with commit_trailer_history_root(root, feature) — the same root the commit-diff check already uses. Check artifact existence against that root. Before the files_changed overlap compare, turn an absolute artifact path under that root into a repo-relative path and compare both sides through normalize_cell_path. Keep every refusal message unchanged. Red first: add a test in verbs/cells/tests.rs using merge_ready_granted_worktree that writes a file only in the worktree and records a leader check whose artifact names it (once relative, once absolute); it must fail before the fix and pass after.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+  "must_haves": {
+    "truths": [
+      "A leader check whose artifact exists only in the feature's granted worktree is accepted",
+      "An absolute worktree path whose relative form is in files_changed passes the overlap check",
+      "An artifact missing from both checkouts is still refused with the same message"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "substantive": "artifact checks use commit_trailer_history_root"
+      }
+    ],
+    "key_links": [
+      "record_leader_check uses one root for artifact existence, overlap, and commit diff"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No change to refusal message text"
+    ]
+  },
+  "trace": {
+    "worker": "leader",
+    "outcome": "leader-check resolves artifacts against the feature worktree root",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "sync-ack: no owned skill describes where leader-check resolves artifact paths; routing-and-contracts.md:181 (deferral is the named escape) stays true"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T15:38:52.354Z",
+    "behavior_change": true,
+    "verification_evidence": "27 leader_check tests incl. 3 new worktree cases, red first for the reported reasons; full --bin bee 4130 passed, integration tests not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+    "claimed_at": "2026-10-06T15:35:23.517Z",
+    "sync_ack": "no owned skill describes where leader-check resolves artifact paths; routing-and-contracts.md:181 (deferral is the named escape) stays true",
+    "mistakes": [
+      {
+        "wrong": "ran bee state set --phase swarming in the same ctl3.sh before the gate approval succeeded, so the phase moved early and had to be reset",
+        "better": "put the phase move in a later script gated on the gate result",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "leader-check resolves artifacts against the feature worktree root",
+      "commit": "346f818b1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check — green:unit — 27 leader_check tests incl. 3 new worktree cases, red first for the reported reasons; full --bin bee 4130 passed, integration tests not run",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A leader check whose artifact exists only in the feature's granted worktree is accepted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "An absolute worktree path whose relative form is in files_changed passes the overlap check",
+            "artifact": "/home/thanhsmind/Projects/goglbe/beehive--wt--leader-check-worktree-root/packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "An artifact missing from both checkouts is still refused with the same message",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T15:39:07.895Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A leader check whose artifact exists only in the feature's granted worktree is accepted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "An absolute worktree path whose relative form is in files_changed passes the overlap check",
+            "artifact": "/home/thanhsmind/Projects/goglbe/beehive--wt--leader-check-worktree-root/packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs"
+          },
+          {
+            "requirement": "An artifact missing from both checkouts is still refused with the same message",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T15:39:07.903Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

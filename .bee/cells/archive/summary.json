@@ -1538,5 +1538,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-10-06T11:31:20.503Z"
+  },
+  "leader-check-worktree-root": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T15:40:16.098Z"
   }
 }
