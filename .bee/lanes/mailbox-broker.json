@@ -15,10 +15,10 @@
   "created_at": "2026-10-03T11:12:19.017Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "paseo-pi shaping: 4 product decisions",
-    "asked_at": "2026-10-05T14:59:21.005Z",
-    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
+    "kind": "gate",
+    "subject": "review",
+    "asked_at": "2026-10-06T09:49:53.009Z",
+    "session": "s1"
   },
   "route": {
     "class": "feature",

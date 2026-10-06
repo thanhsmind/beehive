@@ -668,6 +668,14 @@
     "paseo-pi-hardening",
     "contract:worker-guard",
     "contract:paseo-heartbeat",
-    "contract:doctor-paseo-ready"
+    "contract:doctor-paseo-ready",
+    "herding-leader-toil",
+    "contract:cells-finish-from-job",
+    "contract:control-plane-from-worktree",
+    "contract:judge-record-from-text",
+    "contract:paseo-agent-wait",
+    "contract:pi-isolated-config",
+    "contract:doctor-paseo-cli",
+    "scope-change"
   ]
 }

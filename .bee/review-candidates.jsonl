@@ -164,3 +164,4 @@
 {"id":"edcfc264-487b-4585-9265-d8ceecef9750","type":"candidate","date":"2026-09-20T02:24:25.898Z","feature":"worker-ledger-and-empty-fleet","head":"c63dfb52cd6312aedea35810d9aa7ba4c6006186","mode":"standard","baseline":null,"cells":[]}
 {"id":"29307274-fcb7-41bd-b5fa-bbf731772ed5","type":"candidate","date":"2026-09-20T05:04:09.900Z","feature":"idempotent-herding-receipts","head":"b5f82a37c94d0068eae89bd0774a4ab3cc51f872","mode":"high-risk","baseline":null,"cells":[]}
 {"id":"107aca18-a0ce-4bf2-b1f4-e6394dcaf8b6","type":"candidate","date":"2026-09-20T06:30:34.785Z","feature":"herding-preflight-test-seam","head":"eb63885de6efadb3ab02947363cf4d0e235709f2","mode":"small","baseline":null,"cells":[]}
+{"id":"7200e8c3-c6df-473e-be40-79dd5fdea107","type":"candidate","date":"2026-10-06T06:55:45.131Z","feature":"paseo-pi-hardening","head":"489775e62","mode":"high-risk","baseline":"9c4e986c3","cells":["pph-1","pph-2","pph-3","pph-4","pph-5","pph-6","pph-7"]}

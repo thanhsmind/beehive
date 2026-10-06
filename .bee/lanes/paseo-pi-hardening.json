@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-pi-hardening",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"paseo-pi-hardening\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 72ddcb2; reload the product and test \"paseo-pi-hardening\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-pi-hardening\") or fix it in the worktree and merge again.",
+  "next_action": "uat: user tests paseo-pi-hardening on main, then bee gate --name uat --approved true and bee close",
   "created_at": "2026-10-06T05:30:49.705Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: paseo-pi-hardening",
-    "asked_at": "2026-10-06T06:50:21.362Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-10-06T06:55:45.147Z",
+    "session": "6b23f09e-943a-446a-8126-d3717cc4492b"
   },
   "route": {
     "class": "feature",
@@ -1169,5 +1169,15 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "paseo-pi-hardening",
+    "date": "2026-10-06",
+    "at": "2026-10-06T06:55:08.210Z",
+    "areas_synced": [
+      "bee-herding",
+      "hook-runtime"
+    ],
+    "next_action": "uat: user tests paseo-pi-hardening on main, then bee gate --name uat --approved true and bee close"
   }
 }
