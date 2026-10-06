@@ -164,6 +164,7 @@ For example, `gate --preview` and `close` read the worktree plan and context fil
 `cells leader-check` also reads its artifacts from the feature's worktree (leader-check-worktree-root, decision `7e738c47`, 2026-10-06).
 It resolves one root with `commit_trailer_history_root` and uses it for three checks: artifact existence, the `files_changed` overlap, and the commit diff.
 An absolute artifact path under that root is compared in repo-relative form.
+When the plain prefix strip fails, both paths are canonicalized and stripped again, so an alias of the root (a symlink, or a Windows 8.3 short name such as `RUNNER~1`) still matches (leader-check-windows-paths, decision `6ca8f8a8`).
 When the feature has no granted worktree, the root is the main checkout, as before.
 Before this change, a file that existed only in the worktree was refused as missing, and the only way to merge was a `leader-check-deferral` decision.
 Pointers: `packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs`, `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`.
