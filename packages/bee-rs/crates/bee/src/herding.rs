@@ -939,7 +939,10 @@ fn collect_jobs(
             };
 
             let mut permissions = Vec::new();
-            let paseo_state = if let (Some(cli), Some(agent_id)) = (paseo_cli, paseo_agent_id.as_deref()) {
+            let finished = mark_str.is_some() || result_round.is_some_and(|r| r >= round);
+            let paseo_state = if finished {
+                "finished".to_string()
+            } else if let (Some(cli), Some(agent_id)) = (paseo_cli, paseo_agent_id.as_deref()) {
                 match cli.call(&paseo::inspect_argv(agent_id)) {
                     Ok(ref out) => match paseo::parse_inspect(out) {
                         Some(paseo::PaseoState::Working) => "working".to_string(),
@@ -1115,6 +1118,26 @@ pub(crate) fn status_with_panes_and_transport(
     status_with_panes_and_transport_and_paseo(flags, transport_override, live_panes_override, None)
 }
 
+pub(crate) fn repo_uses_paseo(cfg: &Value, bee_dir: &Path) -> bool {
+    let configured = cfg
+        .get("herding")
+        .and_then(|h| h.get("agents"))
+        .and_then(Value::as_object)
+        .is_some_and(|agents| agents.values().any(|entry| entry.get("paseo").is_some_and(|p| p.is_object())));
+    if configured {
+        return true;
+    }
+    let Ok(entries) = std::fs::read_dir(bee_dir.join("mailbox")) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        std::fs::read_to_string(entry.path().join("job.json"))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+            .is_some_and(|job| job.get("transport").and_then(Value::as_str) == Some("paseo"))
+    })
+}
+
 pub(crate) fn status_with_panes_and_transport_and_paseo(
     flags: &[&str],
     transport_override: Option<&dyn PaneTransport>,
@@ -1146,13 +1169,17 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
     let main_root = resolve_main_root(explicit);
 
     let paseo_box: Option<Box<dyn paseo::PaseoCli>> = if paseo_override.is_none() {
-        main_root.as_ref().map(|root| {
+        main_root.as_ref().and_then(|root| {
             let cfg = match crate::fsutil::read_json(&root.join(".bee").join("config.json")) {
                 crate::fsutil::ReadJson::Parsed(v) => v,
                 _ => Value::Null,
             };
+            if !repo_uses_paseo(&cfg, &root.join(".bee")) || !paseo::daemon_reachable() {
+                return None;
+            }
             let cmd = paseo::paseo_command(&cfg);
-            Box::new(paseo::RealPaseoCli::new(cmd)) as Box<dyn paseo::PaseoCli>
+            let real = paseo::RealPaseoCli::new(cmd).with_timeout(std::time::Duration::from_secs(5));
+            Some(Box::new(paseo::FailFastPaseoCli::new(Box::new(real))) as Box<dyn paseo::PaseoCli>)
         })
     } else {
         None
@@ -1471,6 +1498,21 @@ mod tests {
     fn labels_for(text: &str) -> Vec<&'static str> {
         let lowered = text.to_lowercase();
         FLAG_RULES.iter().filter(|r| (r.matcher)(&lowered)).map(|r| r.label).collect()
+    }
+
+    #[test]
+    fn repo_uses_paseo_only_with_a_paseo_agent_or_a_paseo_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(bee_dir.join("mailbox").join("job-a")).unwrap();
+        std::fs::write(bee_dir.join("mailbox").join("job-a").join("job.json"), r#"{"job_id":"job-a"}"#).unwrap();
+        let herdr_only = serde_json::json!({"herding": {"agents": {"agy": ["agy"]}}});
+        assert!(!repo_uses_paseo(&herdr_only, &bee_dir));
+        let with_agent = serde_json::json!({"herding": {"agents": {"p": {"paseo": {"provider": "pi"}}}}});
+        assert!(repo_uses_paseo(&with_agent, &bee_dir));
+        std::fs::create_dir_all(bee_dir.join("mailbox").join("job-b")).unwrap();
+        std::fs::write(bee_dir.join("mailbox").join("job-b").join("job.json"), r#"{"transport":"paseo"}"#).unwrap();
+        assert!(repo_uses_paseo(&herdr_only, &bee_dir));
     }
 
     #[test]
@@ -2032,7 +2074,12 @@ mod tests {
         inspect_map.insert("agent-err".to_string(), Err("timeout".to_string()));
 
         let fake = FakeHerdingPaseoCli {
-            ls_out: Ok("[]".to_string()),
+            ls_out: Ok(serde_json::json!([
+                {"id": "agent-blocked", "labels": {"bee_job": "job-p-block"}, "archived": false},
+                {"id": "agent-work", "labels": {"bee_job": "job-p-work"}, "archived": false},
+                {"id": "agent-err", "labels": {"bee_job": "job-p-err"}, "archived": false}
+            ])
+            .to_string()),
             inspect_map,
         };
 

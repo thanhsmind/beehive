@@ -458,23 +458,112 @@ pub trait PaseoCli: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct RealPaseoCli {
     pub command: String,
+    pub timeout: Option<std::time::Duration>,
 }
 
 impl RealPaseoCli {
     pub fn new(command: impl Into<String>) -> Self {
         Self {
             command: command.into(),
+            timeout: None,
         }
     }
+
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+}
+
+pub fn daemon_reachable() -> bool {
+    if std::env::var("PASEO_HOST").is_ok_and(|h| !h.trim().is_empty()) {
+        return true;
+    }
+    let addr: std::net::SocketAddr = ([127, 0, 0, 1], 6767).into();
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300)).is_ok()
+}
+
+pub struct FailFastPaseoCli {
+    inner: Box<dyn PaseoCli>,
+    failed: std::sync::atomic::AtomicBool,
+}
+
+impl FailFastPaseoCli {
+    pub fn new(inner: Box<dyn PaseoCli>) -> Self {
+        Self { inner, failed: std::sync::atomic::AtomicBool::new(false) }
+    }
+}
+
+impl PaseoCli for FailFastPaseoCli {
+    fn call(&self, args: &[String]) -> Result<String, String> {
+        if self.failed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("paseo unreachable earlier in this run".to_string());
+        }
+        let result = self.inner.call(args);
+        if result.is_err() {
+            self.failed.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        result
+    }
+}
+
+fn run_with_deadline(
+    command: &str,
+    args: &[String],
+    timeout: std::time::Duration,
+) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    let mut child = std::process::Command::new(command)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn {command}: {e}"))?;
+    let mut out_pipe = child.stdout.take();
+    let mut err_pipe = child.stderr.take();
+    let out_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = out_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = err_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("{command} timed out after {}s", timeout.as_secs()));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(e) => return Err(format!("failed to wait for {command}: {e}")),
+        }
+    };
+    let stdout = out_reader.join().unwrap_or_default();
+    let stderr = err_reader.join().unwrap_or_default();
+    Ok(std::process::Output { status, stdout, stderr })
 }
 
 impl PaseoCli for RealPaseoCli {
     fn call(&self, args: &[String]) -> Result<String, String> {
-        let output = std::process::Command::new(&self.command)
-            .args(args)
-            .stdin(std::process::Stdio::null())
-            .output()
-            .map_err(|e| format!("failed to spawn {}: {e}", self.command))?;
+        let output = match self.timeout {
+            Some(t) => run_with_deadline(&self.command, args, t)?,
+            None => std::process::Command::new(&self.command)
+                .args(args)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map_err(|e| format!("failed to spawn {}: {e}", self.command))?,
+        };
 
         if output.status.success() {
             String::from_utf8(output.stdout)
@@ -500,6 +589,32 @@ impl PaseoCli for RealPaseoCli {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn real_cli_with_timeout_kills_a_slow_command() {
+        let cli = RealPaseoCli::new("sleep").with_timeout(std::time::Duration::from_secs(1));
+        let started = std::time::Instant::now();
+        let err = cli.call(&["5".to_string()]).unwrap_err();
+        assert!(err.contains("timed out"), "{err}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(4));
+    }
+
+    #[test]
+    fn fail_fast_cli_stops_calling_after_the_first_error() {
+        struct Counting(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+        impl PaseoCli for Counting {
+            fn call(&self, _args: &[String]) -> Result<String, String> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("down".to_string())
+            }
+        }
+        let count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cli = FailFastPaseoCli::new(Box::new(Counting(count.clone())));
+        assert!(cli.call(&[]).is_err());
+        assert!(cli.call(&[]).is_err());
+        assert!(cli.call(&[]).is_err());
+        assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn agent_entry_with_paseo_block_parses_into_spec() {

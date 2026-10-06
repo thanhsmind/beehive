@@ -163,7 +163,7 @@ The command `bee herding steer` steers a running turn on Paseo (paseo-answers D2
 The command `bee herding status` displays information for Paseo workers. The status output includes five specific fields:
 - `transport`: Shows the value `paseo`.
 - `paseo_agent_id`: Shows the agent identifier from Paseo.
-- `paseo_state`: Shows the current state: `working`, `idle`, `blocked`, `dead`, or `unknown`.
+- `paseo_state`: Shows the current state: `working`, `idle`, `blocked`, `dead`, `unknown`, or `finished`. A job with a result for its round or a mark is `finished`, and status does not ask Paseo about it. Status asks Paseo only when the repo has a Paseo agent or job and the daemon port answers; each call has a 5-second limit, and after the first failure status stops asking.
 - `permissions`: Lists pending permission requests and tool names when a worker is blocked.
 - `untracked_paseo_agents`: Lists labeled agents that no active job tracks.
 
