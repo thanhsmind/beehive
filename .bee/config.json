@@ -304,6 +304,8 @@
       "{ALLOWED_TOOLS}"
     ],
     "agents": {
+      "paseo-pi-flash": {"paseo": {"provider": "pi", "model": "openrouter/~deepseek/deepseek-flash-latest", "thinking": "low"}},
+      "paseo-claude": {"paseo": {"provider": "claude", "mode": "bypassPermissions"}},
       "claude-sonnet": [
         "claude",
         "--model",

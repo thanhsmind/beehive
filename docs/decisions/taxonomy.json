@@ -657,6 +657,9 @@
     "paseo-heartbeat",
     "contract:paseo-heartbeat-helpers",
     "contract:paseo-heartbeat-events",
-    "contract:paseo-heartbeat-stale-marker"
+    "contract:paseo-heartbeat-stale-marker",
+    "paseo-answers",
+    "steer",
+    "plan-wording"
   ]
 }

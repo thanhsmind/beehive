@@ -13,8 +13,13 @@
   "summary": "Feature \"paseo-heartbeat\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"paseo-heartbeat\" — feature is closed.",
   "created_at": "2026-10-05T23:23:08.569Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "paseo answers slice: same agent or fresh agent; mid-turn steer for Claude/Codex",
+    "asked_at": "2026-10-05T23:59:49.300Z",
+    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
