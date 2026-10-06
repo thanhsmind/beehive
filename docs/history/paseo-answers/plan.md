@@ -62,8 +62,8 @@ during a running turn.
 - broker.rs: `start_child_job_for_answered_question` takes a
   `&dyn PaseoCli`. When the parent job.json says `transport: "paseo"` with a
   `paseo_agent_id` and inspect says Idle, it spawns
-  `bee herding run --continue <parent-job> --task <answer-task>`, where the
-  task is the same question-and-answer text, and records the redispatch with `mode: "continue"`; otherwise the existing
+  `bee herding run --continue job-42 --task answer-text` (`job-42` is the
+  parent job; the task is the same question-and-answer text), and records the redispatch with `mode: "continue"`; otherwise the existing
   child-job path runs unchanged.
 - New `herding/paseo_steer.rs` with an embedded Node script
   (`herding/paseo_steer.mjs`, `include_str!`): resolve the `@getpaseo/cli`
@@ -136,7 +136,7 @@ Waves: wave 1 runs pa-1, pa-3 and pa-4 in parallel (disjoint files); pa-2 runs a
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| pa-1 | Continue a Paseo job in the same idle agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | `bee herding run --continue <paseo job>` runs the next round in the same agent, or refuses when it is busy | herding tests green |
+| pa-1 | Continue a Paseo job in the same idle agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | `bee herding run --continue job-42` on a Paseo job runs the next round in the same agent, or refuses when it is busy | herding tests green |
 | pa-2 | Send a broker answer to the same Paseo agent | packages/bee-rs/crates/bee/src/herding/broker.rs | pa-1 | an answered question on a Paseo job continues the same agent | herding tests green, then a live question round |
 | pa-3 | Steer a running Claude, Codex or OpenCode worker on Paseo | packages/bee-rs/crates/bee/src/herding/paseo_steer.rs (new); packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs (new); packages/bee-rs/crates/bee/src/herding/job_verbs.rs; packages/bee-rs/crates/bee/src/herding.rs | — | `bee herding steer` reaches a running Claude worker on Paseo, or refuses clearly | herding tests green, then a live steer |
 | pa-4 | Document answers and steering on Paseo | docs/knowledge/areas/bee-herding/the-paseo-channel.md | — | the concept explains same-agent answers and steer | knowledge check green |
@@ -166,7 +166,7 @@ Waves: wave 1 runs pa-1, pa-3 and pa-4 in parallel (disjoint files); pa-2 runs a
     "must_haves": {
       "truths": [
         "a Paseo worker result with status question does not archive the agent",
-        "bee herding run --continue on a paseo job sends the round N+1 pointer to the same agent only when it is Idle",
+        "`bee herding run` with the continue flag on a paseo job sends the round N+1 pointer to the same agent only when it is Idle",
         "a continue on a Working, Blocked, Dead or unknown agent refuses with a FIX line and makes no send call",
         "the continued round's result is read from result-(N+1).json",
         "a continue on a non-paseo job runs the existing execute_continue unchanged and the existing herding tests stay green"
@@ -203,7 +203,7 @@ Waves: wave 1 runs pa-1, pa-3 and pa-4 in parallel (disjoint files); pa-2 runs a
     "action": "Red first. In broker.rs add `continue_job: Option<String>` to SpawnArgs; RealJobSpawner passes `--continue <id>` instead of `--job-id <id>` when it is set, and still passes --task, --cwd and --main-root (question flags only for the child path). Give start_child_job_for_answered_question (broker.rs:307) a `paseo: &dyn crate::herding::paseo::PaseoCli` parameter. When the parent job.json has transport \"paseo\" and a paseo_agent_id, call inspect on that id; only when parse_inspect says Idle, spawn with continue_job = the parent job id and the same task text the child path builds (the original task plus the question and answer), write the same redispatched-<round>.json record with an added \"mode\": \"continue\", and return the parent job id. Any other state, an inspect error, or a non-paseo parent runs the existing child-job path unchanged. Thread a RealPaseoCli on the configured paseo command (crate::herding::paseo::paseo_command over the main config) through tick_with and answer_with at their real entry points (tick, answer); tests pass a fake. Tests: an Idle paseo parent spawns once with continue_job set and no --job-id; a Working paseo parent spawns one child job; a non-paseo parent is unchanged; exactly one spawn per answered question in each case. No code comments.",
     "must_haves": {
       "truths": [
-        "an answered question on a paseo job whose agent is Idle spawns bee herding run --continue on the same job, once",
+        "an answered question on a paseo job whose agent is Idle spawns `bee herding run` with the continue flag on the same job, once",
         "an answered question on a paseo job whose agent is not Idle spawns one fresh child job as before",
         "a non-paseo job's answer path is unchanged",
         "the redispatch record marks mode continue for the same-agent path"
@@ -277,7 +277,7 @@ Waves: wave 1 runs pa-1, pa-3 and pa-4 in parallel (disjoint files); pa-2 runs a
       "docs/history/paseo-answers/plan.md",
       "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
     ],
-    "action": "In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace the planned-work line about slice 3 (answers) with a section 'Answers and steering' in the same ASD-STE100 style: a question keeps the agent; the broker sends the answer to the same agent as the next round of the same job only when Paseo shows it idle, else a fresh child job; `bee herding run --continue` on a Paseo job and its refusal when the agent is busy; `bee herding steer` on Paseo: claude, codex, opencode through the daemon helper (needs node and the npm @getpaseo/cli), pi through the steer file, other providers refused; never an interrupting send. Add 'paseo-answers D1, D2' to the frontmatter decisions. Change nothing else.",
+    "action": "In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace the planned-work line about slice 3 (answers) with a section 'Answers and steering' in the same ASD-STE100 style: a question keeps the agent; the broker sends the answer to the same agent as the next round of the same job only when Paseo shows it idle, else a fresh child job; `bee herding run --continue job-42` on a Paseo job and its refusal when the agent is busy; `bee herding steer` on Paseo: claude, codex, opencode through the daemon helper (needs node and the npm @getpaseo/cli), pi through the steer file, other providers refused; never an interrupting send. Add 'paseo-answers D1, D2' to the frontmatter decisions. Change nothing else.",
     "must_haves": {
       "truths": [
         "the concept states that a question keeps the agent and the answer continues the same job only when the agent is idle",
