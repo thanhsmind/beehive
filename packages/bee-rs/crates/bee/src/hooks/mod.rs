@@ -23,6 +23,7 @@ pub mod session_preamble;
 pub mod state_sync;
 pub mod tools_logger;
 pub mod stage_tools;
+pub mod worker_guard;
 pub mod write_guard;
 
 use std::ffi::OsString;
@@ -73,7 +74,7 @@ fn emit_undecidable(name: &str) -> ExitCode {
 /// The hook names `bee hook <name>` dispatches to. Kept as one list so the
 /// usage line and the dispatch match arm can never drift apart silently —
 /// add a hook to both, or the usage line lies.
-const HOOK_NAMES: [&str; 11] = [
+const HOOK_NAMES: [&str; 12] = [
     "tools-logger",
     "activity",
     "codex-subagent-audit",
@@ -85,6 +86,7 @@ const HOOK_NAMES: [&str; 11] = [
     "model-guard",
     "write-guard",
     "stage-tools",
+    "worker-guard",
 ];
 
 /// The herded-worker marker (herding/run.rs D2): set and non-empty means
@@ -99,7 +101,7 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// unknown name in a herded pane is still a hook invocation the pane must
 /// not answer.
 fn marker_short_circuits(name: &str) -> bool {
-    name != "activity"
+    name != "activity" && name != "worker-guard"
 }
 
 fn print_hook_usage() {
@@ -186,6 +188,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "model-guard" => model_guard::run(&rest, &stdin_str),
         "write-guard" => write_guard::run(&rest, &stdin_str),
         "stage-tools" => stage_tools::run(&rest, &stdin_str),
+        "worker-guard" => worker_guard::run(&rest, &stdin_str),
         // Every name that reaches here passed the HOOK_NAMES membership
         // check above, and the arms cover exactly that list.
         _ => unreachable!("unknown hook names are refused before the stdin read"),
@@ -255,23 +258,17 @@ mod tests {
         }
     }
 
-    /// herding-activity-hook D1: the hole in the marker exit is EXACTLY one
-    /// name wide. Asserted over the whole `HOOK_NAMES` list rather than one
-    /// sampled guard — a predicate tested on a single state is a law with a
-    /// hole (docs/knowledge/patterns/20260713).
     #[test]
-    fn under_the_marker_only_activity_passes_through_to_its_handler() {
-        assert!(!marker_short_circuits("activity"), "activity must reach its handler");
+    fn under_the_marker_activity_and_worker_guard_reach_handlers_and_write_guard_short_circuits() {
+        assert!(!marker_short_circuits("activity"));
+        assert!(!marker_short_circuits("worker-guard"));
+        assert!(marker_short_circuits("write-guard"));
         for hook_name in HOOK_NAMES {
-            if hook_name == "activity" {
+            if hook_name == "activity" || hook_name == "worker-guard" {
                 continue;
             }
-            assert!(
-                marker_short_circuits(hook_name),
-                "{hook_name} must still exit 0 before stdin is read under the marker"
-            );
+            assert!(marker_short_circuits(hook_name));
         }
-        // An unknown name is not a hole either: it never reaches dispatch.
         assert!(marker_short_circuits("some-unknown-hook"));
     }
 

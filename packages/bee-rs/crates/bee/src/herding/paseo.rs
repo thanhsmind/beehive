@@ -148,16 +148,29 @@ pub enum PaseoState {
     Dead,
 }
 
-pub fn parse_inspect(stdout: &str) -> Option<PaseoState> {
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PaseoInspect {
+    pub state: Option<PaseoState>,
+    pub updated_at: Option<String>,
+    pub model: Option<String>,
+    pub thinking: Option<String>,
+}
+
+pub fn parse_inspect_full(stdout: &str) -> Option<PaseoInspect> {
     for (i, c) in stdout.char_indices() {
         if c == '{' {
             let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
             if let Some(Ok(Value::Object(map))) = de.next() {
-                let status = map.get("Status").and_then(Value::as_str)?;
-                return match status {
-                    "running" => {
+                let status = map
+                    .get("Status")
+                    .or_else(|| map.get("status"))
+                    .and_then(Value::as_str);
+                let state = match status {
+                    Some("running") => {
                         let has_pending = map
                             .get("PendingPermissions")
+                            .or_else(|| map.get("pendingPermissions"))
+                            .or_else(|| map.get("pending_permissions"))
                             .and_then(Value::as_array)
                             .map(|a| !a.is_empty())
                             .unwrap_or(false);
@@ -167,14 +180,50 @@ pub fn parse_inspect(stdout: &str) -> Option<PaseoState> {
                             Some(PaseoState::Working)
                         }
                     }
-                    "idle" => Some(PaseoState::Idle),
-                    "error" | "closed" => Some(PaseoState::Dead),
+                    Some("idle") => Some(PaseoState::Idle),
+                    Some("error") | Some("closed") => Some(PaseoState::Dead),
                     _ => None,
                 };
+
+                let updated_at = map
+                    .get("UpdatedAt")
+                    .or_else(|| map.get("updatedAt"))
+                    .or_else(|| map.get("updated_at"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
+
+                let model = map
+                    .get("Model")
+                    .or_else(|| map.get("model"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty() && *s != "-")
+                    .map(String::from);
+
+                let thinking = map
+                    .get("Thinking")
+                    .or_else(|| map.get("thinking"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("auto"))
+                    .map(String::from);
+
+                return Some(PaseoInspect {
+                    state,
+                    updated_at,
+                    model,
+                    thinking,
+                });
             }
         }
     }
     None
+}
+
+pub fn parse_inspect(stdout: &str) -> Option<PaseoState> {
+    parse_inspect_full(stdout).and_then(|i| i.state)
 }
 
 pub fn version_at_least(output: &str, required: (u64, u64, u64)) -> bool {
@@ -837,6 +886,72 @@ mod tests {
         assert_eq!(parse_inspect(&unknown_json), None);
 
         assert_eq!(parse_inspect("not json"), None);
+    }
+
+    #[test]
+    fn parse_inspect_full_reads_all_fields_and_sentinels() {
+        let full_json = json!({
+            "Status": "running",
+            "UpdatedAt": "2026-10-06T12:00:00Z",
+            "Model": "claude-3-5-sonnet",
+            "Thinking": "high"
+        })
+        .to_string();
+        assert_eq!(
+            parse_inspect_full(&full_json),
+            Some(PaseoInspect {
+                state: Some(PaseoState::Working),
+                updated_at: Some("2026-10-06T12:00:00Z".to_string()),
+                model: Some("claude-3-5-sonnet".to_string()),
+                thinking: Some("high".to_string()),
+            })
+        );
+
+        let sentinels_json = json!({
+            "Status": "idle",
+            "UpdatedAt": "2026-10-06T12:00:00Z",
+            "Model": "-",
+            "Thinking": "auto"
+        })
+        .to_string();
+        assert_eq!(
+            parse_inspect_full(&sentinels_json),
+            Some(PaseoInspect {
+                state: Some(PaseoState::Idle),
+                updated_at: Some("2026-10-06T12:00:00Z".to_string()),
+                model: None,
+                thinking: None,
+            })
+        );
+
+        let tolerance_json = json!({
+            "status": "running",
+            "updated_at": "2026-10-06T12:00:00Z",
+            "model": "gpt-4o"
+        })
+        .to_string();
+        assert_eq!(
+            parse_inspect_full(&tolerance_json),
+            Some(PaseoInspect {
+                state: Some(PaseoState::Working),
+                updated_at: Some("2026-10-06T12:00:00Z".to_string()),
+                model: Some("gpt-4o".to_string()),
+                thinking: None,
+            })
+        );
+
+        let minimal_json = json!({"Model": "claude-3"}).to_string();
+        assert_eq!(
+            parse_inspect_full(&minimal_json),
+            Some(PaseoInspect {
+                state: None,
+                updated_at: None,
+                model: Some("claude-3".to_string()),
+                thinking: None,
+            })
+        );
+
+        assert_eq!(parse_inspect_full("not json"), None);
     }
 
     #[test]

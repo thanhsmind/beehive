@@ -137,11 +137,20 @@ export default function (pi: ExtensionAPI) {
   registerEvents(pi, belt)
   registerCommands(pi, belt)
 
+  const isPaseoWorker = Boolean(
+    process.env.BEE_HERDING_WORKER &&
+      process.env.BEE_HERDING_WORKER.trim().length > 0 &&
+      process.env.PASEO_AGENT_ID &&
+      process.env.PASEO_AGENT_ID.trim().length > 0,
+  )
+
   if (typeof (pi as any).registerTool === "function") {
     ;(pi as any).registerTool(verdictTool)
-    ;(pi as any).registerTool(beeDispatchTool)
-    ;(pi as any).registerTool(beeAdvisorTool)
-    ;(pi as any).registerTool(beeSteerTool)
+    if (!isPaseoWorker) {
+      ;(pi as any).registerTool(beeDispatchTool)
+      ;(pi as any).registerTool(beeAdvisorTool)
+      ;(pi as any).registerTool(beeSteerTool)
+    }
   }
 }
 

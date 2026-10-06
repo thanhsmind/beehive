@@ -278,6 +278,32 @@ export function recordCarry(mainRoot: string, oldSessionId: string, newSessionId
   return tokens
 }
 
+export function isLeaderBusy(): boolean {
+  return Boolean(state.selfBusy)
+}
+
+export async function sendLeaderMessage(pi: any, message: string): Promise<boolean> {
+  if (typeof pi?.sendUserMessage !== "function") {
+    return false
+  }
+  const steer = Boolean(state.selfBusy)
+  if (!steer) {
+    if (state.turnStartPending) {
+      return false
+    }
+    state.turnStartPending = true
+  }
+  try {
+    await pi.sendUserMessage(message, steer ? { deliverAs: "steer" } : undefined)
+    return steer
+  } catch (err) {
+    if (!steer) {
+      state.turnStartPending = false
+    }
+    throw err
+  }
+}
+
 /** One tick: at most ONE result injected, oldest marker first (filename sort,
  * which is chronological for `job-<ms>` ids). Never throws — every failure
  * either skips the marker or requeues its own claim. Reads both this session's
@@ -346,27 +372,21 @@ export async function drainResultInbox(pi: any, directory: string, token: string
           return na - nb
         })
     } catch {}
+
     const undeliveredStr = undeliveredSteers.length > 0 ? undeliveredSteers.join(", ") : undefined
 
-    const steer = state.selfBusy
-    // F1: latch BEFORE the injection, so a tick landing while the host is still
-    // starting this turn cannot open a second overlapping one.
-    if (!steer) state.turnStartPending = true
     try {
-      await pi.sendUserMessage(
+      await sendLeaderMessage(
+        pi,
         renderResultInjection(marker, result, latest.round, undeliveredStr),
-        steer ? { deliverAs: "steer" } : undefined,
       )
     } catch (err: any) {
-      // Failed injection: unlatch and requeue ONLY this claim. Never lost.
-      state.turnStartPending = false
       requeueClaim(processing)
       console.error(
         `bee result-inbox (advisory): could not inject ${name} — requeued: ${err?.message ?? err}`,
       )
       return
     }
-    // F2: the claim stays on disk until the turn ends at `agent_settled`.
     inFlightClaims.add(processing)
     return // one result per tick
   }

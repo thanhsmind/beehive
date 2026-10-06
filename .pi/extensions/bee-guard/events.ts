@@ -4,15 +4,20 @@ import { rmSync } from "node:fs"
 import { directoryOf, sessionIdOf, sessionSource } from "./session.ts"
 import { beeStorePresent, mainCheckoutRoot, resolveBeeBinary } from "./locate.ts"
 import {
+  deleteHeartbeat,
   ensureHeartbeat,
   heartbeatText,
   isHeartbeatPrompt,
   isPaseoLeader,
   parseTick,
   readPaseoSettings,
+  setTickRunning,
+  startBrokerTimer,
+  stopBrokerTimer,
+  tickRunning,
 } from "./paseo-heartbeat.ts"
 import { mapToolCall, BEE_STAGE_TOOLS } from "./tool-map.ts"
-import { runBlockingHook, runAdvisoryHook } from "./hooks.ts"
+import { runBlockingHook, runAdvisoryHook, block } from "./hooks.ts"
 import { refreshModelUsageStatus } from "./model-usage.ts"
 import {
   forcedContinuationSessions,
@@ -32,7 +37,25 @@ import { drainWorkerSteer } from "./tool-steer.ts"
 import { state } from "./state.ts"
 
 let quietHeartbeatTurn = false
-let tickRunning = false
+let cachedWorkerGuardHelp: boolean | null = null
+
+function checkWorkerGuardSupported(beeBinary: string): boolean {
+  if (cachedWorkerGuardHelp !== null) {
+    return cachedWorkerGuardHelp
+  }
+  try {
+    const helpOut = cp.execFileSync(beeBinary, ["hook", "--help"], {
+      encoding: "utf8",
+      timeout: 5000,
+    })
+    const supported = helpOut.includes("worker-guard")
+    cachedWorkerGuardHelp = supported
+    return supported
+  } catch {
+    cachedWorkerGuardHelp = false
+    return false
+  }
+}
 
 // ─── the belt ──────────────────────────────────────────────────────────────
 
@@ -52,6 +75,51 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
 
     const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
     if (mapped.hook === null) return undefined
+
+    const isHerdedPaseoWorker = Boolean(
+      process.env.BEE_HERDING_WORKER &&
+        process.env.BEE_HERDING_WORKER.trim().length > 0 &&
+        process.env.PASEO_AGENT_ID &&
+        process.env.PASEO_AGENT_ID.trim().length > 0,
+    )
+    const isSupervisorGuarded = Boolean(
+      process.env.BEE_SUPERVISOR_ALLOWED &&
+        process.env.BEE_SUPERVISOR_ALLOWED.trim().length > 0,
+    )
+
+    if ((isHerdedPaseoWorker || isSupervisorGuarded) && mapped.tool_name === "Bash") {
+      const beeBinary = resolveBeeBinary(directory)
+      if (!beeBinary) {
+        return block(
+          "bee guard could not find the bee binary (.bee/bin/bee) in this project or its main worktree, " +
+            "but this repo has a .bee store — blocking rather than letting a call through unchecked. " +
+            "FIX: run `bee onboard --apply` (or vendor .bee/bin/bee) and retry.",
+        )
+      }
+      if (!checkWorkerGuardSupported(beeBinary)) {
+        return block(
+          `bee guard: the bee binary at ${beeBinary} does not list worker-guard in bee hook --help — ` +
+            "blocking rather than allowing an unchecked call. FIX: update the bee binary.",
+        )
+      }
+      const workerVerdict = runBlockingHook(
+        directory,
+        "worker-guard" as any,
+        {
+          hook_event_name: "PreToolUse",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          tool_name: mapped.tool_name,
+          tool_input: mapped.tool_input,
+          bee_runtime: "pi",
+          tools_reopened: belt.toolsReopened,
+        },
+        (event?.input ?? {}) as Record<string, unknown>,
+        mapped.passthrough,
+      )
+      if (workerVerdict?.block) return workerVerdict
+    }
+
     return runBlockingHook(
       directory,
       mapped.hook,
@@ -81,6 +149,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         state.cachedPreamble = null
         state.preambleInjected = false
         state.sessionInitRun = false
+        cachedWorkerGuardHelp = null
         const activeSessionId = sessionIdOf(ctx) ?? ""
         promptDepths.delete(activeSessionId)
       }
@@ -95,10 +164,11 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
       if (isPaseoLeader()) {
         const mainRoot = mainCheckoutRoot(directory)
+        const settings = readPaseoSettings(mainRoot)
         ensureHeartbeat(
           mainRoot,
           process.env.PASEO_AGENT_ID ?? "",
-          readPaseoSettings(mainRoot),
+          settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
@@ -125,6 +195,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           .catch((err: any) => {
             console.error(`bee paseo-heartbeat: ${err?.message ?? err}`)
           })
+        startBrokerTimer(pi, directory, settings)
       }
       const text = runAdvisoryHook(directory, "session-init", {
         hook_event_name: "SessionStart",
@@ -292,7 +363,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
       }
-      tickRunning = true
+      setTickRunning(true)
       try {
         const stdout = await new Promise<string>((resolve, reject) => {
           const child = cp.execFile(
@@ -318,7 +389,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
       } finally {
-        tickRunning = false
+        setTickRunning(false)
       }
     }
     return { action: "continue" }
@@ -771,6 +842,33 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         state.transitionTeardownOccurred = true
       }
       if (reason === "reload") return undefined
+      stopBrokerTimer()
+      if (isPaseoLeader()) {
+        const mainRoot = mainCheckoutRoot(directoryOf(ctx))
+        const settings = readPaseoSettings(mainRoot)
+        await deleteHeartbeat(
+          mainRoot,
+          process.env.PASEO_AGENT_ID ?? "",
+          settings,
+          (command, args) =>
+            new Promise((resolve, reject) => {
+              const child = cp.execFile(
+                command,
+                args,
+                { timeout: 30000, encoding: "utf8" },
+                (error, stdout) => {
+                  if (error) {
+                    reject(error)
+                  } else {
+                    resolve(String(stdout ?? ""))
+                  }
+                },
+              )
+              child.stdin?.on("error", () => {})
+              child.stdin?.end()
+            }),
+        )
+      }
       const directory = directoryOf(ctx)
       try {
         runAdvisoryHook(directory, "session-close", {
