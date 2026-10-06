@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-leader-toil",
   "mode": "high-risk",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"herding-leader-toil\" started at phase \"exploring\" (lane).",
-  "next_action": "uat: user tests herding-leader-toil on main, then bee gate --name uat --approved true and bee close",
+  "next_action": "bee close finished \"herding-leader-toil\" — feature is closed.",
   "created_at": "2026-10-06T07:05:11.557Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
