@@ -91,7 +91,14 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (flags, use_json) = parse_flags(rest)?;
     match verb {
         "set" => run_set(flags, use_json, t0),
-        "gate.preview" => run_gate_preview(flags, use_json, t0),
+        "gate.preview" => {
+            let ctx = match go("gate preview", use_json, t0)? {
+                Ok(c) => c,
+                Err(code) => return Some(code),
+            };
+            let out = run_gate_preview_body(&ctx.root, &flags, use_json);
+            finish_serving(&ctx, out)
+        }
         "gate" => run_gate(flags, use_json, t0),
         "waiting-on.set" => run_waiting_on_set(flags, use_json, t0),
         "waiting-on.clear" => run_waiting_on_clear(flags, use_json, t0),
@@ -117,7 +124,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
-        "route" => run_route(flags, use_json, t0),
+        "route" => run_route_served(flags, use_json, t0),
         "start-feature" => run_start_feature(flags, use_json, t0),
         "advisor-ref.record" => run_advisor_ref_record(flags, use_json, t0),
         "advisor-ref.show" => run_advisor_ref_show(flags, use_json, t0),
@@ -125,12 +132,162 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
 }
 
+fn finish_serving(ctx: &Ctx, out: R2<Out>) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    crate::verbs::drivers::finish_serving_granted(ctx, out, served_main.as_deref())
+}
+
+fn run_route_served(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    if served_main.is_none() {
+        return run_route(flags, use_json, t0);
+    }
+    let no_lane = flags.get("no-lane").is_some();
+    let show = matches!(flags.get("show"), Some(FlagV::Present));
+    let set = matches!(flags.get("set"), Some(FlagV::Present));
+    let ctx = match go("state route", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        if show {
+            let target = resolve_mutation_target(&ctx.root, None, "route show", no_lane)?;
+            let route = match target.record().get("route") {
+                Some(v) if truthy(v) => v.clone(),
+                _ => {
+                    return Ok(Out::Emit(Value::Null, "No route recorded.".to_string(), 0));
+                }
+            };
+            let Some(Value::Array(flag_names)) = jget(&route, "flags") else {
+                return Err(Err2::Ex);
+            };
+            let joined: Vec<String> = flag_names.iter().map(js_disp).collect();
+            let rationale = match jget(&route, "rationale") {
+                Some(v) if truthy(v) => format!(" rationale=\"{}\"", js_disp(v)),
+                _ => String::new(),
+            };
+            let text = format!(
+                "class={} lane={} flags={} [{}] files={}{rationale}{}",
+                js_disp_opt(jget(&route, "class")),
+                js_disp_opt(jget(&route, "lane")),
+                flag_names.len(),
+                joined.join(","),
+                js_disp_opt(jget(&route, "product_files")),
+                target.lane_note(),
+            );
+            return Ok(Out::Emit(route, text, 0));
+        }
+        if !set {
+            return Ok(Out::Thrown(
+                "route: requires --set (to record a route) or --show (to read it back).".to_string(),
+            ));
+        }
+        let mut route_object = match validate_route_set_flags(&flags)? {
+            Ok(r) => r,
+            Err(message) => return Ok(Out::Thrown(message)),
+        };
+        let lane_class = js_disp_opt(route_object.get("lane"));
+
+        let scope = resolve_mutation_lock_scope(&ctx.root, None, no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target = resolve_mutation_target(&ctx.root, None, "route", no_lane)?;
+        if let Some(message) =
+            unbound_default_route_refusal(&target, no_lane, &live_lane_features(&ctx.root)?)
+        {
+            return Ok(Out::Thrown(message));
+        }
+        let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
+        let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
+        if !feature_set
+            || &phase == &json!("idle")
+            || &phase == &json!("compounding-complete")
+        {
+            let phase_disp = match target.record().get("phase") {
+                None | Some(Value::Null) => "idle".to_string(),
+                Some(v) => js_disp(v),
+            };
+            let feature_disp = match target.record().get("feature") {
+                None | Some(Value::Null) => "none".to_string(),
+                Some(v) => js_disp(v),
+            };
+            return Ok(Out::Thrown(format!(
+                "route --set: refused \u{2014} no active feature to attach a route to (phase \"{phase_disp}\", feature \"{feature_disp}\"). FIX: start a feature first (state start-feature), then record its route."
+            )));
+        }
+        let route_owner_feature = target.record().get("feature").cloned().unwrap_or(Value::Null);
+        route_object.insert("feature".into(), route_owner_feature.clone());
+        if let Some(Value::Object(existing_route)) = target.record().get("route") {
+            if route_belongs_to_feature(existing_route, &route_owner_feature) {
+                let new_flags: Vec<String> = match route_object.get("flags") {
+                    Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
+                    _ => Vec::new(),
+                };
+                match validate_route_lane_transition(existing_route, &lane_class, &new_flags) {
+                    Ok(Some(stamp)) => {
+                        route_object.insert("demoted_at".into(), json!(stamp));
+                    }
+                    Ok(None) => {}
+                    Err(message) => return Ok(Out::Thrown(message)),
+                }
+            }
+        }
+        let lane_note = target.lane_note();
+        let target_lane = target.lane().map(str::to_string);
+        target
+            .record_mut()
+            .insert("route".into(), Value::Object(route_object.clone()));
+        let record = target.record().clone();
+        write_through_projection(&ctx.root, &target, &record, &[])?;
+        let target_feature = match &target_lane {
+            Some(l) => l.clone(),
+            None => js_disp_opt(record.get("feature")),
+        };
+        let live = list_workflows(&ctx.root)?;
+        if let Some(wf) = find_live_workflow(&live, &target_feature) {
+            let mut patch = Map::new();
+            patch.insert("route".into(), Value::Object(route_object.clone()));
+            update_workflow_assuming_lock(&ctx.root, &wf_id(wf), patch)?;
+        }
+        let routed_feature = match record.get("feature") {
+            Some(v) if !v.is_null() => Some(js_disp(v)),
+            _ => target_lane.clone(),
+        };
+        drop(locks);
+
+        let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
+        let code_touching = is_code_touching_lane(&lane_class, other_live);
+        let block = route_worktree_block(&ctx.root, routed_feature.as_deref(), &lane_class, code_touching);
+
+        let flags_len = match route_object.get("flags") {
+            Some(Value::Array(a)) => a.len(),
+            _ => 0,
+        };
+        let mut text = format!(
+            "Recorded route (class={} lane={lane_class} flags={flags_len} files={}).{lane_note}",
+            js_disp_opt(route_object.get("class")),
+            js_disp_opt(route_object.get("product_files")),
+        );
+        let mut result = route_object;
+        if let Some(block) = block {
+            text.push('\n');
+            text.push_str(&js_disp_opt(jget(&block, "notice")));
+            result.insert("worktree".into(), block);
+        }
+        Ok(Out::Emit(Value::Object(result), text, 0))
+    })();
+    finish_serving(&ctx, out)
+}
+
 pub(crate) fn go(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Result<Ctx, ExitCode>> {
-    match prelude(cmd, use_json, t0)? {
-        Pre::Go(c) => Some(Ok(c)),
-        Pre::Emitted(code) => Some(Err(code)),
+    match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
+        Ok(c) => Some(Ok(c)),
+        Err(code) => Some(Err(code)),
     }
 }
+
 
 // ─── state set ─────────────────────────────────────────────────────────────
 
@@ -323,7 +480,7 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Err(code) => return Some(code),
     };
     let out = run_set_body(&ctx.root, &flags);
-    finish(&ctx, out)
+    finish_serving(&ctx, out)
 }
 
 /// The mutation body, root-parameterized so it can be exercised directly in
@@ -570,7 +727,18 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
 
 pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if flags.get("preview").is_some() {
-        return run_gate_preview(flags, use_json, t0);
+        if !keys_known(&flags, &["lane", "no-lane", "preview"]) {
+            return None;
+        }
+        if !bool_flag_ok(&flags, "no-lane") {
+            return None;
+        }
+        let ctx = match go("gate preview", use_json, t0)? {
+            Ok(c) => c,
+            Err(code) => return Some(code),
+        };
+        let out = run_gate_preview_body(&ctx.root, &flags, use_json);
+        return finish_serving(&ctx, out);
     }
     if !keys_known(
         &flags,
@@ -588,7 +756,7 @@ pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
         Err(code) => return Some(code),
     };
     let out = run_gate_body(&ctx.root, &flags);
-    finish(&ctx, out)
+    finish_serving(&ctx, out)
 }
 
 /// requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs, Gate 3
@@ -1192,7 +1360,7 @@ pub(crate) fn run_plan_rev_bump(flags: Flags, use_json: bool, t0: Instant) -> Op
         );
         Ok(Out::Emit(Value::Object(result), text, 0))
     })();
-    finish(&ctx, out)
+    finish_serving(&ctx, out)
 }
 
 // ─── tests: the compounding-complete door (tpp-1) ──────────────────────────
@@ -3025,5 +3193,173 @@ mod tests {
             json.get("gate_durable_stamp_skipped").is_none(),
             "the field must not appear on the default-record path: {json:?}"
         );
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(target: &Path) -> Self {
+            let guard = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(target).unwrap();
+            Self { _lock: guard, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        crate::verbs::worktree::run_git(&main, &["init", "-q", "-b", "main", "."]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.email", "a@b.c"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.name", "t"]);
+        crate::verbs::worktree::run_git(&main, &["add", "-A"]);
+        crate::verbs::worktree::run_git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        let ungranted = tmp.join("wt-ungranted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(ungranted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(ungranted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            ungranted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo-ungranted\"}\n",
+        )
+        .unwrap();
+        (main, granted, ungranted)
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_state_verbs() {
+        let tmp = tmp_root();
+        let (main, granted, ungranted) = fixture_e32f3a66(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"idle","feature":null}"#);
+
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            let code = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--feature"),
+                    OsString::from("demo"),
+                    OsString::from("--owner"),
+                    OsString::from("idle"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+            let state: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state["phase"], "planning");
+            assert_eq!(state["feature"], "demo");
+
+            let code_route = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("route"),
+                    OsString::from("--set"),
+                    OsString::from("--class"),
+                    OsString::from("feature"),
+                    OsString::from("--lane"),
+                    OsString::from("standard"),
+                    OsString::from("--flags"),
+                    OsString::from("multi-domain"),
+                    OsString::from("--files"),
+                    OsString::from("7"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_route, Some(ExitCode::SUCCESS));
+            let state_after_route: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_after_route["route"]["class"], "feature");
+
+            w(
+                &granted,
+                "docs/history/demo/plan.md",
+                "# Plan: demo\n\n## Cells, current slice preview\n\n```json\n[{\"id\":\"c1\",\"feature\":\"demo\",\"title\":\"Do thing\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"Implement it\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"It works\"]},\"verify\":\"cargo check\"}]\n```\n",
+            );
+            let code_preview = crate::router::try_native(
+                &[
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_preview, Some(ExitCode::SUCCESS));
+            let code_state_preview = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_state_preview, Some(ExitCode::SUCCESS));
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&main);
+            let code_main = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("swarming"),
+                    OsString::from("--owner"),
+                    OsString::from("planning"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_main, Some(ExitCode::SUCCESS));
+            let state_main: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_main["phase"], "swarming");
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&ungranted);
+            let code_ungranted = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--owner"),
+                    OsString::from("swarming"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_ungranted, Some(ExitCode::SUCCESS));
+            let state_ungranted: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_ungranted["phase"], "planning");
+        }
     }
 }

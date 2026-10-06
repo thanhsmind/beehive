@@ -819,8 +819,27 @@ pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &s
 // named limitation: prose contradictions (the "dark guards" class) have no
 // machine detector here, that is S2-c distill work, recorded, not silently
 // dropped.
+pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
+    if !feature.is_empty() {
+        if let Some((_, worktree_root)) =
+            crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+        {
+            return PathBuf::from(worktree_root);
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
+            if main_root == root {
+                return here;
+            }
+        }
+    }
+    root.to_path_buf()
+}
+
 pub(crate) fn build_knowledge_freshness_door(root: &Path, feature: &str) -> D<Door> {
-    let Some(dir) = crate::verbs::knowledge::bundle_dir(root) else {
+    let docs_root = docs_root_for_feature(root, feature);
+    let Some(dir) = crate::verbs::knowledge::bundle_dir(&docs_root) else {
         return Ok(Door { door: "knowledge-freshness", blocking: false, detail: "clear".to_string(), command: None });
     };
     let Some(report) = crate::verbs::knowledge::check_bundle(&dir, false) else {
@@ -1132,7 +1151,8 @@ fn feature_local_decisions(root: &Path, feature: &str) -> D<Vec<Value>> {
 /// no-archaeology rationale — the door BLOCKS only for CONTEXT files
 /// carrying the canonical grammar.
 pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
-    let context_path = root.join("docs").join("history").join(feature).join("CONTEXT.md");
+    let docs_root = docs_root_for_feature(root, feature);
+    let context_path = docs_root.join("docs").join("history").join(feature).join("CONTEXT.md");
     let text = match std::fs::read_to_string(&context_path) {
         Ok(t) => t,
         Err(_) => {
@@ -1165,7 +1185,7 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
         });
     }
 
-    let bundle_files: Vec<(PathBuf, String)> = match crate::verbs::knowledge::bundle_dir(root) {
+    let bundle_files: Vec<(PathBuf, String)> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
         Some(dir) => crate::verbs::knowledge::list_bundle_markdown(&dir)
             .unwrap_or_default()
             .into_iter()
@@ -1268,9 +1288,10 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
 /// under `docs/history/<feature>/` on disk (present or not, cell-touched or
 /// not).
 pub(crate) fn doc_deferral_scan_files(root: &Path, feature: &str) -> D<Vec<String>> {
+    let docs_root = docs_root_for_feature(root, feature);
     let touched = feature_touched_files(root, feature)?;
     let mut files: Vec<String> = touched.into_iter().filter(|f| f.starts_with("docs/")).collect();
-    let history_dir = root.join("docs").join("history").join(feature);
+    let history_dir = docs_root.join("docs").join("history").join(feature);
     if let Some(rels) = crate::verbs::knowledge::list_bundle_markdown(&history_dir) {
         for rel in rels {
             let full = format!("docs/history/{feature}/{rel}");
@@ -1488,8 +1509,9 @@ fn doc_deferral_candidates(root: &Path, files: &[String]) -> Vec<DeferralCandida
 /// real close would freeze. Every run after that only reads the baseline —
 /// nothing is ever adopted back into it automatically (D2/D4).
 pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool) -> D<Door> {
+    let docs_root = docs_root_for_feature(root, feature);
     let files = doc_deferral_scan_files(root, feature)?;
-    let candidates = doc_deferral_candidates(root, &files);
+    let candidates = doc_deferral_candidates(&docs_root, &files);
     let baseline_path = doc_deferral_baseline_path(root);
 
     let new_items: Vec<&DeferralCandidate> = match read_json(&baseline_path) {
@@ -1497,8 +1519,8 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
             // D6: the seed is REPO-WIDE. `candidates` above is the
             // per-feature ENFORCEMENT set and is deliberately ignored here —
             // seeding from it would freeze only this feature's own docs.
-            let seed_files = doc_deferral_seed_files(root);
-            let seed_candidates = doc_deferral_candidates(root, &seed_files);
+            let seed_files = doc_deferral_seed_files(&docs_root);
+            let seed_candidates = doc_deferral_candidates(&docs_root, &seed_files);
             if dry_run {
                 // D5: `--dry-run` writes NOTHING, ever. It still has to
                 // predict the verdict honestly — and the verdict is
@@ -3075,9 +3097,10 @@ pub(crate) fn close_handler(
     // knowledge a feature earned never blocks finishing it, and D38
     // (promote proposes, it never writes into docs/knowledge/) stays
     // untouched by this door.
-    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(root) {
+    let docs_root = docs_root_for_feature(root, feature);
+    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
         None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-        Some(dir) => match crate::verbs::knowledge::build_promotion(root, &dir, feature) {
+        Some(dir) => match crate::verbs::knowledge::build_promotion(&docs_root, &dir, feature) {
             None => Err("no docs/knowledge/ bundle to mine here".to_string()),
             Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
             Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
@@ -3790,32 +3813,26 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // ── everything that can still delegate happens BEFORE prelude, whose
     //    drift-cache write would swallow the Node re-run's drift line. ──────
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_store_root(&cwd) {
+    let (roots, _here) = crate::verbs::drivers::resolve_root_serving_granted(&cwd);
+    let root = match roots {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, "close", use_json, t0, &why))
         }
         Roots::None => return Some(emit_no_root_error(&cwd, "close", use_json, t0)),
     };
-    // D7: close never spawns commands.test, so no shell needs resolving and
-    // no `.bee/logs/` dir needs creating up front any more — `declared` is
-    // still read (and still passed through below) only to keep
-    // `close_handler`'s signature matching its other callers.
     let declared = declared_test_commands(&root).ok()?;
-    // Delegation pre-flight for the report doors: they are pure reads, so
-    // computing them here (and again, for real, in close_handler) can only
-    // cost two cheap directory scans — but it means a corrupt store can
-    // still hand the whole command to Node BEFORE close_handler runs.
     build_close_report_doors(&root, &feature).ok()?;
     build_pattern_check_door(&root, &feature, &pattern_verdicts).ok()?;
 
-    let ctx = match prelude("close", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let ctx = match crate::verbs::drivers::ctx_serving_granted("close", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
     };
     let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, None, &pattern_verdicts)
         .map_err(crate::verbs::reservations::Err2::from);
-    finish(&ctx, out)
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    crate::verbs::drivers::finish_serving_granted(&ctx, out, served_main.as_deref())
 }
 
 // ═══ routing ═══════════════════════════════════════════════════════════════
@@ -6059,6 +6076,75 @@ mod tests {
         assert!(text.starts_with(CLOSE_LEADER_CHECK_DEBT_PREFIX), "{text}");
         assert!(text.contains("bee cells unarchive --feature demo first"), "{text}");
         assert!(text.contains("bee cells leader-check"), "{text}");
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66_close(tmp: &Path) -> (PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        init_bee_repo(&main);
+        let granted = tmp.join("wt-granted");
+        git_ok(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        w(
+            &main,
+            ".bee/runtime/worktree-grants.json",
+            "{\"wt-granted\": true}\n",
+        );
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        w(&granted, ".bee/onboarding.json", "{}\n");
+        w(
+            &granted,
+            ".bee/runtime/worktree-identity.json",
+            "{\"feature\":\"demo\"}\n",
+        );
+        w(
+            &granted,
+            "docs/history/demo/CONTEXT.md",
+            "# CONTEXT: demo\n\n## Locked Decisions\n\n| ID | Title |\n|---|---|\n",
+        );
+        w(
+            &main,
+            ".bee/state.json",
+            "{\"schema_version\":\"1.0\",\"phase\":\"idle\",\"feature\":\"demo\"}\n",
+        );
+        (main, granted)
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_close_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted) = fixture_e32f3a66_close(tmp.path());
+        let _cwd = CwdGuard::enter(&granted);
+        let code = try_native(
+            &[
+                OsString::from("close"),
+                OsString::from("--feature"),
+                OsString::from("demo"),
+                OsString::from("--dry-run"),
+            ],
+            Instant::now(),
+        );
+        assert_eq!(code, Some(ExitCode::SUCCESS));
     }
 }
 

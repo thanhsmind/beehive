@@ -106,7 +106,7 @@
 
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::Roots;
 use crate::verbs::reservations as rsv;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
@@ -239,7 +239,8 @@ fn run(verb: Verb, flags: Flags, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let use_json = flags.json;
 
-    let root = match resolve_store_root(&cwd) {
+    let (roots, here) = crate::verbs::drivers::resolve_root_serving_granted(&cwd);
+    let root = match roots {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => {
             return Some(emit_unsupported_root(&cwd, verb.cmd(), use_json, t0, &why))
@@ -249,8 +250,6 @@ fn run(verb: Verb, flags: Flags, t0: Instant) -> Option<ExitCode> {
 
     let drift = check_manifest_drift(&root);
 
-    // handleCellsList/Ready: `flags.feature ? String(flags.feature) : null` —
-    // empty string is falsy, so it never filters.
     let feature = flags.feature.as_deref().filter(|s| !s.is_empty());
     let status = flags.status.as_deref().filter(|s| !s.is_empty());
 
@@ -261,9 +260,11 @@ fn run(verb: Verb, flags: Flags, t0: Instant) -> Option<ExitCode> {
     };
 
     match outcome {
-        Err(Delegate) => None, // no output has happened — Node re-runs the command
-        Ok(Handled::Emit { result, text }) => {
-            // emit(): drift stderr line first, then the bare result on stdout.
+        Err(Delegate) => None,
+        Ok(Handled::Emit { mut result, mut text }) => {
+            if here.is_some() {
+                crate::verbs::drivers::augment_served_output(&mut result, &mut text, &root);
+            }
             if drift.manifest_changed {
                 eprintln!("manifest_changed: true — {}", drift.hint);
             }

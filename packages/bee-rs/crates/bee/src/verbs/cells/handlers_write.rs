@@ -29,12 +29,43 @@ pub(crate) fn dispatch(
     t0: Instant,
     f: impl FnOnce(&rsv::Ctx) -> MR<Out>,
 ) -> Option<ExitCode> {
+    if matches!(
+        cmd,
+        "cells add"
+            | "cells update"
+            | "cells schedule"
+            | "cells escalate"
+            | "cells reroute"
+            | "cells judge"
+            | "cells judge-record"
+            | "cells dissent"
+            | "cells dissent-verdict"
+            | "cells leader-check"
+    ) {
+        return dispatch_serving_granted(cmd, use_json, t0, f);
+    }
     let ctx = match rsv::prelude(cmd, use_json, t0)? {
         rsv::Pre::Go(c) => c,
         rsv::Pre::Emitted(code) => return Some(code),
     };
     let out = f(&ctx);
     rsv::finish(&ctx, to_r2(out))
+}
+
+pub(crate) fn dispatch_serving_granted(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+    f: impl FnOnce(&rsv::Ctx) -> MR<Out>,
+) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
+    let ctx = match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = f(&ctx);
+    crate::verbs::drivers::finish_serving_granted(&ctx, to_r2(out), served_main.as_deref())
 }
 
 /// requireFlag(flags, name) — Missing/empty/boolean-true refuse with the
@@ -3011,6 +3042,252 @@ mod tests {
         assert!(rsv::keys_known(&flags, &["from", "to"]));
         assert_eq!(flags.req_str("from"), Some("sess-1"));
         assert_eq!(flags.req_str("to"), Some("sess-2"));
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66_cells(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        crate::verbs::worktree::run_git(&main, &["init", "-q"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.name", "test"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.email", "test@test.test"]);
+        std::fs::write(main.join("README.md"), "# main\n").unwrap();
+        crate::verbs::worktree::run_git(&main, &["add", "README.md"]);
+        crate::verbs::worktree::run_git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        let ungranted = tmp.join("wt-ungranted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(ungranted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(ungranted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            ungranted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo-ungranted\"}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main.join(".bee").join("state.json"),
+            "{\"schema_version\":\"1.0\",\"phase\":\"idle\",\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        (main, granted, ungranted)
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_cells_verbs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = fixture_e32f3a66_cells(tmp.path());
+        let cell_json = tmp.path().join("cell.json");
+        std::fs::write(
+            &cell_json,
+            "{\"id\":\"demo-1\",\"feature\":\"demo\",\"title\":\"t\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"act\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"ok\"]},\"verify\":\"true\",\"affects_skills\":[],\"affects_specs\":[]}\n",
+        )
+        .unwrap();
+
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            let code_add = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("add"),
+                    OsString::from("--file"),
+                    cell_json.as_os_str().to_os_string(),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_add, Some(ExitCode::SUCCESS));
+            assert!(main.join(".bee").join("cells").join("demo-1.json").exists());
+            assert!(!granted.join(".bee").join("cells").join("demo-1.json").exists());
+
+            let code_list = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("list"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_list, Some(ExitCode::SUCCESS));
+
+            let code_claim = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("claim"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--worker"),
+                    OsString::from("w1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_claim, Some(ExitCode::FAILURE));
+
+            let code_claim_next = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("claim-next"),
+                    OsString::from("--worker"),
+                    OsString::from("w1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_claim_next, Some(ExitCode::FAILURE));
+
+            let code_unclaim = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("unclaim"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_unclaim, Some(ExitCode::FAILURE));
+
+            let code_reopen = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("reopen"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_reopen, Some(ExitCode::FAILURE));
+
+            let code_cap = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("cap"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--report"),
+                    OsString::from("{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}"),
+                    OsString::from("--no-mistakes"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_cap, Some(ExitCode::FAILURE));
+
+            let code_block = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("block"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_block, Some(ExitCode::FAILURE));
+
+            let code_drop = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("drop"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_drop, Some(ExitCode::FAILURE));
+
+            let code_rebind = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("rebind-session"),
+                    OsString::from("--from"),
+                    OsString::from("sess-1"),
+                    OsString::from("--to"),
+                    OsString::from("sess-2"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_rebind, Some(ExitCode::FAILURE));
+
+            let code_finish = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("finish"),
+                    OsString::from("--id"),
+                    OsString::from("demo-1"),
+                    OsString::from("--files"),
+                    OsString::from("src/main.rs"),
+                    OsString::from("--commit-pending"),
+                    OsString::from("test"),
+                    OsString::from("--report"),
+                    OsString::from("{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[\"src/main.rs\"],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}"),
+                    OsString::from("--no-mistakes"),
+                    OsString::from("--force-ownership"),
+                    OsString::from("--inline-reason"),
+                    OsString::from("test"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_finish, Some(ExitCode::SUCCESS));
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&main);
+            let code_main_list = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("list"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_main_list, Some(ExitCode::SUCCESS));
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&ungranted);
+            let code_ungranted_add = crate::verbs::cells::try_native(
+                &[
+                    OsString::from("cells"),
+                    OsString::from("add"),
+                    OsString::from("--file"),
+                    cell_json.as_os_str().to_os_string(),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_ungranted_add, Some(ExitCode::FAILURE));
+        }
     }
 }
 
