@@ -9314,6 +9314,35 @@ use std::time::Instant;
         }));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn leader_check_accepts_an_absolute_artifact_reached_through_an_aliased_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-alias",
+            &leader_check_worktree_cell("lc-alias", "demo", &["src/new.rs"]),
+        );
+        let alias_home = tempfile::tempdir().unwrap();
+        let alias = alias_home.path().join("alias");
+        std::os::unix::fs::symlink(tmp.path(), &alias).unwrap();
+
+        let aliased = alias.join(&wt_id).join("src").join("new.rs");
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": aliased.to_str().unwrap()}]
+        });
+        let recorded = record_leader_check(&root, "lc-alias", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "an aliased worktree path overlaps its relative form: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
     #[test]
     fn leader_check_still_refuses_an_artifact_missing_from_both_checkouts() {
         let tmp = tempfile::tempdir().unwrap();
