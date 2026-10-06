@@ -3428,9 +3428,15 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
             let generic = idle_timeout_message(opts.idle_timeout_secs);
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
-        PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::TimedOutCeiling => {
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling; pane kept for inspection".to_string()));
+            RunOutcome::TimedOutCeiling
+        }
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
-        PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Died { pid } => {
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker died; pane kept for inspection".to_string()));
+            RunOutcome::Died { pid }
+        }
         PollDecision::Blocked => {
             let generic = format!("herding: paseo agent {agent_id} blocked on permissions — agent kept for inspection: paseo logs {agent_id}");
             RunOutcome::PaneBlocked(diagnose_giveup_paseo(cli, &agent_id, generic))
@@ -3728,9 +3734,15 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
             let generic = idle_timeout_message(opts.idle_timeout_secs);
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
-        PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::TimedOutCeiling => {
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling; pane kept for inspection".to_string()));
+            RunOutcome::TimedOutCeiling
+        }
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
-        PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Died { pid } => {
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker died; pane kept for inspection".to_string()));
+            RunOutcome::Died { pid }
+        }
         PollDecision::Blocked => {
             let generic = format!("herding: paseo agent {agent_id} blocked on permissions — agent kept for inspection: paseo logs {agent_id}");
             RunOutcome::PaneBlocked(diagnose_giveup_paseo(cli, &agent_id, generic))

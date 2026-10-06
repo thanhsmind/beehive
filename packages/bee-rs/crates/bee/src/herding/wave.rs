@@ -1049,15 +1049,17 @@ pub(super) fn occupancy_with_panes_and_paseo(
         None => live_pane_ids(&main_root),
     };
 
-    if let Some(cli) = p_ref {
-        if let Ok(stdout) = cli.call(&crate::herding::paseo::ls_label_argv("bee_job")) {
-            let mut set = live_panes.unwrap_or_default();
-            for (id, _bee_job, archived) in crate::herding::paseo::parse_ls_agents(&stdout) {
+    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
+        if let Some(agents) = cli
+            .call(&crate::herding::paseo::ls_label_argv("bee_job"))
+            .ok()
+            .and_then(|stdout| crate::herding::paseo::parse_ls_agents_checked(&stdout))
+        {
+            for (id, _bee_job, archived) in agents {
                 if !archived {
                     set.insert(id);
                 }
             }
-            live_panes = Some(set);
         }
     }
 
