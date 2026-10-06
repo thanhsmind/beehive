@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "feature": "occupancy-test-pane-fixture",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"occupancy-test-pane-fixture\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-06T16:59:52.344Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "one test fixture line; CI red on main",
+    "updated_at": "2026-10-06T16:59:52.377Z",
+    "feature": "occupancy-test-pane-fixture"
+  },
+  "gate_preview": {
+    "feature": "occupancy-test-pane-fixture",
+    "plan_sha256": "ea7644858d7f2b868d321af416a165f5fde3481c1c1f4e863123b48fe39a1b18",
+    "previewed_at": "2026-10-06T17:00:23.317Z",
+    "cells": [
+      {
+        "id": "otpf-1",
+        "feature": "occupancy-test-pane-fixture",
+        "title": "Give the paseo occupancy test an explicit empty pane set",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "2d6e4255-7f37-4995-a28f-00b9dd0c9933"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding::wave::tests::occupancy_counts_labelled_non_archived_paseo_agents, pass Some(Some(HashSet::new())) as the live-pane override instead of None, so the test never reads the machine's real panes. The Paseo fake then supplies the one live agent and occupancy is Live(1) on every machine. No product code changes.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::wave::tests::occupancy",
+        "must_haves": {
+          "truths": [
+            "occupancy_counts_labelled_non_archived_paseo_agents passes an explicit pane set and asserts Live(1)",
+            "every herding::wave occupancy test is green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+              "substantive": "test passes Some(Some(HashSet::new()))"
+            }
+          ],
+          "key_links": [
+            "the Paseo fake adds its live agent to the explicit pane set"
+          ],
+          "prohibitions": [
+            "No product code change",
+            "No new code comments"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "occupancy-test-pane-fixture",
+    "plan_sha256": "ea7644858d7f2b868d321af416a165f5fde3481c1c1f4e863123b48fe39a1b18",
+    "previewed_at": "2026-10-06T17:00:23.317Z",
+    "cells": [
+      {
+        "id": "otpf-1",
+        "feature": "occupancy-test-pane-fixture",
+        "title": "Give the paseo occupancy test an explicit empty pane set",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "2d6e4255-7f37-4995-a28f-00b9dd0c9933"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/wave.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In herding::wave::tests::occupancy_counts_labelled_non_archived_paseo_agents, pass Some(Some(HashSet::new())) as the live-pane override instead of None, so the test never reads the machine's real panes. The Paseo fake then supplies the one live agent and occupancy is Live(1) on every machine. No product code changes.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::wave::tests::occupancy",
+        "must_haves": {
+          "truths": [
+            "occupancy_counts_labelled_non_archived_paseo_agents passes an explicit pane set and asserts Live(1)",
+            "every herding::wave occupancy test is green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+              "substantive": "test passes Some(Some(HashSet::new()))"
+            }
+          ],
+          "key_links": [
+            "the Paseo fake adds its live agent to the explicit pane set"
+          ],
+          "prohibitions": [
+            "No product code change",
+            "No new code comments"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-06T17:02:29.957Z",
+    "branch": "wt/occupancy-test-pane-fixture",
+    "worktree_id": "beehive--wt--occupancy-test-pane-fixture",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

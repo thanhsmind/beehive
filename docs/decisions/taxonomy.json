@@ -682,6 +682,7 @@
     "evolving",
     "bee-report-issues",
     "gh",
-    "contract:leader-check-worktree-root"
+    "contract:leader-check-worktree-root",
+    "contract:occupancy-test-pane-fixture"
   ]
 }
