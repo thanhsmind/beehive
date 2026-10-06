@@ -398,6 +398,9 @@ fn mechanical_rows_with_env(
 
             rows.push(pi_binary_freshness_row(root));
             rows.push(pi_herding_transport_row_with_env(root, env));
+            if let Some(row) = paseo_ready_row_with_env(root, env) {
+                rows.push(row);
+            }
         }
     }
 
@@ -711,6 +714,204 @@ fn pi_herding_transport_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<S
             ok: None,
             detail: reason,
         },
+    }
+}
+
+fn read_folded_config(root: &Path) -> Value {
+    let mut map = crate::state::read_config_raw(root);
+    crate::verbs::drivers::fold_team_key(&mut map);
+    Value::Object(map)
+}
+
+fn team_pi_paseo_specs(cfg: &Value) -> Vec<Result<crate::herding::paseo::PaseoSpec, String>> {
+    let Some(slots) = cfg.pointer("/team/pi").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut specs = Vec::new();
+    for slot in slots.values() {
+        if slot.get("kind").and_then(Value::as_str) == Some("herding") {
+            if let Some(agent_name) = slot.get("agent").and_then(Value::as_str) {
+                if let Some(spec) = crate::herding::paseo::PaseoSpec::from_config(cfg, agent_name) {
+                    specs.push(spec);
+                }
+            }
+        }
+    }
+    specs
+}
+
+fn paseo_ready_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Option<Row> {
+    paseo_ready_row_with_env_and_cli(root, env, None, None)
+}
+
+fn paseo_ready_row_with_env_and_cli(
+    root: &Path,
+    env: &dyn Fn(&str) -> Option<String>,
+    cli_override: Option<&dyn crate::herding::paseo::PaseoCli>,
+    daemon_probe: Option<bool>,
+) -> Option<Row> {
+    const KEY: &str = "paseo_ready";
+    let cfg = read_folded_config(root);
+    let specs = team_pi_paseo_specs(&cfg);
+    if specs.is_empty() {
+        return None;
+    }
+
+    let cmd = crate::herding::paseo::paseo_command(&cfg);
+    let real_cli = crate::herding::paseo::RealPaseoCli::new(cmd.clone())
+        .with_timeout(std::time::Duration::from_secs(5));
+    let cli: &dyn crate::herding::paseo::PaseoCli = match cli_override {
+        Some(c) => c,
+        None => &real_cli,
+    };
+
+    let mut failures = Vec::new();
+
+    let daemon_answers = if let Some(d) = daemon_probe {
+        d
+    } else if let Some(v) = env("PASEO_DAEMON") {
+        v == "1" || v == "true"
+    } else if env("PASEO_HOST").is_some_and(|h| !h.trim().is_empty()) {
+        true
+    } else {
+        crate::herding::paseo::daemon_reachable()
+    };
+    if !daemon_answers {
+        failures.push("paseo daemon is down — FIX: start the daemon with paseo daemon start".to_string());
+    }
+
+    match cli.call(&["--version".to_string()]) {
+        Ok(out) => {
+            if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {
+                failures.push(format!(
+                    "{cmd} version is below 0.10.3 — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
+                ));
+            }
+        }
+        Err(e) => {
+            failures.push(format!(
+                "{cmd} --version failed ({e}) — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
+            ));
+        }
+    }
+
+    let any_provider_is_pi = specs.iter().any(|s| match s {
+        Ok(spec) => spec.provider.trim().eq_ignore_ascii_case("pi"),
+        Err(_) => false,
+    });
+    if any_provider_is_pi {
+        let home = env("HOME").or_else(|| env("USERPROFILE"));
+        let auth_exists = home
+            .as_deref()
+            .is_some_and(|h| Path::new(h).join(".pi/agent/auth.json").is_file());
+        if !auth_exists {
+            failures.push("~/.pi/agent/auth.json is missing — FIX: log in with pi".to_string());
+        }
+    }
+
+    let marker_dir = root.join(".bee/runtime/paseo-heartbeat");
+    if let Ok(entries) = std::fs::read_dir(&marker_dir) {
+        let mut marker_paths: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|e| e.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+            .map(|e| e.path())
+            .collect();
+        marker_paths.sort();
+        for marker_path in marker_paths {
+            let raw = std::fs::read_to_string(&marker_path).unwrap_or_default();
+            let parsed: Option<Value> = serde_json::from_str(&raw).ok();
+            let file_stem = marker_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            let file_name = marker_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(file_stem);
+            let agent_id = parsed
+                .as_ref()
+                .and_then(|v| v.get("agent_id").and_then(Value::as_str))
+                .unwrap_or(file_stem);
+            let schedule_id = parsed
+                .as_ref()
+                .and_then(|v| {
+                    v.get("schedule_id")
+                        .or_else(|| v.get("id"))
+                        .or_else(|| v.get("Id"))
+                        .or_else(|| v.get("ID"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or(agent_id);
+
+            if let Some(del_failed) = parsed.as_ref().and_then(|v| v.get("delete_failed")) {
+                if !del_failed.is_null() {
+                    let reason = del_failed.as_str().unwrap_or("failed delete");
+                    failures.push(format!(
+                        "marker {file_name} carries delete_failed ({reason}) — FIX: delete the orphan heartbeat with paseo heartbeat delete {schedule_id} and remove the marker"
+                    ));
+                }
+            }
+
+            let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
+            let inspect_res = cli.call(&inspect_argv);
+            let is_orphan = match inspect_res {
+                Err(_) => true,
+                Ok(stdout) => {
+                    let state = crate::herding::paseo::parse_inspect(&stdout);
+                    let is_dead = state == Some(crate::herding::paseo::PaseoState::Dead);
+                    let mut archived = false;
+                    for (i, c) in stdout.char_indices() {
+                        if c == '{' {
+                            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+                            if let Some(Ok(Value::Object(map))) = de.next() {
+                                if map
+                                    .get("Archived")
+                                    .or_else(|| map.get("archived"))
+                                    .and_then(|v| {
+                                        v.as_bool().or_else(|| {
+                                            v.as_str().map(|s| s == "true" || s == "archived")
+                                        })
+                                    })
+                                    .unwrap_or(false)
+                                {
+                                    archived = true;
+                                }
+                                if map
+                                    .get("Status")
+                                    .or_else(|| map.get("status"))
+                                    .and_then(Value::as_str)
+                                    == Some("archived")
+                                {
+                                    archived = true;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    is_dead || archived
+                }
+            };
+
+            if is_orphan {
+                failures.push(format!(
+                    "orphan heartbeat marker {file_name} (agent {agent_id}) — FIX: delete the orphan heartbeat with paseo heartbeat delete {schedule_id} and remove the marker"
+                ));
+            }
+        }
+    }
+
+    if failures.is_empty() {
+        Some(Row {
+            key: KEY,
+            ok: Some(true),
+            detail: "paseo daemon is reachable, version >= 0.10.3, and heartbeats ready".to_string(),
+        })
+    } else {
+        Some(Row {
+            key: KEY,
+            ok: Some(false),
+            detail: failures.join("; "),
+        })
     }
 }
 

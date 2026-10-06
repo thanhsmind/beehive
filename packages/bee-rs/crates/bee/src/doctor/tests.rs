@@ -1172,4 +1172,248 @@ fn pi_doctor_failure_detail_names_count_and_first_few_files() {
     assert!(wiring.2.contains("bee onboard --apply"), "{}", wiring.2);
 }
 
+#[cfg(unix)]
+struct FakeDoctorPaseoCli {
+    version_out: Result<String, String>,
+    inspect_map: std::collections::HashMap<String, Result<String, String>>,
+}
+
+#[cfg(unix)]
+impl crate::herding::paseo::PaseoCli for FakeDoctorPaseoCli {
+    fn call(&self, args: &[String]) -> Result<String, String> {
+        if args.first().map(|s| s.as_str()) == Some("--version") {
+            return self.version_out.clone();
+        }
+        if args.first().map(|s| s.as_str()) == Some("inspect") {
+            let id = args
+                .iter()
+                .skip(1)
+                .find(|s| *s != "--json")
+                .cloned()
+                .unwrap_or_default();
+            if let Some(res) = self.inspect_map.get(&id) {
+                return res.clone();
+            }
+            return Err(format!("unknown agent {id}"));
+        }
+        Err(format!("unhandled fake call: {args:?}"))
+    }
+}
+
+#[cfg(unix)]
+fn pi_repo_with_paseo(tmp: &Path, team_cfg: &str, agents_cfg: &str) -> PathBuf {
+    let root = pi_repo(tmp, true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    let cfg = json!({
+        "team": {
+            "pi": serde_json::from_str::<Value>(team_cfg).unwrap()
+        },
+        "agents": serde_json::from_str::<Value>(agents_cfg).unwrap()
+    });
+    std::fs::write(root.join(".bee/config.json"), cfg.to_string()).unwrap();
+    root
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_no_row_without_paseo_slot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo(tmp.path(), true, true, Some(PI_EXTENSION_SOURCE), Some("0.1.0"), None);
+    let env = mock_herdr_env;
+    assert!(paseo_ready_row_with_env_and_cli(&root, &env, None, None).is_none());
+    let rows = pi_rows_of(&root, &env);
+    assert!(!rows.iter().any(|(k, _, _)| k == "paseo_ready"));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_ok_when_every_check_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("agent-1.json"),
+        r#"{"agent_id": "agent-1", "schedule_id": "sched-1"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "agent-1".to_string(),
+        Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
+    );
+    let fake_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map,
+    };
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&fake_cli), Some(true)).expect("row");
+    assert_eq!(row.key, "paseo_ready");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_each_failing_check_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+
+    let daemon_down_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(false)).expect("row");
+    assert_eq!(daemon_down_row.ok, Some(false));
+    assert!(
+        daemon_down_row.detail.contains("start the daemon with paseo daemon start"),
+        "{}",
+        daemon_down_row.detail
+    );
+
+    let old_version_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.2".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let old_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&old_version_cli), Some(true)).expect("row");
+    assert_eq!(old_version_row.ok, Some(false));
+    assert!(
+        old_version_row.detail.contains("upgrade to 0.10.3 with npm @getpaseo/cli"),
+        "{}",
+        old_version_row.detail
+    );
+
+    let fail_version_cli = FakeDoctorPaseoCli {
+        version_out: Err("spawn failed".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let fail_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&fail_version_cli), Some(true)).expect("row");
+    assert_eq!(fail_version_row.ok, Some(false));
+    assert!(
+        fail_version_row.detail.contains("upgrade to 0.10.3 with npm @getpaseo/cli"),
+        "{}",
+        fail_version_row.detail
+    );
+
+    let missing_home_env = |k: &str| match k {
+        "HOME" => Some("/tmp/nonexistent-home-for-test".to_string()),
+        _ => mock_herdr_env(k),
+    };
+    let missing_auth_row = paseo_ready_row_with_env_and_cli(&root, &missing_home_env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(missing_auth_row.ok, Some(false));
+    assert!(
+        missing_auth_row.detail.contains("log in with pi"),
+        "{}",
+        missing_auth_row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_orphan_marker_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("orphan-agent.json"),
+        r#"{"agent_id": "orphan-agent", "schedule_id": "sched-orphan"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "orphan-agent".to_string(),
+        Ok(r#"{"Status": "closed", "Archived": true}"#.to_string()),
+    );
+    let cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map,
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("orphan-agent"), "{}", row.detail);
+    assert!(
+        row.detail.contains("delete the orphan heartbeat with paseo heartbeat delete sched-orphan and remove the marker"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_delete_failed_marker_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let hb_dir = root.join(".bee/runtime/paseo-heartbeat");
+    std::fs::create_dir_all(&hb_dir).unwrap();
+    std::fs::write(
+        hb_dir.join("failed-agent.json"),
+        r#"{"agent_id": "failed-agent", "schedule_id": "sched-failed", "delete_failed": "timed out waiting for delete"}"#,
+    )
+    .unwrap();
+    let mut inspect_map = std::collections::HashMap::new();
+    inspect_map.insert(
+        "failed-agent".to_string(),
+        Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
+    );
+    let cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map,
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("failed-agent"), "{}", row.detail);
+    assert!(
+        row.detail.contains("delete the orphan heartbeat with paseo heartbeat delete sched-failed and remove the marker"),
+        "{}",
+        row.detail
+    );
+}
+
+
 
