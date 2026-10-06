@@ -235,6 +235,11 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
   - applied_at:
     - `docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md`
     - `packages/bee/prompts/worker-cell.md`
+- `agents-bee-defect-report` (AGENTS.md § Care for the session):
+  spoken: when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here
+  - applied_at:
+    - `docs/knowledge/areas/feedback-digest/bee-report-issues.md`
+    - `skills/bee-evolving/SKILL.md`
 - `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
   spoken: one commit per cell — imperative subject, and the cell id on the last line of the body
   - applied_at:

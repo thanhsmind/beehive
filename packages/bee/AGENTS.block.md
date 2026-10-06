@@ -309,6 +309,19 @@ one type per file, linked where types meet.
   `no_code_comments` is on, the write guard refuses the write, and the
   comment baseline reds the suite on any count that rises.
 <!-- /rule -->
+<!-- rule: agents-bee-defect-report -->
+- When bee itself is at fault — a crash, a typed error on correct
+  input, a wrong result, or a guard refusing work that is approved and
+  correct — run `bee report issue --title --symptom --evidence
+  --root-cause --command`, and add bee's exact output with `--output`.
+  It files a scrubbed issue upstream on its own; add `--dry-run` first
+  when unsure. One report per defect, never one per retry. After
+  filing, tell the human the issue link in one line. On a gh error,
+  tell the human once to run `gh auth login`, then keep working. Never
+  patch, rebuild or hand-edit bee in this repo. Not a bee defect: a
+  deny that names its remedy, a gate waiting for approval, or your own
+  mistake — that one is `bee mailbox reflect`.
+<!-- /rule -->
 - Write a mistake down the MOMENT you notice it, never composed from
   memory at the end: `bee mailbox reflect --wrong "<what went wrong>"
   --better "<what would have been better>" --fix-at
