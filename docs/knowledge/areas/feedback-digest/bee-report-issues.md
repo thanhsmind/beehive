@@ -19,7 +19,7 @@ When bee itself breaks in a host repository, the agent there does not fix bee. I
 scrubbed report as a GitHub issue on `thanhsmind/beehive` (b58c1cef). The bee repository then
 reads the open issues as one more feedback source, and `bee-evolving` ranks and fixes them through
 its two gates (d45b1e6b). The host rule is `agents-bee-defect-report` in the AGENTS block.
-The locked decisions are bee-report-issues D1–D3 (b58c1cef, c3be1e3f, d45b1e6b).
+The locked decisions are bee-report-issues D1/D2/D3 (b58c1cef, c3be1e3f, d45b1e6b).
 
 ## Entry Points & Triggers
 
