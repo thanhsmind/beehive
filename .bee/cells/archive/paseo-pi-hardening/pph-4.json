@@ -1,0 +1,287 @@
+{
+  "id": "pph-4",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Wake the Pi leader from its own broker timer and delete its heartbeat on exit",
+  "deps": [
+    "pph-3"
+  ],
+  "decisions": [
+    "D6",
+    "D8",
+    "a7326910-f612-44b4-9d12-0c6fb8565f55"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Red first. paseo-heartbeat.ts: DEFAULT_CRON becomes `*/30 * * * *` (D8). readPaseoSettings also reads herding.paseo.broker_tick_secs (a positive integer, default 30; anything else falls back to 30). ensureHeartbeat (D6 revised): when the marker holds a schedule id and a cron different from settings.cron, delete that schedule (`<command> heartbeat delete <id>`) and create a new one, rewriting the marker; same cron keeps today's exists answer. Add deleteHeartbeat(mainRoot, agentId, settings, run) returning a Promise: read the marker; with a schedule id run `<command> heartbeat delete <id>`; on success remove the marker; on failure keep the marker and write delete_failed: <reason> into it; never throws. result-inbox.ts: export one helper that tells whether the leader is busy and sends a message through pi.sendUserMessage with { deliverAs: \"steer\" } when busy and no option otherwise; the drain uses this helper too, so the busy and steer rule lives in one place. paseo-heartbeat.ts: add startBrokerTimer(pi, directory, settings, deps) and stopBrokerTimer(): every broker_tick_secs seconds run `bee herding broker tick --json` (120 s timeout) unless a broker tick is already in flight — the heartbeat input handler's tickRunning flag in events.ts and the timer share ONE in-flight flag (export it from paseo-heartbeat.ts and use it in both places); parse with parseTick; only when news is true send heartbeatText(tick) through the result-inbox helper; no news sends nothing; the timer is unref'd and armed only inside session_start for a Paseo leader (isPaseoLeader), never at module load. events.ts: in session_start, for a Paseo leader, arm the broker timer next to ensureHeartbeat; in session_shutdown, for every reason except reload, stop the broker timer and, for a Paseo leader, await deleteHeartbeat with the same execFile runner ensureHeartbeat uses before the handler returns (D6 revised). The heartbeat input handler still transforms and never swallows (paseo-pi D6). Tests in tests/pi_paseo_heartbeat_contracts.rs (node): the default cron row expects */30; the timer sends nothing on no news, sends once on news, steers when busy, never overlaps a slow tick nor runs while the heartbeat tick runs, reads broker_tick_secs; deleteHeartbeat calls heartbeat delete with the marker's id and removes the marker, and on a failing delete keeps the marker with delete_failed; ensureHeartbeat re-creates on a changed cron and answers exists on the same cron; shutdown(new) then start(new) ends with exactly one heartbeat. Cite decisions a7326910 (contract:paseo-heartbeat), 7f0788a0 and 67f07142. No code comments. REVISION ROUND (judge NEEDS_REVISION, failure_signature: broker timer's sendLeaderMessage bypasses the F1 turnStartPending latch, and on error clears it under the drain). The first round is committed as 6f4885088; make one more commit on top. (1) In paseo-heartbeat.ts startBrokerTimer: when a tick has news but result-inbox state.turnStartPending is true, keep that news text as the one pending message and do not send; on each later interval, first send the pending text once turnStartPending is false (a newer news tick replaces the pending text). (2) In result-inbox.ts sendLeaderMessage: when it is about to send a plain (non-steer) message while state.turnStartPending is already true, do not send and return false, so it never clears a latch it did not set; the drain path keeps its own early return. (3) Remove the unused alias exports sendToLeader and deliverLeaderMessage. (4) In ensureHeartbeat's changed-cron branch, when the old schedule delete fails, write delete_failed into the marker and return created false with the reason, so doctor reports it. Add node tests in tests/pi_paseo_heartbeat_contracts.rs: news while turnStartPending is true sends nothing and is sent on the next tick after the latch clears; a failed send never clears a latch set by the drain; a failed delete on a changed cron writes delete_failed. Run the cell verify, commit with the cell trailer as the last line, then run bee finish.",
+  "must_haves": {
+    "truths": [
+      "the default heartbeat cron is */30 * * * * and a leader whose marker holds another cron gets its heartbeat re-created",
+      "the leader runs the broker tick on its own timer every broker_tick_secs seconds, default 30, sharing one in-flight flag with the heartbeat tick",
+      "a tick with no news sends nothing; a tick with news sends one message, as a steer when the leader is busy, through the same helper the result drain uses",
+      "session_shutdown for every reason except reload awaits the heartbeat delete; a successful delete removes the marker and a failed one keeps it with delete_failed",
+      "a heartbeat prompt is still transformed and never swallowed"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        "substantive": "new default cron, cron re-create, broker timer and deleteHeartbeat"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/result-inbox.ts",
+        "substantive": "the shared busy and steer send helper"
+      },
+      {
+        "path": ".pi/extensions/bee-guard/events.ts",
+        "substantive": "timer arming at session_start and awaited heartbeat delete at session_shutdown"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "substantive": "node tests for the timer, the delete and the cron re-create"
+      }
+    ],
+    "key_links": [
+      "events.ts session_start arms startBrokerTimer for a Paseo leader",
+      "events.ts session_shutdown awaits deleteHeartbeat",
+      "the drain and the broker timer send through one helper"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No timer at module load",
+      "No model turn on a tick with no news",
+      "No change to the heartbeat input handler's never-swallow behavior"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "leader-pph-4",
+    "outcome": "the Pi leader wakes from its own broker timer, the heartbeat backstop is */30 and is deleted on shutdown",
+    "files_changed": [
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+    ],
+    "deviations": [
+      "judge NEEDS_REVISION on the turn-start latch fixed in ca64d2cb3; re-judged PASS",
+      "sync-ack: run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T06:48:44.839Z",
+    "behavior_change": true,
+    "verification_evidence": "24 heartbeat node contracts incl. timer, latch hold, delete, cron re-create; 114 plugin contracts; re-run after the judge revision ca64d2cb3",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+    "claimed_at": "2026-10-06T06:40:11.110Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:34:15.469Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:39:52.954Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:48:44.737Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:48:44.838Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.194Z"
+      }
+    ],
+    "sync_ack": "run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "the Pi leader wakes from its own broker timer, the heartbeat backstop is */30 and is deleted on shutdown",
+      "commit": "ca64d2cb3",
+      "files": [
+        ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts — green:unit — 24 heartbeat node contracts incl. timer, latch hold, delete, cron re-create; 114 plugin contracts; re-run after the judge revision ca64d2cb3",
+      "deviations": [
+        "judge NEEDS_REVISION on the turn-start latch fixed in ca64d2cb3; re-judged PASS"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "default cron */30; changed cron re-created",
+            "status": "PASS",
+            "evidence": "paseo-heartbeat.ts DEFAULT_CRON; ensureHeartbeat re-create; test test_ensure_heartbeat_recreates_on_changed_cron_and_exists_on_same_cron"
+          },
+          {
+            "id": "broker timer every broker_tick_secs sharing one in-flight flag",
+            "status": "PASS",
+            "evidence": "startBrokerTimer setInterval unref'd; tickRunning shared with events.ts heartbeat handler"
+          },
+          {
+            "id": "no news sends nothing; news sends once, steer when busy, through the drain helper",
+            "status": "PASS",
+            "evidence": "sendLeaderMessage used by drain and timer; steer test"
+          },
+          {
+            "id": "shared send path keeps the F1 turn-start latch",
+            "status": "FAIL",
+            "evidence": "result-inbox.ts:313 drainResultInbox returns early when state.turnStartPending; the broker timer in paseo-heartbeat.ts ~396-424 never checks it, so a news tick inside that window sends a second plain message while the first turn is still opening, and on a rejected send the catch clears the drain's latch"
+          },
+          {
+            "id": "shutdown awaits delete; marker kept with delete_failed on failure",
+            "status": "PASS",
+            "evidence": "events.ts ~845-871; deleteHeartbeat; tests"
+          },
+          {
+            "id": "heartbeat prompt still transformed",
+            "status": "PASS",
+            "evidence": "events.ts input handler returns transform"
+          },
+          {
+            "id": "prohibitions: no module-load timer, no turn on no news, no comments",
+            "status": "PASS",
+            "evidence": "startBrokerTimer only in session_start under isPaseoLeader; minor: changed-cron delete failure never heals; unused alias exports"
+          }
+        ],
+        "failure_signature": "broker timer's sendLeaderMessage bypasses the F1 turnStartPending latch, and on error clears it under the drain",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:39:52.954Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "default cron */30 and changed cron re-created",
+            "status": "PASS",
+            "evidence": "paseo-heartbeat.ts DEFAULT_CRON and ensureHeartbeat changed-cron branch; test test_ensure_heartbeat_recreates_on_changed_cron_and_exists_on_same_cron"
+          },
+          {
+            "id": "broker timer every broker_tick_secs sharing one in-flight flag",
+            "status": "PASS",
+            "evidence": "startBrokerTimer unref'd setInterval skips while tickRunning; tickRunning shared with events.ts:356"
+          },
+          {
+            "id": "no news sends nothing; news sends once, steer when busy, through the drain helper",
+            "status": "PASS",
+            "evidence": "sendLeaderMessage shared by drainResultInbox and the timer; steer test"
+          },
+          {
+            "id": "shared send path keeps the F1 turn-start latch",
+            "status": "PASS",
+            "evidence": "ca64d2cb3 sendLeaderMessage returns false without sending when turnStartPending is set; timer holds pendingNewsText while the latch is set; tests test_broker_timer_holds_news_while_turn_start_pending_and_sends_when_cleared and test_failed_send_never_clears_latch_set_by_drain"
+          },
+          {
+            "id": "shutdown awaits delete; marker kept with delete_failed on failure",
+            "status": "PASS",
+            "evidence": "events.ts session_shutdown; deleteHeartbeat; shutdown(new)->start(new) test"
+          },
+          {
+            "id": "changed-cron delete failure writes delete_failed",
+            "status": "PASS",
+            "evidence": "ca64d2cb3 ensureHeartbeat; test test_ensure_heartbeat_failed_delete_on_changed_cron_writes_delete_failed"
+          },
+          {
+            "id": "unused aliases removed",
+            "status": "PASS",
+            "evidence": "ca64d2cb3 removes sendToLeader and deliverLeaderMessage"
+          },
+          {
+            "id": "heartbeat prompt never swallowed; prohibitions hold",
+            "status": "PASS",
+            "evidence": "input handler returns transform; no comments; timer armed only in session_start under isPaseoLeader"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:48:44.737Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T06:39:52.954Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the default heartbeat cron is */30 * * * * and a leader whose marker holds another cron gets its heartbeat re-created",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "the leader runs the broker tick on its own timer every broker_tick_secs seconds, default 30, sharing one in-flight flag with the heartbeat tick",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "a tick with no news sends nothing; a tick with news sends one message, as a steer when the leader is busy, through the same helper the result drain uses",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "session_shutdown for every reason except reload awaits the heartbeat delete; a successful delete removes the marker and a failed one keeps it with delete_failed",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+          },
+          {
+            "requirement": "a heartbeat prompt is still transformed and never swallowed",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.194Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

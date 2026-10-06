@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"paseo-pi-hardening\" started at phase \"exploring\" (lane).",
   "next_action": "uat: user tests paseo-pi-hardening on main, then bee gate --name uat --approved true and bee close",
   "created_at": "2026-10-06T05:30:49.705Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: paseo-pi-hardening",
-    "asked_at": "2026-10-06T06:55:45.147Z",
-    "session": "6b23f09e-943a-446a-8126-d3717cc4492b"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",

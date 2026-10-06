@@ -1,0 +1,201 @@
+{
+  "id": "pph-1",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Bound Paseo calls, nudge silent workers and record the real model in the run loop",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Red first. paseo.rs: add a PaseoInspect struct (state: Option<PaseoState>, updated_at: Option<String>, model: Option<String>, thinking: Option<String>) and parse_inspect_full(stdout) that reads the same first JSON value parse_inspect reads, taking UpdatedAt, Model and Thinking with the same key tolerance; Model \"-\" and Thinking \"auto\" (Paseo's sentinels) parse as None (D4). Keep parse_inspect as a thin wrapper so every existing caller is unchanged. run.rs, timeouts (D1): the two `let cli = RealPaseoCli::new(cmd);` sites in the Paseo run and continue paths gain `.with_timeout(Duration::from_secs(15))`. When the spawn call itself fails or times out, call paseo::ls_label_argv for the job's bee_job label once, and when an agent for this job exists name its id in the SpawnFailed message (report only, no adopt, no archive). run.rs, cadence (D1): in wait_for_round_paseo_driven call paseo inspect only when at least 3 s passed since the last inspect call; the result, log and ack file checks still run every 200 ms tick; a tick that does not call inspect reports liveness None, so the died debounce in run_poll_loop still needs three consecutive real Dead reads. Working stays fresh exactly as today. run.rs, silent idle (D2 revised): once the round has seen Working, an Idle inspect with no result-N.json for the round sends ONE nudge with paseo::send_argv(agent_id, text), where text names the brief file and the result file the worker owes (mailbox path helpers); never send while the last state is Working or Blocked; a failed send counts as sent. A later Idle-with-no-result inspect read at least one inspect interval after the nudge ends the wait: add a bool field to PollTick (false in every herdr and tmux tick) that decide_poll turns into PollDecision::TimedOutIdle at once, before the idle timeout, and have the Paseo caller pass the silent-idle message to diagnose_giveup_paseo in place of the generic idle_timeout_message text: the message `herding: paseo agent <id> went idle twice with no result for round <n> — agent kept for inspection: paseo logs <id>` (pass the flag back through a Cell or the closure's captured state). The agent is kept by the existing failure path. run.rs, observed model (D4 revised): on the first inspect whose model or thinking is Some, write paseo_model_observed and paseo_thinking_observed into job.json (None writes the string unverified), once per job. Compare with the job's PaseoSpec: models match when equal, or when the observed one ends with `/<configured>` or the configured one ends with `/<observed>`; thinking matches equal ignoring case; a None on either side never mismatches. On a confirmed mismatch print one stderr line `herding: paseo agent <id> runs model <observed> (thinking <t>), configured <model> (thinking <t>)` and write paseo_model_mismatch true into job.json; never archive, stop or retry. Tests with a fake PaseoCli and the driven clock: inspect at most once per 3 s of fake time while file checks run each tick; one Dead read followed by Working keeps the run going; Working then Idle with no result sends exactly one nudge and a second silent idle 3 s later ends as idle timeout with the silent-idle message; a failed send still lets the second silent idle end the round; a result after the nudge returns the result; no send while Working or Blocked; observed model and thinking land in job.json; `-`/`auto` write unverified with no warning; a provider-prefixed equal model is no mismatch; a real mismatch writes the flag; a timed-out spawn names a labelled agent; parse_inspect_full reads all four fields and tolerates their absence. Herdr and tmux runs unchanged. No code comments.",
+  "must_haves": {
+    "truths": [
+      "the Paseo run and continue paths build the CLI with a 15 second timeout, and a failed spawn names an agent found under its job label",
+      "the Paseo wait loop calls paseo inspect at most once every 3 seconds while file checks keep the 200 ms poll, and non-inspect ticks report no liveness",
+      "the first silent idle after Working sends exactly one paseo send nudge and a second silent idle at least 3 s later ends the round as idle timeout with a silent-idle message",
+      "no nudge is ever sent while the agent is Working or Blocked",
+      "job.json records the observed model and thinking, with - and auto recorded as unverified, and a confirmed mismatch sets paseo_model_mismatch and prints one warning",
+      "herdr and tmux runs are unchanged and the existing herding tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "PaseoInspect and parse_inspect_full reading UpdatedAt, Model and Thinking with sentinel handling"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "timeouts, 3 s inspect cadence, silent-idle nudge and end flag, observed-model record"
+      }
+    ],
+    "key_links": [
+      "wait_for_round_paseo_driven reads parse_inspect_full",
+      "decide_poll turns the PollTick silent-idle flag into TimedOutIdle"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No new RunOutcome or PollDecision variant",
+      "No paseo send while Working or Blocked",
+      "No archive, stop or retry added",
+      "Working freshness in the run loop is unchanged"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-pph-1",
+    "outcome": "Paseo run paths carry a 15 s CLI timeout; inspect every 3 s; one silent-idle nudge then an immediate idle-timeout end; observed model recorded in job.json",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "sync-ack: run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T06:17:46.506Z",
+    "behavior_change": true,
+    "verification_evidence": "725 herding tests incl. nudge, second silent idle, failed send, observed model, timed-out spawn label; run by the leader in the worktree",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-10-06T05:46:31.402Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:17:46.506Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:39:52.946Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.166Z"
+      }
+    ],
+    "sync_ack": "run-loop, status and control-loop internals change no bee-herding skill procedure; the bee-herding concepts are updated by pph-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Paseo run paths carry a 15 s CLI timeout; inspect every 3 s; one silent-idle nudge then an immediate idle-timeout end; observed model recorded in job.json",
+      "commit": "0b97c3543",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:unit — 725 herding tests incl. nudge, second silent idle, failed send, observed model, timed-out spawn label; run by the leader in the worktree",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "15 s timeout on run and continue; failed spawn names the labelled agent",
+            "status": "PASS",
+            "evidence": "run.rs ~5126 and ~5130 RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(15)); run.rs ~3376-3389 ls_label_argv on spawn Err; test execute_paseo_timed_out_spawn_names_labelled_agent"
+          },
+          {
+            "id": "inspect at most once per 3 s; file checks every tick; non-inspect ticks report no liveness",
+            "status": "PASS",
+            "evidence": "wait_for_round_paseo_driven should_inspect >=3000 ms, liveness None otherwise; run_poll_loop run.rs:1272-1285 keeps the 3-Dead debounce; tests wait_for_round_paseo_inspects_at_most_once_per_3_seconds and one_dead_read_followed_by_working_keeps_run_going"
+          },
+          {
+            "id": "one nudge on first silent idle; second silent idle >=3 s later ends as TimedOutIdle with the silent-idle message",
+            "status": "PASS",
+            "evidence": "Idle arm sends one paseo::send_argv naming brief-N/result-N; later Idle sets the PollTick flag and Cell; decide_poll returns TimedOutIdle; callers swap in the went-idle-twice text; tests for send==1, failed send, result after nudge"
+          },
+          {
+            "id": "no nudge while Working or Blocked",
+            "status": "PASS",
+            "evidence": "send only in the Idle arm; test execute_paseo_no_send_while_working_or_blocked"
+          },
+          {
+            "id": "observed model and thinking recorded; - and auto unverified; mismatch flag and warning",
+            "status": "PASS",
+            "evidence": "paseo.rs parse_inspect_full filters - and auto; run.rs record_observed_model; four job.json tests; minor: warning repeats on --continue rounds"
+          },
+          {
+            "id": "herdr and tmux unchanged",
+            "status": "PASS",
+            "evidence": "wait_for_round_driven passes silent_idle false"
+          },
+          {
+            "id": "prohibitions: no comments, no new variant, no archive/stop/retry, Working freshness unchanged",
+            "status": "PASS",
+            "evidence": "rg over diff finds no added comment; only a PollTick field; spawn-fail path reads only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:39:52.946Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Paseo run and continue paths build the CLI with a 15 second timeout, and a failed spawn names an agent found under its job label",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "the Paseo wait loop calls paseo inspect at most once every 3 seconds while file checks keep the 200 ms poll, and non-inspect ticks report no liveness",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the first silent idle after Working sends exactly one paseo send nudge and a second silent idle at least 3 s later ends the round as idle timeout with a silent-idle message",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "no nudge is ever sent while the agent is Working or Blocked",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "job.json records the observed model and thinking, with - and auto recorded as unverified, and a confirmed mismatch sets paseo_model_mismatch and prints one warning",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "herdr and tmux runs are unchanged and the existing herding tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.166Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

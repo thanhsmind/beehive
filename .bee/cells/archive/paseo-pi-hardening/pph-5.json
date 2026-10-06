@@ -1,0 +1,172 @@
+{
+  "id": "pph-5",
+  "feature": "paseo-pi-hardening",
+  "lane": "high-risk",
+  "role": "code",
+  "change_class": "behavior",
+  "title": "Check the Paseo setup in bee doctor",
+  "deps": [],
+  "decisions": [
+    "D7",
+    "28ffec0f-461b-4518-ba72-eb2c91726af8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-pi-hardening/CONTEXT.md",
+    "docs/history/paseo-pi-hardening/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+  ],
+  "action": "Red first. doctor.rs: in the pi runtime block, after the `rows.push(pi_herding_transport_row_with_env(root, env));` line, push a paseo_ready row only when some team.pi slot is a herding slot whose agent has a paseo block (read with the same folded config every_pi_slot_runs_no_pane uses, and herding::paseo::PaseoSpec::from_config). The row checks, through a PaseoCli built with a 5 s timeout so tests can inject a fake: the daemon answers (paseo::daemon_reachable or a version call); `<command> --version` output passes paseo::version_at_least((0,10,3)); when any configured provider is pi, `~/.pi/agent/auth.json` exists (home from the env closure); and for every marker file under `<root>/.bee/runtime/paseo-heartbeat/`, `paseo inspect <agent id> --json` (paseo::inspect_argv) answers and the agent is not archived (an Archived true field, a failed inspect or a Dead state is an orphan), and no marker carries a delete_failed field (D6 revised). ok is true only when every check passes; the detail names each failed check with a FIX line (start the daemon with paseo daemon start; upgrade to 0.10.3 with npm @getpaseo/cli; log in with pi; delete the orphan heartbeat with paseo heartbeat delete <id> and remove the marker). Report only: doctor changes nothing. No Paseo slot: no row. Tests in doctor/tests.rs with a fake CLI and a temp root: no row without a Paseo slot; ok with every check passing; each failing check named; an orphan marker named; a delete_failed marker named. No code comments.",
+  "must_haves": {
+    "truths": [
+      "bee doctor on the pi runtime shows a paseo_ready row only when a team.pi slot uses a Paseo agent",
+      "the row fails and names the fix when the daemon is down, the version is below 0.10.3, the pi auth file is missing, a heartbeat marker names an archived or missing agent, or a marker records a failed delete",
+      "doctor changes no file and no Paseo state",
+      "the existing doctor tests stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "the paseo_ready row"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "substantive": "tests for each check"
+      }
+    ],
+    "key_links": [
+      "the pi runtime block pushes the paseo_ready row"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No Paseo call that changes state from doctor"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "leader-pph-5",
+    "outcome": "bee doctor on pi shows a report-only paseo_ready row",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "leader removed invented PASEO_DAEMON and PASEO_HOST shortcuts after escalation"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T06:17:38.901Z",
+    "behavior_change": true,
+    "verification_evidence": "49 doctor tests incl. 5 paseo_ready tests, re-run after the leader fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+    "claimed_at": "2026-10-06T05:47:01.089Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:17:38.901Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:39:52.973Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T06:55:03.205Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee doctor on pi shows a report-only paseo_ready row",
+      "commit": "66450f81f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor — green:unit — 49 doctor tests incl. 5 paseo_ready tests, re-run after the leader fix",
+      "deviations": [
+        "leader removed invented PASEO_DAEMON and PASEO_HOST shortcuts after escalation"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "paseo_ready row only with a Paseo slot",
+            "status": "PASS",
+            "evidence": "doctor.rs:401-403; team_pi_paseo_specs; test paseo_ready_no_row_without_paseo_slot"
+          },
+          {
+            "id": "fails and names the fix for each failed check",
+            "status": "PASS",
+            "evidence": "paseo_ready_row_with_env_and_cli: daemon_reachable, version_at_least, auth.json, inspect orphan, delete_failed; one test each"
+          },
+          {
+            "id": "doctor changes nothing",
+            "status": "PASS",
+            "evidence": "only --version and inspect through a 5 s RealPaseoCli"
+          },
+          {
+            "id": "prohibitions: no comments, no state-changing call",
+            "status": "PASS",
+            "evidence": "rg over diff finds none; minor: marker dir is root-relative, not main-root"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T06:39:52.973Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee doctor on the pi runtime shows a paseo_ready row only when a team.pi slot uses a Paseo agent",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "the row fails and names the fix when the daemon is down, the version is below 0.10.3, the pi auth file is missing, a heartbeat marker names an archived or missing agent, or a marker records a failed delete",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          },
+          {
+            "requirement": "doctor changes no file and no Paseo state",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "the existing doctor tests stay green",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T06:55:03.205Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "escalate": true
+}

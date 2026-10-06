@@ -1523,5 +1523,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-06T04:47:29.008Z"
+  },
+  "paseo-pi-hardening": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-10-06T10:08:03.497Z"
   }
 }
