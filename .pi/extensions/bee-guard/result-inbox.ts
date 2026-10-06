@@ -288,6 +288,9 @@ export async function sendLeaderMessage(pi: any, message: string): Promise<boole
   }
   const steer = Boolean(state.selfBusy)
   if (!steer) {
+    if (state.turnStartPending) {
+      return false
+    }
     state.turnStartPending = true
   }
   try {
@@ -300,9 +303,6 @@ export async function sendLeaderMessage(pi: any, message: string): Promise<boole
     throw err
   }
 }
-
-export const sendToLeader = sendLeaderMessage
-export const deliverLeaderMessage = sendLeaderMessage
 
 /** One tick: at most ONE result injected, oldest marker first (filename sort,
  * which is chronological for `job-<ms>` ids). Never throws — every failure

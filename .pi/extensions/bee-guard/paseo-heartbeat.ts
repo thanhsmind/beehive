@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSyn
 import path from "node:path"
 import { resolveBeeBinary } from "./locate.ts"
 import { sendLeaderMessage } from "./result-inbox.ts"
+import { state } from "./state.ts"
 
 export const HEARTBEAT_NAME = "bee-leader"
 export const DEFAULT_CRON = "*/30 * * * *"
@@ -146,21 +147,34 @@ export async function ensureHeartbeat(
           let hasScheduleId = false
           let scheduleId: string | null = null
           let markerCron: string | null = null
+          let parsedMarker: Record<string, any> = {}
           try {
             const raw = readFileSync(marker, "utf8")
-            const parsed = JSON.parse(raw)
-            const rawId = parsed?.schedule_id ?? parsed?.id ?? parsed?.Id ?? parsed?.ID
+            const candidate = JSON.parse(raw)
+            if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+              parsedMarker = candidate
+            }
+            const rawId = parsedMarker.schedule_id ?? parsedMarker.id ?? parsedMarker.Id ?? parsedMarker.ID
             if (rawId !== undefined && rawId !== null && String(rawId).length > 0) {
               hasScheduleId = true
               scheduleId = String(rawId)
             }
-            if (typeof parsed?.cron === "string") {
-              markerCron = parsed.cron
+            if (typeof parsedMarker.cron === "string") {
+              markerCron = parsedMarker.cron
             }
           } catch {}
           if (hasScheduleId && scheduleId) {
             if (markerCron !== settings.cron) {
-              await run(settings.command, ["heartbeat", "delete", scheduleId])
+              try {
+                await run(settings.command, ["heartbeat", "delete", scheduleId])
+              } catch (delErr: any) {
+                const reason = delErr?.message ? String(delErr.message) : String(delErr)
+                parsedMarker.delete_failed = reason
+                try {
+                  writeFileSync(marker, JSON.stringify(parsedMarker, null, 2))
+                } catch {}
+                return { created: false, reason }
+              }
               const stdout = await run(settings.command, [
                 "heartbeat",
                 "create",
@@ -343,6 +357,7 @@ export function isTickRunning(): boolean {
 
 export const BROKER_TIMER_SLOT = Symbol.for("bee.pi.broker-timer")
 let activeBrokerTimer: ReturnType<typeof setInterval> | null = null
+let pendingNewsText: string | null = null
 
 export function stopBrokerTimer(): void {
   const scope = globalThis as any
@@ -354,11 +369,13 @@ export function stopBrokerTimer(): void {
   }
   activeBrokerTimer = null
   scope[BROKER_TIMER_SLOT] = null
+  pendingNewsText = null
 }
 
 export interface BrokerTimerDeps {
   run?: (command: string, args: string[], options?: any) => Promise<string>
   sendLeaderMessage?: (pi: any, text: string) => Promise<boolean>
+  state?: { turnStartPending: boolean; selfBusy?: boolean }
 }
 
 export function startBrokerTimer(
@@ -392,6 +409,8 @@ export function startBrokerTimer(
       ? (deps as BrokerTimerDeps).sendLeaderMessage!
       : sendLeaderMessage
 
+  const stateRef = (deps as BrokerTimerDeps)?.state ?? state
+
   const timer = setInterval(() => {
     if (tickRunning) {
       return
@@ -399,6 +418,12 @@ export function startBrokerTimer(
     setTickRunning(true)
     void Promise.resolve()
       .then(async () => {
+        const turnPending = Boolean(stateRef.turnStartPending && !stateRef.selfBusy)
+        if (pendingNewsText && !turnPending) {
+          const toSend = pendingNewsText
+          pendingNewsText = null
+          await sendFn(pi, toSend)
+        }
         let stdout = ""
         if (runFn) {
           stdout = await runFn("bee", ["herding", "broker", "tick", "--json"], {
@@ -429,7 +454,13 @@ export function startBrokerTimer(
         }
         const tick = parseTick(stdout)
         if (tick && tick.news) {
-          await sendFn(pi, heartbeatText(tick))
+          const text = heartbeatText(tick)
+          const nowPending = Boolean(stateRef.turnStartPending && !stateRef.selfBusy)
+          if (nowPending) {
+            pendingNewsText = text
+          } else {
+            await sendFn(pi, text)
+          }
         }
       })
       .catch((err: any) => {

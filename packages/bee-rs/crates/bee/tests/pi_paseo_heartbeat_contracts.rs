@@ -909,3 +909,128 @@ assert.equal(callsAfterRestart[2], "heartbeat create --cron */30 * * * * --name 
 "#,
     );
 }
+
+#[test]
+fn test_broker_timer_holds_news_while_turn_start_pending_and_sends_when_cleared() {
+    let state_path = repo_root().join(".pi/extensions/bee-guard/state.ts");
+    let code = format!(
+        r#"
+const {{ startBrokerTimer, stopBrokerTimer }} = mod;
+const stateMod = await import(pathToFileURL({:?}).href);
+const messages = [];
+const pi = {{
+  sendUserMessage: async (text, options) => {{
+    messages.push({{ text: String(text), options: options ?? null }});
+  }}
+}};
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-timer-latch-"));
+let tickResponse = JSON.stringify({{ claimed: 1, notices_sent: 0 }});
+
+const stubRun = async () => {{
+  return tickResponse;
+}};
+
+stateMod.state.turnStartPending = true;
+stateMod.state.selfBusy = false;
+
+const settings = {{ command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 1 }};
+startBrokerTimer(pi, tmpDir, settings, {{ run: stubRun }});
+
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(messages.length, 0);
+
+tickResponse = JSON.stringify({{ claimed: 2, notices_sent: 3 }});
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(messages.length, 0);
+
+stateMod.state.turnStartPending = false;
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(messages.length, 1);
+assert.ok(messages[0].text.includes("routed 2 question(s) and sent 3 notice(s)"));
+assert.equal(messages[0].options, null);
+
+stopBrokerTimer();
+stateMod.state.turnStartPending = false;
+"#,
+        state_path.to_str().expect("valid utf-8 path")
+    );
+    run_js_test(
+        "test_broker_timer_holds_news_while_turn_start_pending_and_sends_when_cleared",
+        &code,
+    );
+}
+
+#[test]
+fn test_failed_send_never_clears_latch_set_by_drain() {
+    let inbox_path = repo_root().join(".pi/extensions/bee-guard/result-inbox.ts");
+    let state_path = repo_root().join(".pi/extensions/bee-guard/state.ts");
+    let code = format!(
+        r#"
+const inboxMod = await import(pathToFileURL({:?}).href);
+const stateMod = await import(pathToFileURL({:?}).href);
+
+stateMod.state.turnStartPending = true;
+stateMod.state.selfBusy = false;
+
+let sendUserMessageCalled = false;
+const pi = {{
+  sendUserMessage: async () => {{
+    sendUserMessageCalled = true;
+    throw new Error("delivery rejected");
+  }}
+}};
+
+const sent = await inboxMod.sendLeaderMessage(pi, "test message");
+assert.equal(sent, false);
+assert.equal(sendUserMessageCalled, false);
+assert.equal(stateMod.state.turnStartPending, true);
+
+stateMod.state.turnStartPending = false;
+"#,
+        inbox_path.to_str().expect("valid utf-8 path"),
+        state_path.to_str().expect("valid utf-8 path")
+    );
+    run_js_test(
+        "test_failed_send_never_clears_latch_set_by_drain",
+        &code,
+    );
+}
+
+#[test]
+fn test_ensure_heartbeat_failed_delete_on_changed_cron_writes_delete_failed() {
+    run_js_test(
+        "test_ensure_heartbeat_failed_delete_on_changed_cron_writes_delete_failed",
+        r#"
+const { ensureHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-cron-del-fail-"));
+const agentId = "agent-cron-del-fail";
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, JSON.stringify({
+  agent_id: agentId,
+  schedule_id: "sched-old-fail",
+  cron: "*/5 * * * *",
+  created_at: new Date().toISOString()
+}));
+
+const stubRun = async (cmd, args) => {
+  if (args[0] === "heartbeat" && args[1] === "delete") {
+    throw new Error("heartbeat delete failed: connection refused");
+  }
+  return JSON.stringify({ id: "sched-should-not-reach" });
+};
+
+const settings = { command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 30 };
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(res.created, false);
+assert.ok(res.reason.includes("heartbeat delete failed: connection refused"));
+
+assert.equal(fs.existsSync(marker), true);
+const markerData = JSON.parse(fs.readFileSync(marker, "utf8"));
+assert.equal(markerData.schedule_id, "sched-old-fail");
+assert.ok(markerData.delete_failed);
+assert.ok(markerData.delete_failed.includes("heartbeat delete failed: connection refused"));
+"#,
+    );
+}
+
