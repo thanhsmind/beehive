@@ -472,11 +472,13 @@ fn path_start(text: &str) -> Option<usize> {
         }
         let before = &text[..i];
         let tail = &text[i..];
-        if c == '/' && tail.starts_with("//") && before.ends_with(':') {
-            skip_to = i + tail.find(char::is_whitespace).unwrap_or(tail.len());
+        if c == '/' && tail.starts_with("//") && url_scheme(before) {
+            skip_to = i + tail.find(|u: char| !u.is_ascii_alphanumeric() && !URL_CHARS.contains(u)).unwrap_or(tail.len());
             continue;
         }
-        let led = before.chars().next_back().is_none_or(|p| !p.is_ascii_alphanumeric()) || (c == '/' && short_flag(before));
+        let led = i == skip_to
+            || before.chars().next_back().is_none_or(|p| !p.is_ascii_alphanumeric())
+            || (c == '/' && short_flag(before));
         if !led {
             continue;
         }
@@ -496,6 +498,12 @@ fn path_start(text: &str) -> Option<usize> {
         }
     }
     None
+}
+
+const URL_CHARS: &str = "-._:/?#@!$&*+=%";
+
+fn url_scheme(before: &str) -> bool {
+    before.strip_suffix(':').and_then(|b| b.chars().next_back()).is_some_and(|c| c.is_ascii_alphabetic())
 }
 
 fn short_flag(before: &str) -> bool {
@@ -878,17 +886,20 @@ mod tests {
                 ("symptom", "cfg=/srv/clientcorp/app/x and HOME=~/private/notes [/opt/acme-internal/y] <D:\\work\\client\\z>"),
                 ("evidence", "see path:/var/lib/clientcorp/db and https://github.com/thanhsmind/beehive/issues/3"),
                 ("command", "bee status --cwd=/srv/clientcorp/app 2>/srv/x15 >>/var/x16 -C/srv/x17 @/srv/x21 */srv/x22 !/srv/x23 &/srv/x24 +/srv/x25 x-/srv/x26 -I/opt/x27 and/or keep"),
+                ("output", "https://github.com/o/r/blob/main/a.rs,/opt/acme-corp/secret.txt https://github.com/o/r,~/.ssh/id_rsa see(https://github.com/o/r)/srv/x https://github.com/o/r;C:\\proj\\acme 1://srv/leak \u{e9}://srv/leak2"),
             ],
             true,
         );
         let done = execute(&a, &f.ctx()).unwrap_or_else(|e| panic!("{}", e.msg));
-        for leaked in ["/srv/", "~/", "private", "/opt/", "work", "/var/", "clientcorp"] {
+        for leaked in ["/srv/", "~/", "private", "/opt/", "work", "/var/", "clientcorp", "acme", ".ssh", "id_rsa", "proj", "leak"] {
             assert!(!done.body.contains(leaked), "{leaked:?} survived:\n{}", done.body);
         }
         assert!(done.body.contains("https://github.com/thanhsmind/beehive/issues/3"), "{}", done.body);
         assert!(done.body.contains("cfg=<path>") && done.body.contains("HOME=<home>"), "{}", done.body);
         assert!(done.body.contains("and/or keep"), "{}", done.body);
-        assert_eq!(done.counts.paths, 16, "{:?}", counts_value(done.counts));
+        assert!(done.body.contains("https://github.com/o/r/blob/main/a.rs,<path>"), "{}", done.body);
+        assert!(done.body.contains("see(https://github.com/o/r)<path>"), "{}", done.body);
+        assert_eq!(done.counts.paths, 22, "{:?}", counts_value(done.counts));
         assert!(f.log().is_empty());
     }
 
