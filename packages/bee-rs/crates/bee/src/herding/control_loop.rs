@@ -324,6 +324,7 @@ fn allowed_tools_for(role: Role, kind: TransportKind) -> &'static str {
 const SUPERVISOR_ALLOWED_TOOLS: &str = "Bash(.bee/bin/bee status:*),\
 Bash(.bee/bin/bee state session list:*),\
 Bash(.bee/bin/bee cells list:*),\
+Bash(.bee/bin/bee herding status:*),\
 Bash(.bee/bin/bee herding occupancy:*),\
 Bash(.bee/bin/bee herding pane list:*),\
 Bash(.bee/bin/bee herding pane read:*),\

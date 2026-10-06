@@ -239,8 +239,8 @@ pub(crate) const KNOWN_KINDS: [&str; 2] = ["observation", "silence"];
 /// consult to the struggling session's own lead, which reads it at its next
 /// turn boundary and decides for itself. The supervisor still only writes
 /// records — 704b691c holds untouched.
-pub(crate) const MAILBOX_KINDS: [&str; 5] =
-    ["intervention", "escalation", "urgent", "advisor-nudge", "broker-notice"];
+pub(crate) const MAILBOX_KINDS: [&str; 6] =
+    ["intervention", "escalation", "urgent", "advisor-nudge", "broker-notice", "permission"];
 
 /// The mailbox kinds the frequency cap COUNTS AGAINST. A kind outside this set
 /// is never refused for repeating a point: escalation IS the remedy the cap
@@ -255,8 +255,8 @@ const CAPPED_KINDS: [&str; 2] = ["intervention", "advisor-nudge"];
 
 /// Every kind `record` accepts, in the order its refusal names them.
 /// `all_kinds_is_the_two_sets` keeps this from drifting out of the two above.
-pub(crate) const ALL_KINDS: [&str; 7] =
-    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge", "broker-notice"];
+pub(crate) const ALL_KINDS: [&str; 8] =
+    ["observation", "silence", "intervention", "escalation", "urgent", "advisor-nudge", "broker-notice", "permission"];
 
 /// The two waiting-on kinds that mean a HUMAN is being waited on. `turn-end`
 /// is deliberately not one of them: it is the ordinary end of a turn with
@@ -279,8 +279,8 @@ pub(crate) const WAITING_ON_QUESTION: &str = "question";
 ///
 /// Everything else is NO, `intervention` included — that one is addressed to a
 /// SESSION, and the session answers it.
-pub(crate) const HUMAN_DECISION_KINDS: [&str; 5] =
-    [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", ADVISOR_NUDGE_KIND];
+pub(crate) const HUMAN_DECISION_KINDS: [&str; 6] =
+    [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", ADVISOR_NUDGE_KIND, "permission"];
 
 /// The flag itself. TOTAL on a `&str` by construction: an unknown, empty or
 /// malformed kind derives `false` and the row still renders. A queue row is
@@ -5071,7 +5071,7 @@ mod tests {
     /// blowing up the one report the human reads.
     #[test]
     fn the_needs_human_decision_flag_derives_per_kind_and_never_panics() {
-        for yes in [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", "advisor-nudge"] {
+        for yes in [WAITING_ON_GATE, WAITING_ON_QUESTION, "escalation", "urgent", "advisor-nudge", "permission"] {
             assert!(needs_human_decision(yes), "{yes} is the human's own call");
         }
         for no in ["intervention", "observation", "silence", "turn-end"] {
@@ -5093,6 +5093,22 @@ mod tests {
                 "{kind} flags yes but is neither a mailbox kind nor a waiting-on kind"
             );
         }
+    }
+
+    #[test]
+    fn supervisor_record_of_kind_permission_is_accepted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let rec = ask(
+            control,
+            "permission",
+            "sess-1",
+            "perm-1",
+            "Paseo job needs tool bash. Answer with `bee herding permit`.",
+        )
+        .expect("a valid permission record is accepted");
+        assert_eq!(rec.kind, "permission");
+        assert!(needs_human_decision(&rec.kind));
     }
 
     /// TRUTH: "the WakeReport applies the same order" — the row only the human

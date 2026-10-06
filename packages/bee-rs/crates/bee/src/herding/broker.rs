@@ -275,6 +275,30 @@ fn sanitize_question_for_intervention(text: &str) -> String {
     }
 }
 
+fn slugify_point_key(raw: &str) -> String {
+    let mut out = String::new();
+    let mut prev_hyphen = false;
+    for c in raw.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+            prev_hyphen = false;
+        } else if !prev_hyphen && !out.is_empty() {
+            out.push('-');
+            prev_hyphen = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "permission".to_string()
+    } else if out.chars().count() > 64 {
+        out.chars().take(64).collect::<String>().trim_end_matches('-').to_string()
+    } else {
+        out
+    }
+}
+
 pub(crate) fn write_heartbeat(main_root: &Path) -> Result<(), String> {
     let sup_dir = main_root.join(".bee").join("supervisor");
     if let Err(e) = std::fs::create_dir_all(&sup_dir) {
@@ -559,6 +583,67 @@ pub(crate) fn tick_with(
                         );
                         let _ = crate::fsutil::write_json_atomic(&notice_marker, &json!({"sent_at": chrono::Utc::now().to_rfc3339()}));
                         notices_sent += 1;
+                    }
+                }
+            }
+
+            let is_paseo = job_spec
+                .get("transport")
+                .and_then(Value::as_str)
+                .map(|s| s == "paseo")
+                .unwrap_or(false);
+            if is_paseo {
+                if let Some(agent_id) = job_spec
+                    .get("paseo_agent_id")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.trim().is_empty())
+                {
+                    let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
+                    if let Ok(inspect_out) = paseo.call(&inspect_argv) {
+                        if crate::herding::paseo::parse_inspect(&inspect_out)
+                            == Some(crate::herding::paseo::PaseoState::Blocked)
+                        {
+                            let pending = crate::herding::paseo::parse_pending_permissions(&inspect_out);
+                            let leader_session = job_spec
+                                .get("leader_session")
+                                .and_then(Value::as_str)
+                                .unwrap_or("unattributed");
+                            for (req_id, tool) in pending {
+                                let safe_req_id = req_id.replace(['/', '\\', '\0'], "_");
+                                let marker_path =
+                                    job_dir.join(format!("permission-marker-{safe_req_id}.json"));
+                                if marker_path.exists() {
+                                    continue;
+                                }
+                                let raw_key = format!("perm-{job_id}-{req_id}");
+                                let point_key = slugify_point_key(&raw_key);
+                                let tool_desc = if tool.trim().is_empty() { "tool" } else { &tool };
+                                let msg = format!(
+                                    "Paseo job {job_id} requires permission for tool {tool_desc}. Answer with `bee herding permit`."
+                                );
+                                let rec = crate::verbs::supervisor::record_intervention_into(
+                                    main_root,
+                                    "herding broker tick",
+                                    "permission",
+                                    Some("big-decision"),
+                                    Some(leader_session),
+                                    Some(&point_key),
+                                    Some(&msg),
+                                    None,
+                                );
+                                if rec.is_ok() {
+                                    let _ = crate::fsutil::write_json_atomic(
+                                        &marker_path,
+                                        &json!({
+                                            "request_id": req_id,
+                                            "tool": tool,
+                                            "sent_at": chrono::Utc::now().to_rfc3339()
+                                        }),
+                                    );
+                                    notices_sent += 1;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -938,10 +1023,24 @@ pub(crate) fn tick(args: &[&str]) -> ExitCode {
     };
 
     let cfg = super::run::read_main_config(&main_root);
-    let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
-    let paseo_cli = crate::herding::paseo::RealPaseoCli::new(paseo_cmd);
+    let bee_dir = main_root.join(".bee");
+    let paseo_cli: Box<dyn crate::herding::paseo::PaseoCli> = {
+        if crate::herding::repo_uses_paseo(&cfg, &bee_dir) && crate::herding::paseo::daemon_reachable() {
+            let cmd = crate::herding::paseo::paseo_command(&cfg);
+            let real = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(std::time::Duration::from_secs(5));
+            Box::new(crate::herding::paseo::FailFastPaseoCli::new(Box::new(real)))
+        } else {
+            struct UnavailablePaseoCli;
+            impl crate::herding::paseo::PaseoCli for UnavailablePaseoCli {
+                fn call(&self, _args: &[String]) -> Result<String, String> {
+                    Err("paseo is disabled or daemon unreachable".to_string())
+                }
+            }
+            Box::new(UnavailablePaseoCli)
+        }
+    };
 
-    match tick_with(&main_root, parsed.json, &RealAdvisorRunner, &RealJobSpawner, &paseo_cli) {
+    match tick_with(&main_root, parsed.json, &RealAdvisorRunner, &RealJobSpawner, paseo_cli.as_ref()) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             if parsed.json {
@@ -1712,6 +1811,59 @@ mod tests {
         assert_eq!(spawner.spawned.borrow().len(), 1);
         let spawned = &spawner.spawned.borrow()[0];
         assert_eq!(spawned.continue_job.as_deref(), Some("job-paseo-advisor"));
+    }
+
+    #[test]
+    fn one_blocked_request_files_one_intervention_across_two_ticks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let mbox_dir = bee_dir.join("mailbox").join("job-blocked-1");
+        std::fs::create_dir_all(&mbox_dir).unwrap();
+
+        let job_json = json!({
+            "job_id": "job-blocked-1",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-blocked-1",
+            "leader_session": "sess-leader-blocked",
+        });
+        std::fs::write(mbox_dir.join("job.json"), serde_json::to_string(&job_json).unwrap()).unwrap();
+
+        let inspect_output = json!({
+            "Status": "running",
+            "PendingPermissions": [
+                {
+                    "id": "req-99",
+                    "tool": "bash"
+                }
+            ]
+        })
+        .to_string();
+
+        let fake_paseo = FakePaseoCli::new(Ok(inspect_output));
+        let advisor = FakeAdvisorRunner::new(None);
+        let spawner = FakeJobSpawner::new();
+
+        let out1 = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick 1");
+        assert_eq!(out1.notices_sent, 1);
+
+        let marker = mbox_dir.join("permission-marker-req-99.json");
+        assert!(marker.exists());
+
+        let store1 = crate::verbs::supervisor::read_interventions(main_root);
+        let perms1: Vec<_> = store1.rows.iter().filter(|i| i.kind == "permission").collect();
+        assert_eq!(perms1.len(), 1);
+        assert_eq!(perms1[0].target_session, "sess-leader-blocked");
+        assert!(perms1[0].question.contains("job-blocked-1"));
+        assert!(perms1[0].question.contains("bash"));
+        assert!(perms1[0].question.contains("`bee herding permit`"));
+
+        let out2 = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick 2");
+        assert_eq!(out2.notices_sent, 0);
+
+        let store2 = crate::verbs::supervisor::read_interventions(main_root);
+        let perms2: Vec<_> = store2.rows.iter().filter(|i| i.kind == "permission").collect();
+        assert_eq!(perms2.len(), 1);
     }
 }
 
