@@ -681,6 +681,7 @@
     "github-issues",
     "evolving",
     "bee-report-issues",
-    "gh"
+    "gh",
+    "contract:leader-check-worktree-root"
   ]
 }

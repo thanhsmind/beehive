@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0",
+  "feature": "leader-check-worktree-root",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"leader-check-worktree-root\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-06T15:33:44.233Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "one source file plus its in-file test module; covered bugfix",
+    "updated_at": "2026-10-06T15:33:44.263Z",
+    "feature": "leader-check-worktree-root"
+  },
+  "gate_preview": {
+    "feature": "leader-check-worktree-root",
+    "plan_sha256": "13b71d27669e8ef6f525a2b853fceff8dffd5e34a77cb817954d06f850c7c46e",
+    "previewed_at": "2026-10-06T15:35:16.313Z",
+    "cells": [
+      {
+        "id": "lcwr-1",
+        "feature": "leader-check-worktree-root",
+        "title": "Resolve leader-check artifacts against the feature worktree",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7e738c47-e9fa-4d43-9d91-623e9b7b4ebf"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In record_leader_check, resolve the artifact root once with commit_trailer_history_root(root, feature) — the same root the commit-diff check already uses. Check artifact existence against that root. Before the files_changed overlap compare, turn an absolute artifact path under that root into a repo-relative path and compare both sides through normalize_cell_path. Keep every refusal message unchanged. Red first: add a test in verbs/cells/tests.rs using merge_ready_granted_worktree that writes a file only in the worktree and records a leader check whose artifact names it (once relative, once absolute); it must fail before the fix and pass after.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+        "must_haves": {
+          "truths": [
+            "A leader check whose artifact exists only in the feature's granted worktree is accepted",
+            "An absolute worktree path whose relative form is in files_changed passes the overlap check",
+            "An artifact missing from both checkouts is still refused with the same message"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+              "substantive": "artifact checks use commit_trailer_history_root"
+            }
+          ],
+          "key_links": [
+            "record_leader_check uses one root for artifact existence, overlap, and commit diff"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No change to refusal message text"
+          ]
+        },
+        "behavior_change": true
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "leader-check-worktree-root",
+    "plan_sha256": "13b71d27669e8ef6f525a2b853fceff8dffd5e34a77cb817954d06f850c7c46e",
+    "previewed_at": "2026-10-06T15:35:16.313Z",
+    "cells": [
+      {
+        "id": "lcwr-1",
+        "feature": "leader-check-worktree-root",
+        "title": "Resolve leader-check artifacts against the feature worktree",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "7e738c47-e9fa-4d43-9d91-623e9b7b4ebf"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In record_leader_check, resolve the artifact root once with commit_trailer_history_root(root, feature) — the same root the commit-diff check already uses. Check artifact existence against that root. Before the files_changed overlap compare, turn an absolute artifact path under that root into a repo-relative path and compare both sides through normalize_cell_path. Keep every refusal message unchanged. Red first: add a test in verbs/cells/tests.rs using merge_ready_granted_worktree that writes a file only in the worktree and records a leader check whose artifact names it (once relative, once absolute); it must fail before the fix and pass after.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee leader_check",
+        "must_haves": {
+          "truths": [
+            "A leader check whose artifact exists only in the feature's granted worktree is accepted",
+            "An absolute worktree path whose relative form is in files_changed passes the overlap check",
+            "An artifact missing from both checkouts is still refused with the same message"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs",
+              "substantive": "artifact checks use commit_trailer_history_root"
+            }
+          ],
+          "key_links": [
+            "record_leader_check uses one root for artifact existence, overlap, and commit diff"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No change to refusal message text"
+          ]
+        },
+        "behavior_change": true
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-06T15:38:52.365Z",
+    "branch": "wt/leader-check-worktree-root",
+    "worktree_id": "beehive--wt--leader-check-worktree-root",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
