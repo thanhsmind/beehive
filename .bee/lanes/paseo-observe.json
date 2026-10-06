@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"paseo-observe\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming: wave 1 po-1 and po-5; wave 2 po-2, po-3, po-4.",
+  "next_action": "Merged into main at 2e91eb8; reload the product and test \"paseo-observe\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-observe\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-06T01:29:15.229Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "question",
-    "subject": "paseo-observe: blocked worker wait or end; cancel archive",
-    "asked_at": "2026-10-06T01:31:36.842Z",
-    "session": "b33d1286-7afa-49ef-a7ce-50512d85be46"
+    "kind": "gate",
+    "subject": "uat: paseo-observe",
+    "asked_at": "2026-10-06T04:21:38.739Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -890,12 +890,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-06T04:21:31.734Z",
-    "branch": "wt/paseo-observe",
-    "worktree_id": "beehive--wt--paseo-observe",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
