@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"leader-check-worktree-root\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 767911a; capture what settled, then bee close --feature leader-check-worktree-root.",
   "created_at": "2026-10-06T15:33:44.233Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -125,12 +125,5 @@
         "behavior_change": true
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-06T15:38:52.365Z",
-    "branch": "wt/leader-check-worktree-root",
-    "worktree_id": "beehive--wt--leader-check-worktree-root",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
