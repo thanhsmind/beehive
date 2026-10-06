@@ -161,6 +161,13 @@ JSON array outputs remain unchanged.
 Commands read feature history documents (`docs/history/<feature>/`) from the worktree.
 For example, `gate --preview` and `close` read the worktree plan and context files.
 
+`cells leader-check` also reads its artifacts from the feature's worktree (leader-check-worktree-root, decision `7e738c47`, 2026-10-06).
+It resolves one root with `commit_trailer_history_root` and uses it for three checks: artifact existence, the `files_changed` overlap, and the commit diff.
+An absolute artifact path under that root is compared in repo-relative form.
+When the feature has no granted worktree, the root is the main checkout, as before.
+Before this change, a file that existed only in the worktree was refused as missing, and the only way to merge was a `leader-check-deferral` decision.
+Pointers: `packages/bee-rs/crates/bee/src/verbs/cells/leader_check.rs`, `packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs`.
+
 The shared narrow door does not widen.
 Other commands continue to refuse inside a granted worktree:
 - `cells`: `claim`, `claim-next`, `unclaim`, `reopen`, `cap`, `block`, `drop`, `archive`, `unarchive`, `reset-budget`, `backfill-roles`, and `rebind-session`.
