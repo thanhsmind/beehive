@@ -1,0 +1,251 @@
+{
+  "id": "hlt-3",
+  "feature": "herding-leader-toil",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Record a judge's fenced verdicts straight from its answer",
+  "deps": [
+    "hlt-1"
+  ],
+  "decisions": [
+    "D3",
+    "e7509db5-afa5-47a2-9f58-054bf97a16c4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-leader-toil/CONTEXT.md",
+    "docs/history/herding-leader-toil/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+  ],
+  "action": "Red first. Per D3: in verbs/cells/judge.rs add a pure extract_fenced_verdicts(text) -> Result<Vec<(String, Value)>, String> that finds every fenced block whose opening line is three backticks then `json <cell-id>` (exactly one id token), takes the body to the closing fence, and parses it with the same JSON parser run_judge_record uses; a duplicate id is an error naming it; zero blocks is an error ('no json <cell-id> verdict block found'). In handlers_meta.rs factor the body of run_judge_record after parsing into record_one(...) and add --from-text <path|-> (stdin for -), mutually exclusive with --file; with --from-text, --id becomes optional and, when given, every block id must equal it. Record each valid block on its cell through record_one (claim guards and archive checks per cell, as today); output a JSON array of {id, recorded, errors} (text: one line per id); exit non-zero when any block failed validation or recording. Declare --from-text for cells.judge-record in catalog.rs and generated/registry_payload.json like the existing flags and keep those tests green. In skills/bee-hive/references/gates-and-delegation.md, in the Judge tier paragraph that says the judge returns the judge-verdict/1 schema recorded via cells judge-record, add one sentence: the judge returns one fenced block per cell whose info string is `json <cell-id>`, and the leader records them all with `bee cells judge-record --from-text`. Zero blocks refuse before recording anything. Tests (inline in judge.rs and handlers_meta.rs or the existing judge tests): two valid blocks record two verdicts; an invalid block is reported and the exit is non-zero while the valid one records; duplicate ids refuse; --id mismatch refuses; --file with --from-text refuses; an answer with no blocks refuses. Cite decision e7509db5 (contract:judge-record-from-text). No code comments. REVISION ROUND (judge NEEDS_REVISION; the first round is committed as a1341ec54 — make one more commit on top with the cell trailer last). Fix: (1) handlers_meta.rs test file_with_from_text_refuses compares the Debug of an Option<ExitCode> with the Debug of an ExitCode, so it can never fail; assert on the real refusal text and exit code. (2) that test resolves the real process cwd and writes a timings row into the real main store; run it against a temp repo the way the other judge-record tests do (or through the shared TEST_CWD_LOCK pattern hlt-2 uses), never the real checkout. Also two one-line fixes the judge noted in herding/run.rs: the uncapped-success line must name a runnable command including the mistakes answer, e.g. `bee cells finish --id <cell> --from-job <job> --proof-result <green:unit> --no-mistakes`; and the isolated_config check `spec.provider == \"pi\"` must compare case-insensitively like paseo.rs does. Run only this cell's verify commands, in the foreground; do not start the whole crate suite in the background and wait on it — commit as soon as the verify is green.",
+  "must_haves": {
+    "truths": [
+      "cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell",
+      "an invalid block is reported by id with the validator errors and the verb exits non-zero",
+      "zero blocks, duplicate ids, an --id mismatch, and --file with --from-text refuse by name",
+      "the judge tier paragraph tells the judge to return one json <cell-id> block per cell",
+      "cells judge-record --file behaves as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+        "substantive": "extract_fenced_verdicts"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+        "substantive": "--from-text and record_one"
+      }
+    ],
+    "key_links": [
+      "run_judge_record and --from-text share record_one"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No change to the judge-verdict/1 schema"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "affects_specs": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlt-3",
+    "outcome": "cells judge-record --from-text records fenced verdicts",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [
+      "sync-ack: herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T10:01:04.459Z",
+    "behavior_change": false,
+    "verification_evidence": "cells 406+ and catalog tests green incl. from-text extraction and refusals, and herding green after the run.rs one-liners; re-run by the leader after the judge revision c183c15d2",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+    "claimed_at": "2026-10-06T09:20:18.728Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:09:22.857Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:19:22.763Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:01:04.287Z"
+      },
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:01:04.458Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:02:22.310Z"
+      }
+    ],
+    "sync_ack": "herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "cells judge-record --from-text records fenced verdicts",
+      "commit": "c183c15d2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding — green:unit — cells 406+ and catalog tests green incl. from-text extraction and refusals, and herding green after the run.rs one-liners; re-run by the leader after the judge revision c183c15d2",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "--from-text records every valid block",
+            "status": "PASS",
+            "evidence": "judge.rs:364 extract_fenced_verdicts; two_valid_blocks_record_two_verdicts"
+          },
+          {
+            "id": "invalid block reported, exit non-zero",
+            "status": "PASS",
+            "evidence": "record_verdict_blocks returns 1; test asserts it"
+          },
+          {
+            "id": "zero, duplicate, mismatch, --file conflict refuse",
+            "status": "PASS",
+            "evidence": "process_judge_from_text refusals with text asserts for three"
+          },
+          {
+            "id": "the --file plus --from-text test asserts something real",
+            "status": "FAIL",
+            "evidence": "handlers_meta.rs:1257 compares Debug of Option<ExitCode> with Debug of ExitCode, never equal; the test resolves the real cwd and appended a timings row to the real main store"
+          },
+          {
+            "id": "judge brief line; --file unchanged; schema unchanged; no comments",
+            "status": "PASS",
+            "evidence": "gates-and-delegation.md:407; record_one; validate_judge_verdict untouched"
+          }
+        ],
+        "failure_signature": "file_with_from_text_refuses can never fail and writes a timing row into the real main store",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T09:19:22.763Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "--from-text records every valid json <cell-id> fenced verdict on its cell",
+            "status": "PASS",
+            "evidence": "judge.rs:364 extract_fenced_verdicts; handlers_meta.rs record_verdict_blocks->record_one; two_valid_blocks_record_two_verdicts"
+          },
+          {
+            "id": "an invalid block is reported by id and the verb exits non-zero",
+            "status": "PASS",
+            "evidence": "record_verdict_blocks returns code 1; the test asserts it"
+          },
+          {
+            "id": "zero blocks, duplicate ids, --id mismatch, --file with --from-text refuse by name",
+            "status": "PASS",
+            "evidence": "c183c15d2 file_with_from_text_refuses runs in a tempdir under TEST_CWD_LOCK and a child run must print the mutual-exclusion text"
+          },
+          {
+            "id": "tests stay off the real store",
+            "status": "PASS",
+            "evidence": "no new judge-record row in the main timings.jsonl after the 4101-pass run"
+          },
+          {
+            "id": "judge tier paragraph; --file unchanged; schema unchanged; no comments",
+            "status": "PASS",
+            "evidence": "gates-and-delegation.md:407; record_one; validate_judge_verdict untouched; run.rs:3355 and :5454 one-liners"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T10:01:04.287Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T09:19:22.764Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verified_at": null,
+    "baseline": null,
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs"
+          },
+          {
+            "requirement": "an invalid block is reported by id with the validator errors and the verb exits non-zero",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+          },
+          {
+            "requirement": "zero blocks, duplicate ids, an --id mismatch, and --file with --from-text refuse by name",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs"
+          },
+          {
+            "requirement": "the judge tier paragraph tells the judge to return one json <cell-id> block per cell",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+          },
+          {
+            "requirement": "cells judge-record --file behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T10:02:22.310Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

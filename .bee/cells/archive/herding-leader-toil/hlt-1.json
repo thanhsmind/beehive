@@ -1,0 +1,193 @@
+{
+  "id": "hlt-1",
+  "feature": "herding-leader-toil",
+  "lane": "high-risk",
+  "role": "code",
+  "title": "Cap a herded cell from its job with the leader's proof verdict",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "d248942f-2b88-4b3f-964b-5bd3e6f9aa5e"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-leader-toil/CONTEXT.md",
+    "docs/history/herding-leader-toil/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "action": "Red first. Add three flags to `bee cells finish` (not `cells cap`): --from-job <job-id>, --proof-result <green:unit|green:static|green:live>, --proof-reason <text> (per D1). In finish_support.rs add a pure builder report_from_job(job: &Value, result: &MailboxResult-like fields, git: Option<GitFacts>, cell_verify: &str, proof_result: &str, proof_reason: Option<&str>) -> Result<String, String> that returns the five-key report JSON string: outcome = result summary; files = result files_changed, or the git changed paths when that list is empty; commit = git HEAD sha; tests = '<cell_verify> — <proof_result> — <proof_reason or the result proof text>' joined with the PROOF_SEPARATOR the parser uses; deviations = [dissent claim] when the result carries dissent, else []. The caller in handlers_close.rs (search for run_finish and cap_flags_from) reads the job from <main>/.bee/mailbox/<job>/job.json and the latest result through the herding mailbox helpers: in herding.rs change `mod mailbox;` to `pub(crate) mod mailbox;` and use select_latest_round, result_path and parse_result_text (do not touch herding/run.rs, which another cell owns; read_result and git_block are private there); run git in job.json cwd with a small local helper in finish_support.rs (rev-parse HEAD, diff --name-only <merge-base with the main branch>..HEAD, status --porcelain), then sets the report flag and continues through the existing cap path with no second validator. With --from-job the usual mistakes answer is required (--no-mistakes or --mistake with --fix-at), so bee close never finds the cell unanswered. The cap output (text and JSON) names the files source: worker files_changed or git fallback. Refuse, typed and naming the fix: --from-job with --report; --from-job without --proof-result; --from-job without a mistakes answer; an empty worker proof text with no --proof-reason (FIX: pass --proof-reason); a proof-result outside the three green words; no result file; result status not done; job.json cell_id present and different from --id; job cwd missing (FIX: pass --report). Declare the three flags for cells.finish in catalog.rs and in generated/registry_payload.json in the same shape as the existing cells.finish flags, and keep the registry and catalog tests green. Tests in verbs/cells/tests.rs with a temp repo, a job mailbox and a git worktree dir: a done result caps with the built report and the verify-match passes; empty files_changed falls back to git paths; each refusal; the cell still needs the commit trailer as today. Cite decision d248942f (contract:cells-finish-from-job). No code comments.",
+  "must_haves": {
+    "truths": [
+      "bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text",
+      "empty files_changed falls back to the git changed paths of the job's working directory, and the cap output names the source",
+      "--from-job refuses with --report, without --proof-result, without a mistakes answer, with a non-green proof result, with no result, with a non-done result, with another cell's job, with a missing working directory, and with empty proof text and no --proof-reason",
+      "the existing cells finish and cells cap paths and their tests are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "report_from_job builder"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "--from-job wiring into the cap path"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "from-job tests"
+      }
+    ],
+    "key_links": [
+      "run_finish builds the report from the job before parse_report_flag runs"
+    ],
+    "prohibitions": [
+      "No code comments",
+      "No cap without --proof-result",
+      "No change to cells cap"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog",
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlt-1",
+    "outcome": "cells finish --from-job caps from the job with the leader proof verdict",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [
+      "verbs/knowledge/tests.rs gained the three new CapFlags fields so the crate compiles",
+      "sync-ack: herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T08:42:25.237Z",
+    "behavior_change": false,
+    "verification_evidence": "cells 406 and catalog 15 tests green, run by the leader in the worktree; covers from-job caps, git fallback and every named refusal",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "6b23f09e-943a-446a-8126-d3717cc4492b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog",
+    "claimed_at": "2026-10-06T07:25:24.813Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T08:42:25.237Z"
+      },
+      {
+        "verb": "recordJudgeVerdict",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T09:19:22.714Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "owner_bypassed": null,
+        "at": "2026-10-06T10:02:22.285Z"
+      }
+    ],
+    "sync_ack": "herding, cells and doctor internals change no owned skill procedure; docs land in hlt-7",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "cells finish --from-job caps from the job with the leader proof verdict",
+      "commit": "c8d25a021",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee cells && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee catalog — green:unit — cells 406 and catalog 15 tests green, run by the leader in the worktree; covers from-job caps, git fallback and every named refusal",
+      "deviations": [
+        "verbs/knowledge/tests.rs gained the three new CapFlags fields so the crate compiles"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "from-job caps a done result with the built tests line",
+            "status": "PASS",
+            "evidence": "finish_support.rs report_from_job; handlers_close.rs:1302-1450; test contract_cells_finish_from_job_d248942f_success"
+          },
+          {
+            "id": "git fallback named in output",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:1436 files_source; git_fallback test"
+          },
+          {
+            "id": "every listed refusal",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:1305-1420; refusals test asserts 9 texts"
+          },
+          {
+            "id": "cells finish and cap unchanged; no comments",
+            "status": "PASS",
+            "evidence": "FINISH_FLAGS only for finish; scan found no added comments"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.8-flash-high",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-06T09:19:22.714Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+          },
+          {
+            "requirement": "empty files_changed falls back to the git changed paths of the job's working directory, and the cap output names the source",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "--from-job refuses with --report, without --proof-result, without a mistakes answer, with a non-green proof result, with no result, with a non-done result, with another cell's job, with a missing working directory, and with empty proof text and no --proof-reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "the existing cells finish and cells cap paths and their tests are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T10:02:22.285Z",
+        "recorded_by": "6b23f09e-943a-446a-8126-d3717cc4492b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
