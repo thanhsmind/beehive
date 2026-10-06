@@ -660,6 +660,10 @@
     "contract:paseo-heartbeat-stale-marker",
     "paseo-answers",
     "steer",
-    "plan-wording"
+    "plan-wording",
+    "paseo-observe",
+    "permission",
+    "cancel",
+    "orphans"
   ]
 }
