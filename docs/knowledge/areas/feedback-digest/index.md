@@ -10,6 +10,7 @@ never a generation timestamp or any other wall-clock value.
 
 ## Concepts
 
+- [Feedback Digest — Bee Defects Filed Upstream as Issues](bee-report-issues.md) — How an agent in a host repository files a scrubbed report about a bee defect as a public issue on the bee repository, and how the bee repository reads those open issues back into its ranked feedback as hostile input.
 - [Feedback Digest — Cross-Repository Collection and the Trust Boundary](cross-repo-trust-boundary.md) — How the workflow's maintainers' repository reads other repositories' already-written digests as hostile input — re-validating and neutralizing every field before any of it can influence the workflow's own instructions.
 - [Feedback Digest — Data Model](data-model.md) — The digest's own shape: the six allowed fields an entry may carry, the closed kind vocabulary, how pain is computed once, the dropped list, and the scoped, gated auto-commit on filing — what a digest may hold and what it may never hold.
 - [Feedback Digest — Generating and Refreshing a Repository's Own Digest](generation-and-refresh.md) — How a repository turns its own scattered friction, findings, debt, and lessons into one safe, portable snapshot — as a side effect of closing a feature, on request, or as a count only — and how that snapshot regenerates from scratch, never accumulates.

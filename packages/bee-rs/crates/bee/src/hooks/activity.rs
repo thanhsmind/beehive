@@ -532,7 +532,7 @@ fn sanitize_prompt(prompt: &str, root: &Path) -> String {
 /// path under the repo root becomes repo-relative, any other absolute path
 /// becomes `<path>`. The record is a shareable surface, and where the user
 /// keeps their files is not part of what they asked for.
-fn scrub_abs_paths(text: &str, root: &Path) -> String {
+pub(crate) fn scrub_abs_paths(text: &str, root: &Path) -> String {
     let root_prefix = root.to_string_lossy().into_owned();
     text.split_inclusive(char::is_whitespace)
         .map(|piece| {

@@ -18,6 +18,9 @@
   "uat_stop": "close",
   "uat_before_merge": false,
   "staging_before_merge": false,
+  "bee_report": {
+    "ingest": true
+  },
   "team": {
     "pi": {
       "code": {

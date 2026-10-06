@@ -31,6 +31,7 @@ proprietary source code or sensitive details across repository boundaries.
 - How a repository generates and refreshes its digest: `generation-and-refresh.md`.
 - Safe cross-repository consumption and trust rules: `cross-repo-trust-boundary.md`.
 - Pain scoring, ranking, and self-improvement: `ranking-and-self-improvement.md`.
+- Bee defects filed upstream from host repos and read back as issues: [`bee-report-issues.md`](bee-report-issues.md).
 
 ## Entry Points & Triggers
 
