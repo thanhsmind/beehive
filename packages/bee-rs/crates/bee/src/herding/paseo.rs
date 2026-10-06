@@ -227,6 +227,15 @@ pub fn logs_argv(id: &str) -> Vec<String> {
     ]
 }
 
+pub fn send_argv(id: &str, text: &str) -> Vec<String> {
+    vec![
+        "send".to_string(),
+        id.to_string(),
+        "--no-wait".to_string(),
+        text.to_string(),
+    ]
+}
+
 pub trait PaseoCli: Send + Sync {
     fn call(&self, args: &[String]) -> Result<String, String>;
 }
@@ -504,6 +513,7 @@ mod tests {
         assert_eq!(inspect_argv("agent-1"), vec!["inspect", "--json", "agent-1"]);
         assert_eq!(archive_argv("agent-1"), vec!["archive", "--force", "agent-1"]);
         assert_eq!(logs_argv("agent-1"), vec!["logs", "agent-1"]);
+        assert_eq!(send_argv("agent-1", "do next"), vec!["send", "agent-1", "--no-wait", "do next"]);
     }
 
     #[test]
