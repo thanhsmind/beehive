@@ -463,20 +463,26 @@ fn rewrite(text: &str, ctx: &Ctx, counts: &mut Counts) -> String {
 }
 
 const PATH_END: &str = "\"'`(),;[]<>{}=|";
-const PATH_LEAD: &str = "\"'`(),;[<{=:|";
 
 fn path_start(text: &str) -> Option<usize> {
-    let mut prev: Option<char> = None;
+    let mut skip_to = 0;
     for (i, c) in text.char_indices() {
-        let led = prev.is_none_or(|p| p.is_whitespace() || PATH_LEAD.contains(p));
-        prev = Some(c);
+        if i < skip_to {
+            continue;
+        }
+        let before = &text[..i];
+        let tail = &text[i..];
+        if c == '/' && tail.starts_with("//") && before.ends_with(':') {
+            skip_to = i + tail.find(char::is_whitespace).unwrap_or(tail.len());
+            continue;
+        }
+        let led = before.chars().next_back().is_none_or(|p| !p.is_ascii_alphanumeric()) || (c == '/' && short_flag(before));
         if !led {
             continue;
         }
-        let tail = &text[i..];
         let next = tail[c.len_utf8()..].chars().next();
         let starts = match c {
-            '/' => !(tail.starts_with("//") && text[..i].ends_with(':')),
+            '/' => true,
             '\\' => tail.starts_with("\\\\"),
             '~' => next.is_none_or(|n| n == '/' || n == '\\' || n.is_whitespace() || PATH_END.contains(n)),
             c if c.is_ascii_alphabetic() => {
@@ -490,6 +496,12 @@ fn path_start(text: &str) -> Option<usize> {
         }
     }
     None
+}
+
+fn short_flag(before: &str) -> bool {
+    let b = before.as_bytes();
+    let n = b.len();
+    n >= 2 && b[n - 1].is_ascii_alphabetic() && b[n - 2] == b'-' && (n == 2 || !b[n - 3].is_ascii_alphanumeric())
 }
 
 fn replace_word(text: &str, word: &str, with: &str, hits: &mut usize) -> String {
@@ -865,7 +877,7 @@ mod tests {
             &[
                 ("symptom", "cfg=/srv/clientcorp/app/x and HOME=~/private/notes [/opt/acme-internal/y] <D:\\work\\client\\z>"),
                 ("evidence", "see path:/var/lib/clientcorp/db and https://github.com/thanhsmind/beehive/issues/3"),
-                ("command", "bee status --cwd=/srv/clientcorp/app"),
+                ("command", "bee status --cwd=/srv/clientcorp/app 2>/srv/x15 >>/var/x16 -C/srv/x17 @/srv/x21 */srv/x22 !/srv/x23 &/srv/x24 +/srv/x25 x-/srv/x26 -I/opt/x27 and/or keep"),
             ],
             true,
         );
@@ -875,7 +887,8 @@ mod tests {
         }
         assert!(done.body.contains("https://github.com/thanhsmind/beehive/issues/3"), "{}", done.body);
         assert!(done.body.contains("cfg=<path>") && done.body.contains("HOME=<home>"), "{}", done.body);
-        assert_eq!(done.counts.paths, 6, "{:?}", counts_value(done.counts));
+        assert!(done.body.contains("and/or keep"), "{}", done.body);
+        assert_eq!(done.counts.paths, 16, "{:?}", counts_value(done.counts));
         assert!(f.log().is_empty());
     }
 
