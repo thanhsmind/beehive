@@ -940,21 +940,27 @@ fn collect_jobs(
             };
 
             let mut permissions = Vec::new();
+            let mut inspect_opt = None;
             let finished = mark_str.is_some() || result_round.is_some_and(|r| r >= round);
             let paseo_state = if finished {
                 "finished".to_string()
             } else if let (Some(cli), Some(agent_id)) = (paseo_cli, paseo_agent_id.as_deref()) {
                 match cli.call(&paseo::inspect_argv(agent_id)) {
-                    Ok(ref out) => match paseo::parse_inspect(out) {
-                        Some(paseo::PaseoState::Working) => "working".to_string(),
-                        Some(paseo::PaseoState::Idle) => "idle".to_string(),
-                        Some(paseo::PaseoState::Blocked) => {
-                            permissions = paseo::parse_pending_permissions(out);
-                            "blocked".to_string()
-                        }
-                        Some(paseo::PaseoState::Dead) => "dead".to_string(),
-                        None => "unknown".to_string(),
-                    },
+                    Ok(ref out) => {
+                        let parsed = paseo::parse_inspect_full(out);
+                        let state = match parsed.as_ref().and_then(|i| i.state) {
+                            Some(paseo::PaseoState::Working) => "working".to_string(),
+                            Some(paseo::PaseoState::Idle) => "idle".to_string(),
+                            Some(paseo::PaseoState::Blocked) => {
+                                permissions = paseo::parse_pending_permissions(out);
+                                "blocked".to_string()
+                            }
+                            Some(paseo::PaseoState::Dead) => "dead".to_string(),
+                            None => "unknown".to_string(),
+                        };
+                        inspect_opt = parsed;
+                        state
+                    }
                     Err(_) => "unknown".to_string(),
                 }
             } else {
@@ -971,6 +977,30 @@ fn collect_jobs(
                     }
                 } else {
                     "done".to_string()
+                }
+            } else if paseo_state == "working" {
+                let is_stale = inspect_opt
+                    .as_ref()
+                    .and_then(|i| i.updated_at.as_deref())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.timestamp_millis())
+                    .map_or(false, |at| {
+                        now_ms.saturating_sub(at)
+                            > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+                    });
+
+                if is_stale {
+                    mailbox::transition_status(bee_dir, &job_id, "stalled");
+                    "stalled".to_string()
+                } else {
+                    let last_status = job_obj.get("last_status").and_then(Value::as_str);
+                    if last_status == Some("stalled") {
+                        mailbox::transition_status(bee_dir, &job_id, "recovered");
+                        "recovered".to_string()
+                    } else {
+                        mailbox::transition_status(bee_dir, &job_id, "working");
+                        "working".to_string()
+                    }
                 }
             } else {
                 paseo_state.clone()
@@ -1018,6 +1048,18 @@ fn collect_jobs(
                 job_map.insert("permissions".into(), Value::Array(perms_val));
             }
 
+            let model_mismatch = job_obj
+                .get("paseo_model_mismatch")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            job_map.insert("model_mismatch".into(), Value::Bool(model_mismatch));
+
+            let paseo_model_observed = match job_obj.get("paseo_model_observed") {
+                Some(Value::String(s)) => Value::String(s.clone()),
+                _ => Value::Null,
+            };
+            job_map.insert("paseo_model_observed".into(), paseo_model_observed);
+
             jobs_json.push(Value::Object(job_map));
 
             let mark_disp = mark_str.as_deref().unwrap_or("null");
@@ -1032,8 +1074,13 @@ fn collect_jobs(
             } else {
                 String::new()
             };
+            let mismatch_disp = if model_mismatch {
+                " model_mismatch=true"
+            } else {
+                ""
+            };
             plain_lines.push(format!(
-                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}"
+                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{mismatch_disp}"
             ));
             continue;
         }
@@ -2259,5 +2306,311 @@ mod tests {
             untracked_ids,
             vec!["agent-no-mbox", "agent-with-done", "agent-with-mark"]
         );
+    }
+
+    #[test]
+    fn status_paseo_stalled_for_old_updated_at_working_for_fresh_or_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        let job_stale_dir = bee_dir.join("mailbox").join("job-stale");
+        std::fs::create_dir_all(&job_stale_dir).unwrap();
+        let spec_stale = serde_json::json!({
+            "job_id": "job-stale",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-stale",
+            "round": 1
+        });
+        std::fs::write(job_stale_dir.join("job.json"), serde_json::to_string(&spec_stale).unwrap()).unwrap();
+
+        let job_fresh_dir = bee_dir.join("mailbox").join("job-fresh");
+        std::fs::create_dir_all(&job_fresh_dir).unwrap();
+        let spec_fresh = serde_json::json!({
+            "job_id": "job-fresh",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-fresh",
+            "round": 1
+        });
+        std::fs::write(job_fresh_dir.join("job.json"), serde_json::to_string(&spec_fresh).unwrap()).unwrap();
+
+        let job_missing_dir = bee_dir.join("mailbox").join("job-missing");
+        std::fs::create_dir_all(&job_missing_dir).unwrap();
+        let spec_missing = serde_json::json!({
+            "job_id": "job-missing",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-missing",
+            "round": 1
+        });
+        std::fs::write(job_missing_dir.join("job.json"), serde_json::to_string(&spec_missing).unwrap()).unwrap();
+
+        let job_unparseable_dir = bee_dir.join("mailbox").join("job-unparseable");
+        std::fs::create_dir_all(&job_unparseable_dir).unwrap();
+        let spec_unparseable = serde_json::json!({
+            "job_id": "job-unparseable",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-unparseable",
+            "round": 1
+        });
+        std::fs::write(job_unparseable_dir.join("job.json"), serde_json::to_string(&spec_unparseable).unwrap()).unwrap();
+
+        let old_time = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        let fresh_time = chrono::Utc::now() - chrono::Duration::seconds(10);
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert(
+            "agent-stale".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": old_time.to_rfc3339()
+            }).to_string()),
+        );
+        inspect_map.insert(
+            "agent-fresh".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": fresh_time.to_rfc3339()
+            }).to_string()),
+        );
+        inspect_map.insert(
+            "agent-missing".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running"
+            }).to_string()),
+        );
+        inspect_map.insert(
+            "agent-unparseable".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": "not-a-valid-timestamp"
+            }).to_string()),
+        );
+
+        let fake = FakeHerdingPaseoCli {
+            ls_out: Ok(serde_json::json!([
+                {"id": "agent-stale", "labels": {"bee_job": "job-stale"}, "archived": false},
+                {"id": "agent-fresh", "labels": {"bee_job": "job-fresh"}, "archived": false},
+                {"id": "agent-missing", "labels": {"bee_job": "job-missing"}, "archived": false},
+                {"id": "agent-unparseable", "labels": {"bee_job": "job-unparseable"}, "archived": false}
+            ]).to_string()),
+            inspect_map,
+        };
+
+        let (exit, val, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+        let stale = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-stale")).unwrap();
+        assert_eq!(stale.get("status"), Some(&Value::String("stalled".to_string())));
+        assert_eq!(stale.get("paseo_state"), Some(&Value::String("working".to_string())));
+
+        let fresh = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-fresh")).unwrap();
+        assert_eq!(fresh.get("status"), Some(&Value::String("working".to_string())));
+        assert_eq!(fresh.get("paseo_state"), Some(&Value::String("working".to_string())));
+
+        let missing = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-missing")).unwrap();
+        assert_eq!(missing.get("status"), Some(&Value::String("working".to_string())));
+        assert_eq!(missing.get("paseo_state"), Some(&Value::String("working".to_string())));
+
+        let unparseable = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-unparseable")).unwrap();
+        assert_eq!(unparseable.get("status"), Some(&Value::String("working".to_string())));
+        assert_eq!(unparseable.get("paseo_state"), Some(&Value::String("working".to_string())));
+    }
+
+    #[test]
+    fn status_paseo_recovered_after_stalled_when_updated_at_moves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        let job_dir = bee_dir.join("mailbox").join("job-paseo-rec");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let spec = serde_json::json!({
+            "job_id": "job-paseo-rec",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-rec",
+            "round": 1
+        });
+        std::fs::write(job_dir.join("job.json"), serde_json::to_string(&spec).unwrap()).unwrap();
+
+        let old_time = chrono::Utc::now() - chrono::Duration::seconds(mailbox::ACTIVITY_FRESHNESS_SECS + 30);
+        let mut inspect_map1 = std::collections::HashMap::new();
+        inspect_map1.insert(
+            "agent-rec".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": old_time.to_rfc3339()
+            }).to_string()),
+        );
+        let rec_ls_out = serde_json::json!([
+            {"id": "agent-rec", "labels": {"bee_job": "job-paseo-rec"}, "archived": false}
+        ]).to_string();
+        let fake1 = FakeHerdingPaseoCli {
+            ls_out: Ok(rec_ls_out.clone()),
+            inspect_map: inspect_map1,
+        };
+
+        let (_exit, val1, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake1),
+        );
+        let jobs1 = val1.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs1[0].get("status"), Some(&Value::String("stalled".to_string())));
+
+        let moved_time = chrono::Utc::now() - chrono::Duration::seconds(5);
+        let mut inspect_map2 = std::collections::HashMap::new();
+        inspect_map2.insert(
+            "agent-rec".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": moved_time.to_rfc3339()
+            }).to_string()),
+        );
+        let fake2 = FakeHerdingPaseoCli {
+            ls_out: Ok(rec_ls_out.clone()),
+            inspect_map: inspect_map2,
+        };
+
+        let (_exit, val2, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake2),
+        );
+        let jobs2 = val2.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs2[0].get("status"), Some(&Value::String("recovered".to_string())));
+
+        let moved_time_3 = chrono::Utc::now() - chrono::Duration::seconds(2);
+        let mut inspect_map3 = std::collections::HashMap::new();
+        inspect_map3.insert(
+            "agent-rec".to_string(),
+            Ok(serde_json::json!({
+                "Status": "running",
+                "UpdatedAt": moved_time_3.to_rfc3339()
+            }).to_string()),
+        );
+        let fake3 = FakeHerdingPaseoCli {
+            ls_out: Ok(rec_ls_out),
+            inspect_map: inspect_map3,
+        };
+
+        let (_exit, val3, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake3),
+        );
+        let jobs3 = val3.get("jobs").and_then(Value::as_array).unwrap();
+        assert_eq!(jobs3[0].get("status"), Some(&Value::String("working".to_string())));
+    }
+
+    #[test]
+    fn status_paseo_model_mismatch_and_observed_rows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+
+        let job_mismatch_dir = bee_dir.join("mailbox").join("job-mismatch");
+        std::fs::create_dir_all(&job_mismatch_dir).unwrap();
+        let spec_mismatch = serde_json::json!({
+            "job_id": "job-mismatch",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-mismatch",
+            "round": 1,
+            "paseo_model_mismatch": true,
+            "paseo_model_observed": "claude-3-5-sonnet"
+        });
+        std::fs::write(job_mismatch_dir.join("job.json"), serde_json::to_string(&spec_mismatch).unwrap()).unwrap();
+
+        let job_match_dir = bee_dir.join("mailbox").join("job-match");
+        std::fs::create_dir_all(&job_match_dir).unwrap();
+        let spec_match = serde_json::json!({
+            "job_id": "job-match",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-match",
+            "round": 1,
+            "paseo_model_observed": "gpt-4o"
+        });
+        std::fs::write(job_match_dir.join("job.json"), serde_json::to_string(&spec_match).unwrap()).unwrap();
+
+        let job_none_dir = bee_dir.join("mailbox").join("job-none");
+        std::fs::create_dir_all(&job_none_dir).unwrap();
+        let spec_none = serde_json::json!({
+            "job_id": "job-none",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-none",
+            "round": 1
+        });
+        std::fs::write(job_none_dir.join("job.json"), serde_json::to_string(&spec_none).unwrap()).unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert(
+            "agent-mismatch".to_string(),
+            Ok(serde_json::json!({"Status": "running"}).to_string()),
+        );
+        inspect_map.insert(
+            "agent-match".to_string(),
+            Ok(serde_json::json!({"Status": "running"}).to_string()),
+        );
+        inspect_map.insert(
+            "agent-none".to_string(),
+            Ok(serde_json::json!({"Status": "running"}).to_string()),
+        );
+
+        let fake = FakeHerdingPaseoCli {
+            ls_out: Ok(serde_json::json!([
+                {"id": "agent-mismatch", "labels": {"bee_job": "job-mismatch"}, "archived": false},
+                {"id": "agent-match", "labels": {"bee_job": "job-match"}, "archived": false},
+                {"id": "agent-none", "labels": {"bee_job": "job-none"}, "archived": false}
+            ]).to_string()),
+            inspect_map,
+        };
+
+        let (_exit, val, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+
+        let row_mismatch = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-mismatch")).unwrap();
+        assert_eq!(row_mismatch.get("model_mismatch"), Some(&Value::Bool(true)));
+        assert_eq!(row_mismatch.get("paseo_model_observed"), Some(&Value::String("claude-3-5-sonnet".to_string())));
+
+        let row_match = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-match")).unwrap();
+        assert_eq!(row_match.get("model_mismatch"), Some(&Value::Bool(false)));
+        assert_eq!(row_match.get("paseo_model_observed"), Some(&Value::String("gpt-4o".to_string())));
+
+        let row_none = jobs.iter().find(|j| j.get("job_id").and_then(Value::as_str) == Some("job-none")).unwrap();
+        assert_eq!(row_none.get("model_mismatch"), Some(&Value::Bool(false)));
+        assert_eq!(row_none.get("paseo_model_observed"), Some(&Value::Null));
+
+        let (_exit, _val, plain_lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+
+        let line_mismatch = plain_lines.iter().find(|l| l.starts_with("job-mismatch:")).unwrap();
+        assert!(line_mismatch.contains("model_mismatch=true"));
+
+        let line_match = plain_lines.iter().find(|l| l.starts_with("job-match:")).unwrap();
+        assert!(!line_match.contains("model_mismatch"));
+
+        let line_none = plain_lines.iter().find(|l| l.starts_with("job-none:")).unwrap();
+        assert!(!line_none.contains("model_mismatch"));
     }
 }
