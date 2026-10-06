@@ -218,6 +218,10 @@ fn execute(args: &Args, ctx: &Ctx) -> Result<Done, Fail> {
     file(ctx, &title, &body, counts)
 }
 
+fn title_refusal() -> Fail {
+    refuse("title", &format!("no single line of 1 to {TITLE_MAX} characters"))
+}
+
 fn valid_repo(repo: &str) -> bool {
     let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c));
     matches!(repo.split_once('/'), Some((o, n)) if ok(o) && ok(n))
@@ -230,8 +234,8 @@ fn scrub(args: &Args, ctx: &Ctx) -> Result<(String, String, Counts), Fail> {
         }
     }
     let raw_title = args.get("title").unwrap_or_default();
-    if raw_title.trim().is_empty() || raw_title.contains(['\n', '\r']) || raw_title.chars().count() > TITLE_MAX {
-        return Err(refuse("title", &format!("no single line of 1 to {TITLE_MAX} characters")));
+    if raw_title.trim().is_empty() || raw_title.contains(['\n', '\r']) {
+        return Err(title_refusal());
     }
     let exit_code = args.get("exit-code");
     if exit_code.is_some_and(|c| c.trim().parse::<i64>().is_err()) {
@@ -256,6 +260,9 @@ fn scrub(args: &Args, ctx: &Ctx) -> Result<(String, String, Counts), Fail> {
         Ok(text)
     };
     let title = clean("title", None)?;
+    if title.chars().count() > TITLE_MAX {
+        return Err(title_refusal());
+    }
     let symptom = clean("symptom", None)?;
     let evidence = clean("evidence", Some(EVIDENCE_MAX))?;
     let output = match args.get("output") {
@@ -561,9 +568,8 @@ fn gh(program: &OsStr, args: &[&str], stdin: Option<&str>) -> Gh {
     }
 }
 
-fn issue_url(stdout: &str, repo: &str) -> Option<String> {
-    let prefix = format!("https://github.com/{repo}/issues/");
-    stdout.lines().map(str::trim).find(|l| l.starts_with(&prefix)).map(str::to_string)
+fn issue_url(stdout: &str) -> Option<String> {
+    stdout.lines().map(str::trim).rev().find(|l| l.starts_with("https://github.com/")).map(str::to_string)
 }
 
 fn issue_number(url: &str) -> Option<u64> {
@@ -580,7 +586,8 @@ fn existing_issue(ctx: &Ctx, title: &str) -> Option<u64> {
         return None;
     };
     let wanted = title_key(title);
-    serde_json::from_str::<Value>(&listed).ok()?.as_array()?.iter().find_map(|issue| {
+    let json = listed.lines().skip_while(|l| !l.trim_start().starts_with('[')).collect::<Vec<_>>().join("\n");
+    serde_json::from_str::<Value>(&json).ok()?.as_array()?.iter().find_map(|issue| {
         let same = issue.get("title")?.as_str().is_some_and(|t| title_key(t) == wanted);
         if same { issue.get("number")?.as_u64() } else { None }
     })
@@ -605,7 +612,7 @@ fn file(ctx: &Ctx, title: &str, body: &str, counts: Counts) -> Result<Done, Fail
         let n_s = n.to_string();
         return match gh(&ctx.gh, &["issue", "comment", n_s.as_str(), "-R", ctx.repo.as_str(), "--body-file", "-"], Some(body)) {
             Gh::Ok(out) => {
-                let mut d = done("commented", issue_url(&out, &ctx.repo), Some(true));
+                let mut d = done("commented", issue_url(&out), Some(true));
                 d.number = Some(n);
                 Ok(d)
             }
@@ -621,9 +628,9 @@ fn file(ctx: &Ctx, title: &str, body: &str, counts: Counts) -> Result<Done, Fail
         gh(&ctx.gh, &argv, Some(body))
     };
     match create(title, true) {
-        Gh::Ok(out) => Ok(done("created", issue_url(&out, &ctx.repo), Some(true))),
+        Gh::Ok(out) => Ok(done("created", issue_url(&out), Some(true))),
         Gh::LabelMissing => match create(&format!("{LABEL_PREFIX}{title}"), false) {
-            Gh::Ok(out) => Ok(done("created", issue_url(&out, &ctx.repo), Some(false))),
+            Gh::Ok(out) => Ok(done("created", issue_url(&out), Some(false))),
             _ => Err(gh_failed(ctx, title, body)),
         },
         Gh::Failed => Err(gh_failed(ctx, title, body)),
@@ -928,6 +935,40 @@ mod tests {
         let log = f.log();
         assert!(log.contains("[issue] [comment] [7] [-R] [thanhsmind/beehive] [--body-file] [-]"), "{log}");
         assert!(!log.contains("[create]"), "a second issue was opened:\n{log}");
+    }
+
+    fn noisy(f: &Fake) {
+        let script = std::fs::read_to_string(&f.gh).unwrap();
+        let noise = "#!/bin/sh\necho 'mise WARN tools: gh@2.101.0 [x]'\n";
+        std::fs::write(&f.gh, script.replacen("#!/bin/sh\n", noise, 1)).unwrap();
+    }
+
+    #[test]
+    fn report_reads_list_json_and_url_past_a_wrapper_noise_line() {
+        let f = fake(Some(r#"[{"number":7,"title":"bee status crashes on an empty state file"}]"#), false, false);
+        noisy(&f);
+        let done = execute(&args(&[], false), &f.ctx()).unwrap_or_else(|e| panic!("{}", e.msg));
+        assert_eq!((done.action, done.number), ("commented", Some(7)));
+        assert_eq!(done.url.as_deref(), Some("https://github.com/thanhsmind/beehive/issues/7#issuecomment-9"));
+        assert!(!f.log().contains("[create]"), "a second issue was opened:\n{}", f.log());
+
+        let f = fake(Some("[]"), false, false);
+        noisy(&f);
+        let done = execute(&args(&[], false), &f.ctx()).unwrap_or_else(|e| panic!("{}", e.msg));
+        assert_eq!((done.action, done.number), ("created", Some(42)));
+        assert_eq!(done.url.as_deref(), Some("https://github.com/thanhsmind/beehive/issues/42"));
+    }
+
+    #[test]
+    fn report_checks_the_title_length_after_the_scrub() {
+        let f = fake(Some("[]"), false, false);
+        let long = format!("bee status fails reading /opt/{}/state.json", "deep/".repeat(30));
+        assert!(long.chars().count() > TITLE_MAX);
+        let done = execute(&args(&[("title", long.as_str())], true), &f.ctx()).unwrap_or_else(|e| panic!("{}", e.msg));
+        assert_eq!(done.title, "bee status fails reading <path>");
+        let still_long = "word ".repeat(30);
+        let err = execute(&args(&[("title", still_long.as_str())], true), &f.ctx()).err().unwrap();
+        assert_eq!(err.field, Some("title"));
     }
 
     #[test]

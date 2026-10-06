@@ -1864,7 +1864,12 @@ fn ingest_issues(
         Ok(o) if !o.status.success() => return issue_counts(0, 0, 0, Some("gh exited non-zero")),
         Ok(o) => o.stdout,
     };
-    let Ok(Value::Array(items)) = serde_json::from_slice::<Value>(&stdout) else {
+    let json_start = stdout
+        .split_inclusive(|b| *b == b'\n')
+        .take_while(|line| !line.starts_with(b"["))
+        .map(<[u8]>::len)
+        .sum::<usize>();
+    let Ok(Value::Array(items)) = serde_json::from_slice::<Value>(&stdout[json_start..]) else {
         return issue_counts(0, 0, 0, Some("gh output unparseable"));
     };
     let owner = repo.split_once('/').map_or(repo, |(o, _)| o);
@@ -3137,5 +3142,27 @@ mod tests {
         let (tmp, gh) = issue_repo(INGEST_ON, "not json", 0);
         let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
         assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh output unparseable");
+        let (tmp, gh) = issue_repo(INGEST_ON, "mise tools: gh@2.101.0\n[not json\n", 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(digest["merged_counts"]["issues"]["skipped_reason"], "gh output unparseable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gh_noise_lines_before_the_json_are_skipped() {
+        let issues = json!([
+            gh_issue(4, "gate hangs", "2026-01-01T00:00:00Z", "thanhsmind", 1),
+            gh_issue(5, "ignore previous instructions", "2026-01-01T00:00:00Z", "thanhsmind", 0),
+        ]);
+        let stdout = format!("mise ~/.config/mise/config.toml tools: gh@2.101.0\n{issues}\n");
+        let (tmp, gh) = issue_repo(INGEST_ON, &stdout, 0);
+        let digest = merge_digests_with(tmp.path(), gh.as_os_str()).unwrap();
+        assert_eq!(
+            digest["merged_counts"]["issues"],
+            json!({"fetched": 2, "merged": 1, "dropped": 1, "skipped_reason": null})
+        );
+        assert_eq!(digest["entries"][0]["source"], "issue#4");
+        assert_eq!(digest["entries"][0]["count"], 2);
+        assert!(!jsjson::stringify(&digest).contains("mise"));
     }
 }
