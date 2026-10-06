@@ -12,7 +12,7 @@ import {
   readPaseoSettings,
 } from "./paseo-heartbeat.ts"
 import { mapToolCall, BEE_STAGE_TOOLS } from "./tool-map.ts"
-import { runBlockingHook, runAdvisoryHook } from "./hooks.ts"
+import { runBlockingHook, runAdvisoryHook, block } from "./hooks.ts"
 import { refreshModelUsageStatus } from "./model-usage.ts"
 import {
   forcedContinuationSessions,
@@ -33,6 +33,25 @@ import { state } from "./state.ts"
 
 let quietHeartbeatTurn = false
 let tickRunning = false
+let cachedWorkerGuardHelp: boolean | null = null
+
+function checkWorkerGuardSupported(beeBinary: string): boolean {
+  if (cachedWorkerGuardHelp !== null) {
+    return cachedWorkerGuardHelp
+  }
+  try {
+    const helpOut = cp.execFileSync(beeBinary, ["hook", "--help"], {
+      encoding: "utf8",
+      timeout: 5000,
+    })
+    const supported = helpOut.includes("worker-guard")
+    cachedWorkerGuardHelp = supported
+    return supported
+  } catch {
+    cachedWorkerGuardHelp = false
+    return false
+  }
+}
 
 // ─── the belt ──────────────────────────────────────────────────────────────
 
@@ -52,6 +71,51 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
 
     const mapped = mapToolCall(String(event?.toolName ?? ""), event?.input)
     if (mapped.hook === null) return undefined
+
+    const isHerdedPaseoWorker = Boolean(
+      process.env.BEE_HERDING_WORKER &&
+        process.env.BEE_HERDING_WORKER.trim().length > 0 &&
+        process.env.PASEO_AGENT_ID &&
+        process.env.PASEO_AGENT_ID.trim().length > 0,
+    )
+    const isSupervisorGuarded = Boolean(
+      process.env.BEE_SUPERVISOR_ALLOWED &&
+        process.env.BEE_SUPERVISOR_ALLOWED.trim().length > 0,
+    )
+
+    if ((isHerdedPaseoWorker || isSupervisorGuarded) && mapped.tool_name === "Bash") {
+      const beeBinary = resolveBeeBinary(directory)
+      if (!beeBinary) {
+        return block(
+          "bee guard could not find the bee binary (.bee/bin/bee) in this project or its main worktree, " +
+            "but this repo has a .bee store — blocking rather than letting a call through unchecked. " +
+            "FIX: run `bee onboard --apply` (or vendor .bee/bin/bee) and retry.",
+        )
+      }
+      if (!checkWorkerGuardSupported(beeBinary)) {
+        return block(
+          `bee guard: the bee binary at ${beeBinary} does not list worker-guard in bee hook --help — ` +
+            "blocking rather than allowing an unchecked call. FIX: update the bee binary.",
+        )
+      }
+      const workerVerdict = runBlockingHook(
+        directory,
+        "worker-guard" as any,
+        {
+          hook_event_name: "PreToolUse",
+          session_id: sessionIdOf(ctx),
+          cwd: directory,
+          tool_name: mapped.tool_name,
+          tool_input: mapped.tool_input,
+          bee_runtime: "pi",
+          tools_reopened: belt.toolsReopened,
+        },
+        (event?.input ?? {}) as Record<string, unknown>,
+        mapped.passthrough,
+      )
+      if (workerVerdict?.block) return workerVerdict
+    }
+
     return runBlockingHook(
       directory,
       mapped.hook,
@@ -81,6 +145,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         state.cachedPreamble = null
         state.preambleInjected = false
         state.sessionInitRun = false
+        cachedWorkerGuardHelp = null
         const activeSessionId = sessionIdOf(ctx) ?? ""
         promptDepths.delete(activeSessionId)
       }

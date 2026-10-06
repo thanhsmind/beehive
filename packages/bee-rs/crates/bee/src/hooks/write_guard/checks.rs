@@ -1115,11 +1115,11 @@ helpers is the leader's."
     format!("{head} {}", outward_fix_line(form, id.as_deref()))
 }
 
-fn command_basename(token: &str) -> String {
+pub(crate) fn command_basename(token: &str) -> String {
     token.replace('\\', "/").rsplit('/').next().unwrap_or("").to_string()
 }
 
-fn outward_segment_head(segment: &[String]) -> Option<(usize, String)> {
+pub(crate) fn outward_segment_head(segment: &[String]) -> Option<(usize, String)> {
     let mut i = 0usize;
     while i < segment.len() {
         let token = segment[i].as_str();
@@ -1155,7 +1155,7 @@ fn is_env_assignment(token: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
+pub(crate) fn codex_read_only_exec(head: &str, rest: &[String]) -> bool {
     head == "codex"
         && rest.first().map(String::as_str) == Some("exec")
         && rest
@@ -1181,7 +1181,7 @@ fn configured_cli_command(config: &Map<String, Value>, segment: &[String]) -> bo
         })
 }
 
-fn gh_sub_and_args(rest: &[String]) -> (&str, &[String]) {
+pub(crate) fn gh_sub_and_args(rest: &[String]) -> (&str, &[String]) {
     let mut i = 0usize;
     while i < rest.len() {
         let token = rest[i].as_str();
@@ -1198,7 +1198,7 @@ fn gh_sub_and_args(rest: &[String]) -> (&str, &[String]) {
     ("", &rest[rest.len()..])
 }
 
-fn gh_read_only_form(sub: &str, rest: &[String]) -> bool {
+pub(crate) fn gh_read_only_form(sub: &str, rest: &[String]) -> bool {
     let verb = rest.iter().find(|t| !t.starts_with('-')).map(String::as_str);
     match sub {
         "pr" => matches!(verb, Some("view" | "list" | "status" | "checks" | "diff")),
