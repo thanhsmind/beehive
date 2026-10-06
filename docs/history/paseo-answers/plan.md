@@ -61,9 +61,9 @@ during a running turn.
   question).
 - broker.rs: `start_child_job_for_answered_question` takes a
   `&dyn PaseoCli`. When the parent job.json says `transport: "paseo"` with a
-  `paseo_agent_id` and inspect says Idle, it spawns `bee herding run
-  --continue <parent job> --task <the same question-and-answer task>` and
-  records the redispatch with `mode: "continue"`; otherwise the existing
+  `paseo_agent_id` and inspect says Idle, it spawns
+  `bee herding run --continue <parent-job> --task <answer-task>`, where the
+  task is the same question-and-answer text, and records the redispatch with `mode: "continue"`; otherwise the existing
   child-job path runs unchanged.
 - New `herding/paseo_steer.rs` with an embedded Node script
   (`herding/paseo_steer.mjs`, `include_str!`): resolve the `@getpaseo/cli`
