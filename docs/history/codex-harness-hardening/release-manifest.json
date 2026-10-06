@@ -1823,14 +1823,14 @@
     },
     {
       "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
-      "sha256": "d58c7291e336a5ee6c60debf372529f035d049128fdd521241abafc25be470b9",
+      "sha256": "2424b70e0df9428e366421b080924fcef92ddd3e666c353890263bf93105e7a4",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "fdc95643fdaf729163bad62139dd843c1a798fb975abe9ceefebaa4d8adbce03",
+      "sha256": "0f36e20d92e96fd0fa0bfc1afb435d38733006ed6130a4807b6079b56456aa9a",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
