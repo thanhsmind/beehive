@@ -3091,6 +3091,32 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "spawned by contract_control_plane_from_worktree_e32f3a66_state_verbs"]
+    fn served_state_verbs_name_the_main_root_child() {
+        let set = try_native(
+            &[
+                OsString::from("state"),
+                OsString::from("waiting-on"),
+                OsString::from("set"),
+                OsString::from("--kind"),
+                OsString::from("gate"),
+                OsString::from("--subject"),
+                OsString::from("review"),
+                OsString::from("--session-id"),
+                OsString::from("s1"),
+                OsString::from("--json"),
+            ],
+            Instant::now(),
+        );
+        assert_eq!(set, Some(ExitCode::SUCCESS));
+        let clear = try_native(
+            &[OsString::from("state"), OsString::from("waiting-on"), OsString::from("clear")],
+            Instant::now(),
+        );
+        assert_eq!(clear, Some(ExitCode::SUCCESS));
+    }
+
+    #[test]
     fn contract_control_plane_from_worktree_e32f3a66_state_verbs() {
         let tmp = tmp_root();
         let (main, granted, ungranted) = fixture_e32f3a66(tmp.path());
@@ -3186,33 +3212,22 @@ mod tests {
             );
             assert_eq!(code_waiting_clear, Some(ExitCode::SUCCESS));
 
-            let bin = {
-                let mut dir = std::env::current_exe().expect("test binary path");
-                dir.pop();
-                if dir.ends_with("deps") {
-                    dir.pop();
-                }
-                dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX))
-            };
-            if bin.is_file() {
-                let out_set = std::process::Command::new(&bin)
-                    .args(["state", "waiting-on", "set", "--kind", "gate", "--subject", "review", "--session-id", "s1", "--json"])
-                    .current_dir(&granted)
-                    .output()
-                    .unwrap();
-                assert!(out_set.status.success());
-                let parsed: Value = serde_json::from_str(&String::from_utf8_lossy(&out_set.stdout)).unwrap();
-                assert_eq!(parsed["control_root"], main.display().to_string());
-
-                let out_clear = std::process::Command::new(&bin)
-                    .args(["state", "waiting-on", "clear"])
-                    .current_dir(&granted)
-                    .output()
-                    .unwrap();
-                assert!(out_clear.status.success());
-                let text = String::from_utf8_lossy(&out_clear.stdout);
-                assert!(text.contains(&format!("control plane: {}", main.display())));
-            }
+            let exe = std::env::current_exe().expect("test binary path");
+            let out = std::process::Command::new(&exe)
+                .args([
+                    "--exact",
+                    "verbs::state_group::set_gate::tests::served_state_verbs_name_the_main_root_child",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .current_dir(&granted)
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(out.status.success(), "{stdout}");
+            assert!(stdout.contains(&format!("\"control_root\": \"{}\"", main.display())), "{stdout}");
+            assert!(stdout.contains(&format!("control plane: {}", main.display())), "{stdout}");
         }
 
         {

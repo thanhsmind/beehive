@@ -823,16 +823,12 @@ pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
     if let Ok(cwd) = std::env::current_dir() {
         if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
             if main_root == root {
-                if !feature.is_empty() {
-                    if let Some((_, worktree_root)) =
-                        crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
-                    {
-                        if here == Path::new(&worktree_root) {
-                            return here;
-                        }
-                    }
+                if feature.is_empty() {
+                    return here;
                 }
-                return here;
+                let owns_feature = crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+                    .is_some_and(|(_, worktree_root)| here == Path::new(&worktree_root));
+                return if owns_feature { here } else { root.to_path_buf() };
             }
         }
     }

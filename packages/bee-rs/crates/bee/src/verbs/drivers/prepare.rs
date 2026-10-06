@@ -79,8 +79,8 @@ thread_local! {
     pub(crate) static SERVED_CONTROL_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
-pub(crate) fn served_control_root() -> Option<PathBuf> {
-    SERVED_CONTROL_ROOT.with(|s| s.borrow().clone())
+pub(crate) fn take_served_control_root() -> Option<PathBuf> {
+    SERVED_CONTROL_ROOT.with(|s| s.borrow_mut().take())
 }
 
 pub(crate) fn is_serving_granted(cwd: &Path) -> Option<PathBuf> {
