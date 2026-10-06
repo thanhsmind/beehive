@@ -170,6 +170,7 @@ pub(crate) struct SpawnArgs {
     pub(crate) question_of: Option<String>,
     pub(crate) question_round: u32,
     pub(crate) no_question: bool,
+    pub(crate) continue_job: Option<String>,
 }
 
 pub(crate) trait JobSpawner {
@@ -178,46 +179,60 @@ pub(crate) trait JobSpawner {
 
 pub(crate) struct RealJobSpawner;
 
-impl JobSpawner for RealJobSpawner {
-    fn spawn(&self, main_root: &Path, args: &SpawnArgs) -> Result<(), String> {
+impl RealJobSpawner {
+    pub(crate) fn build_command(main_root: &Path, args: &SpawnArgs) -> Command {
         let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bee"));
         let mut cmd = Command::new(exe);
         cmd.arg("herding").arg("run");
-        cmd.arg("--job-id").arg(&args.job_id);
-        cmd.arg("--task").arg(&args.task);
-        cmd.arg("--cwd").arg(&args.cwd);
-        if let Some(agent) = &args.agent {
-            cmd.arg("--agent").arg(agent);
+        if let Some(cont) = &args.continue_job {
+            cmd.arg("--continue").arg(cont);
+            cmd.arg("--task").arg(&args.task);
+            cmd.arg("--cwd").arg(&args.cwd);
+            cmd.arg("--main-root").arg(main_root);
+        } else {
+            cmd.arg("--job-id").arg(&args.job_id);
+            cmd.arg("--task").arg(&args.task);
+            cmd.arg("--cwd").arg(&args.cwd);
+            if let Some(agent) = &args.agent {
+                cmd.arg("--agent").arg(agent);
+            }
+            if let Some(seat) = &args.seat {
+                cmd.arg("--seat").arg(seat);
+            }
+            if let Some(cell_id) = &args.cell_id {
+                cmd.arg("--cell-id").arg(cell_id);
+            }
+            if args.no_pane {
+                cmd.arg("--no-pane");
+            }
+            if let Some(inbox) = &args.inbox_session {
+                cmd.arg("--inbox-session").arg(inbox);
+            }
+            if let Some(qof) = &args.question_of {
+                cmd.arg("--question-of").arg(qof);
+            }
+            cmd.arg("--question-round").arg(args.question_round.to_string());
+            if args.no_question {
+                cmd.arg("--no-question");
+            }
+            cmd.arg("--main-root").arg(main_root);
         }
-        if let Some(seat) = &args.seat {
-            cmd.arg("--seat").arg(seat);
-        }
-        if let Some(cell_id) = &args.cell_id {
-            cmd.arg("--cell-id").arg(cell_id);
-        }
-        if args.no_pane {
-            cmd.arg("--no-pane");
-        }
-        if let Some(inbox) = &args.inbox_session {
-            cmd.arg("--inbox-session").arg(inbox);
-        }
-        if let Some(qof) = &args.question_of {
-            cmd.arg("--question-of").arg(qof);
-        }
-        cmd.arg("--question-round").arg(args.question_round.to_string());
-        if args.no_question {
-            cmd.arg("--no-question");
-        }
-        cmd.arg("--main-root").arg(main_root);
         cmd.current_dir(main_root);
         cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        cmd
+    }
+}
 
+impl JobSpawner for RealJobSpawner {
+    fn spawn(&self, main_root: &Path, args: &SpawnArgs) -> Result<(), String> {
+        let mut cmd = Self::build_command(main_root, args);
         match cmd.spawn() {
             Ok(_) => Ok(()),
             Err(e) => Err(format!("failed to spawn child job: {e}")),
         }
     }
 }
+
 
 pub(crate) struct TickOutcome {
     pub(crate) heartbeat: bool,
@@ -310,6 +325,7 @@ pub(crate) fn start_child_job_for_answered_question(
     parent_round: u32,
     answer_text: &str,
     spawner: &dyn JobSpawner,
+    paseo: &dyn crate::herding::paseo::PaseoCli,
 ) -> Result<String, BrokerError> {
     let bee_dir = main_root.join(".bee");
     let mbox_dir = mailbox::mailbox_dir(&bee_dir, parent_job_id);
@@ -397,6 +413,58 @@ pub(crate) fn start_child_job_for_answered_question(
         "{original_task}\n\n# Prior Round Question and Answer\nQuestion: {question_text}\nAnswer: {answer_text}\nFiles changed in prior round: {files_changed_str}"
     );
 
+    let is_paseo = job_raw
+        .get("transport")
+        .and_then(Value::as_str)
+        .map(|s| s == "paseo")
+        .unwrap_or(false);
+    let paseo_agent_id = job_raw
+        .get("paseo_agent_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+
+    if is_paseo {
+        if let Some(agent_id) = paseo_agent_id {
+            let inspect_argv = crate::herding::paseo::inspect_argv(agent_id);
+            if let Ok(inspect_out) = paseo.call(&inspect_argv) {
+                if crate::herding::paseo::parse_inspect(&inspect_out) == Some(crate::herding::paseo::PaseoState::Idle) {
+                    let spawn_args = SpawnArgs {
+                        job_id: String::new(),
+                        task: child_task,
+                        cwd,
+                        agent,
+                        seat,
+                        cell_id,
+                        no_pane,
+                        inbox_session,
+                        question_of: None,
+                        question_round: next_question_round,
+                        no_question,
+                        continue_job: Some(parent_job_id.to_string()),
+                    };
+
+                    if let Err(e) = spawner.spawn(main_root, &spawn_args) {
+                        return Err(BrokerError {
+                            code: "spawn_failed",
+                            message: format!("failed to spawn child job: {e}"),
+                        });
+                    }
+
+                    let redispatch_record = json!({
+                        "child_job_id": parent_job_id,
+                        "round": next_question_round,
+                        "dispatched_at": chrono::Utc::now().to_rfc3339(),
+                        "mode": "continue",
+                    });
+                    let redispatch_file = mbox_dir.join(format!("redispatched-{parent_round}.json"));
+                    let _ = crate::fsutil::write_json_atomic(&redispatch_file, &redispatch_record);
+
+                    return Ok(parent_job_id.to_string());
+                }
+            }
+        }
+    }
+
     let root_job_id = parent_question_of.as_deref().unwrap_or(parent_job_id);
     let child_job_id = format!("{root_job_id}-q{next_question_round}");
 
@@ -412,6 +480,7 @@ pub(crate) fn start_child_job_for_answered_question(
         question_of: Some(root_job_id.to_string()),
         question_round: next_question_round,
         no_question,
+        continue_job: None,
     };
 
     if let Err(e) = spawner.spawn(main_root, &spawn_args) {
@@ -432,11 +501,13 @@ pub(crate) fn start_child_job_for_answered_question(
     Ok(child_job_id)
 }
 
+
 pub(crate) fn tick_with(
     main_root: &Path,
     json: bool,
     advisor_runner: &dyn AdvisorRunner,
     spawner: &dyn JobSpawner,
+    paseo: &dyn crate::herding::paseo::PaseoCli,
 ) -> Result<TickOutcome, BrokerError> {
     if let Err(e) = write_heartbeat(main_root) {
         return Err(BrokerError {
@@ -535,12 +606,13 @@ pub(crate) fn tick_with(
                         let tmp_ans = job_dir.join(format!("answer-{round}.json.tmp"));
                         let _ = std::fs::write(&tmp_ans, serde_json::to_string_pretty(&answer_obj).unwrap());
                         let _ = std::fs::rename(&tmp_ans, &answer_path);
-                        let _ = start_child_job_for_answered_question(main_root, &job_id, round, leaning, spawner);
+                        let _ = start_child_job_for_answered_question(main_root, &job_id, round, leaning, spawner, paseo);
                     }
                 }
             }
         }
     }
+
 
     let mut candidate: Option<(String, u32, MailboxResult, PathBuf)> = None;
     if let Ok(rd) = std::fs::read_dir(&mbox_root) {
@@ -658,7 +730,7 @@ pub(crate) fn tick_with(
                     let ans_tmp = job_dir.join(format!("answer-{round}.json.tmp"));
                     let _ = std::fs::write(&ans_tmp, serde_json::to_string_pretty(&answer_obj).unwrap());
                     let _ = std::fs::rename(&ans_tmp, &ans_path);
-                    let _ = start_child_job_for_answered_question(main_root, &job_id, round, &answer_text, spawner);
+                    let _ = start_child_job_for_answered_question(main_root, &job_id, round, &answer_text, spawner, paseo);
                 }
                 Ok(AdvisorOutcome::Blocked { .. })
                 | Ok(AdvisorOutcome::Failed(_))
@@ -708,6 +780,7 @@ pub(crate) fn answer_with(
     text: &str,
     json: bool,
     spawner: &dyn JobSpawner,
+    paseo: &dyn crate::herding::paseo::PaseoCli,
 ) -> Result<AnswerOutcome, BrokerError> {
     let bee_dir = main_root.join(".bee");
     let mbox_dir = mailbox::mailbox_dir(&bee_dir, job_id);
@@ -760,7 +833,8 @@ pub(crate) fn answer_with(
         });
     }
 
-    let child_job_id = start_child_job_for_answered_question(main_root, job_id, round, text, spawner)?;
+    let child_job_id = start_child_job_for_answered_question(main_root, job_id, round, text, spawner, paseo)?;
+
 
     let outcome = AnswerOutcome {
         job_id: job_id.to_string(),
@@ -863,7 +937,11 @@ pub(crate) fn tick(args: &[&str]) -> ExitCode {
         }
     };
 
-    match tick_with(&main_root, parsed.json, &RealAdvisorRunner, &RealJobSpawner) {
+    let cfg = super::run::read_main_config(&main_root);
+    let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
+    let paseo_cli = crate::herding::paseo::RealPaseoCli::new(paseo_cmd);
+
+    match tick_with(&main_root, parsed.json, &RealAdvisorRunner, &RealJobSpawner, &paseo_cli) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             if parsed.json {
@@ -904,7 +982,11 @@ pub(crate) fn answer(args: &[&str]) -> ExitCode {
         }
     };
 
-    match answer_with(&main_root, job_id, text, parsed.json, &RealJobSpawner) {
+    let cfg = super::run::read_main_config(&main_root);
+    let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
+    let paseo_cli = crate::herding::paseo::RealPaseoCli::new(paseo_cmd);
+
+    match answer_with(&main_root, job_id, text, parsed.json, &RealJobSpawner, &paseo_cli) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             if parsed.json {
@@ -973,7 +1055,32 @@ mod tests {
         }
     }
 
-    fn setup_test_job(
+    struct FakePaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        inspect: Result<String, String>,
+    }
+
+    impl FakePaseoCli {
+        fn new(inspect: Result<String, String>) -> Self {
+            Self {
+                calls: std::sync::Mutex::new(Vec::new()),
+                inspect,
+            }
+        }
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakePaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            if args.first().map(|s| s.as_str()) == Some("inspect") {
+                self.inspect.clone()
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+
+    fn setup_test_job_full(
         main_root: &Path,
         job_id: &str,
         round: u32,
@@ -981,12 +1088,14 @@ mod tests {
         q_text: Option<&str>,
         q_kind: Option<&str>,
         leaning: Option<&str>,
+        transport: Option<&str>,
+        paseo_agent_id: Option<&str>,
     ) {
         let bee_dir = main_root.join(".bee");
         let mbox_dir = bee_dir.join("mailbox").join(job_id);
         std::fs::create_dir_all(&mbox_dir).unwrap();
 
-        let job_json = json!({
+        let mut job_json = json!({
             "job_id": job_id,
             "task": "Build the feature",
             "cwd": main_root.display().to_string(),
@@ -999,6 +1108,12 @@ mod tests {
             "question_of": Value::Null,
             "question_round": 0,
         });
+        if let Some(t) = transport {
+            job_json["transport"] = Value::String(t.to_string());
+        }
+        if let Some(pid) = paseo_agent_id {
+            job_json["paseo_agent_id"] = Value::String(pid.to_string());
+        }
         std::fs::write(mbox_dir.join("job.json"), serde_json::to_string_pretty(&job_json).unwrap()).unwrap();
 
         let mut res_obj = json!({
@@ -1021,6 +1136,19 @@ mod tests {
         std::fs::write(mbox_dir.join(format!("result-{round}.json")), serde_json::to_string_pretty(&res_obj).unwrap()).unwrap();
     }
 
+    fn setup_test_job(
+        main_root: &Path,
+        job_id: &str,
+        round: u32,
+        status: &str,
+        q_text: Option<&str>,
+        q_kind: Option<&str>,
+        leaning: Option<&str>,
+    ) {
+        setup_test_job_full(main_root, job_id, round, status, q_text, q_kind, leaning, None, None);
+    }
+
+
     #[test]
     fn gate_or_product_question_becomes_intervention_without_advisor_call() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1029,8 +1157,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(Some(AdvisorOutcome::Done { summary: "Yes".into(), report_path: None }));
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.claimed.as_deref(), Some("job-gate-1"));
         assert!(advisor.calls.borrow().is_empty());
 
@@ -1050,8 +1179,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.claimed.as_deref(), Some("job-prod-1"));
         assert!(advisor.calls.borrow().is_empty());
 
@@ -1071,8 +1201,9 @@ mod tests {
             report_path: Some("/reports/rep.md".into()),
         }));
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.claimed.as_deref(), Some("job-tech-1"));
         assert_eq!(advisor.calls.borrow().len(), 1);
 
@@ -1099,8 +1230,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(Some(AdvisorOutcome::NotHerding));
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.claimed.as_deref(), Some("job-tech-native"));
 
         let store = crate::verbs::supervisor::read_interventions(main_root);
@@ -1120,8 +1252,9 @@ mod tests {
             report_path: Some("/rep.md".into()),
         }));
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.claimed.as_deref(), Some("job-tech-blocked"));
 
         let store = crate::verbs::supervisor::read_interventions(main_root);
@@ -1137,11 +1270,12 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out1 = tick_with(main_root, false, &advisor, &spawner).expect("tick 1");
+        let out1 = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick 1");
         assert_eq!(out1.claimed.as_deref(), Some("job-dedupe-1"));
 
-        let out2 = tick_with(main_root, false, &advisor, &spawner).expect("tick 2");
+        let out2 = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick 2");
         assert_eq!(out2.claimed, None);
     }
 
@@ -1152,8 +1286,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert!(out.heartbeat);
 
         let hb = main_root.join(".bee").join("supervisor").join("broker-heartbeat.json");
@@ -1167,12 +1302,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let err = answer_with(main_root, "non-existent-job", "answer text", false, &spawner).unwrap_err();
+        let err = answer_with(main_root, "non-existent-job", "answer text", false, &spawner, &fake_paseo).unwrap_err();
         assert_eq!(err.code, "job_not_found");
 
         setup_test_job(main_root, "job-answer-1", 1, "question", Some("Should we proceed?"), Some("technical"), None);
-        let res = answer_with(main_root, "job-answer-1", "Go ahead", false, &spawner).expect("answer");
+        let res = answer_with(main_root, "job-answer-1", "Go ahead", false, &spawner, &fake_paseo).expect("answer");
         assert_eq!(res.round, 1);
         assert_eq!(res.text, "Go ahead");
 
@@ -1190,9 +1326,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
         setup_test_job(main_root, "job-done-1", 1, "done", None, None, None);
-        let err = answer_with(main_root, "job-done-1", "some answer", false, &spawner).unwrap_err();
+        let err = answer_with(main_root, "job-done-1", "some answer", false, &spawner, &fake_paseo).unwrap_err();
         assert_eq!(err.code, "no_question");
     }
 
@@ -1215,7 +1352,8 @@ mod tests {
         std::fs::write(&job_path, serde_json::to_string_pretty(&job_obj).unwrap()).unwrap();
 
         let spawner = FakeJobSpawner::new();
-        let res = answer_with(main_root, "job-r2", "Final answer", false, &spawner).expect("answer");
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
+        let res = answer_with(main_root, "job-r2", "Final answer", false, &spawner, &fake_paseo).expect("answer");
         assert_eq!(res.round, 2);
 
         assert_eq!(spawner.spawned.borrow().len(), 1);
@@ -1223,6 +1361,7 @@ mod tests {
         assert_eq!(child.question_round, 3);
         assert!(child.no_question);
     }
+
 
     #[test]
     fn finished_child_job_without_inbox_session_gets_broker_notice() {
@@ -1254,8 +1393,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let out = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
         assert_eq!(out.notices_sent, 1);
 
         let store = crate::verbs::supervisor::read_interventions(main_root);
@@ -1264,7 +1404,7 @@ mod tests {
         assert!(notice.question.contains("child-1"));
         assert!(mbox_dir.join("broker-notice-sent.json").exists());
 
-        let out2 = tick_with(main_root, false, &advisor, &spawner).expect("second tick");
+        let out2 = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("second tick");
         assert_eq!(out2.notices_sent, 0);
     }
 
@@ -1299,8 +1439,9 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let _ = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let _ = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
 
         let ans_path = mbox_dir.join("answer-1.json");
         assert!(ans_path.exists());
@@ -1343,11 +1484,235 @@ mod tests {
 
         let advisor = FakeAdvisorRunner::new(None);
         let spawner = FakeJobSpawner::new();
+        let fake_paseo = FakePaseoCli::new(Ok(String::new()));
 
-        let _ = tick_with(main_root, false, &advisor, &spawner).expect("tick");
+        let _ = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
 
         let ans_path = mbox_dir.join("answer-1.json");
         assert!(!ans_path.exists());
         assert!(spawner.spawned.borrow().is_empty());
     }
+
+    #[test]
+    fn idle_paseo_parent_spawns_once_with_continue_job_set_and_no_job_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job_full(
+            main_root,
+            "job-paseo-idle",
+            1,
+            "question",
+            Some("Which model?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-idle-42"),
+        );
+
+        let fake_paseo = FakePaseoCli::new(Ok("{\"Status\":\"idle\"}\n".to_string()));
+        let spawner = FakeJobSpawner::new();
+
+        let res = answer_with(main_root, "job-paseo-idle", "Use Claude", false, &spawner, &fake_paseo).expect("answer");
+        assert_eq!(res.round, 1);
+        assert_eq!(res.job_id, "job-paseo-idle");
+        assert_eq!(res.child_job_id, "job-paseo-idle");
+
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+        let spawned = &spawner.spawned.borrow()[0];
+        assert_eq!(spawned.continue_job.as_deref(), Some("job-paseo-idle"));
+        assert!(spawned.job_id.is_empty());
+        assert!(spawned.task.contains("Which model?"));
+        assert!(spawned.task.contains("Use Claude"));
+
+        let cmd = RealJobSpawner::build_command(main_root, spawned);
+        let argv: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().to_string()).collect();
+        assert!(argv.contains(&"--continue".to_string()));
+        assert!(!argv.contains(&"--job-id".to_string()));
+
+        let redispatch_path = main_root.join(".bee").join("mailbox").join("job-paseo-idle").join("redispatched-1.json");
+        assert!(redispatch_path.exists());
+        let redispatch_val: Value = serde_json::from_str(&std::fs::read_to_string(redispatch_path).unwrap()).unwrap();
+        assert_eq!(redispatch_val.get("mode").and_then(Value::as_str), Some("continue"));
+        assert_eq!(redispatch_val.get("child_job_id").and_then(Value::as_str), Some("job-paseo-idle"));
+
+        let calls = fake_paseo.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], vec!["inspect", "--json", "agent-idle-42"]);
+    }
+
+    #[test]
+    fn working_paseo_parent_spawns_one_child_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job_full(
+            main_root,
+            "job-paseo-work",
+            1,
+            "question",
+            Some("Which model?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-busy-99"),
+        );
+
+        let fake_paseo = FakePaseoCli::new(Ok("{\"Status\":\"running\"}\n".to_string()));
+        let spawner = FakeJobSpawner::new();
+
+        let res = answer_with(main_root, "job-paseo-work", "Use Sonnet", false, &spawner, &fake_paseo).expect("answer");
+        assert_eq!(res.round, 1);
+        assert_eq!(res.job_id, "job-paseo-work");
+        assert_eq!(res.child_job_id, "job-paseo-work-q1");
+
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+        let spawned = &spawner.spawned.borrow()[0];
+        assert_eq!(spawned.continue_job, None);
+        assert_eq!(spawned.job_id, "job-paseo-work-q1");
+
+        let cmd = RealJobSpawner::build_command(main_root, spawned);
+        let argv: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().to_string()).collect();
+        assert!(!argv.contains(&"--continue".to_string()));
+        assert!(argv.contains(&"--job-id".to_string()));
+
+        let redispatch_path = main_root.join(".bee").join("mailbox").join("job-paseo-work").join("redispatched-1.json");
+        assert!(redispatch_path.exists());
+        let redispatch_val: Value = serde_json::from_str(&std::fs::read_to_string(redispatch_path).unwrap()).unwrap();
+        assert!(redispatch_val.get("mode").is_none());
+        assert_eq!(redispatch_val.get("child_job_id").and_then(Value::as_str), Some("job-paseo-work-q1"));
+
+        let calls = fake_paseo.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], vec!["inspect", "--json", "agent-busy-99"]);
+    }
+
+    #[test]
+    fn non_paseo_parent_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job(
+            main_root,
+            "job-non-paseo",
+            1,
+            "question",
+            Some("Which architecture?"),
+            Some("technical"),
+            None,
+        );
+
+        let fake_paseo = FakePaseoCli::new(Ok("{\"Status\":\"idle\"}\n".to_string()));
+        let spawner = FakeJobSpawner::new();
+
+        let res = answer_with(main_root, "job-non-paseo", "Microservices", false, &spawner, &fake_paseo).expect("answer");
+        assert_eq!(res.round, 1);
+        assert_eq!(res.job_id, "job-non-paseo");
+        assert_eq!(res.child_job_id, "job-non-paseo-q1");
+
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+        let spawned = &spawner.spawned.borrow()[0];
+        assert_eq!(spawned.continue_job, None);
+        assert_eq!(spawned.job_id, "job-non-paseo-q1");
+
+        let calls = fake_paseo.calls.lock().unwrap();
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn exactly_one_spawn_per_answered_question_in_each_case() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job_full(
+            main_root,
+            "job-once-idle",
+            1,
+            "question",
+            Some("Wait here?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-once-1"),
+        );
+
+        let fake_paseo = FakePaseoCli::new(Ok("{\"Status\":\"idle\"}\n".to_string()));
+        let spawner = FakeJobSpawner::new();
+
+        let res1 = answer_with(main_root, "job-once-idle", "Proceed", false, &spawner, &fake_paseo);
+        assert!(res1.is_ok());
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+
+        setup_test_job_full(
+            main_root,
+            "job-once-working",
+            1,
+            "question",
+            Some("Wait here?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-once-2"),
+        );
+        let spawner2 = FakeJobSpawner::new();
+        let fake_working = FakePaseoCli::new(Ok("{\"Status\":\"running\"}\n".to_string()));
+        let res2 = answer_with(main_root, "job-once-working", "Proceed", false, &spawner2, &fake_working);
+        assert!(res2.is_ok());
+        assert_eq!(spawner2.spawned.borrow().len(), 1);
+    }
+
+    #[test]
+    fn inspect_error_on_paseo_parent_falls_back_to_child_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job_full(
+            main_root,
+            "job-paseo-err",
+            1,
+            "question",
+            Some("Which path?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-err-1"),
+        );
+
+        let fake_paseo = FakePaseoCli::new(Err("inspect failed".to_string()));
+        let spawner = FakeJobSpawner::new();
+
+        let res = answer_with(main_root, "job-paseo-err", "Take path A", false, &spawner, &fake_paseo).expect("answer");
+        assert_eq!(res.child_job_id, "job-paseo-err-q1");
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+        let spawned = &spawner.spawned.borrow()[0];
+        assert_eq!(spawned.continue_job, None);
+        assert_eq!(spawned.job_id, "job-paseo-err-q1");
+    }
+
+    #[test]
+    fn idle_paseo_parent_answered_by_advisor_spawns_with_continue_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        setup_test_job_full(
+            main_root,
+            "job-paseo-advisor",
+            1,
+            "question",
+            Some("Which method?"),
+            Some("technical"),
+            None,
+            Some("paseo"),
+            Some("agent-adv-1"),
+        );
+
+        let fake_paseo = FakePaseoCli::new(Ok("{\"Status\":\"idle\"}\n".to_string()));
+        let advisor = FakeAdvisorRunner::new(Some(AdvisorOutcome::Done {
+            summary: "Use method A".into(),
+            report_path: None,
+        }));
+        let spawner = FakeJobSpawner::new();
+
+        let out = tick_with(main_root, false, &advisor, &spawner, &fake_paseo).expect("tick");
+        assert_eq!(out.claimed.as_deref(), Some("job-paseo-advisor"));
+        assert_eq!(spawner.spawned.borrow().len(), 1);
+        let spawned = &spawner.spawned.borrow()[0];
+        assert_eq!(spawned.continue_job.as_deref(), Some("job-paseo-advisor"));
+    }
 }
+
+
