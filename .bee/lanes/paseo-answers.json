@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-answers",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"paseo-answers\" started at phase \"exploring\" (lane).",
-  "next_action": "User tests same-agent answers and steer on Paseo on main, then approves uat",
+  "next_action": "bee close finished \"paseo-answers\" — feature is closed.",
   "created_at": "2026-10-06T00:03:05.380Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
