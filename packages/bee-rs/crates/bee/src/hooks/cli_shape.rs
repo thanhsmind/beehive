@@ -1149,7 +1149,7 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 10] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 13] = [
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
         // plan carries this span as a cell TITLE naming the verb the cell adds
         // ("Add bee cells rebind-session --from --to") — a name for the flag
@@ -1187,6 +1187,20 @@ mod documented_invocations {
         r#"bee worktree enter --id, bee state handoff show --json, bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
         r#"bee dispatch wave with the caller's real runtime and feature, bee discovery list --json, or null""#,
         r#"bee worktree enter --id"#,
+        // hlt-1 (herding-leader-toil): the fenced cells JSON of that closed
+        // plan quotes this span inside cell MUST-HAVES to describe cap behavior
+        // — a prose mention of a verb shape, not a transcript anyone ran or
+        // should copy; the plan is immutable history, so the line is pinned here
+        // instead of rewritten.
+        r#"bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text""#,
+        // hlt-3 (herding-leader-toil): the fenced cells JSON of that closed
+        // plan quotes this span inside a cell title and action — a prose mention
+        // of a verb shape with flags omitted, not a runnable invocation.
+        r#"bee cells judge-record --from-text"#,
+        // hlt-4 (herding-leader-toil): the fenced cells JSON of that closed
+        // plan quotes this span inside an uncapped-success message note — a prose
+        // mention of a verb shape, not a runnable invocation.
+        r#"bee cells finish --from-job""#,
     ];
 
     #[test]
