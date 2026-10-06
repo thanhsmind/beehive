@@ -149,6 +149,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "interrupt" => Some(job_verbs::interrupt(rest)),
         "cancel" => Some(job_verbs::cancel(rest)),
         "steer" => Some(job_verbs::steer(rest)),
+        "permit" => Some(job_verbs::permit(rest)),
         "broker" => broker::route_broker(rest),
         "answer" => Some(broker::answer(rest)),
         _ => None,
