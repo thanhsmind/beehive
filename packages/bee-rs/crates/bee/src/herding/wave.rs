@@ -2581,7 +2581,11 @@ mod tests {
         ]"#;
         let fake = FakePaseoCli::new(Ok(ls_json.to_string()));
 
-        let (exit, occ, _) = occupancy_with_panes_and_paseo(&["--main-root", root_str], None, Some(&fake));
+        let (exit, occ, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
         assert_eq!(exit, ExitCode::SUCCESS);
         assert_eq!(occ, wave_ledger::Occupancy::Live(1));
         assert_eq!(
