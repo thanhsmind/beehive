@@ -683,6 +683,7 @@
     "bee-report-issues",
     "gh",
     "contract:leader-check-worktree-root",
-    "contract:occupancy-test-pane-fixture"
+    "contract:occupancy-test-pane-fixture",
+    "contract:leader-check-windows-paths"
   ]
 }
