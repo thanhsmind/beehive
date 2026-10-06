@@ -360,3 +360,121 @@ pub(crate) fn derive_model_independence(
         "confirmed"
     }
 }
+
+pub(crate) fn extract_fenced_verdicts(text: &str) -> Result<Vec<(String, Value)>, String> {
+    let mut verdicts = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
+    let mut in_target_fence: Option<(String, String)> = None;
+    let mut in_other_fence = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let is_closing_fence =
+            trimmed.starts_with("```") && trimmed.trim_start_matches('`').trim().is_empty();
+        if let Some((_, ref mut body)) = in_target_fence {
+            if is_closing_fence {
+                let (id, body) = in_target_fence.take().unwrap();
+                let parsed = match parse_json_js(&body, false) {
+                    JsParse::Value(v) => v,
+                    JsParse::NotJson => Value::String(body),
+                };
+                verdicts.push((id, parsed));
+            } else {
+                body.push_str(line);
+                body.push('\n');
+            }
+        } else if in_other_fence {
+            if is_closing_fence {
+                in_other_fence = false;
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("```") {
+            if rest.starts_with('`') {
+                in_other_fence = true;
+            } else {
+                let tokens: Vec<&str> = rest.split_whitespace().collect();
+                if tokens.len() == 2 && tokens[0] == "json" {
+                    let cell_id = tokens[1].to_string();
+                    if seen_ids.contains(&cell_id) {
+                        return Err(format!("duplicate cell id \"{cell_id}\" in verdict blocks"));
+                    }
+                    seen_ids.insert(cell_id.clone());
+                    in_target_fence = Some((cell_id, String::new()));
+                } else {
+                    in_other_fence = true;
+                }
+            }
+        }
+    }
+
+    if verdicts.is_empty() {
+        return Err("no json <cell-id> verdict block found".to_string());
+    }
+
+    Ok(verdicts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_fenced_verdicts_finds_all_blocks() {
+        let text = "\
+preamble
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+middle prose
+```json c2
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"NEEDS_REVISION\", \"checks\": [{\"id\": \"t2\", \"status\": \"FAIL\", \"evidence\": \"bad\"}], \"failure_signature\": \"sig\", \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let res = extract_fenced_verdicts(text).unwrap();
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0].0, "c1");
+        assert_eq!(res[0].1["verdict"], "PASS");
+        assert_eq!(res[1].0, "c2");
+        assert_eq!(res[1].1["verdict"], "NEEDS_REVISION");
+    }
+
+    #[test]
+    fn extract_fenced_verdicts_refuses_zero_blocks() {
+        let err = extract_fenced_verdicts("no blocks here").unwrap_err();
+        assert_eq!(err, "no json <cell-id> verdict block found");
+
+        let err2 = extract_fenced_verdicts("```json\n{}\n```").unwrap_err();
+        assert_eq!(err2, "no json <cell-id> verdict block found");
+    }
+
+    #[test]
+    fn extract_fenced_verdicts_refuses_duplicate_ids() {
+        let text = "\
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let err = extract_fenced_verdicts(text).unwrap_err();
+        assert!(err.contains("duplicate cell id \"c1\" in verdict blocks"));
+    }
+
+    #[test]
+    fn extract_fenced_verdicts_ignores_other_fenced_blocks() {
+        let text = "\
+```text
+```json c-nested
+```
+```json
+{\"ignored\": true}
+```
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let res = extract_fenced_verdicts(text).unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].0, "c1");
+    }
+}
