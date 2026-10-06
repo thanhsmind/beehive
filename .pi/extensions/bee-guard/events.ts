@@ -4,12 +4,17 @@ import { rmSync } from "node:fs"
 import { directoryOf, sessionIdOf, sessionSource } from "./session.ts"
 import { beeStorePresent, mainCheckoutRoot, resolveBeeBinary } from "./locate.ts"
 import {
+  deleteHeartbeat,
   ensureHeartbeat,
   heartbeatText,
   isHeartbeatPrompt,
   isPaseoLeader,
   parseTick,
   readPaseoSettings,
+  setTickRunning,
+  startBrokerTimer,
+  stopBrokerTimer,
+  tickRunning,
 } from "./paseo-heartbeat.ts"
 import { mapToolCall, BEE_STAGE_TOOLS } from "./tool-map.ts"
 import { runBlockingHook, runAdvisoryHook, block } from "./hooks.ts"
@@ -32,7 +37,6 @@ import { drainWorkerSteer } from "./tool-steer.ts"
 import { state } from "./state.ts"
 
 let quietHeartbeatTurn = false
-let tickRunning = false
 let cachedWorkerGuardHelp: boolean | null = null
 
 function checkWorkerGuardSupported(beeBinary: string): boolean {
@@ -160,10 +164,11 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
       if (isPaseoLeader()) {
         const mainRoot = mainCheckoutRoot(directory)
+        const settings = readPaseoSettings(mainRoot)
         ensureHeartbeat(
           mainRoot,
           process.env.PASEO_AGENT_ID ?? "",
-          readPaseoSettings(mainRoot),
+          settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
@@ -190,6 +195,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           .catch((err: any) => {
             console.error(`bee paseo-heartbeat: ${err?.message ?? err}`)
           })
+        startBrokerTimer(pi, directory, settings)
       }
       const text = runAdvisoryHook(directory, "session-init", {
         hook_event_name: "SessionStart",
@@ -357,7 +363,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
       }
-      tickRunning = true
+      setTickRunning(true)
       try {
         const stdout = await new Promise<string>((resolve, reject) => {
           const child = cp.execFile(
@@ -383,7 +389,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
       } finally {
-        tickRunning = false
+        setTickRunning(false)
       }
     }
     return { action: "continue" }
@@ -836,6 +842,33 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         state.transitionTeardownOccurred = true
       }
       if (reason === "reload") return undefined
+      stopBrokerTimer()
+      if (isPaseoLeader()) {
+        const mainRoot = mainCheckoutRoot(directoryOf(ctx))
+        const settings = readPaseoSettings(mainRoot)
+        await deleteHeartbeat(
+          mainRoot,
+          process.env.PASEO_AGENT_ID ?? "",
+          settings,
+          (command, args) =>
+            new Promise((resolve, reject) => {
+              const child = cp.execFile(
+                command,
+                args,
+                { timeout: 30000, encoding: "utf8" },
+                (error, stdout) => {
+                  if (error) {
+                    reject(error)
+                  } else {
+                    resolve(String(stdout ?? ""))
+                  }
+                },
+              )
+              child.stdin?.on("error", () => {})
+              child.stdin?.end()
+            }),
+        )
+      }
       const directory = directoryOf(ctx)
       try {
         runAdvisoryHook(directory, "session-close", {

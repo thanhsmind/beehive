@@ -210,12 +210,12 @@ fn test_constants_and_read_paseo_settings() {
         r#"
 const { HEARTBEAT_NAME, DEFAULT_CRON, STALE_MARKER_MS, readPaseoSettings } = mod;
 assert.equal(HEARTBEAT_NAME, "bee-leader");
-assert.equal(DEFAULT_CRON, "*/5 * * * *");
+assert.equal(DEFAULT_CRON, "*/30 * * * *");
 assert.equal(STALE_MARKER_MS, 120000);
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-test-settings-"));
 const defaultSettings = readPaseoSettings(tmpDir);
-assert.deepEqual(defaultSettings, { command: "paseo", cron: "*/5 * * * *" });
+assert.deepEqual(defaultSettings, { command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 30 });
 
 const beeDir = path.join(tmpDir, ".bee");
 fs.mkdirSync(beeDir, { recursive: true });
@@ -223,16 +223,37 @@ fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
   herding: {
     paseo: {
       command: "custom-paseo",
-      heartbeat_cron: "0 * * * *"
+      heartbeat_cron: "0 * * * *",
+      broker_tick_secs: 45
     }
   }
 }));
 const customSettings = readPaseoSettings(tmpDir);
-assert.deepEqual(customSettings, { command: "custom-paseo", cron: "0 * * * *" });
+assert.deepEqual(customSettings, { command: "custom-paseo", cron: "0 * * * *", broker_tick_secs: 45 });
+
+fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
+  herding: {
+    paseo: {
+      broker_tick_secs: -10
+    }
+  }
+}));
+const negativeSettings = readPaseoSettings(tmpDir);
+assert.equal(negativeSettings.broker_tick_secs, 30);
+
+fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
+  herding: {
+    paseo: {
+      broker_tick_secs: "not-a-number"
+    }
+  }
+}));
+const stringSettings = readPaseoSettings(tmpDir);
+assert.equal(stringSettings.broker_tick_secs, 30);
 
 fs.writeFileSync(path.join(beeDir, "config.json"), "{ invalid json");
 const fallbackSettings = readPaseoSettings(tmpDir);
-assert.deepEqual(fallbackSettings, { command: "paseo", cron: "*/5 * * * *" });
+assert.deepEqual(fallbackSettings, { command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 30 });
 "#,
     );
 }
@@ -395,7 +416,7 @@ while (Date.now() < deadline) {
 assert.ok(fs.existsSync(callsLog), "stub paseo must have been called");
 const lines1 = fs.readFileSync(callsLog, "utf8").trim().split("\n");
 assert.equal(lines1.length, 1);
-assert.equal(lines1[0], "heartbeat create --cron */5 * * * * --name bee-leader --json bee heartbeat");
+assert.equal(lines1[0], "heartbeat create --cron */30 * * * * --name bee-leader --json bee heartbeat");
 
 assert.ok(fs.existsSync(markerPath), "marker file must exist");
 assert.equal(marker.schedule_id, "sched-hb-42");
@@ -644,6 +665,247 @@ const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
 assert.equal(res.created, false);
 assert.ok(res.reason.includes("herding.paseo.command"));
 assert.ok(res.reason.endsWith(" — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo binary"));
+"#,
+    );
+}
+
+#[test]
+fn test_ensure_heartbeat_recreates_on_changed_cron_and_exists_on_same_cron() {
+    run_js_test(
+        "test_ensure_heartbeat_recreates_on_changed_cron_and_exists_on_same_cron",
+        r#"
+const { ensureHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-cron-change-"));
+const agentId = "agent-cron-change";
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, JSON.stringify({
+  agent_id: agentId,
+  schedule_id: "sched-old",
+  cron: "*/5 * * * *",
+  created_at: new Date().toISOString()
+}));
+
+const calls = [];
+const stubRun = async (cmd, args) => {
+  calls.push({ cmd, args });
+  if (args[0] === "heartbeat" && args[1] === "delete") {
+    return "";
+  }
+  if (args[0] === "heartbeat" && args[1] === "create") {
+    return JSON.stringify({ id: "sched-new" });
+  }
+  throw new Error("unexpected call");
+};
+
+const settings = { command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 30 };
+const res = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(res.created, true);
+assert.equal(res.id, "sched-new");
+assert.equal(calls.length, 2);
+assert.deepEqual(calls[0].args, ["heartbeat", "delete", "sched-old"]);
+assert.deepEqual(calls[1].args, ["heartbeat", "create", "--cron", "*/30 * * * *", "--name", "bee-leader", "--json", "bee heartbeat"]);
+
+const updatedMarker = JSON.parse(fs.readFileSync(marker, "utf8"));
+assert.equal(updatedMarker.schedule_id, "sched-new");
+assert.equal(updatedMarker.cron, "*/30 * * * *");
+
+const resSame = await ensureHeartbeat(tmpDir, agentId, settings, stubRun);
+assert.equal(resSame.created, false);
+assert.equal(resSame.reason, "exists");
+assert.equal(calls.length, 2);
+"#,
+    );
+}
+
+#[test]
+fn test_delete_heartbeat_calls_delete_and_removes_marker_or_records_failure() {
+    run_js_test(
+        "test_delete_heartbeat_calls_delete_and_removes_marker_or_records_failure",
+        r#"
+const { deleteHeartbeat, heartbeatMarkerPath } = mod;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-del-hb-"));
+const agentId = "agent-del-ok";
+const marker = heartbeatMarkerPath(tmpDir, agentId);
+fs.mkdirSync(path.dirname(marker), { recursive: true });
+fs.writeFileSync(marker, JSON.stringify({
+  agent_id: agentId,
+  schedule_id: "sched-del-123",
+  cron: "*/30 * * * *"
+}));
+
+let deletedId = null;
+const stubRunOk = async (cmd, args) => {
+  assert.equal(cmd, "paseo");
+  assert.deepEqual(args, ["heartbeat", "delete", "sched-del-123"]);
+  deletedId = args[2];
+  return "";
+};
+const settings = { command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 30 };
+await deleteHeartbeat(tmpDir, agentId, settings, stubRunOk);
+assert.equal(deletedId, "sched-del-123");
+assert.equal(fs.existsSync(marker), false);
+
+const agentIdFail = "agent-del-fail";
+const markerFail = heartbeatMarkerPath(tmpDir, agentIdFail);
+fs.writeFileSync(markerFail, JSON.stringify({
+  agent_id: agentIdFail,
+  schedule_id: "sched-fail-456",
+  cron: "*/30 * * * *"
+}));
+const stubRunFail = async () => {
+  throw new Error("daemon unreachable");
+};
+await deleteHeartbeat(tmpDir, agentIdFail, settings, stubRunFail);
+assert.equal(fs.existsSync(markerFail), true);
+const failedMarker = JSON.parse(fs.readFileSync(markerFail, "utf8"));
+assert.equal(failedMarker.schedule_id, "sched-fail-456");
+assert.ok(failedMarker.delete_failed);
+assert.ok(failedMarker.delete_failed.includes("daemon unreachable"));
+"#,
+    );
+}
+
+#[test]
+fn test_broker_timer_sends_once_on_news_nothing_on_no_news_steers_when_busy_and_skips_when_in_flight() {
+    let state_path = repo_root().join(".pi/extensions/bee-guard/state.ts");
+    let code = format!(
+        r#"
+const {{ startBrokerTimer, stopBrokerTimer, setTickRunning }} = mod;
+const messages = [];
+const pi = {{
+  sendUserMessage: async (text, options) => {{
+    messages.push({{ text: String(text), options: options ?? null }});
+  }}
+}};
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-broker-timer-"));
+let tickCalls = 0;
+let tickResponse = JSON.stringify({{ claimed: 0, notices_sent: 0 }});
+let tickDelayMs = 0;
+
+const stubRun = async (cmd, args) => {{
+  tickCalls++;
+  if (tickDelayMs > 0) {{
+    await new Promise((r) => setTimeout(r, tickDelayMs));
+  }}
+  return tickResponse;
+}};
+
+const settings = {{ command: "paseo", cron: "*/30 * * * *", broker_tick_secs: 1 }};
+startBrokerTimer(pi, tmpDir, settings, {{ run: stubRun }});
+
+await new Promise((r) => setTimeout(r, 1100));
+assert.ok(tickCalls >= 1);
+assert.equal(messages.length, 0);
+
+tickResponse = JSON.stringify({{ claimed: 1, notices_sent: 0 }});
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(messages.length, 1);
+assert.equal(messages[0].options, null);
+
+const stateMod = await import(pathToFileURL({:?}).href);
+stateMod.state.selfBusy = true;
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(messages.length, 2);
+assert.deepEqual(messages[1].options, {{ deliverAs: "steer" }});
+stateMod.state.selfBusy = false;
+
+setTickRunning(true);
+const callsBeforeInFlight = tickCalls;
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(tickCalls, callsBeforeInFlight);
+setTickRunning(false);
+
+tickDelayMs = 1500;
+const callsBeforeSlow = tickCalls;
+await new Promise((r) => setTimeout(r, 1100));
+const firstCallInFlight = tickCalls;
+assert.equal(firstCallInFlight, callsBeforeSlow + 1);
+await new Promise((r) => setTimeout(r, 500));
+assert.equal(tickCalls, firstCallInFlight);
+await new Promise((r) => setTimeout(r, 1000));
+tickDelayMs = 0;
+
+stopBrokerTimer();
+const callsAfterStop = tickCalls;
+await new Promise((r) => setTimeout(r, 1100));
+assert.equal(tickCalls, callsAfterStop);
+"#,
+        state_path.to_str().expect("valid utf-8 path")
+    );
+    run_js_test(
+        "test_broker_timer_sends_once_on_news_nothing_on_no_news_steers_when_busy_and_skips_when_in_flight",
+        &code,
+    );
+}
+
+#[test]
+fn test_leader_shutdown_deletes_heartbeat_and_restart_creates_one() {
+    run_extension_test(
+        "test_leader_shutdown_deletes_heartbeat_and_restart_creates_one",
+        &[("PASEO_AGENT_ID", "agent-leader-lifecycle")],
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-leader-lifecycle-"));
+const stubPaseo = path.join(tmpDir, "stub-paseo.sh");
+const callsLog = path.join(tmpDir, "paseo-calls.log");
+fs.writeFileSync(stubPaseo, `#!/bin/sh\nprintf '%s\n' "$*" >> "${callsLog}"\nif [ "$1" = "heartbeat" ] && [ "$2" = "create" ]; then\n  printf '{"id":"sched-lifecycle-1"}'\nfi\nexit 0\n`);
+fs.chmodSync(stubPaseo, 0o755);
+
+const beeDir = path.join(tmpDir, ".bee");
+fs.mkdirSync(beeDir, { recursive: true });
+fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify({
+  herding: {
+    paseo: {
+      command: stubPaseo
+    }
+  }
+}));
+
+const ctx = { cwd: tmpDir, sessionId: "sess-leader-lifecycle" };
+await fire("session_start", { reason: "new" }, ctx);
+
+const deadline = Date.now() + 2000;
+const markerPath = path.join(tmpDir, ".bee", "runtime", "paseo-heartbeat", "agent-leader-lifecycle.json");
+let marker = {};
+while (Date.now() < deadline) {
+  if (fs.existsSync(markerPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+      if (parsed.schedule_id) {
+        marker = parsed;
+        break;
+      }
+    } catch {}
+  }
+  await new Promise((r) => setTimeout(r, 20));
+}
+assert.equal(marker.schedule_id, "sched-lifecycle-1");
+
+await fire("session_shutdown", { reason: "new" }, ctx);
+assert.equal(fs.existsSync(markerPath), false);
+const callsAfterShutdown = fs.readFileSync(callsLog, "utf8").trim().split("\n");
+assert.equal(callsAfterShutdown.length, 2);
+assert.equal(callsAfterShutdown[1], "heartbeat delete sched-lifecycle-1");
+
+await fire("session_start", { reason: "new" }, ctx);
+const deadline2 = Date.now() + 2000;
+let marker2 = {};
+while (Date.now() < deadline2) {
+  if (fs.existsSync(markerPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+      if (parsed.schedule_id) {
+        marker2 = parsed;
+        break;
+      }
+    } catch {}
+  }
+  await new Promise((r) => setTimeout(r, 20));
+}
+assert.equal(marker2.schedule_id, "sched-lifecycle-1");
+const callsAfterRestart = fs.readFileSync(callsLog, "utf8").trim().split("\n");
+assert.equal(callsAfterRestart.length, 3);
+assert.equal(callsAfterRestart[2], "heartbeat create --cron */30 * * * * --name bee-leader --json bee heartbeat");
 "#,
     );
 }
