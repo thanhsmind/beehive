@@ -91,14 +91,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (flags, use_json) = parse_flags(rest)?;
     match verb {
         "set" => run_set(flags, use_json, t0),
-        "gate.preview" => {
-            let ctx = match go("gate preview", use_json, t0)? {
-                Ok(c) => c,
-                Err(code) => return Some(code),
-            };
-            let out = run_gate_preview_body(&ctx.root, &flags, use_json);
-            finish_serving(&ctx, out)
-        }
+        "gate.preview" => run_gate_preview(flags, use_json, t0),
         "gate" => run_gate(flags, use_json, t0),
         "waiting-on.set" => run_waiting_on_set(flags, use_json, t0),
         "waiting-on.clear" => run_waiting_on_clear(flags, use_json, t0),
@@ -124,7 +117,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
-        "route" => run_route_served(flags, use_json, t0),
+        "route" => run_route(flags, use_json, t0),
         "start-feature" => run_start_feature(flags, use_json, t0),
         "advisor-ref.record" => run_advisor_ref_record(flags, use_json, t0),
         "advisor-ref.show" => run_advisor_ref_show(flags, use_json, t0),
@@ -132,154 +125,6 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
 }
 
-fn finish_serving(ctx: &Ctx, out: R2<Out>) -> Option<ExitCode> {
-    let cwd = std::env::current_dir().ok()?;
-    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
-    crate::verbs::drivers::finish_serving_granted(ctx, out, served_main.as_deref())
-}
-
-fn run_route_served(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    let cwd = std::env::current_dir().ok()?;
-    let served_main = crate::verbs::drivers::is_serving_granted(&cwd);
-    if served_main.is_none() {
-        return run_route(flags, use_json, t0);
-    }
-    let no_lane = flags.get("no-lane").is_some();
-    let show = matches!(flags.get("show"), Some(FlagV::Present));
-    let set = matches!(flags.get("set"), Some(FlagV::Present));
-    let ctx = match go("state route", use_json, t0)? {
-        Ok(c) => c,
-        Err(code) => return Some(code),
-    };
-    let out = (|| -> R2<Out> {
-        if show {
-            let target = resolve_mutation_target(&ctx.root, None, "route show", no_lane)?;
-            let route = match target.record().get("route") {
-                Some(v) if truthy(v) => v.clone(),
-                _ => {
-                    return Ok(Out::Emit(Value::Null, "No route recorded.".to_string(), 0));
-                }
-            };
-            let Some(Value::Array(flag_names)) = jget(&route, "flags") else {
-                return Err(Err2::Ex);
-            };
-            let joined: Vec<String> = flag_names.iter().map(js_disp).collect();
-            let rationale = match jget(&route, "rationale") {
-                Some(v) if truthy(v) => format!(" rationale=\"{}\"", js_disp(v)),
-                _ => String::new(),
-            };
-            let text = format!(
-                "class={} lane={} flags={} [{}] files={}{rationale}{}",
-                js_disp_opt(jget(&route, "class")),
-                js_disp_opt(jget(&route, "lane")),
-                flag_names.len(),
-                joined.join(","),
-                js_disp_opt(jget(&route, "product_files")),
-                target.lane_note(),
-            );
-            return Ok(Out::Emit(route, text, 0));
-        }
-        if !set {
-            return Ok(Out::Thrown(
-                "route: requires --set (to record a route) or --show (to read it back).".to_string(),
-            ));
-        }
-        let mut route_object = match validate_route_set_flags(&flags)? {
-            Ok(r) => r,
-            Err(message) => return Ok(Out::Thrown(message)),
-        };
-        let lane_class = js_disp_opt(route_object.get("lane"));
-
-        let scope = resolve_mutation_lock_scope(&ctx.root, None, no_lane)?;
-        let workflows = list_workflows(&ctx.root)?;
-        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
-        let mut target = resolve_mutation_target(&ctx.root, None, "route", no_lane)?;
-        if let Some(message) =
-            unbound_default_route_refusal(&target, no_lane, &live_lane_features(&ctx.root)?)
-        {
-            return Ok(Out::Thrown(message));
-        }
-        let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
-        let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
-        if !feature_set
-            || &phase == &json!("idle")
-            || &phase == &json!("compounding-complete")
-        {
-            let phase_disp = match target.record().get("phase") {
-                None | Some(Value::Null) => "idle".to_string(),
-                Some(v) => js_disp(v),
-            };
-            let feature_disp = match target.record().get("feature") {
-                None | Some(Value::Null) => "none".to_string(),
-                Some(v) => js_disp(v),
-            };
-            return Ok(Out::Thrown(format!(
-                "route --set: refused \u{2014} no active feature to attach a route to (phase \"{phase_disp}\", feature \"{feature_disp}\"). FIX: start a feature first (state start-feature), then record its route."
-            )));
-        }
-        let route_owner_feature = target.record().get("feature").cloned().unwrap_or(Value::Null);
-        route_object.insert("feature".into(), route_owner_feature.clone());
-        if let Some(Value::Object(existing_route)) = target.record().get("route") {
-            if route_belongs_to_feature(existing_route, &route_owner_feature) {
-                let new_flags: Vec<String> = match route_object.get("flags") {
-                    Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
-                    _ => Vec::new(),
-                };
-                match validate_route_lane_transition(existing_route, &lane_class, &new_flags) {
-                    Ok(Some(stamp)) => {
-                        route_object.insert("demoted_at".into(), json!(stamp));
-                    }
-                    Ok(None) => {}
-                    Err(message) => return Ok(Out::Thrown(message)),
-                }
-            }
-        }
-        let lane_note = target.lane_note();
-        let target_lane = target.lane().map(str::to_string);
-        target
-            .record_mut()
-            .insert("route".into(), Value::Object(route_object.clone()));
-        let record = target.record().clone();
-        write_through_projection(&ctx.root, &target, &record, &[])?;
-        let target_feature = match &target_lane {
-            Some(l) => l.clone(),
-            None => js_disp_opt(record.get("feature")),
-        };
-        let live = list_workflows(&ctx.root)?;
-        if let Some(wf) = find_live_workflow(&live, &target_feature) {
-            let mut patch = Map::new();
-            patch.insert("route".into(), Value::Object(route_object.clone()));
-            update_workflow_assuming_lock(&ctx.root, &wf_id(wf), patch)?;
-        }
-        let routed_feature = match record.get("feature") {
-            Some(v) if !v.is_null() => Some(js_disp(v)),
-            _ => target_lane.clone(),
-        };
-        drop(locks);
-
-        let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
-        let code_touching = is_code_touching_lane(&lane_class, other_live);
-        let block = route_worktree_block(&ctx.root, routed_feature.as_deref(), &lane_class, code_touching);
-
-        let flags_len = match route_object.get("flags") {
-            Some(Value::Array(a)) => a.len(),
-            _ => 0,
-        };
-        let mut text = format!(
-            "Recorded route (class={} lane={lane_class} flags={flags_len} files={}).{lane_note}",
-            js_disp_opt(route_object.get("class")),
-            js_disp_opt(route_object.get("product_files")),
-        );
-        let mut result = route_object;
-        if let Some(block) = block {
-            text.push('\n');
-            text.push_str(&js_disp_opt(jget(&block, "notice")));
-            result.insert("worktree".into(), block);
-        }
-        Ok(Out::Emit(Value::Object(result), text, 0))
-    })();
-    finish_serving(&ctx, out)
-}
 
 pub(crate) fn go(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Result<Ctx, ExitCode>> {
     match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
@@ -480,7 +325,7 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Err(code) => return Some(code),
     };
     let out = run_set_body(&ctx.root, &flags);
-    finish_serving(&ctx, out)
+    finish(&ctx, out)
 }
 
 /// The mutation body, root-parameterized so it can be exercised directly in
@@ -727,18 +572,7 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
 
 pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if flags.get("preview").is_some() {
-        if !keys_known(&flags, &["lane", "no-lane", "preview"]) {
-            return None;
-        }
-        if !bool_flag_ok(&flags, "no-lane") {
-            return None;
-        }
-        let ctx = match go("gate preview", use_json, t0)? {
-            Ok(c) => c,
-            Err(code) => return Some(code),
-        };
-        let out = run_gate_preview_body(&ctx.root, &flags, use_json);
-        return finish_serving(&ctx, out);
+        return run_gate_preview(flags, use_json, t0);
     }
     if !keys_known(
         &flags,
@@ -756,7 +590,7 @@ pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
         Err(code) => return Some(code),
     };
     let out = run_gate_body(&ctx.root, &flags);
-    finish_serving(&ctx, out)
+    finish(&ctx, out)
 }
 
 /// requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs, Gate 3
@@ -1360,7 +1194,7 @@ pub(crate) fn run_plan_rev_bump(flags: Flags, use_json: bool, t0: Instant) -> Op
         );
         Ok(Out::Emit(Value::Object(result), text, 0))
     })();
-    finish_serving(&ctx, out)
+    finish(&ctx, out)
 }
 
 // ─── tests: the compounding-complete door (tpp-1) ──────────────────────────
@@ -3324,6 +3158,61 @@ mod tests {
                 Instant::now(),
             );
             assert_eq!(code_state_preview, Some(ExitCode::SUCCESS));
+
+            let code_waiting_set = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("set"),
+                    OsString::from("--kind"),
+                    OsString::from("gate"),
+                    OsString::from("--subject"),
+                    OsString::from("review"),
+                    OsString::from("--session-id"),
+                    OsString::from("s1"),
+                    OsString::from("--json"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_set, Some(ExitCode::SUCCESS));
+
+            let code_waiting_clear = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("clear"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_clear, Some(ExitCode::SUCCESS));
+
+            let bin = {
+                let mut dir = std::env::current_exe().expect("test binary path");
+                dir.pop();
+                if dir.ends_with("deps") {
+                    dir.pop();
+                }
+                dir.join(format!("bee{}", std::env::consts::EXE_SUFFIX))
+            };
+            if bin.is_file() {
+                let out_set = std::process::Command::new(&bin)
+                    .args(["state", "waiting-on", "set", "--kind", "gate", "--subject", "review", "--session-id", "s1", "--json"])
+                    .current_dir(&granted)
+                    .output()
+                    .unwrap();
+                assert!(out_set.status.success());
+                let parsed: Value = serde_json::from_str(&String::from_utf8_lossy(&out_set.stdout)).unwrap();
+                assert_eq!(parsed["control_root"], main.display().to_string());
+
+                let out_clear = std::process::Command::new(&bin)
+                    .args(["state", "waiting-on", "clear"])
+                    .current_dir(&granted)
+                    .output()
+                    .unwrap();
+                assert!(out_clear.status.success());
+                let text = String::from_utf8_lossy(&out_clear.stdout);
+                assert!(text.contains(&format!("control plane: {}", main.display())));
+            }
         }
 
         {

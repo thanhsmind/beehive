@@ -54,8 +54,13 @@ pub(crate) fn ctx_serving_granted(
     t0: Instant,
 ) -> Option<Result<crate::verbs::reservations::Ctx, ExitCode>> {
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_root_serving_granted(&cwd).0 {
-        Roots::Ordinary(r) => r,
+    let (resolved, here) = resolve_root_serving_granted(&cwd);
+    let root = match resolved {
+        Roots::Ordinary(r) => {
+            let served = here.is_some().then(|| r.clone());
+            SERVED_CONTROL_ROOT.with(|s| *s.borrow_mut() = served);
+            r
+        }
         Roots::Unsupported(why) => return Some(Err(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))),
         Roots::None => return Some(Err(emit_no_root_error(&cwd, cmd, use_json, t0))),
     };
@@ -68,6 +73,14 @@ pub(crate) fn ctx_serving_granted(
         drift_changed: drift.manifest_changed,
         drift_hint: drift.hint,
     }))
+}
+
+thread_local! {
+    pub(crate) static SERVED_CONTROL_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(crate) fn served_control_root() -> Option<PathBuf> {
+    SERVED_CONTROL_ROOT.with(|s| s.borrow().clone())
 }
 
 pub(crate) fn is_serving_granted(cwd: &Path) -> Option<PathBuf> {
@@ -85,7 +98,9 @@ pub(crate) fn augment_served_output(
     if let Value::Object(map) = result {
         map.insert("control_root".to_string(), Value::String(main_root.display().to_string()));
     }
-    *text = format!("control plane: {}\n{text}", main_root.display());
+    if !text.starts_with("control plane: ") {
+        *text = format!("control plane: {}\n{text}", main_root.display());
+    }
 }
 
 pub(crate) fn finish_serving_granted(

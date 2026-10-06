@@ -3105,6 +3105,28 @@ mod tests {
         (main, granted, ungranted)
     }
 
+
+
+    #[test]
+    #[ignore = "spawned by contract_control_plane_from_worktree_e32f3a66_cells_verbs"]
+    fn refused_verbs_print_the_granted_worktree_text_child() {
+        let verbs: [&[&str]; 8] = [
+            &["cells", "claim", "--id", "demo-1", "--worker", "w1"],
+            &["cells", "claim-next", "--worker", "w1"],
+            &["cells", "unclaim", "--id", "demo-1"],
+            &["cells", "reopen", "--id", "demo-1", "--reason", "test"],
+            &["cells", "cap", "--id", "demo-1", "--report", "{\"outcome\":\"done\",\"commit\":\"none\",\"files\":[],\"tests\":\"true — green:unit — ok\",\"deviations\":[]}", "--no-mistakes"],
+            &["cells", "block", "--id", "demo-1", "--reason", "test"],
+            &["cells", "drop", "--id", "demo-1", "--reason", "test"],
+            &["cells", "rebind-session", "--from", "sess-1", "--to", "sess-2"],
+        ];
+        for argv in verbs {
+            let args: Vec<OsString> = argv.iter().map(OsString::from).collect();
+            let code = crate::verbs::cells::try_native(&args, Instant::now());
+            assert_eq!(code, Some(ExitCode::FAILURE), "{argv:?}");
+        }
+    }
+
     #[test]
     fn contract_control_plane_from_worktree_e32f3a66_cells_verbs() {
         let tmp = tempfile::tempdir().unwrap();
@@ -3240,6 +3262,31 @@ mod tests {
                 Instant::now(),
             );
             assert_eq!(code_rebind, Some(ExitCode::FAILURE));
+
+            let exe = std::env::current_exe().expect("test binary path");
+            let out = std::process::Command::new(&exe)
+                .args([
+                    "--exact",
+                    "verbs::cells::handlers_write::tests::refused_verbs_print_the_granted_worktree_text_child",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .current_dir(&granted)
+                .output()
+                .unwrap();
+            let combined = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&out.stderr),
+                String::from_utf8_lossy(&out.stdout)
+            );
+            assert_eq!(
+                combined
+                    .matches("refused inside a granted feature worktree — this command reads the shared control plane")
+                    .count(),
+                8,
+                "{combined}"
+            );
 
             let code_finish = crate::verbs::cells::try_native(
                 &[

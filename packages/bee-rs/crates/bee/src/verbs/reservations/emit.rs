@@ -36,6 +36,7 @@ pub(crate) enum Pre {
 }
 
 pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pre> {
+    crate::verbs::drivers::SERVED_CONTROL_ROOT.with(|s| *s.borrow_mut() = None);
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
@@ -164,7 +165,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 
 pub(crate) fn finish(ctx: &Ctx, out: R2<Out>) -> Option<ExitCode> {
     match out {
-        Ok(Out::Emit(result, text, code)) => Some(ctx.emit(&result, &text, code)),
+        Ok(Out::Emit(mut result, mut text, code)) => {
+            if let Some(main_root) = crate::verbs::drivers::served_control_root().filter(|m| *m == ctx.root) {
+                crate::verbs::drivers::augment_served_output(&mut result, &mut text, &main_root);
+            }
+            Some(ctx.emit(&result, &text, code))
+        }
         Ok(Out::Thrown(msg)) => Some(ctx.fail(&msg)),
         Err(Err2::Msg(msg)) => Some(ctx.fail(&msg)),
         Err(Err2::Ex) => None,

@@ -820,16 +820,18 @@ pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &s
 // machine detector here, that is S2-c distill work, recorded, not silently
 // dropped.
 pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
-    if !feature.is_empty() {
-        if let Some((_, worktree_root)) =
-            crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
-        {
-            return PathBuf::from(worktree_root);
-        }
-    }
     if let Ok(cwd) = std::env::current_dir() {
         if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
             if main_root == root {
+                if !feature.is_empty() {
+                    if let Some((_, worktree_root)) =
+                        crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+                    {
+                        if here == Path::new(&worktree_root) {
+                            return here;
+                        }
+                    }
+                }
                 return here;
             }
         }
@@ -3100,7 +3102,7 @@ pub(crate) fn close_handler(
     let docs_root = docs_root_for_feature(root, feature);
     let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(&docs_root) {
         None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-        Some(dir) => match crate::verbs::knowledge::build_promotion(&docs_root, &dir, feature) {
+        Some(dir) => match crate::verbs::knowledge::build_promotion_split(root, &docs_root, &dir, feature) {
             None => Err("no docs/knowledge/ bundle to mine here".to_string()),
             Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
             Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
@@ -6120,7 +6122,12 @@ mod tests {
         w(
             &granted,
             "docs/history/demo/CONTEXT.md",
-            "# CONTEXT: demo\n\n## Locked Decisions\n\n| ID | Title |\n|---|---|\n",
+            "# CONTEXT: demo\n\n## Locked Decisions\n\n| ID | Title |\n|---|---|\n| D1 | Decision from worktree CONTEXT |\n",
+        );
+        w(
+            &main,
+            ".bee/cells/c1.json",
+            "{\"id\":\"c1\",\"feature\":\"demo\",\"status\":\"capped\",\"outcome\":\"done c1\",\"files_changed\":[],\"deviations\":[],\"verify\":\"cargo check\",\"verify_summary\":\"green:unit\",\"capped_at\":\"2026-10-06T00:00:00Z\"}\n",
         );
         w(
             &main,
@@ -6133,18 +6140,35 @@ mod tests {
     #[test]
     fn contract_control_plane_from_worktree_e32f3a66_close_dry_run() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_main, granted) = fixture_e32f3a66_close(tmp.path());
-        let _cwd = CwdGuard::enter(&granted);
-        let code = try_native(
-            &[
-                OsString::from("close"),
-                OsString::from("--feature"),
-                OsString::from("demo"),
-                OsString::from("--dry-run"),
-            ],
-            Instant::now(),
-        );
-        assert_eq!(code, Some(ExitCode::SUCCESS));
+        let (main, granted) = fixture_e32f3a66_close(tmp.path());
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            assert_eq!(docs_root_for_feature(&main, "demo"), granted);
+            let dir = crate::verbs::knowledge::bundle_dir(&granted).unwrap();
+            let promo = crate::verbs::knowledge::build_promotion_split(&main, &granted, &dir, "demo").unwrap();
+            match promo {
+                crate::verbs::knowledge::Promo::Ok(proposal) => {
+                    assert_eq!(proposal["cells"].as_array().unwrap().len(), 1);
+                    assert_eq!(proposal["cells"][0]["id"], "c1");
+                    assert!(proposal["delivery"]["content"].as_str().unwrap().contains("docs/history/demo/CONTEXT.md"));
+                }
+                _ => panic!("expected promo ok"),
+            }
+            let code = try_native(
+                &[
+                    OsString::from("close"),
+                    OsString::from("--feature"),
+                    OsString::from("demo"),
+                    OsString::from("--dry-run"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+        }
+        {
+            let _cwd = CwdGuard::enter(&main);
+            assert_eq!(docs_root_for_feature(&main, "demo"), main);
+        }
     }
 }
 
