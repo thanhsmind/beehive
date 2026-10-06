@@ -59,7 +59,7 @@ Labels: `read` (file opened at that line), `ran` (command executed, output kept)
 Two advisor digests (2026-10-06) mapped the refusal door, the cap and judge
 parsers, `paseo agent wait`, Pi's agent folder and trust rules, the AppImage
 output, and Paseo titles, labels and parent inheritance; CONTEXT.md carries the
-environment facts. The leader opened claims 1-9.
+environment facts. The leader opened claims 1-9. The plan-step hat wave (five seats) found blockers in ht-1 (private mailbox module, missing mistakes answer), ht-2 (a widened shared door, no close.rs, a non-existent release verb), ht-3 (zero blocks exited 0) and ht-4 (an unstoppable wait thread); D1-D4 and D6 were revised and the cells carry the fixes (reports/hat-wave.md).
 
 ## Approach
 
@@ -79,8 +79,10 @@ Risk map:
 | event wait spins | MEDIUM | wait returns at once on idle or permission | ht-4 | fake WaitSource tests for re-arm gaps |
 | from-job proof honesty | MEDIUM | a synthesized green line | ht-1 | --proof-result required; refusal tests |
 | isolated folder drops bee-guard | MEDIUM | trust must stay always | ht-5, ht-6 | settings test and doctor row |
+| auth link replaced by a refresh | LOW | Pi may rewrite auth.json | ht-5, ht-6 | doctor fails on a non-link; live check |
+| orphan wait child | MEDIUM | a wait outliving the round | ht-4 | cancel on every exit, fake-source test |
 
-Waves: wave 1 runs ht-1, ht-2, ht-4 and ht-6 (disjoint files). Wave 2 runs ht-3 (shares catalog.rs and the registry with ht-1) and ht-5 (shares run.rs and paseo.rs with ht-4). Wave 3 runs ht-7.
+Waves: wave 1 runs ht-1, ht-2, ht-4 and ht-6 (disjoint files). Wave 2 runs ht-3 (shares catalog.rs and the registry with ht-1) and ht-5 (shares herding.rs with ht-1 and run.rs and paseo.rs with ht-4). Wave 3 runs ht-7.
 
 ## Role assignments
 
@@ -131,11 +133,11 @@ Current slice: all seven cells.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| ht-1 | Cap a herded cell from its job with the leader's proof verdict | packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs; packages/bee-rs/crates/bee/src/verbs/cells/tests.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json | — | bee cells finish --from-job with --proof-result caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text | related tests green |
-| ht-2 | Serve the main control plane from inside a granted worktree | packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs; packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs; packages/bee-rs/crates/bee/src/verbs/cells/mod.rs; packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs; packages/bee-rs/crates/bee/src/roots.rs | — | state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent run from a granted worktree against the main store and name the main root in their output | related tests green |
+| ht-1 | Cap a herded cell from its job with the leader's proof verdict | packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs; packages/bee-rs/crates/bee/src/verbs/cells/tests.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; packages/bee-rs/crates/bee/src/herding.rs | — | bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text | related tests green |
+| ht-2 | Serve the main control plane for allow-listed verbs inside a granted worktree | packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs; packages/bee-rs/crates/bee/src/verbs/cells/util.rs; packages/bee-rs/crates/bee/src/verbs/cells/mod.rs; packages/bee-rs/crates/bee/src/verbs/drivers/close.rs; packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs | — | state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root | related tests green |
 | ht-3 | Record a judge's fenced verdicts straight from its answer | packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs; packages/bee-rs/crates/bee/src/verbs/cells/judge.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; skills/bee-hive/references/gates-and-delegation.md | ht-1 | cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell | related tests green |
-| ht-4 | Wait on Paseo events and name workers by cell and agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | the Paseo wait loop learns idle, permission, error and timeout from paseo agent wait on a background thread with its own deadline | related tests green |
-| ht-5 | Give an opted-in Pi worker its own Pi config folder | packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs; packages/bee-rs/crates/bee/src/herding.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs; packages/bee-rs/crates/bee/src/herding/run.rs | ht-4 | a pi-provider Paseo agent with isolated_config true gets .bee/runtime/pi-agent/<agent>/ with auth, optional model and npm links, trust-always settings and empty skills and extensions | related tests green |
+| ht-4 | Wait on Paseo events and name workers by cell and agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | the Paseo wait loop learns idle, permission, error and timeout from a paseo agent wait child it polls on the 200 ms tick and kills on every round exit | related tests green |
+| ht-5 | Give an opted-in Pi worker its own Pi config folder | packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs; packages/bee-rs/crates/bee/src/herding.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs; packages/bee-rs/crates/bee/src/herding/run.rs | ht-1, ht-4 | a pi-provider Paseo agent with isolated_config true gets .bee/runtime/pi-agent/<agent>/ with auth, optional model and npm links, trust-always settings and empty skills and extensions | related tests green |
 | ht-6 | Catch the AppImage paseo CLI and a broken isolated Pi folder in doctor | packages/bee-rs/crates/bee/src/doctor.rs; packages/bee-rs/crates/bee/src/doctor/tests.rs | — | paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script | related tests green |
 | ht-7 | Document from-job caps, worktree control verbs, judge text, Paseo wait and isolated Pi folders | docs/knowledge/areas/bee-herding/the-paseo-channel.md; docs/knowledge/areas/worktree-parallelism/control-plane-topology.md; skills/bee-swarming/references/swarming-reference.md; docs/config-reference.md | ht-1, ht-2, ht-3, ht-4, ht-5, ht-6 | the Paseo channel concept describes the event wait, isolated Pi folders, the doctor checks and worker titles with their decision ids | knowledge check green |
 
@@ -156,20 +158,22 @@ Current slice: all seven cells.
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
       "packages/bee-rs/crates/bee/src/catalog.rs",
-      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding.rs"
     ],
     "read_first": [
       "docs/history/herding-leader-toil/CONTEXT.md",
       "docs/history/herding-leader-toil/plan.md",
       "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
-      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
     ],
-    "action": "Red first. Add three flags to `bee cells finish` (not `cells cap`): --from-job <job-id>, --proof-result <green:unit|green:static|green:live>, --proof-reason <text> (per D1). In finish_support.rs add a pure builder report_from_job(job: &Value, result: &MailboxResult-like fields, git: Option<GitFacts>, cell_verify: &str, proof_result: &str, proof_reason: Option<&str>) -> Result<String, String> that returns the five-key report JSON string: outcome = result summary; files = result files_changed, or the git changed paths when that list is empty; commit = git HEAD sha; tests = '<cell_verify> — <proof_result> — <proof_reason or the result proof text>' joined with the PROOF_SEPARATOR the parser uses; deviations = [dissent claim] when the result carries dissent, else []. The caller in handlers_close.rs (search for run_finish and cap_flags_from) reads the job from <main>/.bee/mailbox/<job>/job.json and the latest result-N.json through the existing mailbox helpers (select_latest_round / read_result), runs git in job.json cwd (rev-parse HEAD, diff --name-only base..HEAD plus status --porcelain, the same facts run.rs git_block computes; reuse it if it is reachable, otherwise a small local helper), then sets the report flag and continues through the existing cap path with no second validator. Refuse, typed and naming the fix: --from-job with --report; --from-job without --proof-result; a proof-result outside the three green words; no result file; result status not done; job.json cell_id present and different from --id; job cwd missing (FIX: pass --report). Declare the three flags for cells.finish in catalog.rs and in generated/registry_payload.json in the same shape as the existing cells.finish flags, and keep the registry and catalog tests green. Tests in verbs/cells/tests.rs with a temp repo, a job mailbox and a git worktree dir: a done result caps with the built report and the verify-match passes; empty files_changed falls back to git paths; each refusal; the cell still needs the commit trailer as today. Cite decision 511c64b2 (contract:cells-finish-from-job). No code comments.",
+    "action": "Red first. Add three flags to `bee cells finish` (not `cells cap`): --from-job <job-id>, --proof-result <green:unit|green:static|green:live>, --proof-reason <text> (per D1). In finish_support.rs add a pure builder report_from_job(job: &Value, result: &MailboxResult-like fields, git: Option<GitFacts>, cell_verify: &str, proof_result: &str, proof_reason: Option<&str>) -> Result<String, String> that returns the five-key report JSON string: outcome = result summary; files = result files_changed, or the git changed paths when that list is empty; commit = git HEAD sha; tests = '<cell_verify> — <proof_result> — <proof_reason or the result proof text>' joined with the PROOF_SEPARATOR the parser uses; deviations = [dissent claim] when the result carries dissent, else []. The caller in handlers_close.rs (search for run_finish and cap_flags_from) reads the job from <main>/.bee/mailbox/<job>/job.json and the latest result through the herding mailbox helpers: in herding.rs change `mod mailbox;` to `pub(crate) mod mailbox;` and use select_latest_round, result_path and parse_result_text (do not touch herding/run.rs, which another cell owns; read_result and git_block are private there); run git in job.json cwd with a small local helper in finish_support.rs (rev-parse HEAD, diff --name-only <merge-base with the main branch>..HEAD, status --porcelain), then sets the report flag and continues through the existing cap path with no second validator. With --from-job the usual mistakes answer is required (--no-mistakes or --mistake with --fix-at), so bee close never finds the cell unanswered. The cap output (text and JSON) names the files source: worker files_changed or git fallback. Refuse, typed and naming the fix: --from-job with --report; --from-job without --proof-result; --from-job without a mistakes answer; an empty worker proof text with no --proof-reason (FIX: pass --proof-reason); a proof-result outside the three green words; no result file; result status not done; job.json cell_id present and different from --id; job cwd missing (FIX: pass --report). Declare the three flags for cells.finish in catalog.rs and in generated/registry_payload.json in the same shape as the existing cells.finish flags, and keep the registry and catalog tests green. Tests in verbs/cells/tests.rs with a temp repo, a job mailbox and a git worktree dir: a done result caps with the built report and the verify-match passes; empty files_changed falls back to git paths; each refusal; the cell still needs the commit trailer as today. Cite decision d248942f (contract:cells-finish-from-job). No code comments.",
     "must_haves": {
       "truths": [
-        "bee cells finish --from-job with --proof-result caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text",
-        "empty files_changed falls back to the git changed paths of the job's working directory",
-        "--from-job refuses with --report, without --proof-result, with a non-green proof result, with no result, with a non-done result, with another cell's job, and with a missing working directory",
+        "bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text",
+        "empty files_changed falls back to the git changed paths of the job's working directory, and the cap output names the source",
+        "--from-job refuses with --report, without --proof-result, without a mistakes answer, with a non-green proof result, with no result, with a non-done result, with another cell's job, with a missing working directory, and with empty proof text and no --proof-reason",
         "the existing cells finish and cells cap paths and their tests are unchanged"
       ],
       "artifacts": [
@@ -206,51 +210,59 @@ Current slice: all seven cells.
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
-    "title": "Serve the main control plane from inside a granted worktree",
+    "title": "Serve the main control plane for allow-listed verbs inside a granted worktree",
     "deps": [],
     "decisions": [
       "D2"
     ],
     "files": [
-      "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
-      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
-      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
       "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
-      "packages/bee-rs/crates/bee/src/roots.rs"
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
     ],
     "read_first": [
       "docs/history/herding-leader-toil/CONTEXT.md",
       "docs/history/herding-leader-toil/plan.md",
-      "packages/bee-rs/crates/bee/src/roots.rs",
-      "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/roots.rs",
       "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
     ],
-    "action": "Red first. Per D2: move resolve_root_serving_granted from verbs/drivers/prepare.rs next to prelude in verbs/reservations/emit.rs (prepare.rs keeps calling it from the new home) and make prelude use it, so a Roots::Unsupported(GrantedWorktree { main_root }) becomes Pre::Go with ctx.root = main_root plus the worktree root kept for artifact reads. Do the same swap for cells list/ready/show in verbs/cells/mod.rs (search resolve_store_root there). Keep refusing, with the existing GrantedWorktree text: dispatch prepare --claim (its explicit re-refusal in prepare.rs stays), and cells claim, claim-next, release, reopen and cap (add an explicit refusal arm for those verbs in the cells dispatch, since prelude now serves the worktree). In verbs/state_group/set_gate.rs, make every read of docs/history/<feature>/ files (gate --preview plan.md, the plan hash, CONTEXT.md) resolve against the worktree root when the call came from a granted worktree. When a verb is served this way, its text output gains one line `control plane: <main root>` and its JSON gains control_root. Do not change resolve_store_root itself (tests assert its refusal). Tests (inline #[cfg(test)] modules in the touched files, no cells/tests.rs edit): a granted worktree with state route --set, gate --preview reading the worktree plan.md, cells list and cells add all succeed and write main's store; cells claim and dispatch prepare --claim still refuse with the GrantedWorktree text; an ungranted worktree and the main checkout behave as before. Cite decision d45a56b9 (contract:control-plane-from-worktree). No code comments.",
+    "action": "Red first. Per D2 (revised): do NOT change verbs/reservations/emit.rs prelude or resolve_store_root. Use the existing serve-granted resolvers in verbs/drivers/prepare.rs (resolve_root_serving_granted and ctx_serving_granted, already used by state_group/advisor_ref.rs) as an opt-in: (1) state_group's entry (verbs/state_group/set_gate.rs, search `go` and its prelude call) serves granted worktrees for every state verb, and the gate and route aliases with it; (2) verbs/drivers/close.rs: both root resolutions (search resolve_store_root and prelude) serve granted worktrees, and its reads of docs/history/<feature>/ and docs/knowledge go through the worktree found for the feature (reuse find_granted_worktree_for_feature or the advisor_plan_path approach) so a worktree close judges the worktree's docs; (3) cells: add a dispatch_serving_granted twin next to dispatch in verbs/cells/handlers_write.rs and route ONLY add, update, schedule, escalate, reroute, judge, judge-record, dissent, dissent-verdict and leader-check through it (find the routing in verbs/cells/util.rs try_mutating and the handlers that call dispatch); every other cells verb keeps the existing refusal untouched; list, ready and show in verbs/cells/mod.rs serve granted worktrees too. cells finish stays on its full door. dispatch prepare --claim, dispatch wave and dispatch authorize keep refusing. Gate and plan reads already resolve the worktree plan through advisor_plan_path: add a test, no second resolver. A served call's text output gains one line `control plane: <main root>`; a JSON object output gains control_root; JSON array outputs (cells list, ready) are unchanged. Tests (inline #[cfg(test)] modules in the touched files, not verbs/cells/tests.rs): from a granted worktree, state route --set, state set, gate --preview (reads the worktree plan.md), cells add, cells list and close --dry-run (reads the worktree CONTEXT.md) succeed against main's store; cells claim, claim-next, unclaim, reopen, cap, block, drop and rebind-session still refuse with the GrantedWorktree text; cells finish still caps from the worktree; the main checkout and an ungranted worktree behave as before. Cite decision e32f3a66 (contract:control-plane-from-worktree). No code comments.",
     "must_haves": {
       "truths": [
-        "state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent run from a granted worktree against the main store and name the main root in their output",
-        "gate --preview run from a granted worktree reads the worktree's plan.md",
-        "dispatch prepare --claim and cells claim, claim-next, release, reopen and cap still refuse inside a granted worktree with the existing text",
-        "the main checkout and ungranted worktrees behave exactly as before and resolve_store_root still refuses"
+        "state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root",
+        "close and gate run from a granted worktree read the worktree's docs/history files",
+        "every other cells verb, dispatch prepare --claim, dispatch wave and dispatch authorize still refuse inside a granted worktree with the existing text, and cells finish still caps there",
+        "JSON array outputs are unchanged; JSON object outputs gain control_root when served",
+        "the main checkout and ungranted worktrees behave exactly as before; the shared prelude and resolve_store_root are unchanged"
       ],
       "artifacts": [
         {
-          "path": "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
-          "substantive": "prelude serving granted worktrees"
+          "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+          "substantive": "dispatch_serving_granted for the allow-listed cells verbs"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "substantive": "close served with worktree docs reads"
         },
         {
           "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
-          "substantive": "worktree-relative history reads"
+          "substantive": "state entry served"
         }
       ],
       "key_links": [
-        "prelude calls resolve_root_serving_granted"
+        "only allow-listed verbs call the serve-granted resolver"
       ],
       "prohibitions": [
         "No code comments",
-        "No change to resolve_store_root",
-        "No per-worktree cells store"
+        "No change to verbs/reservations/emit.rs prelude or resolve_store_root",
+        "No per-worktree cells store",
+        "No change to cells finish"
       ]
     },
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee",
@@ -284,12 +296,12 @@ Current slice: all seven cells.
       "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs",
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
     ],
-    "action": "Red first. Per D3: in verbs/cells/judge.rs add a pure extract_fenced_verdicts(text) -> Result<Vec<(String, Value)>, String> that finds every fenced block whose opening line is three backticks then `json <cell-id>` (exactly one id token), takes the body to the closing fence, and parses it with the same JSON parser run_judge_record uses; a duplicate id is an error naming it. In handlers_meta.rs factor the body of run_judge_record after parsing into record_one(...) and add --from-text <path|-> (stdin for -), mutually exclusive with --file; with --from-text, --id becomes optional and, when given, every block id must equal it. Record each valid block on its cell through record_one (claim guards and archive checks per cell, as today); output a JSON array of {id, recorded, errors} (text: one line per id); exit non-zero when any block failed validation or recording. Declare --from-text for cells.judge-record in catalog.rs and generated/registry_payload.json like the existing flags and keep those tests green. In skills/bee-hive/references/gates-and-delegation.md, in the Judge tier paragraph that says the judge returns the judge-verdict/1 schema recorded via cells judge-record, add one sentence: the judge returns one fenced block per cell whose info string is `json <cell-id>`, and the leader records them all with `bee cells judge-record --from-text`. Tests (inline in judge.rs and handlers_meta.rs or the existing judge tests): two valid blocks record two verdicts; an invalid block is reported and the exit is non-zero while the valid one records; duplicate ids refuse; --id mismatch refuses; --file with --from-text refuses. Cite decision 6b5d7ed8 (contract:judge-record-from-text). No code comments.",
+    "action": "Red first. Per D3: in verbs/cells/judge.rs add a pure extract_fenced_verdicts(text) -> Result<Vec<(String, Value)>, String> that finds every fenced block whose opening line is three backticks then `json <cell-id>` (exactly one id token), takes the body to the closing fence, and parses it with the same JSON parser run_judge_record uses; a duplicate id is an error naming it; zero blocks is an error ('no json <cell-id> verdict block found'). In handlers_meta.rs factor the body of run_judge_record after parsing into record_one(...) and add --from-text <path|-> (stdin for -), mutually exclusive with --file; with --from-text, --id becomes optional and, when given, every block id must equal it. Record each valid block on its cell through record_one (claim guards and archive checks per cell, as today); output a JSON array of {id, recorded, errors} (text: one line per id); exit non-zero when any block failed validation or recording. Declare --from-text for cells.judge-record in catalog.rs and generated/registry_payload.json like the existing flags and keep those tests green. In skills/bee-hive/references/gates-and-delegation.md, in the Judge tier paragraph that says the judge returns the judge-verdict/1 schema recorded via cells judge-record, add one sentence: the judge returns one fenced block per cell whose info string is `json <cell-id>`, and the leader records them all with `bee cells judge-record --from-text`. Zero blocks refuse before recording anything. Tests (inline in judge.rs and handlers_meta.rs or the existing judge tests): two valid blocks record two verdicts; an invalid block is reported and the exit is non-zero while the valid one records; duplicate ids refuse; --id mismatch refuses; --file with --from-text refuses; an answer with no blocks refuses. Cite decision e7509db5 (contract:judge-record-from-text). No code comments.",
     "must_haves": {
       "truths": [
         "cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell",
         "an invalid block is reported by id with the validator errors and the verb exits non-zero",
-        "duplicate ids, an --id mismatch, and --file with --from-text refuse by name",
+        "zero blocks, duplicate ids, an --id mismatch, and --file with --from-text refuse by name",
         "the judge tier paragraph tells the judge to return one json <cell-id> block per cell",
         "cells judge-record --file behaves as before"
       ],
@@ -339,11 +351,11 @@ Current slice: all seven cells.
       "packages/bee-rs/crates/bee/src/herding/paseo.rs",
       "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
     ],
-    "action": "Red first. paseo.rs: add wait_argv(id, timeout_secs) = [agent, wait, <id>, --timeout, <n>, --json] and parse_wait(stdout) -> Option<WaitStatus> (Idle|Permission|Error|Timeout) reading the first JSON object's status, skipping leading non-JSON lines like parse_run_agent_id does. run_argv (D7): the title becomes `<cell-id> <agent>` when the run has a cell id, else `<agent> <job-id>`; add --label bee_agent=<agent> and, when a cell id is set, --label bee_cell=<cell-id>, keeping --label bee_job=<job-id>; thread the cell id and agent name from the call sites (search run_argv). run.rs (D4): introduce a WaitSource seam for wait_for_round_paseo_driven: the real one runs paseo agent wait on a background thread through its own RealPaseoCli whose deadline is timeout + 10 s (never the 15 s CLI timeout and never FailFastPaseoCli) and sends results on a channel; the 200 ms tick drains it with try_recv and maps Idle -> PaseoState::Idle, Permission -> Blocked, Error -> Dead, Timeout -> Working (heartbeat fresh). Arm the first wait after the one post-spawn inspect (which still records the model, paseo-pi-hardening D4); re-arm only after a Timeout or after Idle handling, never sooner than 3 s after the previous wait returned; while Blocked do not arm a wait and fall back to one inspect every 3 s until the state leaves Blocked. Use a wait timeout of 60 s, or the remaining idle budget when smaller. Keep the silent-idle nudge and second-idle end, the mailbox checks, the mark checks and the idle and ceiling timeouts exactly as they are. Tests inject a fake WaitSource and the driven clock: Idle after Working with no result still nudges once and ends on the second idle; a Timeout keeps the run alive; Permission then Idle; an Error maps to the died path through the existing three-read debounce; no wait is armed while Blocked; the post-spawn inspect records the model; title and labels for a cell run and a plain run. Also change the `worker reported success for cell ... without capping it` line to name `bee cells finish --id <cell> --from-job <job-id> --proof-result <green:...>` (D1). Cite decision 32625922 (contract:paseo-agent-wait). No code comments.",
+    "action": "Red first. paseo.rs: add wait_argv(id, timeout_secs) = [agent, wait, <id>, --timeout, <n>, --json] and parse_wait(stdout) -> Option<WaitStatus> (Idle|Permission|Error|Timeout) reading the first JSON object's status, skipping leading non-JSON lines like parse_run_agent_id does. run_argv (D7): the title becomes `<cell-id> <agent>` when the run has a cell id, else `<agent> <job-id>`; add --label bee_agent=<agent> and, when a cell id is set, --label bee_cell=<cell-id>, keeping --label bee_job=<job-id>; thread the cell id and agent name from the call sites (search run_argv). run.rs (D4): introduce a WaitSource trait with arm(timeout), poll() -> Option<WaitStatus> and cancel() for wait_for_round_paseo_driven: the real one spawns paseo agent wait as a std::process::Child with piped stdout (never through the 15 s CLI and never FailFastPaseoCli), poll uses try_wait on the existing 200 ms tick and parses stdout when the child exits, cancel kills and reaps the child; cancel runs on every round exit (result, mark, timeout, died) through a drop guard and before every re-arm; no thread, no channel. The tick maps Idle -> PaseoState::Idle, Permission -> Blocked, Error -> Dead, Timeout -> Working (heartbeat fresh). Arm the first wait after the one post-spawn inspect (which still records the model, paseo-pi-hardening D4); re-arm only after a Timeout or after Idle handling, never sooner than 3 s after the previous wait returned; while Blocked, and after an Error until an inspect reports a state, do not arm a wait and fall back to one inspect every 3 s (so the existing three-read died debounce sees real reads). Use a wait timeout of 60 s, or the remaining idle budget when smaller. Keep the silent-idle nudge and second-idle end, the mailbox checks, the mark checks and the idle and ceiling timeouts exactly as they are. Tests inject a fake WaitSource and the driven clock: Idle after Working with no result still nudges once and ends on the second idle; a Timeout keeps the run alive; Permission then Idle; an Error switches to the inspect fallback and three Dead inspects reach the died path; no wait is armed while Blocked; cancel kills the child on every round exit; the post-spawn inspect records the model; title and labels for a cell run and a plain run. Also change the `worker reported success for cell ... without capping it` line to name `bee cells finish --id <cell> --from-job <job-id> --proof-result <green:...>` (D1). Cite decision a0c36961 (contract:paseo-agent-wait). No code comments.",
     "must_haves": {
       "truths": [
-        "the Paseo wait loop learns idle, permission, error and timeout from paseo agent wait on a background thread with its own deadline",
-        "a wait is re-armed only after a timeout or idle handling and never sooner than 3 s; no wait is armed while blocked, where one inspect every 3 s runs instead",
+        "the Paseo wait loop learns idle, permission, error and timeout from a paseo agent wait child it polls on the 200 ms tick and kills on every round exit",
+        "a wait is re-armed only after a timeout or idle handling and never sooner than 3 s; while blocked and after an error the loop uses one inspect every 3 s instead",
         "the post-spawn inspect still records the observed model, and the silent-idle nudge, mailbox checks and timeouts are unchanged",
         "a worker's Paseo title is <cell-id> <agent> or <agent> <job-id> with bee_agent and bee_cell labels beside bee_job",
         "the uncapped-success line names bee cells finish --from-job",
@@ -364,6 +376,7 @@ Current slice: all seven cells.
       ],
       "prohibitions": [
         "No code comments",
+        "No thread or channel for the wait",
         "No paseo agent wait through FailFastPaseoCli or the 15 s CLI",
         "No change to herdr or tmux paths"
       ]
@@ -381,6 +394,7 @@ Current slice: all seven cells.
     "role": "code",
     "title": "Give an opted-in Pi worker its own Pi config folder",
     "deps": [
+      "ht-1",
       "ht-4"
     ],
     "decisions": [
@@ -397,7 +411,7 @@ Current slice: all seven cells.
       "docs/history/herding-leader-toil/plan.md",
       "packages/bee-rs/crates/bee/src/herding/paseo.rs"
     ],
-    "action": "Red first. Per D5: paseo.rs PaseoSpec gains isolated_config: bool from the paseo block (default false; ignored unless provider is pi). New module herding/pi_agent_dir.rs (declare it in herding.rs): ensure_pi_agent_dir(main_root, agent, home) -> Result<(PathBuf, Vec<String>), String> creates <main_root>/.bee/runtime/pi-agent/<agent>/ idempotently: symlink auth.json to <home>/.pi/agent/auth.json (refuse with FIX 'log in with pi once' when that file is missing), and symlink models.json, models-store.json and npm when their sources exist; write settings.json {\"defaultProjectTrust\":\"always\",\"quietStartup\":true} when absent or different; create empty skills/ and extensions/; never replace an existing real file or directory where a link belongs — return a note for it instead. run.rs: in the Paseo spawn path (search build_child_env and run_argv), when the spec has isolated_config, call ensure_pi_agent_dir and add PI_CODING_AGENT_DIR=<dir> to the child env (so it becomes a --env flag); a refusal ends the run as SpawnFailed with the FIX line; notes go to stderr. Tests with a temp home and root: links and settings created; idempotent second call; a real file in place of a link is kept and reported; missing auth refuses; the argv carries --env PI_CODING_AGENT_DIR only when isolated_config is true and provider is pi. Cite decision db780128 (contract:pi-isolated-config). No code comments.",
+    "action": "Red first. Per D5: paseo.rs PaseoSpec gains isolated_config: bool from the paseo block (default false; ignored unless provider is pi). New module herding/pi_agent_dir.rs (declare it in herding.rs): ensure_pi_agent_dir(main_root, agent, home) -> Result<(PathBuf, Vec<String>), String> creates <main_root>/.bee/runtime/pi-agent/<agent>/ idempotently: symlink auth.json to <home>/.pi/agent/auth.json (refuse with FIX 'log in with pi once' when that file is missing), and symlink models.json, models-store.json and npm when their sources exist; write settings.json {\"defaultProjectTrust\":\"always\",\"quietStartup\":true} when absent or different; create empty skills/ and extensions/; never replace an existing real file or directory where a link belongs — return a note for it instead. run.rs: in the Paseo spawn path (search build_child_env and run_argv), when the spec has isolated_config, call ensure_pi_agent_dir and add PI_CODING_AGENT_DIR=<dir> to the child env (so it becomes a --env flag); a refusal ends the run as SpawnFailed with the FIX line; notes go to stderr. Tests with a temp home and root: links and settings created; idempotent second call; a real file in place of a link is kept and reported; missing auth refuses; the argv carries --env PI_CODING_AGENT_DIR only when isolated_config is true and provider is pi. In the live proof the leader checks that auth.json stays a link after a worker runs. Cite decision db780128 (contract:pi-isolated-config). No code comments.",
     "must_haves": {
       "truths": [
         "a pi-provider Paseo agent with isolated_config true gets .bee/runtime/pi-agent/<agent>/ with auth, optional model and npm links, trust-always settings and empty skills and extensions",
@@ -450,11 +464,11 @@ Current slice: all seven cells.
       "docs/history/herding-leader-toil/plan.md",
       "packages/bee-rs/crates/bee/src/doctor.rs"
     ],
-    "action": "Red first. Per D6, in doctor.rs paseo_ready_row_with_env_and_cli (search paseo_ready): after the --version call, fail with FIX 'set herding.paseo.command to the npm @getpaseo/cli paseo' when the first non-blank stdout line is not a bare x.y.z version, or when the command resolved on PATH (or given as a path) is a text script containing 'AppImage'. For each herding agent whose raw config paseo block has provider pi and isolated_config true, check <root>/.bee/runtime/pi-agent/<agent>/settings.json has defaultProjectTrust always and its auth.json link resolves; fail with a FIX naming the agent otherwise (read the raw config keys; do not depend on new structs). Tests in doctor/tests.rs with the fake CLI and temp files: AppImage-style version output fails; an AppImage wrapper script fails; the npm style passes; a broken isolated folder fails; a good one passes. Cite decision 096d7f99 (contract:doctor-paseo-cli). No code comments.",
+    "action": "Red first. Per D6, in doctor.rs paseo_ready_row_with_env_and_cli (search paseo_ready): after the --version call, fail with FIX 'set herding.paseo.command to the npm @getpaseo/cli paseo' when the first non-blank stdout line is not a bare x.y.z version, or when the command resolved on PATH (or given as a path) is a text script containing 'AppImage'. For each herding agent whose raw config paseo block has provider pi and isolated_config true, when <root>/.bee/runtime/pi-agent/<agent>/ exists, check its settings.json has defaultProjectTrust always and its auth.json is a symlink that resolves (a real file or a broken link fails); when the folder does not exist yet, only check that ~/.pi/agent/auth.json exists; fail with a FIX naming the agent otherwise (read the raw config keys; do not depend on new structs). Tests in doctor/tests.rs with the fake CLI and temp files: AppImage-style version output fails; an AppImage wrapper script fails; the npm style passes; a broken isolated folder fails; a replaced (non-link) auth.json fails; a missing folder with the home auth present passes; a good one passes. Cite decision a79e3edc (contract:doctor-paseo-cli). No code comments.",
     "must_haves": {
       "truths": [
         "paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script",
-        "paseo_ready fails when an isolated_config Pi agent's folder lacks trust-always settings or a working auth link",
+        "paseo_ready fails when an existing isolated_config folder lacks trust-always settings or an auth.json that is a working link, and only checks the home auth when the folder does not exist yet",
         "the npm CLI with good folders still passes and the existing doctor tests stay green"
       ],
       "artifacts": [
