@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee Herding — the supervisor observer, its tick, and how an intervention reaches a session"
 description: "A cold observer role of the herding control loop that reads bee's existing state surfaces, writes exactly one observation per tick, and turns a signal into an open question delivered to the target session at its next turn boundary — with a frequency cap that escalates instead of repeating, and a danger class that notifies at once."
-timestamp: 2026-08-28
+timestamp: 2026-10-06
 bee:
   id: bee-herding-the-supervisor-observer-and-its-interventions
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)", "slp-human-up 3cfd9980 (an advisor-nudge record recommends only; the target lead summons the advisor itself)", "slp-human-up 9e5eda5b (an advisor-nudge is a response debt enforced like judge-debt/dissent-debt)", "supervisor-tick-contract 051b87ba (--role supervisor --once --main-root PATH is the documented external-trigger primitive for a cross-repo caller; no new verb, no signature change)", "slp-lead-recovery b5b77bfb (split of powers: the supervisor only detects and records a lead-recovery mailbox record; the herding dispatch arm executes the successor spawn behind the owner interlock — the observer never spawns; touches 787a9eb0)", "slp-lead-recovery a97566ae (safety envelope: two-sighting proof, one successor per dead session ever, ACK by successor heartbeat and lane bind within one interval, opt-in supervisor.lead_recovery default off, fail-closed single-shape executor guard, old lead never machine-closed; touches c80debd7)", "herding-cockpit-completeness 468c6cb8 (2026-09-06 — stalled and recovered status words share the 120s activity freshness constant with the supervisor observer)", "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior)", "herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list)"]
-  sources: [docs/history/slp-supervisor-heartbeat/CONTEXT.md, docs/history/slp-supervisor-heartbeat/plan.md, docs/discovery/slp-supervisor-lead-peer/MAP.md, docs/history/research/slp-observer-surfaces.md, docs/history/research/slp-supervisor-placement.md, "slp-supervisor-heartbeat cells sup-1, sup-2, sup-3 (the role arm, the observation store and its verbs, the end-to-end tick; traces in `.bee/cells/`, 2026-08-27)", "slp-supervisor-heartbeat cells sup-5, sup-6, sup-7 (the frequency-capped intervention mailbox, next-turn delivery through the prompt hook, the urgent class; traces in `.bee/cells/`, 2026-08-27)", "capture stub 3b7b9e9c (Phase 3 shape: four event-sourced stores resolved against the control root)", docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-6, hcc-7 (commits 704abdb5, 9895e008)"]
+  decisions: ["slp-supervisor-heartbeat 787a9eb0 (SLP is distilled into bee's skeleton; bee's locked rules win on any conflict — the observer adds beside them, never relaxes them)", "slp-supervisor-heartbeat 322695d6 (the supervisor is a new role of the herding control loop, cold per tick, model from the configured supervisor role, tool surface enumerated read/query only)", "slp-supervisor-heartbeat da7cb49b (observation reads bee's seven existing surfaces; day-1 signals struggling-loop, big-decision, danger-op; the cheap Detector poller is NOT this feature)", "slp-supervisor-heartbeat c80debd7 (interventions are file records read at the target session's NEXT turn boundary, never mid-turn injection; same point twice escalates, never repeats; danger-class alerts notify immediately)", "slp-supervisor-heartbeat a8f4b8ab (added signals: work over 2x its recorded estimate measured by the harness, and two consecutive submissions differing only in the same region)", "slp-supervisor-heartbeat a020319d (this is the FIRST of four slp clusters; dissent, blind lanes, and contract/original-request are separate features)", "slp-human-up 3cfd9980 (an advisor-nudge record recommends only; the target lead summons the advisor itself)", "slp-human-up 9e5eda5b (an advisor-nudge is a response debt enforced like judge-debt/dissent-debt)", "supervisor-tick-contract 051b87ba (--role supervisor --once --main-root PATH is the documented external-trigger primitive for a cross-repo caller; no new verb, no signature change)", "slp-lead-recovery b5b77bfb (split of powers: the supervisor only detects and records a lead-recovery mailbox record; the herding dispatch arm executes the successor spawn behind the owner interlock — the observer never spawns; touches 787a9eb0)", "slp-lead-recovery a97566ae (safety envelope: two-sighting proof, one successor per dead session ever, ACK by successor heartbeat and lane bind within one interval, opt-in supervisor.lead_recovery default off, fail-closed single-shape executor guard, old lead never machine-closed; touches c80debd7)", "herding-cockpit-completeness 468c6cb8 (2026-09-06 — stalled and recovered status words share the 120s activity freshness constant with the supervisor observer)", "herding-cockpit-completeness 9615be76 (2026-09-06 — no automatic behavior)", "herding-cockpit-completeness afec9446 (2026-09-06 — D8 word list)", "paseo-pi-hardening D9 e2af1dab"]
+  sources: [docs/history/slp-supervisor-heartbeat/CONTEXT.md, docs/history/slp-supervisor-heartbeat/plan.md, docs/discovery/slp-supervisor-lead-peer/MAP.md, docs/history/research/slp-observer-surfaces.md, docs/history/research/slp-supervisor-placement.md, "slp-supervisor-heartbeat cells sup-1, sup-2, sup-3 (the role arm, the observation store and its verbs, the end-to-end tick; traces in `.bee/cells/`, 2026-08-27)", "slp-supervisor-heartbeat cells sup-5, sup-6, sup-7 (the frequency-capped intervention mailbox, next-turn delivery through the prompt hook, the urgent class; traces in `.bee/cells/`, 2026-08-27)", "capture stub 3b7b9e9c (Phase 3 shape: four event-sourced stores resolved against the control root)", docs/history/herding-cockpit-completeness/CONTEXT.md, docs/history/herding-cockpit-completeness/plan.md, "herding-cockpit-completeness cells hcc-6, hcc-7 (commits 704abdb5, 9895e008)", docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
   authoritative_for: "bee-herding: the supervisor observer role, its observation tick, and the intervention channel"
   owns.code: [packages/bee-rs/crates/bee/src/verbs/supervisor.rs, packages/bee-rs/crates/bee/src/herding/control_loop.rs]
   owns.skills: ["skills/bee-herding/references/supervisor-prompt.md"]
@@ -224,6 +224,46 @@ already established for `bee decisions log` / `bee backlog pbi add`).
   `sup-20260831-b2e1`) needs no changes on this side either.
 
 
+## Supervisor runtime and the Pi argv
+
+The key `herding.supervisor_runtime` selects the supervisor execution runtime (paseo-pi-hardening D9, store `e2af1dab`).
+
+The key accepts two values:
+- `"claude"`: The default runtime. An absent key uses this runtime.
+- `"pi"`: Executes the supervisor through the Pi command-line interface.
+
+Any other value refuses execution before any process starts.
+
+### The Claude runtime
+
+Under `"claude"`, the control loop reads the supervisor model from `team.claude.supervisor`.
+The spawner executes:
+```text
+claude -p "<prompt>" --model <model> --max-turns 10 --allowedTools <SUPERVISOR_ALLOWED_TOOLS>
+```
+
+### The Pi runtime
+
+Under `"pi"`, the control loop resolves `team.pi.supervisor`.
+The slot must configure a herding agent with a `pi` provider, or a plain model slot.
+The runner extracts the model and optional thinking level.
+Any other provider (such as `claude`) refuses execution with a `FIX:` message.
+
+Before spawning, the runner verifies that `<main root>/.pi/extensions/bee-guard` exists.
+If the extension directory is missing, the runner refuses execution.
+
+The spawner executes the Pi process in the main repository root.
+The default argv is:
+```text
+pi --print <prompt> --model <model> [--thinking <level>] --no-session --no-extensions -e <main root>/.pi/extensions/bee-guard --tools read,grep,find,ls,bash
+```
+
+The spawner sets the environment variable `BEE_SUPERVISOR_ALLOWED` to the supervisor allowlist (`SUPERVISOR_ALLOWED_TOOLS`).
+The `worker-guard` hook inspects every shell command.
+The hook refuses any command outside the allowlist.
+
+When `herding.control_command` is configured, its template overrides the default argv.
+
 ## A plan check that refuses the shape is the plan check working
 
 `slp-lead-recovery` was ported as an automatic successor spawn and shipped as
@@ -243,9 +283,12 @@ fires is dead code that still has to be maintained.
 
 - Role arm and the enumerated tool surface: `packages/bee-rs/crates/bee/src/herding/control_loop.rs` (`Role`, `allowed_tools_for`).
 - Stores, records, and every verb: `packages/bee-rs/crates/bee/src/verbs/supervisor.rs`.
+- Supervisor shell allowlist guard: `packages/bee-rs/crates/bee/src/hooks/worker_guard.rs`.
 - Verb surface: `bee supervisor record | list | pending | mark-delivered`, driven by `bee herding control-loop --role supervisor --interval 900`.
 - External trigger: `bee herding control-loop --role supervisor --once --main-root <path>` (see "External trigger (cross-repo callers)" above).
 - Store root: `.bee/supervisor/` under the control root.
 - Observer prompt: `skills/bee-herding/references/supervisor-prompt.md`.
 - Delivery point: the `UserPromptSubmit` hook.
+- Feature context and locked decisions: `docs/history/paseo-pi-hardening/CONTEXT.md`.
+- Implementation plan and test matrix: `docs/history/paseo-pi-hardening/plan.md`.
 - Companion page: [Presence, wake reports, and earned autonomy](presence-wake-reports-and-earned-autonomy.md).

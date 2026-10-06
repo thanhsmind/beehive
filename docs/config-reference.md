@@ -252,6 +252,7 @@ Pi enforces bee rules through the extension folder [`.pi/extensions/bee-guard/`]
 | Rule | Pi Event | Policy | Description |
 |---|---|---|---|
 | `write-guard` | `tool_call` | Blocking | Validates tool executions (`bash`, `powershell`, `write`, `edit`, `read`, `grep`, `find`, `ls`, and custom tools). |
+| `worker-guard` | `tool_call` | Blocking | Judges shell commands for Paseo workers (refuses git push, gh writes, agent launches, paseo commands, bee verbs) and supervisor allowlist mode when `BEE_SUPERVISOR_ALLOWED` is set (paseo-pi-hardening D5, D9). |
 | `session-init` | `session_start` | Advisory | Runs at every real session boundary — a fresh start, a new session, a resume, or a fork — and caches the session preamble. A `/reload` does not run it a second time: the session keeps the preamble it already has. A reload that arrives before it has ever run does run it once, because Pi can hand the extension a fresh copy of itself. It reports a new session as a clear; a resume, a fork, or a reload as a resume; and anything else as a startup. |
 | `prompt-context` | `before_agent_start` | Advisory | Generates the per-turn context delta appended to the system prompt. |
 | `activity` | `before_agent_start` (`UserPromptSubmit`), `tool_execution_start` (`PreToolUse`), `tool_result` (`PostToolUse` / `PostToolUseFailure`), `ui_prompt_start` (`Notification:agent_needs_input`), `ui_prompt_end` (`UserPromptSubmit`), `agent_settled` (`Stop`), `session_shutdown` (`SessionEnd`) | Advisory | Records session state transitions across prompt submission, tool execution, extension UI prompts, turn completion, and session shutdown. |
@@ -383,6 +384,9 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
 | `doc_viewer` | opt-in URL prefix for a local doc viewer (e.g. mdview) — `base_url` + `project` join as `<base_url>/p/<project>/<repo-relative-path>`, so the agent gives a clickable URL instead of a bare path — see below | unset ⇒ bare paths |
 | `herding` | `agent_command` / `control_command` — the runtime adapter for `bee herding run`/`--continue` (one external agent as a cell-execution worker), `bee herding interrupt`, `bee herding cancel`, `bee herding wave`, and `bee herding control-loop`; both keys are optional and independent. Canonical doc, not duplicated here: [skills/bee-herding/references/operational-invariants.md](../skills/bee-herding/references/operational-invariants.md) | absent ⇒ today's `claude` spawn, unchanged |
+| `herding.supervisor_runtime` | selects the supervisor observer runtime: `"claude"` (default) or `"pi"` (paseo-pi-hardening D9). With `"pi"`, runs `team.pi.supervisor` under `worker-guard` with `BEE_SUPERVISOR_ALLOWED`. | `"claude"` |
+| `herding.paseo.broker_tick_secs` | interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8). Runs `bee herding broker tick --json` and sends news to the leader. | `30` |
+| `herding.paseo.heartbeat_cron` | cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8). Replaces the previous 5-minute default (`*/5 * * * *`). | `"*/30 * * * *"` |
 
 ### `guards.worker_outward` — the three commands a worktree never runs
 
@@ -500,6 +504,40 @@ staying quiet.
 **The one limit.** bee joins the URL; it does not encode it. A repo-relative path that contains a
 space (or another character a URL cannot carry as-is) has to be percent-escaped by whoever writes the
 link — bee will not do it for you.
+
+### `herding.supervisor_runtime` and `herding.paseo` — supervisor and Paseo controls
+
+Three keys configure supervisor execution and the Paseo channel (paseo-pi-hardening D8, D9):
+
+#### `herding.supervisor_runtime`
+
+Selects the runtime for the supervisor observer tick: `"claude"` (default) or `"pi"`.
+
+When set to `"claude"`, the supervisor runs through Claude with model `team.claude.supervisor`.
+
+When set to `"pi"`, the supervisor runs through Pi (paseo-pi-hardening D9, store `e2af1dab`):
+- `team.pi.supervisor` must resolve to a herding agent with provider `pi`, or a plain model slot.
+- Other providers (such as `claude`) refuse before spawn with a `FIX:` message.
+- Refuses before spawn if `.pi/extensions/bee-guard` is missing from the main repository root.
+- Spawns in the main repository root with:
+  ```text
+  pi --print <prompt> --model <model> [--thinking <level>] --no-session --no-extensions -e <main root>/.pi/extensions/bee-guard --tools read,grep,find,ls,bash
+  ```
+- Sets `BEE_SUPERVISOR_ALLOWED` so `worker-guard` enforces the supervisor allowlist on all shell commands.
+
+#### `herding.paseo.broker_tick_secs`
+
+Sets the interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8, store `f26723a1`).
+The default value is `30` (positive integer).
+Every interval, the extension runs `bee herding broker tick --json`.
+When the tick reports news, it starts a model turn or delivers a steer message.
+
+#### `herding.paseo.heartbeat_cron`
+
+Sets the cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8, store `f26723a1`).
+The default value is `"*/30 * * * *"` (superseding the previous 5-minute default).
+If the marker file contains a different cron, `ensureHeartbeat` updates the heartbeat schedule on session start.
+On session shutdown (except reload), the extension stops the broker timer and awaits heartbeat deletion (`paseo heartbeat delete <id>`).
 
 ## Full sample to copy
 

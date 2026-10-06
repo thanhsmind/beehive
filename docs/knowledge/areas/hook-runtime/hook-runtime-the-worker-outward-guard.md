@@ -3,11 +3,13 @@ type: bee.area
 title: Hook Runtime — the worker-outward guard
 description: "Why a shell request from inside a linked worktree is refused a push, a GitHub write or an unsanctioned agent launch in every phase, which reads and which launches stay allowed, where the opt-out is read from, and why the main checkout's verdicts are byte-identical."
 tags: [hook-runtime, guards, worktree]
-timestamp: 2026-09-22
+timestamp: 2026-10-06
 bee:
   id: hook-runtime-hook-runtime-the-worker-outward-guard
   lifecycle: active
   areas: [hook-runtime]
+  decisions: ["worker-outward-guard D1-D11", "paseo-pi-hardening D5 be1699f8", "paseo-pi-hardening D9 e2af1dab", "contract:worker-guard 9659395e"]
+  sources: [docs/history/worker-outward-guard/CONTEXT.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md]
 ---
 
 ## Purpose
@@ -46,6 +48,49 @@ Adapted from the Seatworks plugin, which denies `git push`, `gh` and agent launc
 
 **Leave main byte-identical** (worker-outward-guard D7): a request from the main checkout produces the same verdict and the same text as before this guard existed; the idle intake refusal of a push at a terminal phase is untouched. Inside a worktree at idle, the outward text takes precedence over the intake text.
 
+## The worker-guard hook
+
+The `worker-guard` hook guards shell commands for Paseo workers and the Pi supervisor (paseo-pi-hardening D5, store `be1699f8`; paseo-pi-hardening D9, store `e2af1dab`; contract store `9659395e`).
+
+Under `BEE_HERDING_WORKER`, most hooks exit immediately with code 0. The `worker-guard` hook is the second hook that runs past the marker short-circuit after `activity`.
+
+The hook judges only shell requests (`Bash` tool). It reads `PreToolUse` JSON input from stdin. It judges commands independent of the working directory.
+
+### Mode A: Paseo worker guard
+
+When `BEE_HERDING_WORKER` and `PASEO_AGENT_ID` are both non-empty, the hook enforces worker restrictions (paseo-pi-hardening D5, store `be1699f8`).
+
+The hook inspects each command segment and refuses:
+- `git push` in any segment or syntax.
+- Non-read-only `gh` commands.
+- Agent command heads (`claude`, `codex`, `pi`, `opencode`), except read-only `codex exec`.
+- `paseo` command heads.
+- `bee` commands whose verbs are `dispatch`, `herding run`, `worktree merge`, or `gate`.
+
+The hook allows ordinary work commands like `cargo test`, `git commit`, `git status`, and `bee cells list`.
+
+When only `BEE_HERDING_WORKER` is set without `PASEO_AGENT_ID`, the hook allows all commands. This preserves existing behavior for terminal pane workers.
+
+### Mode B: Supervisor allowlist mode
+
+When `BEE_SUPERVISOR_ALLOWED` is non-empty, the hook enforces the supervisor allowlist (paseo-pi-hardening D9, store `e2af1dab`).
+
+The variable contains a comma-separated list of tool prefixes in the format `Bash(<prefix>:*)`.
+The hook allows any command segment that matches an allowed prefix after trimming.
+Leading prefixes `bee`, `./.bee/bin/bee`, or paths ending in `/.bee/bin/bee` normalize to `.bee/bin/bee`.
+
+The hook refuses any command segment that matches no allowed prefix.
+The hook also refuses commands with command substitutions (`$(...)`, backticks) or file redirections (`>`).
+
+### Belt integration
+
+When neither variable is set, `worker-guard` exits 0 without output.
+
+The Pi extension belt (`.pi/extensions/bee-guard/events.ts`) routes shell calls to `worker-guard`.
+The belt blocks execution on a deny exit (code 2), a crash, a missing binary, or a binary missing `worker-guard`.
+
+For a Paseo worker, the extension also omits registration of `bee_dispatch`, `bee_advisor`, and `bee_steer` tools (`.pi/extensions/bee-guard/index.ts`).
+
 ## Business Rules
 
 - One arm inside the existing git bash check, after the git invocations are found and before the empty-invocation return, so one fence and one tokenize pass serve both checks (hat wave, alternatives seat).
@@ -71,5 +116,12 @@ Adapted from the Seatworks plugin, which denies `git push`, `gh` and agent launc
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs` — `OutwardForm`, `outward_fix_line`.
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs` — the one-argument change at the shell call site.
 - `packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs` — the nine `worker_outward_*` tests.
+- `packages/bee-rs/crates/bee/src/hooks/worker_guard.rs` — the `worker-guard` hook implementation (paseo-pi-hardening D5, D9).
+- `packages/bee-rs/crates/bee/src/hooks/mod.rs` — hook dispatch and marker short-circuit routing.
+- `.pi/extensions/bee-guard/events.ts` — Pi belt worker-guard hook call.
+- `.pi/extensions/bee-guard/index.ts` — suppression of dispatch tools for Paseo workers.
+- `packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs` — contract tests for worker-guard.
 - `docs/config-reference.md` § `guards.worker_outward` — the allowlist's prose home; `.bee/verify/verify-app/features/worker-outward-guard.md` — the drivable recipe.
 - `docs/history/worker-outward-guard/CONTEXT.md` — decisions worker-outward-guard D1-D11; cells wog-1, wog-2 (capped 2026-09-23, merged at a05e1b0).
+- `docs/history/paseo-pi-hardening/CONTEXT.md` — feature context and decisions D5, D9.
+- `docs/history/paseo-pi-hardening/plan.md` — hardening plan and verification matrix.
