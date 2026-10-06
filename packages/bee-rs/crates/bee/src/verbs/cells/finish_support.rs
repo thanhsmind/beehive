@@ -916,3 +916,131 @@ pub(crate) fn advisor_nudge_cap_refusal(root: &Path, id: &str, feature: &str) ->
         .join("\n"),
     ))
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GitFacts {
+    pub(crate) head: String,
+    pub(crate) changed_files: Vec<String>,
+}
+
+pub(crate) fn report_from_job(
+    _job: &Value,
+    result: &crate::herding::mailbox::MailboxResult,
+    git: Option<GitFacts>,
+    cell_verify: &str,
+    proof_result: &str,
+    proof_reason: Option<&str>,
+) -> Result<String, String> {
+    let outcome = result.summary.trim();
+    if outcome.is_empty() {
+        return Err("result summary is empty".to_string());
+    }
+    let Some(git_facts) = git else {
+        return Err("cannot build report: git facts missing (git HEAD sha required)".to_string());
+    };
+    let commit = git_facts.head.trim();
+    if commit.is_empty() {
+        return Err("git HEAD sha is empty".to_string());
+    }
+    let files = if !result.files_changed.is_empty() {
+        result.files_changed.clone()
+    } else {
+        git_facts.changed_files
+    };
+    let cell_verify = cell_verify.trim();
+    if cell_verify.is_empty() {
+        return Err("cell verify command is empty".to_string());
+    }
+    let proof_result = proof_result.trim();
+    if proof_result.is_empty() {
+        return Err("proof_result is empty".to_string());
+    }
+    let reason = match proof_reason {
+        Some(r) if !r.trim().is_empty() => r.trim(),
+        _ => result.proof.trim(),
+    };
+    if reason.is_empty() {
+        return Err("worker result proof text is empty (FIX: pass --proof-reason)".to_string());
+    }
+    let tests = format!("{cell_verify}{PROOF_SEPARATOR}{proof_result}{PROOF_SEPARATOR}{reason}");
+    let mut deviations = Vec::new();
+    if let Some(dissent) = &result.dissent {
+        if !dissent.claim.trim().is_empty() {
+            deviations.push(Value::String(dissent.claim.clone()));
+        }
+    }
+    let mut map = serde_json::Map::new();
+    map.insert("outcome".to_string(), Value::String(outcome.to_string()));
+    map.insert("commit".to_string(), Value::String(commit.to_string()));
+    map.insert(
+        "files".to_string(),
+        Value::Array(files.into_iter().map(Value::String).collect()),
+    );
+    map.insert("tests".to_string(), Value::String(tests));
+    map.insert("deviations".to_string(), Value::Array(deviations));
+    serde_json::to_string(&Value::Object(map)).map_err(|e| e.to_string())
+}
+
+pub(crate) fn read_job_git_facts(cwd: &Path, main_root: &Path) -> Option<GitFacts> {
+    use crate::verbs::worktree::run_git;
+
+    let head_out = run_git(cwd, &["rev-parse", "HEAD"]);
+    if head_out.status != Some(0) {
+        return None;
+    }
+    let head = head_out.stdout.as_deref().unwrap_or("").trim().to_string();
+    if head.is_empty() {
+        return None;
+    }
+
+    let mut changed_set = std::collections::BTreeSet::new();
+
+    let main_head_out = run_git(main_root, &["rev-parse", "HEAD"]);
+    if main_head_out.status == Some(0) {
+        let main_sha = main_head_out.stdout.as_deref().unwrap_or("").trim();
+        if !main_sha.is_empty() {
+            let merge_base_out = run_git(cwd, &["merge-base", "HEAD", main_sha]);
+            if merge_base_out.status == Some(0) {
+                let base_sha = merge_base_out.stdout.as_deref().unwrap_or("").trim();
+                if !base_sha.is_empty() {
+                    let range = format!("{base_sha}..HEAD");
+                    let diff_out = run_git(cwd, &["diff", "--name-only", &range]);
+                    if diff_out.status == Some(0) {
+                        if let Some(stdout) = &diff_out.stdout {
+                            for line in stdout.lines() {
+                                let path = line.trim();
+                                if !path.is_empty() {
+                                    changed_set.insert(path.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let porcelain_out = run_git(cwd, &["status", "--porcelain"]);
+    if porcelain_out.status == Some(0) {
+        if let Some(stdout) = &porcelain_out.stdout {
+            for line in stdout.lines() {
+                let line = line.trim_end_matches(['\r', '\n']);
+                if line.len() >= 4 {
+                    let rest = &line[3..];
+                    let path = match rest.split_once(" -> ") {
+                        Some((_, dest)) => dest.trim(),
+                        None => rest.trim(),
+                    };
+                    if !path.is_empty() {
+                        changed_set.insert(path.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Some(GitFacts {
+        head,
+        changed_files: changed_set.into_iter().collect(),
+    })
+}

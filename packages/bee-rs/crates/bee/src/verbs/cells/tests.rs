@@ -3556,6 +3556,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -5439,6 +5442,9 @@ use std::time::Instant;
                     .to_string(),
             ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -5511,6 +5517,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -5609,6 +5618,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(report.to_string()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -5860,6 +5872,9 @@ use std::time::Instant;
             inline_reason: None,
             report: report.map(str::to_string),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -6419,6 +6434,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -6537,6 +6555,9 @@ use std::time::Instant;
             inline_reason: inline_reason.map(str::to_string),
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -7577,6 +7598,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -8818,6 +8842,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: sync_ack.map(str::to_string),
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -9128,6 +9155,9 @@ use std::time::Instant;
             inline_reason: None,
             report: Some(default_test_report_json()),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 
@@ -10737,4 +10767,414 @@ use std::time::Instant;
         ).unwrap();
         assert_eq!(door_own.cell["status"], json!("claimed"));
     }
+
+    fn cap_flags_from_job(id: &str, job_id: &str, proof_result: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            mistake: None,
+            fix_at: None,
+            no_mistakes: true,
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: None,
+            sync_ack: None,
+            from_job: Some(job_id.to_string()),
+            proof_result: proof_result.map(str::to_string),
+            proof_reason: None,
+        }
+    }
+
+    fn setup_from_job_fixture(tmp: &Path, feature: &str) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("mailbox")).unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(main.join("file.txt"), "base\n").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "initial commit"]);
+
+        let wt = tmp.join("wt");
+        git_ok(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "feat-wt"]);
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            wt.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{{\"feature\": \"{feature}\"}}\n"),
+        )
+        .unwrap();
+        (main, wt)
+    }
+
+    fn write_from_job_mailbox(
+        main: &Path,
+        job_id: &str,
+        cell_id: &str,
+        cwd: &Path,
+        status: &str,
+        files_changed: &[&str],
+        proof: &str,
+        dissent: Option<Value>,
+    ) {
+        let job_dir = main.join(".bee").join("mailbox").join(job_id);
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let job_json = json!({
+            "job_id": job_id,
+            "cell_id": cell_id,
+            "cwd": cwd.to_string_lossy().to_string(),
+        });
+        std::fs::write(
+            job_dir.join("job.json"),
+            jsjson::stringify_pretty(&job_json),
+        )
+        .unwrap();
+
+        let mut res = json!({
+            "round": 1,
+            "status": status,
+            "summary": "job completed successfully",
+            "files_changed": files_changed,
+            "proof": proof,
+            "report_path": "report-1.md"
+        });
+        if let Some(d) = dissent {
+            res["dissent"] = d;
+        }
+        std::fs::write(
+            job_dir.join("result-1.json"),
+            jsjson::stringify_pretty(&res),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_success() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c1";
+        let job_id = "job-101";
+
+        std::fs::write(wt.join("file.txt"), "updated\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", &format!("worker commit\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo test --bin bee",
+            None,
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "job cell",
+            "action": "do work",
+            "verify": "cargo test --bin bee",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, text, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(result_val["files_source"], json!("worker files_changed"));
+        assert!(text.contains("Files source: worker files_changed."));
+        assert_eq!(result_val["trace"]["outcome"], json!("job completed successfully"));
+        assert_eq!(result_val["trace"]["files_changed"], json!(["file.txt"]));
+        assert_eq!(
+            result_val["trace"]["verification_evidence"],
+            json!("cargo test --bin bee")
+        );
+        assert_eq!(
+            result_val["trace"]["report"]["tests"],
+            json!("cargo test --bin bee — green:unit — cargo test --bin bee")
+        );
+        assert_eq!(result_val["trace"]["verify_passed"], json!(true));
+        assert_eq!(result_val["trace"]["verify_command"], json!("cargo test --bin bee"));
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_git_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c2";
+        let job_id = "job-102";
+
+        std::fs::write(wt.join("extra.txt"), "new file\n").unwrap();
+        git_ok(&wt, &["add", "extra.txt"]);
+        git_ok(&wt, &["commit", "-qm", &format!("add extra\n\ncell: {cell_id}")]);
+
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &[],
+            "cargo test -p bee",
+            None,
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "git fallback cell",
+            "action": "do work",
+            "verify": "cargo test -p bee",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let flags = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, text, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(result_val["files_source"], json!("git fallback"));
+        assert!(text.contains("Files source: git fallback."));
+        let files = result_val["trace"]["files_changed"].as_array().unwrap();
+        assert!(files.contains(&json!("extra.txt")));
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_commit_trailer_and_dissent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-c3";
+        let job_id = "job-103";
+
+        std::fs::write(wt.join("file.txt"), "changed\n").unwrap();
+        git_ok(&wt, &["commit", "-qam", "missing trailer commit"]);
+
+        let dissent_val = json!({
+            "claim": "approach has issue",
+            "alternative": "better plan",
+            "severity": "consider"
+        });
+        write_from_job_mailbox(
+            &main,
+            job_id,
+            cell_id,
+            &wt,
+            "done",
+            &["file.txt"],
+            "cargo check",
+            Some(dissent_val),
+        );
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "dissent cell",
+            "action": "do work",
+            "verify": "cargo check",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let mut flags = cap_flags_from_job(cell_id, job_id, Some("green:static"));
+        let refusal = thrown(finish_cap_and_release(&main, None, flags.clone(), None));
+        assert!(
+            refusal.contains("one commit per cell: no commit in the last"),
+            "expected trailer refusal, got: {refusal}"
+        );
+
+        flags.commit_pending = Some("pending commit".to_string());
+        flags.proof_reason = Some("override proof reason".to_string());
+        let out = finish_cap_and_release(&main, None, flags, None).unwrap();
+        let Out::Emit(result_val, _, 0) = out else {
+            panic!("expected Out::Emit");
+        };
+
+        assert_eq!(result_val["status"], json!("capped"));
+        assert_eq!(
+            result_val["trace"]["deviations"],
+            json!(["approach has issue"])
+        );
+        assert_eq!(
+            result_val["trace"]["verification_evidence"],
+            json!("override proof reason")
+        );
+        assert_eq!(
+            result_val["trace"]["report"]["tests"],
+            json!("cargo check — green:static — override proof reason")
+        );
+    }
+
+    #[test]
+    fn contract_cells_finish_from_job_d248942f_refusals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = setup_from_job_fixture(tmp.path(), "myfeat");
+        let cell_id = "job-refuse";
+        let job_id = "job-refuse-1";
+
+        let cell_val = json!({
+            "id": cell_id,
+            "feature": "myfeat",
+            "title": "refusal cell",
+            "action": "do work",
+            "verify": "cargo check",
+            "lane": "tiny",
+            "status": "claimed",
+            "deps": [],
+            "files": [],
+            "trace": { "worker": "w-worker" },
+        });
+        write_cell_fixture(&main, cell_id, &cell_val);
+
+        let mut flags_report = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        flags_report.report = Some(default_test_report_json());
+        let err1 = thrown(finish_cap_and_release(&main, None, flags_report, None));
+        assert!(
+            err1.contains("cells finish: --from-job cannot be combined with --report (FIX: omit --report when capping from a job)"),
+            "got: {err1}"
+        );
+
+        let flags_no_proof = cap_flags_from_job(cell_id, job_id, None);
+        let err2 = thrown(finish_cap_and_release(&main, None, flags_no_proof, None));
+        assert!(
+            err2.contains("cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)"),
+            "got: {err2}"
+        );
+
+        let flags_bad_proof = cap_flags_from_job(cell_id, job_id, Some("red"));
+        let err3 = thrown(finish_cap_and_release(&main, None, flags_bad_proof, None));
+        assert!(
+            err3.contains("cells finish: --proof-result \"red\" is invalid") && err3.contains("green:unit, green:static, green:live"),
+            "got: {err3}"
+        );
+
+        let mut flags_no_mistakes = cap_flags_from_job(cell_id, job_id, Some("green:unit"));
+        flags_no_mistakes.no_mistakes = false;
+        flags_no_mistakes.mistake = None;
+        let err4 = thrown(finish_cap_and_release(&main, None, flags_no_mistakes, None));
+        assert!(
+            err4.contains("cells finish: --from-job requires a mistakes answer") && err4.contains("(FIX: pass --no-mistakes or --mistake with --fix-at)"),
+            "got: {err4}"
+        );
+
+        let nonexistent_cwd = tmp.path().join("nonexistent_wt");
+        write_from_job_mailbox(
+            &main,
+            "job-missing-cwd",
+            cell_id,
+            &nonexistent_cwd,
+            "done",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_missing_cwd = cap_flags_from_job(cell_id, "job-missing-cwd", Some("green:unit"));
+        let err5 = thrown(finish_cap_and_release(&main, None, flags_missing_cwd, None));
+        assert!(
+            err5.contains("working directory") && err5.contains("does not exist") && err5.contains("(FIX: pass --report)"),
+            "got: {err5}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-wrong-cell",
+            "different-cell-id",
+            &wt,
+            "done",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_wrong_cell = cap_flags_from_job(cell_id, "job-wrong-cell", Some("green:unit"));
+        let err6 = thrown(finish_cap_and_release(&main, None, flags_wrong_cell, None));
+        assert!(
+            err6.contains("is for cell \"different-cell-id\"") && err6.contains("job-refuse") && err6.contains("(FIX: verify the job id"),
+            "got: {err6}"
+        );
+
+        let job_no_res_dir = main.join(".bee").join("mailbox").join("job-no-result");
+        std::fs::create_dir_all(&job_no_res_dir).unwrap();
+        std::fs::write(
+            job_no_res_dir.join("job.json"),
+            jsjson::stringify_pretty(&json!({
+                "job_id": "job-no-result",
+                "cell_id": cell_id,
+                "cwd": wt.to_string_lossy().to_string(),
+            })),
+        ).unwrap();
+        let flags_no_result = cap_flags_from_job(cell_id, "job-no-result", Some("green:unit"));
+        let err7 = thrown(finish_cap_and_release(&main, None, flags_no_result, None));
+        assert!(
+            err7.contains("no result file found for job \"job-no-result\"") && err7.contains("(FIX: wait for the job or inspect the worker)"),
+            "got: {err7}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-blocked",
+            cell_id,
+            &wt,
+            "blocked",
+            &[],
+            "cargo test",
+            None,
+        );
+        let flags_blocked = cap_flags_from_job(cell_id, "job-blocked", Some("green:unit"));
+        let err8 = thrown(finish_cap_and_release(&main, None, flags_blocked, None));
+        assert!(
+            err8.contains("result status is not done") && err8.contains("(FIX: wait for the job to complete or pass --report)"),
+            "got: {err8}"
+        );
+
+        write_from_job_mailbox(
+            &main,
+            "job-empty-proof",
+            cell_id,
+            &wt,
+            "done",
+            &[],
+            "",
+            None,
+        );
+        let flags_empty_proof = cap_flags_from_job(cell_id, "job-empty-proof", Some("green:unit"));
+        let err9 = thrown(finish_cap_and_release(&main, None, flags_empty_proof, None));
+        assert!(
+            err9.contains("cells finish: worker result proof text is empty (FIX: pass --proof-reason)"),
+            "got: {err9}"
+        );
+    }
+
 

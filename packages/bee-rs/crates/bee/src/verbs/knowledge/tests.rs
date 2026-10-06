@@ -899,6 +899,9 @@ use std::time::Instant;
                     .to_string(),
             ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         };
         // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
         // dropped its `test_root` parameter with the per-cap test run.

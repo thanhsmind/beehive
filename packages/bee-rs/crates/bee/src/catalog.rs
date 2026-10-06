@@ -816,7 +816,7 @@ mod tests {
         // the same reflection — what to have done instead — and a layer is
         // not an instead. `--severity` and `--type` (backlog.add) rank and
         // shape a row; neither says where a fix belongs.
-        const PINNED_FLAG_COUNT: usize = 212;
+        const PINNED_FLAG_COUNT: usize = 215;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
