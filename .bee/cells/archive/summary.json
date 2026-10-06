@@ -1543,5 +1543,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-06T15:40:16.098Z"
+  },
+  "occupancy-test-pane-fixture": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-06T17:02:39.371Z"
   }
 }
