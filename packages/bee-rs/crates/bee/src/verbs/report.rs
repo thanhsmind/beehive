@@ -20,7 +20,7 @@ const CODE_REMOVED: &str = "[code block removed]";
 const VALUE_FLAGS: [&str; 7] =
     ["title", "symptom", "evidence", "root-cause", "command", "output", "exit-code"];
 const REQUIRED: [&str; 5] = ["title", "symptom", "evidence", "root-cause", "command"];
-const SECRET_FLAGS: [&str; 4] = ["--token", "--password", "--key", "--secret"];
+const SECRET_FLAGS: [&str; 4] = ["--token", "--password", "--secret", "--api-key"];
 const HOME_MARKERS: [&str; 3] = ["/home/", "/Users/", "\\Users\\"];
 
 struct Args {
@@ -315,7 +315,7 @@ fn refusal_reason(text: &str) -> Option<&'static str> {
         return Some("a URL whose host is not github.com");
     }
     if has_secret_flag(text) {
-        return Some("a --token, --password, --key or --secret value");
+        return Some("a --token, --password, --secret or --api-key value");
     }
     None
 }
@@ -774,6 +774,18 @@ mod tests {
             assert!(err.msg.contains(&format!("--{field}")), "{}", err.msg);
             assert!(f.log().is_empty(), "gh ran for {field}={value}: {}", f.log());
         }
+    }
+
+    #[test]
+    fn report_allows_config_key_flag_and_refuses_api_key_value() {
+        let f = fake(Some("[]"), false, false);
+        let a = args(&[("command", "bee config set --key gate_bypass --value full")], true);
+        assert!(execute(&a, &f.ctx()).is_ok());
+        let f = fake(Some("[]"), false, false);
+        let err = execute(&args(&[("command", "bee sync --api-key abc123")], false), &f.ctx()).err().expect("--api-key was not refused");
+        assert_eq!(err.kind, "report_refused");
+        assert_eq!(err.field, Some("command"));
+        assert!(f.log().is_empty(), "gh ran: {}", f.log());
     }
 
     #[test]
