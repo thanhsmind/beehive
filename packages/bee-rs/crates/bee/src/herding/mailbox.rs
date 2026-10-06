@@ -929,7 +929,7 @@ pub(crate) fn mark_orphans_with_paseo(
     let labelled_agents_res = paseo.map(|p| {
         p.call(&crate::herding::paseo::ls_label_argv("bee_job"))
             .ok()
-            .map(|out| crate::herding::paseo::parse_ls_agents(&out))
+            .and_then(|out| crate::herding::paseo::parse_ls_agents_checked(&out))
     });
     let ls_agents_opt = labelled_agents_res.flatten();
     let labelled_ids: Option<HashSet<String>> = ls_agents_opt

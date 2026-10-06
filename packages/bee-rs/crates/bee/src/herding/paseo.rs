@@ -276,6 +276,23 @@ pub fn permit_argv(agent: &str, allow: bool, request: Option<&str>, all: bool) -
     argv
 }
 
+pub fn parse_ls_agents_checked(stdout: &str) -> Option<Vec<(String, String, bool)>> {
+    for (i, c) in stdout.char_indices() {
+        if c == '[' || c == '{' {
+            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+            if let Some(Ok(val)) = de.next() {
+                let readable = match &val {
+                    Value::Array(_) => true,
+                    Value::Object(m) => m.values().any(Value::is_array),
+                    _ => false,
+                };
+                return readable.then(|| parse_ls_agents(stdout));
+            }
+        }
+    }
+    None
+}
+
 pub fn parse_ls_agents(stdout: &str) -> Vec<(String, String, bool)> {
     for (i, c) in stdout.char_indices() {
         if c == '[' || c == '{' {

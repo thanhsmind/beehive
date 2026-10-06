@@ -1242,12 +1242,36 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
     let mut untracked_paseo_agents = Vec::new();
     if let (Some(cli), Some(root)) = (p_ref, main_root.as_ref()) {
         let bee_dir = root.join(".bee");
-        if let Ok(ls_out) = cli.call(&paseo::ls_label_argv("bee_job")) {
-            let agents = paseo::parse_ls_agents(&ls_out);
-            for (agent_id, bee_job, archived) in agents {
-                if archived || bee_job.trim().is_empty() {
+        let mut job_by_agent: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        if let Ok(dirs) = std::fs::read_dir(bee_dir.join("mailbox")) {
+            for dir in dirs.flatten() {
+                let Some(job_name) = dir.file_name().to_str().map(str::to_string) else { continue };
+                if let crate::fsutil::ReadJson::Parsed(job) = crate::fsutil::read_json(&dir.path().join("job.json")) {
+                    if job.get("transport").and_then(Value::as_str) == Some("paseo") {
+                        if let Some(agent) = job.get("paseo_agent_id").and_then(Value::as_str) {
+                            job_by_agent.insert(agent.trim().to_string(), job_name);
+                        }
+                    }
+                }
+            }
+        }
+        let listed = cli
+            .call(&paseo::ls_label_argv("bee_job"))
+            .ok()
+            .and_then(|out| paseo::parse_ls_agents_checked(&out));
+        if let Some(agents) = listed {
+            for (agent_id, labelled_job, archived) in agents {
+                if archived {
                     continue;
                 }
+                let bee_job = if labelled_job.trim().is_empty() {
+                    match job_by_agent.get(agent_id.trim()) {
+                        Some(job) => job.clone(),
+                        None => continue,
+                    }
+                } else {
+                    labelled_job
+                };
                 let mailbox_dir = bee_dir.join("mailbox").join(&bee_job);
                 if !mailbox_dir.is_dir() {
                     untracked_paseo_agents.push(agent_id);
@@ -2129,6 +2153,44 @@ mod tests {
         assert!(blk_line.contains("paseo_agent_id=agent-blocked"));
         assert!(blk_line.contains("paseo_state=blocked"));
         assert!(blk_line.contains("permissions=req-1:terminal.exec"));
+    }
+
+    #[test]
+    fn status_finds_untracked_agents_by_job_agent_id_when_ls_has_no_labels() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let done = bee_dir.join("mailbox").join("job-real-done");
+        std::fs::create_dir_all(&done).unwrap();
+        std::fs::write(done.join("job.json"), r#"{"transport":"paseo","paseo_agent_id":"agent-real","round":1}"#).unwrap();
+        std::fs::write(done.join("result-1.json"), r#"{"status":"done"}"#).unwrap();
+        let live = bee_dir.join("mailbox").join("job-real-live");
+        std::fs::create_dir_all(&live).unwrap();
+        std::fs::write(live.join("job.json"), r#"{"transport":"paseo","paseo_agent_id":"agent-live","round":1}"#).unwrap();
+        let ls_json = serde_json::json!([
+            {"id": "agent-real", "status": "idle"},
+            {"id": "agent-live", "status": "running"},
+            {"id": "agent-user", "status": "idle"}
+        ])
+        .to_string();
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-live".to_string(), Ok(serde_json::json!({"Status": "running"}).to_string()));
+        let fake = FakeHerdingPaseoCli { ls_out: Ok(ls_json), inspect_map };
+        let (_exit, val, _lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        let untracked: Vec<&str> = val
+            .get("untracked_paseo_agents")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert_eq!(untracked, vec!["agent-real"]);
     }
 
     #[test]
