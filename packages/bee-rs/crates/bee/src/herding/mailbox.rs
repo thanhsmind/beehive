@@ -906,6 +906,14 @@ pub(crate) fn clear_mark(bee_dir: &Path, job_id: &str) -> Result<(), String> {
 /// progress notifications. Jobs with no recorded `pane_id` are skipped. Nothing is
 /// relaunched (D7).
 pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<String> {
+    mark_orphans_with_paseo(bee_dir, live_panes, None)
+}
+
+pub(crate) fn mark_orphans_with_paseo(
+    bee_dir: &Path,
+    live_panes: &HashSet<String>,
+    paseo: Option<&dyn crate::herding::paseo::PaseoCli>,
+) -> Vec<String> {
     let mailbox_base = bee_dir.join("mailbox");
     let rd = match std::fs::read_dir(&mailbox_base) {
         Ok(rd) => rd,
@@ -917,6 +925,15 @@ pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<
         .filter(|p| p.is_dir())
         .collect();
     job_dirs.sort();
+
+    let labelled_agents_res = paseo.map(|p| {
+        p.call(&crate::herding::paseo::ls_label_argv("bee_job"))
+            .ok()
+            .and_then(|out| crate::herding::paseo::parse_ls_agents_checked(&out))
+    });
+    let ls_agents_opt = labelled_agents_res.flatten();
+    let labelled_ids: Option<HashSet<String>> = ls_agents_opt
+        .map(|agents| agents.into_iter().map(|(id, _, _)| id).collect());
 
     let mut marked = Vec::new();
     for job_dir in job_dirs {
@@ -930,6 +947,51 @@ pub(crate) fn mark_orphans(bee_dir: &Path, live_panes: &HashSet<String>) -> Vec<
             crate::fsutil::ReadJson::Parsed(Value::Object(m)) => m,
             _ => continue,
         };
+
+        let is_paseo = obj.get("transport").and_then(Value::as_str) == Some("paseo");
+        if is_paseo {
+            if let Some(cli) = paseo {
+                let agent_id = match obj.get("paseo_agent_id").and_then(Value::as_str) {
+                    Some(a) if !a.trim().is_empty() => a.trim(),
+                    _ => continue,
+                };
+
+                let has_result = match std::fs::read_dir(&job_dir) {
+                    Ok(entries) => entries
+                        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                        .any(|name| parse_result_filename(&name).is_some()),
+                    Err(_) => false,
+                };
+                if has_result {
+                    continue;
+                }
+
+                if read_mark(bee_dir, &job_id).is_some() {
+                    continue;
+                }
+
+                let is_missing = match labelled_ids {
+                    Some(ref set) => !set.contains(agent_id),
+                    None => false,
+                };
+
+                let is_dead = if is_missing {
+                    false
+                } else {
+                    match cli.call(&crate::herding::paseo::inspect_argv(agent_id)) {
+                        Ok(ref out) => crate::herding::paseo::parse_inspect(out) == Some(crate::herding::paseo::PaseoState::Dead),
+                        Err(_) => false,
+                    }
+                };
+
+                if is_missing || is_dead {
+                    if write_mark(bee_dir, &job_id, Mark::Interrupted, "process_restarted").is_ok() {
+                        marked.push(job_id);
+                    }
+                }
+            }
+            continue;
+        }
 
         let pane_id = match obj.get("pane_id").and_then(Value::as_str) {
             Some(p) if !p.trim().is_empty() => p.trim(),
@@ -2211,6 +2273,186 @@ the report file's exact final name"),
         } else {
             panic!("job.json was not parsed as JSON object");
         }
+    }
+
+    struct FakeMailboxPaseoCli {
+        ls_out: Result<String, String>,
+        inspect_map: std::collections::HashMap<String, Result<String, String>>,
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakeMailboxPaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            if args.first().map(|s| s.as_str()) == Some("ls") {
+                self.ls_out.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("inspect") {
+                let id = args.last().cloned().unwrap_or_default();
+                self.inspect_map
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or(Err("inspect failed".to_string()))
+            } else {
+                Ok(String::new())
+            }
+        }
+    }
+
+    #[test]
+    fn mark_orphans_paseo_marks_dead_agent_and_missing_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_dead = "job-p-dead";
+        let path_dead = job_path(&bee_dir, job_dead);
+        let mut spec_dead = serde_json::Map::new();
+        spec_dead.insert("job_id".to_string(), Value::String(job_dead.to_string()));
+        spec_dead.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_dead.insert("paseo_agent_id".to_string(), Value::String("agent-dead".to_string()));
+        crate::fsutil::write_json_atomic(&path_dead, &Value::Object(spec_dead)).unwrap();
+
+        let job_missing = "job-p-missing";
+        let path_missing = job_path(&bee_dir, job_missing);
+        let mut spec_missing = serde_json::Map::new();
+        spec_missing.insert("job_id".to_string(), Value::String(job_missing.to_string()));
+        spec_missing.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_missing.insert("paseo_agent_id".to_string(), Value::String("agent-gone".to_string()));
+        crate::fsutil::write_json_atomic(&path_missing, &Value::Object(spec_missing)).unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-dead".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-dead",
+                "labels": { "bee_job": "job-p-dead" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert_eq!(marked, vec![job_dead.to_string(), job_missing.to_string()]);
+
+        let (mark1, reason1) = read_mark(&bee_dir, job_dead).expect("marked dead");
+        assert_eq!(mark1, Mark::Interrupted);
+        assert_eq!(reason1, Some("process_restarted".to_string()));
+
+        let (mark2, reason2) = read_mark(&bee_dir, job_missing).expect("marked missing");
+        assert_eq!(mark2, Mark::Interrupted);
+        assert_eq!(reason2, Some("process_restarted".to_string()));
+    }
+
+    #[test]
+    fn mark_orphans_paseo_leaves_working_and_failed_inspect_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_working = "job-p-work";
+        let path_work = job_path(&bee_dir, job_working);
+        let mut spec_work = serde_json::Map::new();
+        spec_work.insert("job_id".to_string(), Value::String(job_working.to_string()));
+        spec_work.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_work.insert("paseo_agent_id".to_string(), Value::String("agent-work".to_string()));
+        crate::fsutil::write_json_atomic(&path_work, &Value::Object(spec_work)).unwrap();
+
+        let job_err = "job-p-err";
+        let path_err = job_path(&bee_dir, job_err);
+        let mut spec_err = serde_json::Map::new();
+        spec_err.insert("job_id".to_string(), Value::String(job_err.to_string()));
+        spec_err.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_err.insert("paseo_agent_id".to_string(), Value::String("agent-err".to_string()));
+        crate::fsutil::write_json_atomic(&path_err, &Value::Object(spec_err)).unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-work".to_string(), Ok("{\"Status\":\"running\"}".to_string()));
+        inspect_map.insert("agent-err".to_string(), Err("command timeout".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-work",
+                "labels": { "bee_job": "job-p-work" },
+                "archived": false
+            },
+            {
+                "id": "agent-err",
+                "labels": { "bee_job": "job-p-err" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_working), None);
+        assert_eq!(read_mark(&bee_dir, job_err), None);
+    }
+
+    #[test]
+    fn mark_orphans_paseo_leaves_job_with_result_or_existing_mark_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let job_res = "job-p-res";
+        let path_res = job_path(&bee_dir, job_res);
+        let mut spec_res = serde_json::Map::new();
+        spec_res.insert("job_id".to_string(), Value::String(job_res.to_string()));
+        spec_res.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_res.insert("paseo_agent_id".to_string(), Value::String("agent-res".to_string()));
+        crate::fsutil::write_json_atomic(&path_res, &Value::Object(spec_res)).unwrap();
+        let res_path = result_path(&bee_dir, job_res, 1);
+        std::fs::write(&res_path, "{}").unwrap();
+
+        let job_marked = "job-p-marked";
+        let path_marked = job_path(&bee_dir, job_marked);
+        let mut spec_marked = serde_json::Map::new();
+        spec_marked.insert("job_id".to_string(), Value::String(job_marked.to_string()));
+        spec_marked.insert("transport".to_string(), Value::String("paseo".to_string()));
+        spec_marked.insert("paseo_agent_id".to_string(), Value::String("agent-marked".to_string()));
+        crate::fsutil::write_json_atomic(&path_marked, &Value::Object(spec_marked)).unwrap();
+        write_mark(&bee_dir, job_marked, Mark::Interrupted, "earlier").unwrap();
+
+        let mut inspect_map = std::collections::HashMap::new();
+        inspect_map.insert("agent-res".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+        inspect_map.insert("agent-marked".to_string(), Ok("{\"Status\":\"closed\"}".to_string()));
+
+        let ls_json = serde_json::json!([
+            {
+                "id": "agent-res",
+                "labels": { "bee_job": "job-p-res" },
+                "archived": false
+            },
+            {
+                "id": "agent-marked",
+                "labels": { "bee_job": "job-p-marked" },
+                "archived": false
+            }
+        ])
+        .to_string();
+
+        let fake = FakeMailboxPaseoCli {
+            ls_out: Ok(ls_json),
+            inspect_map,
+        };
+
+        let live_panes = HashSet::new();
+        let marked = mark_orphans_with_paseo(&bee_dir, &live_panes, Some(&fake));
+        assert!(marked.is_empty());
+        assert_eq!(read_mark(&bee_dir, job_res), None);
+        assert_eq!(
+            read_mark(&bee_dir, job_marked),
+            Some((Mark::Interrupted, Some("earlier".to_string())))
+        );
     }
 }
 

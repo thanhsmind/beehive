@@ -944,6 +944,15 @@ mod tests {
     }
 
     #[test]
+    fn herding_permit_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["herding", "permit"]).expect("herding.permit is in the registry");
+        assert_eq!(entry.invoke, "bee herding permit");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+    }
+
+    #[test]
     fn herding_broker_tick_resolves() {
         let (entry, rest) = resolve(&["herding", "broker", "tick"]).expect("herding.broker is in the registry");
         assert_eq!(entry.invoke, "bee herding broker");

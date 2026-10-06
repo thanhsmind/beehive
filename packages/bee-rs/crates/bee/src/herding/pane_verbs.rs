@@ -41,6 +41,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::OnceLock;
 
+use super::paseo::PaseoCli;
 use super::run::{read_main_config, PaneGeom, PaneTransport, RealHerdr};
 use super::tmux::{classify, RealTmux, Screen, TmuxSettings};
 use super::{resolve_main_root, TransportKind};
@@ -709,7 +710,7 @@ fn cwd_or_here(flag: Option<&str>) -> PathBuf {
 /// everywhere and defaults to `resolve_main_root`'s git answer.
 fn run_verb<F>(args: &[&str], body: F) -> ExitCode
 where
-    F: FnOnce(&dyn CockpitTransport, &[&str]) -> Result<Map<String, Value>, VerbError>,
+    F: FnOnce(&dyn CockpitTransport, &Path, &[&str]) -> Result<Map<String, Value>, VerbError>,
 {
     let mut argv: Vec<&str> = args.to_vec();
     let explicit = take_opt(&mut argv, "--main-root");
@@ -728,7 +729,7 @@ where
         Err(message) => return print_err(None, &verb_error("transport", message)),
     };
     let name = transport.name();
-    match body(transport.as_ref(), &argv) {
+    match body(transport.as_ref(), &main_root, &argv) {
         Ok(result) => print_ok(name, result),
         Err(err) => print_err(Some(name), &err),
     }
@@ -737,7 +738,6 @@ where
 const PANE_SUBVERBS: &str = "current, list, split, run, send-text, read, rename, close, layout, \
                              tab-create, tab-list, tab-focus";
 
-/// `bee herding pane <subverb> …`
 pub(crate) fn pane(args: &[&str]) -> ExitCode {
     let Some((sub, rest)) = args.split_first() else {
         return print_err(
@@ -745,15 +745,64 @@ pub(crate) fn pane(args: &[&str]) -> ExitCode {
             &usage(format!("bee herding pane needs a subverb — one of: {PANE_SUBVERBS}")),
         );
     };
-    run_verb(rest, |t, rest| dispatch_pane(sub, rest, t))
+    run_verb(rest, |t, main_root, rest| dispatch_pane_with(sub, rest, t, Some(main_root), None))
 }
 
-/// The whole `pane` group, pure over its transport — a test drives it with
-/// a fake and reads the result map back without capturing stdout.
-fn dispatch_pane(
+fn find_paseo_agent(main_root: &Path, id: &str) -> Option<String> {
+    let bee_dir = main_root.join(".bee");
+    let mbox_root = bee_dir.join("mailbox");
+    let direct_job = mbox_root.join(id).join("job.json");
+    if direct_job.is_file() {
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&direct_job) {
+            if map.get("transport").and_then(Value::as_str) == Some("paseo") {
+                if let Some(agent_id) = map.get("paseo_agent_id").and_then(Value::as_str) {
+                    if !agent_id.trim().is_empty() {
+                        return Some(agent_id.to_string());
+                    }
+                }
+                return Some(id.to_string());
+            }
+        }
+    }
+    let entries = std::fs::read_dir(&mbox_root).ok()?;
+    for entry in entries.flatten() {
+        let job_file = entry.path().join("job.json");
+        if !job_file.is_file() {
+            continue;
+        }
+        if let crate::fsutil::ReadJson::Parsed(Value::Object(map)) = crate::fsutil::read_json(&job_file) {
+            if map.get("transport").and_then(Value::as_str) == Some("paseo") {
+                let job_id = map.get("job_id").and_then(Value::as_str).unwrap_or("");
+                let agent_id = map.get("paseo_agent_id").and_then(Value::as_str).unwrap_or("");
+                let dir_name = entry.file_name().to_string_lossy().to_string();
+                if id == job_id || id == dir_name || id == agent_id {
+                    let res_id = if !agent_id.trim().is_empty() {
+                        agent_id.to_string()
+                    } else {
+                        id.to_string()
+                    };
+                    return Some(res_id);
+                }
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn dispatch_pane(
     sub: &str,
     args: &[&str],
     t: &dyn CockpitTransport,
+) -> Result<Map<String, Value>, VerbError> {
+    dispatch_pane_with(sub, args, t, None, None)
+}
+
+pub(crate) fn dispatch_pane_with(
+    sub: &str,
+    args: &[&str],
+    t: &dyn CockpitTransport,
+    main_root: Option<&Path>,
+    paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>,
 ) -> Result<Map<String, Value>, VerbError> {
     let mut a: Vec<&str> = args.to_vec();
     match sub {
@@ -800,8 +849,6 @@ fn dispatch_pane(
         }
 
         "read" => {
-            // `--source` is herdr's own flag; accepted and ignored so one
-            // role line reads the same on both transports.
             let _ = take_opt(&mut a, "--source");
             let lines = match take_opt(&mut a, "--lines") {
                 Some(n) => Some(
@@ -810,7 +857,39 @@ fn dispatch_pane(
                 ),
                 None => None,
             };
+            let explicit_root = take_opt(&mut a, "--main-root");
             let pane = positional(&a, 0, "bee herding pane read needs a <pane_id>")?;
+            let resolved_root = explicit_root
+                .map(PathBuf::from)
+                .or_else(|| main_root.map(PathBuf::from))
+                .or_else(|| resolve_main_root(None));
+            if let Some(ref root) = resolved_root {
+                if let Some(agent_id) = find_paseo_agent(root, pane) {
+                    let n = lines.unwrap_or(40);
+                    let argv = crate::herding::paseo::logs_tail_argv(&agent_id, n, None);
+                    let text = if let Some(cli) = paseo_cli {
+                        cli.call(&argv).map_err(transport_err)?
+                    } else {
+                        let bee_dir = root.join(".bee");
+                        let cfg = super::run::read_main_config(root);
+                        if !crate::herding::repo_uses_paseo(&cfg, &bee_dir)
+                            || !crate::herding::paseo::daemon_reachable()
+                        {
+                            return Err(transport_err(format!(
+                                "paseo is not enabled or daemon is unreachable for agent {agent_id}"
+                            )));
+                        }
+                        let cmd = crate::herding::paseo::paseo_command(&cfg);
+                        let real = crate::herding::paseo::RealPaseoCli::new(cmd)
+                            .with_timeout(std::time::Duration::from_secs(5));
+                        let cli = crate::herding::paseo::FailFastPaseoCli::new(Box::new(real));
+                        cli.call(&argv).map_err(transport_err)?
+                    };
+                    let mut m = Map::new();
+                    m.insert("text".into(), Value::String(text));
+                    return Ok(m);
+                }
+            }
             let text = t.pane_read(pane).map_err(transport_err)?;
             let text = match lines {
                 Some(n) => tail_of(&text, n),
@@ -903,7 +982,7 @@ pub(crate) fn agent_start(args: &[&str]) -> ExitCode {
         Some(i) => (&args[..i], args[i + 1..].iter().map(|s| (*s).to_string()).collect()),
         None => (args, Vec::new()),
     };
-    run_verb(head, move |t, rest| {
+    run_verb(head, move |t, _main_root, rest| {
         let mut a: Vec<&str> = rest.to_vec();
         let kind = take_opt(&mut a, "--kind")
             .ok_or_else(|| usage("bee herding agent-start needs --kind <kind>"))?;
@@ -920,7 +999,7 @@ pub(crate) fn agent_start(args: &[&str]) -> ExitCode {
 /// bootstrap idempotency probe), this is a typed answer: a miss is
 /// `not_found` and exit 1, so a role can branch on it.
 pub(crate) fn pane_id(args: &[&str]) -> ExitCode {
-    run_verb(args, |t, rest| {
+    run_verb(args, |t, _main_root, rest| {
         let mut a: Vec<&str> = rest.to_vec();
         let label = take_opt(&mut a, "--label")
             .ok_or_else(|| usage("bee herding pane-id needs --label <label>"))?;
@@ -1272,6 +1351,59 @@ mod tests {
         let r = ok(&f, "read", &["w4:p4", "--source", "recent", "--lines", "2"]);
         assert_eq!(r.get("text").and_then(Value::as_str), Some("three\nfour"));
         assert_eq!(f.calls(), vec!["pane_read w4:p4"]);
+    }
+
+    struct TestPaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        output: Result<String, String>,
+    }
+
+    impl crate::herding::paseo::PaseoCli for TestPaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            self.output.clone()
+        }
+    }
+
+    #[test]
+    fn pane_read_on_a_paseo_job_prints_the_log_tail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let mbox_dir = bee_dir.join("mailbox").join("job-paseo-1");
+        std::fs::create_dir_all(&mbox_dir).unwrap();
+        let job_json = serde_json::json!({
+            "job_id": "job-paseo-1",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-paseo-1",
+        });
+        std::fs::write(mbox_dir.join("job.json"), serde_json::to_string(&job_json).unwrap()).unwrap();
+
+        let f = FakeCockpit::new();
+        let cli = TestPaseoCli {
+            calls: std::sync::Mutex::new(Vec::new()),
+            output: Ok("tail log line 1\ntail log line 2".into()),
+        };
+
+        let r = dispatch_pane_with("read", &["job-paseo-1", "--lines", "25"], &f, Some(tmp.path()), Some(&cli))
+            .expect("read should succeed");
+        assert_eq!(r.get("text").and_then(Value::as_str), Some("tail log line 1\ntail log line 2"));
+        assert!(f.calls().is_empty());
+        assert_eq!(cli.calls.lock().unwrap().as_slice(), &[vec!["logs".to_string(), "agent-paseo-1".to_string(), "--tail".to_string(), "25".to_string()]]);
+
+        let r_agent = dispatch_pane_with("read", &["agent-paseo-1"], &f, Some(tmp.path()), Some(&cli))
+            .expect("read by agent id should succeed");
+        assert_eq!(r_agent.get("text").and_then(Value::as_str), Some("tail log line 1\ntail log line 2"));
+        assert!(f.calls().is_empty());
+        assert_eq!(cli.calls.lock().unwrap().last().unwrap(), &vec!["logs".to_string(), "agent-paseo-1".to_string(), "--tail".to_string(), "40".to_string()]);
+    }
+
+    #[test]
+    fn herdr_pane_read_is_unchanged() {
+        let mut f = FakeCockpit::new();
+        f.pane_text = "herdr log output".into();
+        let r = dispatch_pane("read", &["herdr-pane-99"], &f).expect("read should succeed");
+        assert_eq!(r.get("text").and_then(Value::as_str), Some("herdr log output"));
+        assert_eq!(f.calls(), vec!["pane_read herdr-pane-99"]);
     }
 
     #[test]

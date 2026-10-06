@@ -986,6 +986,14 @@ pub(super) fn occupancy_with_panes(
     flags: &[&str],
     live_panes_override: Option<Option<HashSet<String>>>,
 ) -> (ExitCode, wave_ledger::Occupancy, Vec<String>) {
+    occupancy_with_panes_and_paseo(flags, live_panes_override, None)
+}
+
+pub(super) fn occupancy_with_panes_and_paseo(
+    flags: &[&str],
+    live_panes_override: Option<Option<HashSet<String>>>,
+    paseo_override: Option<&dyn crate::herding::paseo::PaseoCli>,
+) -> (ExitCode, wave_ledger::Occupancy, Vec<String>) {
     let mut explicit_root: Option<&str> = None;
     let mut json = false;
     let mut i = 0usize;
@@ -1015,15 +1023,50 @@ pub(super) fn occupancy_with_panes(
         return (ExitCode::FAILURE, wave_ledger::Occupancy::Fallback(0), Vec::new());
     };
 
-    let live_panes = match live_panes_override {
+    let paseo_box: Option<Box<dyn crate::herding::paseo::PaseoCli>> = if paseo_override.is_none() {
+        let cfg = match crate::fsutil::read_json(&main_root.join(".bee").join("config.json")) {
+            crate::fsutil::ReadJson::Parsed(v) => v,
+            _ => Value::Null,
+        };
+        if !crate::herding::repo_uses_paseo(&cfg, &main_root.join(".bee"))
+            || !crate::herding::paseo::daemon_reachable()
+        {
+            None
+        } else {
+            let cmd = crate::herding::paseo::paseo_command(&cfg);
+            let real = crate::herding::paseo::RealPaseoCli::new(cmd)
+                .with_timeout(Duration::from_secs(5));
+            Some(Box::new(crate::herding::paseo::FailFastPaseoCli::new(Box::new(real)))
+                as Box<dyn crate::herding::paseo::PaseoCli>)
+        }
+    } else {
+        None
+    };
+    let p_ref = paseo_override.or(paseo_box.as_deref());
+
+    let mut live_panes = match live_panes_override {
         Some(lp) => lp,
         None => live_pane_ids(&main_root),
     };
 
+    if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
+        if let Some(agents) = cli
+            .call(&crate::herding::paseo::ls_label_argv("bee_job"))
+            .ok()
+            .and_then(|stdout| crate::herding::paseo::parse_ls_agents_checked(&stdout))
+        {
+            for (id, _bee_job, archived) in agents {
+                if !archived {
+                    set.insert(id);
+                }
+            }
+        }
+    }
+
     let mut sweep_lines = Vec::new();
     if let Some(ref panes) = live_panes {
         let bee_dir = main_root.join(".bee");
-        for marked_id in super::mailbox::mark_orphans(&bee_dir, panes) {
+        for marked_id in super::mailbox::mark_orphans_with_paseo(&bee_dir, panes, p_ref) {
             let msg = format!("herding: marked job {marked_id} interrupted (process_restarted)");
             println!("{msg}");
             sweep_lines.push(msg);
@@ -2487,5 +2530,105 @@ mod tests {
         assert_eq!(bucket.len(), 1);
         assert_eq!(bucket[0]["name"], "alpha");
         assert_eq!(bucket[0]["retryable"], true, "flipped_before_send bucket row must carry retryable: true");
+    }
+
+    struct FakePaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        result: Result<String, String>,
+    }
+
+    impl FakePaseoCli {
+        fn new(result: Result<String, String>) -> Self {
+            Self {
+                calls: std::sync::Mutex::new(Vec::new()),
+                result,
+            }
+        }
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakePaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            self.result.clone()
+        }
+    }
+
+    #[test]
+    fn occupancy_counts_labelled_non_archived_paseo_agents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+
+        let worker = wave_ledger::WorkerRow {
+            name: "job-p1".to_string(),
+            pane_id: "paseo-agent-live".to_string(),
+            worktree: root.display().to_string(),
+            task: "task-1".to_string(),
+            outcome: None,
+            evidence: None,
+            retryable: None,
+        };
+        let row = wave_ledger::WaveRow {
+            wave_id: "w-1".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            workers: vec![worker],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+
+        let ls_json = r#"[
+            {"id": "paseo-agent-live", "labels": {"bee_job": "job-p1"}, "archived": false},
+            {"id": "paseo-agent-archived", "labels": {"bee_job": "job-p2"}, "archived": true}
+        ]"#;
+        let fake = FakePaseoCli::new(Ok(ls_json.to_string()));
+
+        let (exit, occ, _) = occupancy_with_panes_and_paseo(&["--main-root", root_str], None, Some(&fake));
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+        assert_eq!(
+            fake.calls.lock().unwrap().as_slice(),
+            &[crate::herding::paseo::ls_label_argv("bee_job")]
+        );
+    }
+
+    #[test]
+    fn occupancy_failed_paseo_call_preserves_existing_behaviour() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+
+        let worker = wave_ledger::WorkerRow {
+            name: "job-p1".to_string(),
+            pane_id: "pane-1".to_string(),
+            worktree: root.display().to_string(),
+            task: "task-1".to_string(),
+            outcome: None,
+            evidence: None,
+            retryable: None,
+        };
+        let row = wave_ledger::WaveRow {
+            wave_id: "w-1".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            workers: vec![worker],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+
+        let fake = FakePaseoCli::new(Err("paseo connection failed".to_string()));
+        let live_panes: HashSet<String> = ["pane-1".to_string()].into_iter().collect();
+
+        let (exit, occ, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(Some(live_panes)),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+
+        let (exit_fb, occ_fb, _) = occupancy_with_panes_and_paseo(
+            &["--main-root", root_str],
+            Some(None),
+            Some(&fake),
+        );
+        assert_eq!(exit_fb, ExitCode::SUCCESS);
+        assert_eq!(occ_fb, wave_ledger::Occupancy::Fallback(1));
     }
 }

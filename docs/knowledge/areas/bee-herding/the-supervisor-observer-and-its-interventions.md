@@ -57,6 +57,8 @@ running past twice its recorded estimate, measured by the harness and never
 self-reported, and two consecutive submissions that differ only inside the same
 region (a8f4b8ab).
 
+The supervisor may run `bee herding status`. A `permission` kind exists in the human-decision queue for blocked Paseo workers.
+
 **Shared 120 s freshness constant with `stalled` / `recovered` status**
 (herding-cockpit-completeness 468c6cb8, afec9446). The observer inspects activity
 records whose freshness threshold is the single 120 s constant

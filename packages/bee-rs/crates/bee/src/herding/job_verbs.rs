@@ -93,47 +93,42 @@ fn parse_args<'a>(args: &[&'a str]) -> ParsedArgs<'a> {
     ParsedArgs { job_id, main_root, text, json }
 }
 
-fn read_job_spec(
+fn read_job_json(
     bee_dir: &Path,
     job_id: &str,
     verb: &str,
-) -> Result<(Value, String), JobVerbError> {
+) -> Result<Value, JobVerbError> {
     let job_path = mailbox::job_path(bee_dir, job_id);
-    let raw = match crate::fsutil::read_json(&job_path) {
-        crate::fsutil::ReadJson::Parsed(v) => v,
-        _ => {
-            return Err(JobVerbError {
-                code: "job_not_found",
-                message: format!(
-                    "herding {verb}: job \"{job_id}\" not found (no job.json in .bee/mailbox/{job_id}/). FIX: check the job id with bee herding status"
-                ),
-            });
-        }
-    };
-    let pane_id = raw
-        .get("pane_id")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    if pane_id.is_empty() {
-        return Err(JobVerbError {
-            code: "pane_missing",
+    match crate::fsutil::read_json(&job_path) {
+        crate::fsutil::ReadJson::Parsed(v) => Ok(v),
+        _ => Err(JobVerbError {
+            code: "job_not_found",
             message: format!(
-                "herding {verb}: job \"{job_id}\" has no recorded pane_id in job.json. FIX: check the job with bee herding status"
+                "herding {verb}: job \"{job_id}\" not found (no job.json in .bee/mailbox/{job_id}/). FIX: check the job id with bee herding status"
             ),
-        });
+        }),
     }
-    Ok((raw, pane_id))
 }
 
+#[allow(dead_code)]
 pub(crate) fn interrupt_with_transport(
     main_root: &Path,
     job_id: &str,
     json: bool,
     transport: &dyn PaneTransport,
 ) -> Result<(), JobVerbError> {
+    interrupt_with_backends(main_root, job_id, json, Some(transport), None)
+}
+
+pub(crate) fn interrupt_with_backends(
+    main_root: &Path,
+    job_id: &str,
+    json: bool,
+    transport: Option<&dyn PaneTransport>,
+    paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>,
+) -> Result<(), JobVerbError> {
     let bee_dir = main_root.join(".bee");
-    let (_job_spec, pane_id) = read_job_spec(&bee_dir, job_id, "interrupt")?;
+    let job_raw = read_job_json(&bee_dir, job_id, "interrupt")?;
 
     if let Some((mark, _)) = mailbox::read_mark(&bee_dir, job_id) {
         if matches!(mark, Mark::Cancelled | Mark::CancelPending) {
@@ -147,69 +142,159 @@ pub(crate) fn interrupt_with_transport(
         }
     }
 
-    if !transport.pane_alive(&pane_id) {
-        return Err(JobVerbError {
-            code: "pane_missing",
+    let is_paseo = job_raw.get("transport").and_then(Value::as_str) == Some("paseo");
+    if is_paseo {
+        let paseo_agent_id = match job_raw
+            .get("paseo_agent_id")
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(id) => id,
+            None => {
+                return Err(JobVerbError {
+                    code: "paseo_agent_missing",
+                    message: format!(
+                        "herding interrupt: job \"{job_id}\" has no recorded paseo_agent_id in job.json. FIX: check the job with bee herding status"
+                    ),
+                });
+            }
+        };
+
+        let stop_cmd = crate::herding::paseo::stop_argv(paseo_agent_id);
+        let real_cli;
+        let cli = match paseo_cli {
+            Some(c) => c,
+            None => {
+                let cfg = run::read_main_config(main_root);
+                let cmd = crate::herding::paseo::paseo_command(&cfg);
+                real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+                &real_cli
+            }
+        };
+
+        cli.call(&stop_cmd).map_err(|e| JobVerbError {
+            code: "stop_failed",
             message: format!(
-                "herding interrupt: pane \"{pane_id}\" for job \"{job_id}\" is missing or dead. FIX: check pane with bee herding pane list"
+                "herding interrupt: failed to stop agent \"{paseo_agent_id}\": {e}. FIX: check the Paseo daemon"
             ),
-        });
-    }
+        })?;
 
-    let kind = crate::herding::transport_kind_at(main_root).unwrap_or(TransportKind::Herdr);
-    let key = if kind == TransportKind::Tmux || transport.name() == "tmux" {
-        "Escape"
-    } else {
-        "esc"
-    };
+        mailbox::write_mark(&bee_dir, job_id, Mark::Interrupted, "user").map_err(|e| {
+            JobVerbError {
+                code: "write_mark_failed",
+                message: format!(
+                    "herding interrupt: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"
+                ),
+            }
+        })?;
 
-    transport.pane_send_key(&pane_id, key).map_err(|e| JobVerbError {
-        code: "send_key_failed",
-        message: format!(
-            "herding interrupt: failed to send key to pane \"{pane_id}\": {e}. FIX: check pane with bee herding pane list"
-        ),
-    })?;
-
-    mailbox::write_mark(&bee_dir, job_id, Mark::Interrupted, "user").map_err(|e| {
-        JobVerbError {
-            code: "write_mark_failed",
-            message: format!(
-                "herding interrupt: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"
-            ),
+        if json {
+            let out = serde_json::json!({
+                "job_id": job_id,
+                "outcome": "interrupted",
+                "paseo_agent_id": paseo_agent_id,
+                "closed_pane": false,
+            });
+            println!("{}", serde_json::to_string(&out).unwrap());
+        } else {
+            println!("herding: interrupted job {job_id} (agent kept)");
         }
-    })?;
 
-    if json {
-        let out = serde_json::json!({
-            "job_id": job_id,
-            "outcome": "interrupted",
-            "pane_id": pane_id,
-            "closed_pane": false,
-        });
-        println!("{}", serde_json::to_string(&out).unwrap());
+        Ok(())
     } else {
-        println!("herding: interrupted job {job_id} (pane kept open)");
-    }
+        let pane_id = job_raw
+            .get("pane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if pane_id.is_empty() {
+            return Err(JobVerbError {
+                code: "pane_missing",
+                message: format!(
+                    "herding interrupt: job \"{job_id}\" has no recorded pane_id in job.json. FIX: check the job with bee herding status"
+                ),
+            });
+        }
 
-    Ok(())
+        let real_trans;
+        let trans = match transport {
+            Some(t) => t,
+            None => {
+                real_trans = transport_for_run(main_root).map_err(|e| JobVerbError {
+                    code: "transport_error",
+                    message: format!("herding interrupt: {e}. FIX: check herding.transport in .bee/config.json"),
+                })?;
+                real_trans.as_ref()
+            }
+        };
+
+        if !trans.pane_alive(&pane_id) {
+            return Err(JobVerbError {
+                code: "pane_missing",
+                message: format!(
+                    "herding interrupt: pane \"{pane_id}\" for job \"{job_id}\" is missing or dead. FIX: check pane with bee herding pane list"
+                ),
+            });
+        }
+
+        let kind = crate::herding::transport_kind_at(main_root).unwrap_or(TransportKind::Herdr);
+        let key = if kind == TransportKind::Tmux || trans.name() == "tmux" {
+            "Escape"
+        } else {
+            "esc"
+        };
+
+        trans.pane_send_key(&pane_id, key).map_err(|e| JobVerbError {
+            code: "send_key_failed",
+            message: format!(
+                "herding interrupt: failed to send key to pane \"{pane_id}\": {e}. FIX: check pane with bee herding pane list"
+            ),
+        })?;
+
+        mailbox::write_mark(&bee_dir, job_id, Mark::Interrupted, "user").map_err(|e| {
+            JobVerbError {
+                code: "write_mark_failed",
+                message: format!(
+                    "herding interrupt: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"
+                ),
+            }
+        })?;
+
+        if json {
+            let out = serde_json::json!({
+                "job_id": job_id,
+                "outcome": "interrupted",
+                "pane_id": pane_id,
+                "closed_pane": false,
+            });
+            println!("{}", serde_json::to_string(&out).unwrap());
+        } else {
+            println!("herding: interrupted job {job_id} (pane kept open)");
+        }
+
+        Ok(())
+    }
 }
 
+#[allow(dead_code)]
 pub(crate) fn cancel_with_transport(
     main_root: &Path,
     job_id: &str,
     json: bool,
     transport: &dyn PaneTransport,
 ) -> Result<(), JobVerbError> {
-    cancel_with_transport_and_timeout(
+    cancel_with_backends_and_timeout(
         main_root,
         job_id,
         json,
-        transport,
+        Some(transport),
+        None,
         DEFAULT_POLL_TIMEOUT,
         DEFAULT_POLL_INTERVAL,
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn cancel_with_transport_and_timeout(
     main_root: &Path,
     job_id: &str,
@@ -218,8 +303,28 @@ pub(crate) fn cancel_with_transport_and_timeout(
     poll_timeout: Duration,
     poll_interval: Duration,
 ) -> Result<(), JobVerbError> {
+    cancel_with_backends_and_timeout(
+        main_root,
+        job_id,
+        json,
+        Some(transport),
+        None,
+        poll_timeout,
+        poll_interval,
+    )
+}
+
+pub(crate) fn cancel_with_backends_and_timeout(
+    main_root: &Path,
+    job_id: &str,
+    json: bool,
+    transport: Option<&dyn PaneTransport>,
+    paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>,
+    poll_timeout: Duration,
+    poll_interval: Duration,
+) -> Result<(), JobVerbError> {
     let bee_dir = main_root.join(".bee");
-    let (job_spec, pane_id) = read_job_spec(&bee_dir, job_id, "cancel")?;
+    let job_raw = read_job_json(&bee_dir, job_id, "cancel")?;
 
     let current_mark = mailbox::read_mark(&bee_dir, job_id);
     if let Some((Mark::Cancelled, _)) = current_mark {
@@ -231,27 +336,203 @@ pub(crate) fn cancel_with_transport_and_timeout(
         });
     }
 
-    // A second cancel on a cancel_pending job skips the pane step and only re-confirms the pid.
-    let is_cancel_pending = matches!(current_mark, Some((Mark::CancelPending, _)));
-
-    let pid = if is_cancel_pending {
-        // Retrieve recorded pid from job.json
-        job_spec
-            .get("cancel_pid")
-            .and_then(Value::as_u64)
-            .map(|n| n as u32)
-    } else {
-        match transport.process_info(&pane_id) {
-            Liveness::Unknown => {
+    let is_paseo = job_raw.get("transport").and_then(Value::as_str) == Some("paseo");
+    if is_paseo {
+        let paseo_agent_id = match job_raw
+            .get("paseo_agent_id")
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(id) => id,
+            None => {
                 return Err(JobVerbError {
-                    code: "cancel_unknown",
+                    code: "paseo_agent_missing",
                     message: format!(
-                        "herding cancel: process info for pane \"{pane_id}\" is unknown — cannot confirm cancel. FIX: inspect pane with bee herding pane list"
+                        "herding cancel: job \"{job_id}\" has no recorded paseo_agent_id in job.json. FIX: check the job with bee herding status"
                     ),
                 });
             }
-            Liveness::Absent => {
-                let _ = transport.pane_close(&pane_id);
+        };
+
+        let is_cancel_pending = matches!(current_mark, Some((Mark::CancelPending, _)));
+        if !is_cancel_pending {
+            mailbox::write_mark(&bee_dir, job_id, Mark::CancelPending, "user").map_err(|e| {
+                JobVerbError {
+                    code: "write_mark_failed",
+                    message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
+                }
+            })?;
+        }
+
+        let is_own_agent = std::env::var("PASEO_AGENT_ID")
+            .map(|own| !own.trim().is_empty() && own.trim() == paseo_agent_id.trim())
+            .unwrap_or(false);
+
+        if is_own_agent {
+            mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
+                JobVerbError {
+                    code: "write_mark_failed",
+                    message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
+                }
+            })?;
+            if json {
+                let out = serde_json::json!({
+                    "job_id": job_id,
+                    "outcome": "cancelled",
+                    "paseo_agent_id": paseo_agent_id,
+                    "skipped_own_agent": true,
+                    "message": format!("skipped stop and archive for caller's own agent {paseo_agent_id}"),
+                });
+                println!("{}", serde_json::to_string(&out).unwrap());
+            } else {
+                println!("herding: cancelled job {job_id} (skipped stop and archive for caller's own agent {paseo_agent_id})");
+            }
+            return Ok(());
+        }
+
+        let real_cli;
+        let cli = match paseo_cli {
+            Some(c) => c,
+            None => {
+                let cfg = run::read_main_config(main_root);
+                let cmd = crate::herding::paseo::paseo_command(&cfg);
+                real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+                &real_cli
+            }
+        };
+
+        let stop_cmd = crate::herding::paseo::stop_argv(paseo_agent_id);
+        cli.call(&stop_cmd).map_err(|e| JobVerbError {
+            code: "stop_failed",
+            message: format!("herding cancel: failed to stop agent \"{paseo_agent_id}\": {e}. FIX: check the Paseo daemon"),
+        })?;
+
+        let archive_cmd = crate::herding::paseo::archive_argv(paseo_agent_id);
+        cli.call(&archive_cmd).map_err(|e| JobVerbError {
+            code: "archive_failed",
+            message: format!("herding cancel: failed to archive agent \"{paseo_agent_id}\": {e}. FIX: check the Paseo daemon"),
+        })?;
+
+        mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
+            JobVerbError {
+                code: "write_mark_failed",
+                message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
+            }
+        })?;
+
+        if json {
+            let out = serde_json::json!({
+                "job_id": job_id,
+                "outcome": "cancelled",
+                "paseo_agent_id": paseo_agent_id,
+                "closed_pane": false,
+            });
+            println!("{}", serde_json::to_string(&out).unwrap());
+        } else {
+            println!("herding: cancelled job {job_id} (agent stopped and archived)");
+        }
+
+        Ok(())
+    } else {
+        let pane_id = job_raw
+            .get("pane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if pane_id.is_empty() {
+            return Err(JobVerbError {
+                code: "pane_missing",
+                message: format!(
+                    "herding cancel: job \"{job_id}\" has no recorded pane_id in job.json. FIX: check the job with bee herding status"
+                ),
+            });
+        }
+
+        let real_trans;
+        let trans = match transport {
+            Some(t) => t,
+            None => {
+                real_trans = transport_for_run(main_root).map_err(|e| JobVerbError {
+                    code: "transport_error",
+                    message: format!("herding cancel: {e}. FIX: check herding.transport in .bee/config.json"),
+                })?;
+                real_trans.as_ref()
+            }
+        };
+
+        let is_cancel_pending = matches!(current_mark, Some((Mark::CancelPending, _)));
+
+        let pid = if is_cancel_pending {
+            job_raw
+                .get("cancel_pid")
+                .and_then(Value::as_u64)
+                .map(|n| n as u32)
+        } else {
+            match trans.process_info(&pane_id) {
+                Liveness::Unknown => {
+                    return Err(JobVerbError {
+                        code: "cancel_unknown",
+                        message: format!(
+                            "herding cancel: process info for pane \"{pane_id}\" is unknown — cannot confirm cancel. FIX: inspect pane with bee herding pane list"
+                        ),
+                    });
+                }
+                Liveness::Absent => {
+                    let _ = trans.pane_close(&pane_id);
+                    mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
+                        JobVerbError {
+                            code: "write_mark_failed",
+                            message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
+                        }
+                    })?;
+                    if json {
+                        let out = serde_json::json!({
+                            "job_id": job_id,
+                            "outcome": "cancelled",
+                            "pane_id": pane_id,
+                            "closed_pane": true,
+                        });
+                        println!("{}", serde_json::to_string(&out).unwrap());
+                    } else {
+                        println!("herding: cancelled job {job_id} (pane closed)");
+                    }
+                    return Ok(());
+                }
+                Liveness::Alive { pid } => {
+                    mailbox::write_mark(&bee_dir, job_id, Mark::CancelPending, "user").map_err(|e| {
+                        JobVerbError {
+                            code: "write_mark_failed",
+                            message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
+                        }
+                    })?;
+                    let job_path = mailbox::job_path(&bee_dir, job_id);
+                    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) =
+                        crate::fsutil::read_json(&job_path)
+                    {
+                        map.insert("cancel_pid".to_string(), Value::Number(pid.into()));
+                        let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
+                    }
+                    let _ = trans.pane_close(&pane_id);
+                    Some(pid)
+                }
+            }
+        };
+
+        if let Some(pid) = pid {
+            let mut gone = false;
+            let steps = (poll_timeout.as_millis() / poll_interval.as_millis().max(1)).max(1);
+            for _ in 0..steps {
+                if !crate::lock::is_pid_alive(Some(pid as f64)) {
+                    gone = true;
+                    break;
+                }
+                std::thread::sleep(poll_interval);
+            }
+            if !gone && !crate::lock::is_pid_alive(Some(pid as f64)) {
+                gone = true;
+            }
+
+            if gone {
                 mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
                     JobVerbError {
                         code: "write_mark_failed",
@@ -264,51 +545,35 @@ pub(crate) fn cancel_with_transport_and_timeout(
                         "outcome": "cancelled",
                         "pane_id": pane_id,
                         "closed_pane": true,
+                        "pid": pid,
                     });
                     println!("{}", serde_json::to_string(&out).unwrap());
                 } else {
-                    println!("herding: cancelled job {job_id} (pane closed)");
+                    println!("herding: cancelled job {job_id} (pane closed, pid {pid} exited)");
                 }
-                return Ok(());
-            }
-            Liveness::Alive { pid } => {
-                // Write mark cancel_pending
-                mailbox::write_mark(&bee_dir, job_id, Mark::CancelPending, "user").map_err(|e| {
-                    JobVerbError {
-                        code: "write_mark_failed",
-                        message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
-                    }
-                })?;
-                // Save cancel_pid in job.json
-                let job_path = mailbox::job_path(&bee_dir, job_id);
-                if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) =
-                    crate::fsutil::read_json(&job_path)
-                {
-                    map.insert("cancel_pid".to_string(), Value::Number(pid.into()));
-                    let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
+                Ok(())
+            } else {
+                if json {
+                    let err_obj = serde_json::json!({
+                        "error": "cancel_termination_failed",
+                        "job_id": job_id,
+                        "pid": pid,
+                        "pane_id": pane_id,
+                    });
+                    println!("{}", serde_json::to_string(&err_obj).unwrap());
+                } else {
+                    eprintln!(
+                        "herding cancel: pid {pid} still alive after {} s. FIX: kill pid {pid} by hand, then run bee herding cancel {job_id} again",
+                        poll_timeout.as_secs()
+                    );
                 }
-                // Close pane
-                let _ = transport.pane_close(&pane_id);
-                Some(pid)
+                Err(JobVerbError {
+                    code: "cancel_termination_failed",
+                    message: format!("FIX: kill pid {pid} by hand, then run bee herding cancel {job_id} again"),
+                })
             }
-        }
-    };
-
-    if let Some(pid) = pid {
-        let mut gone = false;
-        let steps = (poll_timeout.as_millis() / poll_interval.as_millis().max(1)).max(1);
-        for _ in 0..steps {
-            if !crate::lock::is_pid_alive(Some(pid as f64)) {
-                gone = true;
-                break;
-            }
-            std::thread::sleep(poll_interval);
-        }
-        if !gone && !crate::lock::is_pid_alive(Some(pid as f64)) {
-            gone = true;
-        }
-
-        if gone {
+        } else {
+            let _ = trans.pane_close(&pane_id);
             mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
                 JobVerbError {
                     code: "write_mark_failed",
@@ -321,55 +586,13 @@ pub(crate) fn cancel_with_transport_and_timeout(
                     "outcome": "cancelled",
                     "pane_id": pane_id,
                     "closed_pane": true,
-                    "pid": pid,
                 });
                 println!("{}", serde_json::to_string(&out).unwrap());
             } else {
-                println!("herding: cancelled job {job_id} (pane closed, pid {pid} exited)");
+                println!("herding: cancelled job {job_id} (pane closed)");
             }
             Ok(())
-        } else {
-            // Pid still alive after timeout! Exit non-zero, mark stays cancel_pending.
-            if json {
-                let err_obj = serde_json::json!({
-                    "error": "cancel_termination_failed",
-                    "job_id": job_id,
-                    "pid": pid,
-                    "pane_id": pane_id,
-                });
-                println!("{}", serde_json::to_string(&err_obj).unwrap());
-            } else {
-                eprintln!(
-                    "herding cancel: pid {pid} still alive after {} s. FIX: kill pid {pid} by hand, then run bee herding cancel {job_id} again",
-                    poll_timeout.as_secs()
-                );
-            }
-            Err(JobVerbError {
-                code: "cancel_termination_failed",
-                message: format!("FIX: kill pid {pid} by hand, then run bee herding cancel {job_id} again"),
-            })
         }
-    } else {
-        // No pid was known and mark was cancel_pending without cancel_pid. Close pane and mark cancelled.
-        let _ = transport.pane_close(&pane_id);
-        mailbox::write_mark(&bee_dir, job_id, Mark::Cancelled, "user").map_err(|e| {
-            JobVerbError {
-                code: "write_mark_failed",
-                message: format!("herding cancel: could not write mark: {e}. FIX: check permissions in .bee/mailbox/{job_id}/"),
-            }
-        })?;
-        if json {
-            let out = serde_json::json!({
-                "job_id": job_id,
-                "outcome": "cancelled",
-                "pane_id": pane_id,
-                "closed_pane": true,
-            });
-            println!("{}", serde_json::to_string(&out).unwrap());
-        } else {
-            println!("herding: cancelled job {job_id} (pane closed)");
-        }
-        Ok(())
     }
 }
 
@@ -383,14 +606,7 @@ pub(super) fn interrupt(args: &[&str]) -> ExitCode {
         eprintln!("herding interrupt: could not resolve main checkout root. FIX: pass --main-root <path>");
         return ExitCode::FAILURE;
     };
-    let transport = match transport_for_run(&main_root) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("herding interrupt: {e}. FIX: check herding.transport in .bee/config.json");
-            return ExitCode::FAILURE;
-        }
-    };
-    match interrupt_with_transport(&main_root, job_id, parsed.json, transport.as_ref()) {
+    match interrupt_with_backends(&main_root, job_id, parsed.json, None, None) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             if parsed.json {
@@ -417,14 +633,15 @@ pub(super) fn cancel(args: &[&str]) -> ExitCode {
         eprintln!("herding cancel: could not resolve main checkout root. FIX: pass --main-root <path>");
         return ExitCode::FAILURE;
     };
-    let transport = match transport_for_run(&main_root) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("herding cancel: {e}. FIX: check herding.transport in .bee/config.json");
-            return ExitCode::FAILURE;
-        }
-    };
-    match cancel_with_transport(&main_root, job_id, parsed.json, transport.as_ref()) {
+    match cancel_with_backends_and_timeout(
+        &main_root,
+        job_id,
+        parsed.json,
+        None,
+        None,
+        DEFAULT_POLL_TIMEOUT,
+        DEFAULT_POLL_INTERVAL,
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             if e.code != "cancel_termination_failed" {
@@ -754,6 +971,173 @@ pub(super) fn steer(args: &[&str]) -> ExitCode {
                 println!("{}", serde_json::to_string(&out).unwrap());
             } else {
                 println!("herding: steered job {job_id} (steer #{n})");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            if parsed.json {
+                let err_obj = serde_json::json!({
+                    "error": e.code,
+                    "message": e.message,
+                });
+                println!("{}", serde_json::to_string(&err_obj).unwrap());
+            } else {
+                eprintln!("{}", e.message);
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+pub(crate) fn permit_job(
+    main_root: &Path,
+    job: &str,
+    allow: bool,
+    request: Option<&str>,
+    all: bool,
+    cli: &dyn crate::herding::paseo::PaseoCli,
+) -> Result<String, JobVerbError> {
+    let bee_dir = main_root.join(".bee");
+    let job_raw = read_job_json(&bee_dir, job, "permit")?;
+
+    if job_raw.get("transport").and_then(Value::as_str) != Some("paseo") {
+        return Err(JobVerbError {
+            code: "not_a_paseo_job",
+            message: format!(
+                "herding permit: job \"{job}\" is not a Paseo job. FIX: permit only applies to Paseo workers"
+            ),
+        });
+    }
+
+    let paseo_agent_id = match job_raw
+        .get("paseo_agent_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+    {
+        Some(id) => id,
+        None => {
+            return Err(JobVerbError {
+                code: "paseo_agent_missing",
+                message: format!(
+                    "herding permit: job \"{job}\" has no recorded paseo_agent_id in job.json. FIX: check the job with bee herding status"
+                ),
+            });
+        }
+    };
+
+    let argv = crate::herding::paseo::permit_argv(paseo_agent_id, allow, request, all);
+    cli.call(&argv).map_err(|e| JobVerbError {
+        code: "permit_failed",
+        message: format!(
+            "herding permit: failed to answer permission for agent \"{paseo_agent_id}\": {e}. FIX: check the Paseo daemon"
+        ),
+    })
+}
+
+struct ParsedPermitArgs<'a> {
+    job_id: Option<&'a str>,
+    action: Option<&'a str>,
+    request: Option<&'a str>,
+    all: bool,
+    json: bool,
+    main_root: Option<&'a str>,
+}
+
+fn parse_permit_args<'a>(args: &[&'a str]) -> ParsedPermitArgs<'a> {
+    let mut job_id = None;
+    let mut action = None;
+    let mut request = None;
+    let mut all = false;
+    let mut json = false;
+    let mut main_root = None;
+    let mut i = 0usize;
+    while i < args.len() {
+        match args[i] {
+            "--json" => {
+                json = true;
+                i += 1;
+            }
+            "--all" => {
+                all = true;
+                i += 1;
+            }
+            "--request" => {
+                request = args.get(i + 1).copied();
+                i += 2;
+            }
+            arg if arg.starts_with("--request=") => {
+                request = Some(&arg["--request=".len()..]);
+                i += 1;
+            }
+            "--main-root" => {
+                main_root = args.get(i + 1).copied();
+                i += 2;
+            }
+            arg if arg.starts_with("--main-root=") => {
+                main_root = Some(&arg["--main-root=".len()..]);
+                i += 1;
+            }
+            arg if !arg.starts_with('-') => {
+                if job_id.is_none() {
+                    job_id = Some(arg);
+                } else if action.is_none() {
+                    action = Some(arg);
+                }
+                i += 1;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    ParsedPermitArgs {
+        job_id,
+        action,
+        request,
+        all,
+        json,
+        main_root,
+    }
+}
+
+pub(super) fn permit(args: &[&str]) -> ExitCode {
+    let parsed = parse_permit_args(args);
+    let Some(job_id) = parsed.job_id else {
+        eprintln!("herding permit: missing <job-id> positional argument. FIX: run bee herding permit <job-id> allow|deny");
+        return ExitCode::FAILURE;
+    };
+    let Some(action_str) = parsed.action else {
+        eprintln!("herding permit: missing <allow|deny> positional argument. FIX: run bee herding permit {job_id} allow|deny");
+        return ExitCode::FAILURE;
+    };
+    let allow = match action_str {
+        "allow" => true,
+        "deny" => false,
+        other => {
+            eprintln!("herding permit: invalid action \"{other}\". FIX: pass allow or deny");
+            return ExitCode::FAILURE;
+        }
+    };
+    let Some(main_root) = resolve_main_root(parsed.main_root) else {
+        eprintln!("herding permit: could not resolve main checkout root. FIX: pass --main-root <path>");
+        return ExitCode::FAILURE;
+    };
+    let cfg = run::read_main_config(&main_root);
+    let cmd = crate::herding::paseo::paseo_command(&cfg);
+    let cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+    match permit_job(&main_root, job_id, allow, parsed.request, parsed.all, &cli) {
+        Ok(output) => {
+            if parsed.json {
+                let out = serde_json::json!({
+                    "job_id": job_id,
+                    "action": action_str,
+                    "output": output.trim(),
+                });
+                println!("{}", serde_json::to_string(&out).unwrap());
+            } else if !output.trim().is_empty() {
+                println!("{}", output.trim());
+            } else {
+                println!("herding: permitted job {job_id} ({action_str})");
             }
             ExitCode::SUCCESS
         }
@@ -1231,5 +1615,184 @@ mod tests {
         assert!(err.message.contains("FIX:"));
         assert_eq!(runner.call_count(), 1);
         assert!(!job_dir.join("steer-1.json").exists());
+    }
+
+    struct FakePaseoCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        result: Result<String, String>,
+    }
+
+    impl FakePaseoCli {
+        fn new() -> Self {
+            Self {
+                calls: std::sync::Mutex::new(Vec::new()),
+                result: Ok("ok".to_string()),
+            }
+        }
+
+        fn get_calls(&self) -> Vec<Vec<String>> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    impl crate::herding::paseo::PaseoCli for FakePaseoCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            self.result.clone()
+        }
+    }
+
+    fn seed_paseo_job(bee_dir: &Path, job_id: &str, agent_id: &str) {
+        let job_file = mailbox::job_path(bee_dir, job_id);
+        let mut obj = serde_json::Map::new();
+        obj.insert("job_id".to_string(), Value::String(job_id.to_string()));
+        obj.insert("transport".to_string(), Value::String("paseo".to_string()));
+        obj.insert("paseo_agent_id".to_string(), Value::String(agent_id.to_string()));
+        crate::fsutil::write_json_atomic(&job_file, &Value::Object(obj)).unwrap();
+    }
+
+    #[test]
+    fn interrupt_paseo_calls_stop_and_keeps_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_job(&bee_dir, "job-paseo-int", "agent-int-123");
+
+        let cli = FakePaseoCli::new();
+        let res = interrupt_with_backends(tmp.path(), "job-paseo-int", false, None, Some(&cli));
+        assert!(res.is_ok(), "{res:?}");
+        assert_eq!(cli.get_calls(), vec![vec!["stop".to_string(), "agent-int-123".to_string()]]);
+        let mark = mailbox::read_mark(&bee_dir, "job-paseo-int");
+        assert_eq!(mark, Some((Mark::Interrupted, Some("user".to_string()))));
+    }
+
+    #[test]
+    fn cancel_paseo_calls_stop_then_archive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_job(&bee_dir, "job-paseo-cancel", "agent-cancel-456");
+
+        let cli = FakePaseoCli::new();
+        let res = cancel_with_backends_and_timeout(
+            tmp.path(),
+            "job-paseo-cancel",
+            false,
+            None,
+            Some(&cli),
+            DEFAULT_POLL_TIMEOUT,
+            DEFAULT_POLL_INTERVAL,
+        );
+        assert!(res.is_ok(), "{res:?}");
+        assert_eq!(
+            cli.get_calls(),
+            vec![
+                vec!["stop".to_string(), "agent-cancel-456".to_string()],
+                vec!["archive".to_string(), "--force".to_string(), "agent-cancel-456".to_string()],
+            ]
+        );
+        let mark = mailbox::read_mark(&bee_dir, "job-paseo-cancel");
+        assert_eq!(mark, Some((Mark::Cancelled, Some("user".to_string()))));
+    }
+
+    #[test]
+    fn cancel_paseo_never_archives_callers_own_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_job(&bee_dir, "job-paseo-own", "agent-own-999");
+
+        unsafe { std::env::set_var("PASEO_AGENT_ID", "agent-own-999") };
+        let cli = FakePaseoCli::new();
+        let res = cancel_with_backends_and_timeout(
+            tmp.path(),
+            "job-paseo-own",
+            false,
+            None,
+            Some(&cli),
+            DEFAULT_POLL_TIMEOUT,
+            DEFAULT_POLL_INTERVAL,
+        );
+        unsafe { std::env::remove_var("PASEO_AGENT_ID") };
+
+        assert!(res.is_ok(), "{res:?}");
+        assert!(cli.get_calls().is_empty());
+        let mark = mailbox::read_mark(&bee_dir, "job-paseo-own");
+        assert_eq!(mark, Some((Mark::Cancelled, Some("user".to_string()))));
+    }
+
+    #[test]
+    fn permit_sends_allow_or_deny_with_job_agent_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_job(&bee_dir, "job-paseo-permit", "agent-permit-789");
+
+        let cli = FakePaseoCli::new();
+        let res1 = permit_job(tmp.path(), "job-paseo-permit", true, Some("req-1"), false, &cli);
+        assert!(res1.is_ok(), "{res1:?}");
+        let res2 = permit_job(tmp.path(), "job-paseo-permit", false, None, true, &cli);
+        assert!(res2.is_ok(), "{res2:?}");
+
+        assert_eq!(
+            cli.get_calls(),
+            vec![
+                vec!["permit".to_string(), "allow".to_string(), "agent-permit-789".to_string(), "req-1".to_string()],
+                vec!["permit".to_string(), "deny".to_string(), "agent-permit-789".to_string(), "--all".to_string()],
+            ]
+        );
+    }
+
+    #[test]
+    fn permit_refuses_a_herdr_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_job(&bee_dir, "job-herdr-permit", "p1");
+
+        let cli = FakePaseoCli::new();
+        let err = permit_job(tmp.path(), "job-herdr-permit", true, None, false, &cli).unwrap_err();
+        assert_eq!(err.code, "not_a_paseo_job");
+        assert!(err.message.contains("FIX:"), "{err}");
+        assert!(cli.get_calls().is_empty());
+    }
+
+    #[test]
+    fn permit_refuses_missing_job_and_missing_agent_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+
+        let cli = FakePaseoCli::new();
+        let err1 = permit_job(tmp.path(), "nonexistent-job", true, None, false, &cli).unwrap_err();
+        assert_eq!(err1.code, "job_not_found");
+        assert!(err1.message.contains("FIX:"), "{err1}");
+
+        let job_file = mailbox::job_path(&bee_dir, "job-no-agent");
+        let mut obj = serde_json::Map::new();
+        obj.insert("job_id".to_string(), Value::String("job-no-agent".to_string()));
+        obj.insert("transport".to_string(), Value::String("paseo".to_string()));
+        crate::fsutil::write_json_atomic(&job_file, &Value::Object(obj)).unwrap();
+
+        let err2 = permit_job(tmp.path(), "job-no-agent", true, None, false, &cli).unwrap_err();
+        assert_eq!(err2.code, "paseo_agent_missing");
+        assert!(err2.message.contains("FIX:"), "{err2}");
+    }
+
+    #[test]
+    fn interrupt_and_cancel_paseo_never_build_pane_transport() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_job(&bee_dir, "job-paseo-no-pane", "agent-no-pane");
+
+        let cli = FakePaseoCli::new();
+        let res_int = interrupt_with_backends(tmp.path(), "job-paseo-no-pane", false, None, Some(&cli));
+        assert!(res_int.is_ok());
+
+        seed_paseo_job(&bee_dir, "job-paseo-no-pane-cancel", "agent-no-pane-cancel");
+        let res_cancel = cancel_with_backends_and_timeout(
+            tmp.path(),
+            "job-paseo-no-pane-cancel",
+            false,
+            None,
+            Some(&cli),
+            DEFAULT_POLL_TIMEOUT,
+            DEFAULT_POLL_INTERVAL,
+        );
+        assert!(res_cancel.is_ok());
     }
 }

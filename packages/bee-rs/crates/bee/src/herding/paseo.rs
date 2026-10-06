@@ -236,6 +236,238 @@ pub fn send_argv(id: &str, text: &str) -> Vec<String> {
     ]
 }
 
+pub fn stop_argv(id: &str) -> Vec<String> {
+    vec!["stop".to_string(), id.to_string()]
+}
+
+pub fn ls_label_argv(key: &str) -> Vec<String> {
+    vec![
+        "ls".to_string(),
+        "--global".to_string(),
+        "--label".to_string(),
+        key.to_string(),
+        "--json".to_string(),
+    ]
+}
+
+pub fn logs_tail_argv(id: &str, n: usize, filter: Option<&str>) -> Vec<String> {
+    let mut argv = vec![
+        "logs".to_string(),
+        id.to_string(),
+        "--tail".to_string(),
+        n.to_string(),
+    ];
+    if let Some(f) = filter {
+        argv.push("--filter".to_string());
+        argv.push(f.to_string());
+    }
+    argv
+}
+
+pub fn permit_argv(agent: &str, allow: bool, request: Option<&str>, all: bool) -> Vec<String> {
+    let action = if allow { "allow" } else { "deny" };
+    let mut argv = vec!["permit".to_string(), action.to_string(), agent.to_string()];
+    if let Some(req) = request {
+        argv.push(req.to_string());
+    }
+    if all {
+        argv.push("--all".to_string());
+    }
+    argv
+}
+
+pub fn parse_ls_agents_checked(stdout: &str) -> Option<Vec<(String, String, bool)>> {
+    for (i, c) in stdout.char_indices() {
+        if c == '[' || c == '{' {
+            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+            if let Some(Ok(val)) = de.next() {
+                let readable = match &val {
+                    Value::Array(_) => true,
+                    Value::Object(m) => m.values().any(Value::is_array),
+                    _ => false,
+                };
+                return readable.then(|| parse_ls_agents(stdout));
+            }
+        }
+    }
+    None
+}
+
+pub fn parse_ls_agents(stdout: &str) -> Vec<(String, String, bool)> {
+    for (i, c) in stdout.char_indices() {
+        if c == '[' || c == '{' {
+            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+            if let Some(Ok(val)) = de.next() {
+                let array_opt = match val {
+                    Value::Array(a) => Some(a),
+                    Value::Object(m) => m
+                        .get("agents")
+                        .or_else(|| m.get("Agents"))
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .or_else(|| m.values().find_map(|v| v.as_array().cloned())),
+                    _ => None,
+                };
+                let array = match array_opt {
+                    Some(a) => a,
+                    None => return Vec::new(),
+                };
+                let mut out = Vec::new();
+                for item in array {
+                    let map = match item {
+                        Value::Object(m) => m,
+                        _ => continue,
+                    };
+                    let id = map
+                        .get("id")
+                        .or_else(|| map.get("Id"))
+                        .or_else(|| map.get("agentId"))
+                        .or_else(|| map.get("AgentId"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    if id.trim().is_empty() {
+                        continue;
+                    }
+                    let mut bee_job = String::new();
+                    let labels_val = map
+                        .get("labels")
+                        .or_else(|| map.get("Labels"))
+                        .or_else(|| map.get("label"))
+                        .or_else(|| map.get("Label"));
+                    if let Some(lv) = labels_val {
+                        match lv {
+                            Value::Object(lm) => {
+                                if let Some(j) = lm
+                                    .get("bee_job")
+                                    .or_else(|| lm.get("Bee_job"))
+                                    .and_then(Value::as_str)
+                                {
+                                    bee_job = j.to_string();
+                                }
+                            }
+                            Value::Array(la) => {
+                                for elem in la {
+                                    if let Some(s) = elem.as_str() {
+                                        if let Some(stripped) = s.strip_prefix("bee_job=") {
+                                            bee_job = stripped.to_string();
+                                            break;
+                                        } else if let Some(stripped) = s.strip_prefix("bee_job:") {
+                                            bee_job = stripped.to_string();
+                                            break;
+                                        }
+                                    } else if let Value::Object(em) = elem {
+                                        let k = em
+                                            .get("key")
+                                            .or_else(|| em.get("name"))
+                                            .and_then(Value::as_str);
+                                        let v = em.get("value").and_then(Value::as_str);
+                                        if k == Some("bee_job") {
+                                            if let Some(v_str) = v {
+                                                bee_job = v_str.to_string();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if bee_job.is_empty() {
+                        if let Some(j) = map
+                            .get("bee_job")
+                            .or_else(|| map.get("Bee_job"))
+                            .and_then(Value::as_str)
+                        {
+                            bee_job = j.to_string();
+                        }
+                    }
+                    let archived = map
+                        .get("archived")
+                        .or_else(|| map.get("Archived"))
+                        .and_then(|v| {
+                            v.as_bool().or_else(|| {
+                                v.as_str().map(|s| s == "true" || s == "archived")
+                            })
+                        })
+                        .or_else(|| {
+                            map.get("archivedAt")
+                                .or_else(|| map.get("ArchivedAt"))
+                                .and_then(Value::as_str)
+                                .map(|s| !s.trim().is_empty())
+                        })
+                        .or_else(|| {
+                            map.get("status")
+                                .or_else(|| map.get("Status"))
+                                .and_then(Value::as_str)
+                                .map(|s| s == "archived")
+                        })
+                        .unwrap_or(false);
+                    out.push((id.to_string(), bee_job, archived));
+                }
+                return out;
+            }
+        }
+    }
+    Vec::new()
+}
+
+pub fn parse_pending_permissions(stdout: &str) -> Vec<(String, String)> {
+    for (i, c) in stdout.char_indices() {
+        if c == '{' {
+            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+            if let Some(Ok(Value::Object(map))) = de.next() {
+                let pending = map
+                    .get("PendingPermissions")
+                    .or_else(|| map.get("pendingPermissions"))
+                    .or_else(|| map.get("pending_permissions"))
+                    .and_then(Value::as_array);
+                let array = match pending {
+                    Some(a) => a,
+                    None => return Vec::new(),
+                };
+                let mut out = Vec::new();
+                for item in array {
+                    match item {
+                        Value::Object(m) => {
+                            let id = m
+                                .get("id")
+                                .or_else(|| m.get("Id"))
+                                .or_else(|| m.get("requestId"))
+                                .or_else(|| m.get("RequestId"))
+                                .or_else(|| m.get("request_id"))
+                                .and_then(Value::as_str);
+                            let tool = m
+                                .get("tool")
+                                .or_else(|| m.get("name"))
+                                .or_else(|| m.get("toolName"))
+                                .or_else(|| m.get("Tool"))
+                                .or_else(|| m.get("Name"))
+                                .or_else(|| m.get("ToolName"))
+                                .and_then(Value::as_str);
+                            if let Some(id_str) = id {
+                                out.push((id_str.to_string(), tool.unwrap_or("").to_string()));
+                            } else if let Some(tool_str) = tool {
+                                out.push((tool_str.to_string(), String::new()));
+                            } else {
+                                out.push((item.to_string(), String::new()));
+                            }
+                        }
+                        Value::String(s) => {
+                            out.push((s.clone(), String::new()));
+                        }
+                        other => {
+                            out.push((other.to_string(), String::new()));
+                        }
+                    }
+                }
+                return out;
+            }
+        }
+    }
+    Vec::new()
+}
+
 pub trait PaseoCli: Send + Sync {
     fn call(&self, args: &[String]) -> Result<String, String>;
 }
@@ -243,23 +475,112 @@ pub trait PaseoCli: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct RealPaseoCli {
     pub command: String,
+    pub timeout: Option<std::time::Duration>,
 }
 
 impl RealPaseoCli {
     pub fn new(command: impl Into<String>) -> Self {
         Self {
             command: command.into(),
+            timeout: None,
         }
     }
+
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+}
+
+pub fn daemon_reachable() -> bool {
+    if std::env::var("PASEO_HOST").is_ok_and(|h| !h.trim().is_empty()) {
+        return true;
+    }
+    let addr: std::net::SocketAddr = ([127, 0, 0, 1], 6767).into();
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300)).is_ok()
+}
+
+pub struct FailFastPaseoCli {
+    inner: Box<dyn PaseoCli>,
+    failed: std::sync::atomic::AtomicBool,
+}
+
+impl FailFastPaseoCli {
+    pub fn new(inner: Box<dyn PaseoCli>) -> Self {
+        Self { inner, failed: std::sync::atomic::AtomicBool::new(false) }
+    }
+}
+
+impl PaseoCli for FailFastPaseoCli {
+    fn call(&self, args: &[String]) -> Result<String, String> {
+        if self.failed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("paseo unreachable earlier in this run".to_string());
+        }
+        let result = self.inner.call(args);
+        if result.is_err() {
+            self.failed.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        result
+    }
+}
+
+fn run_with_deadline(
+    command: &str,
+    args: &[String],
+    timeout: std::time::Duration,
+) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    let mut child = std::process::Command::new(command)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn {command}: {e}"))?;
+    let mut out_pipe = child.stdout.take();
+    let mut err_pipe = child.stderr.take();
+    let out_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = out_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = err_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("{command} timed out after {}s", timeout.as_secs()));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(e) => return Err(format!("failed to wait for {command}: {e}")),
+        }
+    };
+    let stdout = out_reader.join().unwrap_or_default();
+    let stderr = err_reader.join().unwrap_or_default();
+    Ok(std::process::Output { status, stdout, stderr })
 }
 
 impl PaseoCli for RealPaseoCli {
     fn call(&self, args: &[String]) -> Result<String, String> {
-        let output = std::process::Command::new(&self.command)
-            .args(args)
-            .stdin(std::process::Stdio::null())
-            .output()
-            .map_err(|e| format!("failed to spawn {}: {e}", self.command))?;
+        let output = match self.timeout {
+            Some(t) => run_with_deadline(&self.command, args, t)?,
+            None => std::process::Command::new(&self.command)
+                .args(args)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map_err(|e| format!("failed to spawn {}: {e}", self.command))?,
+        };
 
         if output.status.success() {
             String::from_utf8(output.stdout)
@@ -285,6 +606,32 @@ impl PaseoCli for RealPaseoCli {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn real_cli_with_timeout_kills_a_slow_command() {
+        let cli = RealPaseoCli::new("sleep").with_timeout(std::time::Duration::from_secs(1));
+        let started = std::time::Instant::now();
+        let err = cli.call(&["5".to_string()]).unwrap_err();
+        assert!(err.contains("timed out"), "{err}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(4));
+    }
+
+    #[test]
+    fn fail_fast_cli_stops_calling_after_the_first_error() {
+        struct Counting(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+        impl PaseoCli for Counting {
+            fn call(&self, _args: &[String]) -> Result<String, String> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("down".to_string())
+            }
+        }
+        let count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cli = FailFastPaseoCli::new(Box::new(Counting(count.clone())));
+        assert!(cli.call(&[]).is_err());
+        assert!(cli.call(&[]).is_err());
+        assert!(cli.call(&[]).is_err());
+        assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn agent_entry_with_paseo_block_parses_into_spec() {
@@ -524,5 +871,114 @@ mod tests {
 
         let bad_cli = RealPaseoCli::new("non_existent_command_12345");
         assert!(bad_cli.call(&[]).is_err());
+    }
+
+    #[test]
+    fn new_argv_builders_produce_expected_tokens() {
+        assert_eq!(stop_argv("agent-1"), vec!["stop", "agent-1"]);
+        assert_eq!(
+            ls_label_argv("bee_job"),
+            vec!["ls", "--global", "--label", "bee_job", "--json"]
+        );
+        assert_eq!(
+            logs_tail_argv("agent-1", 40, None),
+            vec!["logs", "agent-1", "--tail", "40"]
+        );
+        assert_eq!(
+            logs_tail_argv("agent-1", 10, Some("tools")),
+            vec!["logs", "agent-1", "--tail", "10", "--filter", "tools"]
+        );
+        assert_eq!(
+            permit_argv("agent-1", true, Some("req-123"), false),
+            vec!["permit", "allow", "agent-1", "req-123"]
+        );
+        assert_eq!(
+            permit_argv("agent-1", false, None, true),
+            vec!["permit", "deny", "agent-1", "--all"]
+        );
+    }
+
+    #[test]
+    fn parse_ls_agents_parses_array_and_object_with_capitalized_keys() {
+        let raw_array = json!([
+            {
+                "id": "agent-1",
+                "labels": { "bee_job": "job-101" },
+                "archived": false
+            },
+            {
+                "Id": "agent-2",
+                "Labels": { "Bee_job": "job-102" },
+                "Archived": true
+            },
+            {
+                "agentId": "agent-3",
+                "labels": ["bee_job=job-103"],
+                "archivedAt": "2026-10-06T00:00:00Z"
+            },
+            {
+                "id": "agent-4",
+                "bee_job": "job-104",
+                "status": "archived"
+            }
+        ])
+        .to_string();
+        let stdout_with_prefix = format!("[desktop] startup line\n{raw_array}\n");
+        let parsed = parse_ls_agents(&stdout_with_prefix);
+        assert_eq!(
+            parsed,
+            vec![
+                ("agent-1".to_string(), "job-101".to_string(), false),
+                ("agent-2".to_string(), "job-102".to_string(), true),
+                ("agent-3".to_string(), "job-103".to_string(), true),
+                ("agent-4".to_string(), "job-104".to_string(), true),
+            ]
+        );
+
+        let wrapped_obj = json!({
+            "Agents": [
+                {
+                    "Id": "agent-5",
+                    "Labels": { "bee_job": "job-105" },
+                    "Archived": false
+                }
+            ]
+        })
+        .to_string();
+        let parsed_obj = parse_ls_agents(&wrapped_obj);
+        assert_eq!(
+            parsed_obj,
+            vec![("agent-5".to_string(), "job-105".to_string(), false)]
+        );
+    }
+
+    #[test]
+    fn parse_pending_permissions_extracts_id_and_tool_shapes() {
+        let inspect_json = json!({
+            "Id": "agent-1",
+            "Status": "running",
+            "PendingPermissions": [
+                { "id": "req-1", "tool": "terminal.exec" },
+                { "Id": "req-2", "name": "bash" },
+                { "id": "req-3", "toolName": "file_write" },
+                { "id": "req-4" },
+                "perm-string-only",
+                { "unknown_key": "val" }
+            ]
+        })
+        .to_string();
+        let stdout = format!("log line before json\n{inspect_json}\n");
+        let perms = parse_pending_permissions(&stdout);
+        assert_eq!(
+            perms,
+            vec![
+                ("req-1".to_string(), "terminal.exec".to_string()),
+                ("req-2".to_string(), "bash".to_string()),
+                ("req-3".to_string(), "file_write".to_string()),
+                ("req-4".to_string(), "".to_string()),
+                ("perm-string-only".to_string(), "".to_string()),
+                ("{\"unknown_key\":\"val\"}".to_string(), "".to_string()),
+            ]
+        );
     }
 }
