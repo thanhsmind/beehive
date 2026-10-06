@@ -62,7 +62,13 @@ high-risk, every capped `behavior_change` cell must carry a recorded
 semantic-judge verdict (`trace.semantic_judge`, written by
 `cells judge-record`); missing verdicts make a BLOCKING `judge-debt` door
 naming the offending cell ids, remedy `bee cells judge` /
-`bee cells judge-record`. Tiny/small routes never grow the door —
+`bee cells judge-record`. A slice judge answers with one fenced block per
+cell whose info string is `json <cell-id>`; `bee cells judge-record
+--from-text <answer.md>` records every valid block on its own cell, reports an
+invalid block by id and exits non-zero, and refuses an answer with no block,
+a duplicate cell id, an `--id` that differs from a block, or `--file` together
+with `--from-text` before it records anything (herding-leader-toil D3, store
+`6824f849`). Tiny/small routes never grow the door —
 the semantic judge stays on smell there. The leader completeness check is
 separate and runs on every cap in every lane (R102). Judgment moved from
 instructed to enforced for the lanes where a missed smell costs most. The closing feature's route
