@@ -1,0 +1,128 @@
+{
+  "id": "po-5",
+  "feature": "paseo-observe",
+  "lane": "high-risk",
+  "role": "docs",
+  "title": "Document Paseo observation and control",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-observe/CONTEXT.md",
+    "docs/history/paseo-observe/plan.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+  ],
+  "action": "In the-paseo-channel.md add a section 'Watching and controlling Paseo workers' in the same ASD-STE100 style: the status fields (transport, paseo_agent_id, paseo_state, permissions, untracked_paseo_agents) and what unknown means; interrupt (paseo stop, agent kept), cancel (stop and archive, own-agent guard); the permit verb and the blocked-permission flow (the run keeps waiting, the broker files a permission decision, a person answers, the same turn goes on); occupancy counting; pane read showing the log tail; untracked agents reported only. Write commands as inline code that holds the verb name only, for example `bee herding permit`, never with flags or placeholders. Add 'paseo-observe D1, D2' to its frontmatter decisions. In the supervisor concept add one short paragraph: the supervisor may run the herding status verb, and a permission kind exists in the human-decision queue for blocked Paseo workers. Change nothing else.",
+  "must_haves": {
+    "truths": [
+      "the Paseo concept documents the status fields and that unknown is neither alive nor dead",
+      "the Paseo concept documents interrupt, cancel and the own-agent guard",
+      "the Paseo concept documents the permit verb and the blocked-permission flow",
+      "the supervisor concept documents the status verb and the permission kind",
+      "the Paseo concept frontmatter cites paseo-observe D1, D2"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "the watching and controlling section"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+        "substantive": "the Paseo paragraph"
+      }
+    ],
+    "key_links": [
+      "the sections extend the existing concepts"
+    ],
+    "prohibitions": [
+      "No change to any other file"
+    ]
+  },
+  "verify": ".bee/bin/bee knowledge check --json",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-po-5",
+    "outcome": "The Paseo and supervisor concepts document Paseo observation and control",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+      "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-06T01:40:45.688Z",
+    "behavior_change": false,
+    "verification_evidence": "errors 0, orphans 5 (none new)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+    "verify_command": ".bee/bin/bee knowledge check --json",
+    "claimed_at": "2026-10-06T01:37:43.598Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T01:40:45.687Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "owner_bypassed": null,
+        "at": "2026-10-06T04:22:15.779Z"
+      }
+    ],
+    "no_mistakes": true,
+    "report": {
+      "outcome": "The Paseo and supervisor concepts document Paseo observation and control",
+      "commit": "f6697925a",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check --json — green:static — errors 0, orphans 5 (none new)",
+      "deviations": [],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the Paseo concept documents the status fields and that unknown is neither alive nor dead",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the Paseo concept documents interrupt, cancel and the own-agent guard",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the Paseo concept documents the permit verb and the blocked-permission flow",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the supervisor concept documents the status verb and the permission kind",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the Paseo concept frontmatter cites paseo-observe D1, D2",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-06T04:22:15.779Z",
+        "recorded_by": "b33d1286-7afa-49ef-a7ce-50512d85be46",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
