@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"paseo-answers\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming: wave 1 pa-1, pa-3, pa-4; then pa-2.",
+  "next_action": "Merged into main at b18d987; reload the product and test \"paseo-answers\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-answers\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-06T00:03:05.380Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: paseo-answers",
+    "asked_at": "2026-10-06T00:46:44.159Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -706,13 +711,6 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-06T00:41:10.778Z",
-    "branch": "wt/paseo-answers",
-    "worktree_id": "beehive--wt--paseo-answers",
-    "uat": "pending",
-    "blocked_by": []
   },
   "gate_revoked_at": {
     "execution": "2026-10-06T00:44:14.683Z"
