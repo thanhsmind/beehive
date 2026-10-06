@@ -767,15 +767,7 @@ fn paseo_ready_row_with_env_and_cli(
 
     let mut failures = Vec::new();
 
-    let daemon_answers = if let Some(d) = daemon_probe {
-        d
-    } else if let Some(v) = env("PASEO_DAEMON") {
-        v == "1" || v == "true"
-    } else if env("PASEO_HOST").is_some_and(|h| !h.trim().is_empty()) {
-        true
-    } else {
-        crate::herding::paseo::daemon_reachable()
-    };
+    let daemon_answers = daemon_probe.unwrap_or_else(crate::herding::paseo::daemon_reachable);
     if !daemon_answers {
         failures.push("paseo daemon is down — FIX: start the daemon with paseo daemon start".to_string());
     }
