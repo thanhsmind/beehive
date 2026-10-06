@@ -38,7 +38,7 @@ sanctioned script, and a permit that is validated before a single byte moves.
 ```json
 [
   {
-    "id": "rel500-1",
+    "id": "rel510-1",
     "feature": "release-2-51-0",
     "title": "Publish release 2.51.0 through the sanctioned script",
     "lane": "tiny",
