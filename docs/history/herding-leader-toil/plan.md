@@ -59,7 +59,7 @@ Labels: `read` (file opened at that line), `ran` (command executed, output kept)
 Two advisor digests (2026-10-06) mapped the refusal door, the cap and judge
 parsers, `paseo agent wait`, Pi's agent folder and trust rules, the AppImage
 output, and Paseo titles, labels and parent inheritance; CONTEXT.md carries the
-environment facts. The leader opened claims 1-9. The plan-step hat wave (five seats) found blockers in ht-1 (private mailbox module, missing mistakes answer), ht-2 (a widened shared door, no close.rs, a non-existent release verb), ht-3 (zero blocks exited 0) and ht-4 (an unstoppable wait thread); D1-D4 and D6 were revised and the cells carry the fixes (reports/hat-wave.md).
+environment facts. The leader opened claims 1-9. The plan-step hat wave (five seats) found blockers in hlt-1 (private mailbox module, missing mistakes answer), hlt-2 (a widened shared door, no close.rs, a non-existent release verb), hlt-3 (zero blocks exited 0) and hlt-4 (an unstoppable wait thread); D1-D4 and D6 were revised and the cells carry the fixes (reports/hat-wave.md).
 
 ## Approach
 
@@ -75,14 +75,14 @@ Risk map:
 
 | Component | Risk | Reason | Lands in | Proof needed |
 |---|---|---|---|---|
-| worktree verbs write main | HIGH | a wrong root writes the wrong store | ht-2 | tests on a granted worktree, main and ungranted |
-| event wait spins | MEDIUM | wait returns at once on idle or permission | ht-4 | fake WaitSource tests for re-arm gaps |
-| from-job proof honesty | MEDIUM | a synthesized green line | ht-1 | --proof-result required; refusal tests |
-| isolated folder drops bee-guard | MEDIUM | trust must stay always | ht-5, ht-6 | settings test and doctor row |
-| auth link replaced by a refresh | LOW | Pi may rewrite auth.json | ht-5, ht-6 | doctor fails on a non-link; live check |
-| orphan wait child | MEDIUM | a wait outliving the round | ht-4 | cancel on every exit, fake-source test |
+| worktree verbs write main | HIGH | a wrong root writes the wrong store | hlt-2 | tests on a granted worktree, main and ungranted |
+| event wait spins | MEDIUM | wait returns at once on idle or permission | hlt-4 | fake WaitSource tests for re-arm gaps |
+| from-job proof honesty | MEDIUM | a synthesized green line | hlt-1 | --proof-result required; refusal tests |
+| isolated folder drops bee-guard | MEDIUM | trust must stay always | hlt-5, hlt-6 | settings test and doctor row |
+| auth link replaced by a refresh | LOW | Pi may rewrite auth.json | hlt-5, hlt-6 | doctor fails on a non-link; live check |
+| orphan wait child | MEDIUM | a wait outliving the round | hlt-4 | cancel on every exit, fake-source test |
 
-Waves: wave 1 runs ht-1, ht-2, ht-4 and ht-6 (disjoint files). Wave 2 runs ht-3 (shares catalog.rs and the registry with ht-1) and ht-5 (shares herding.rs with ht-1 and run.rs and paseo.rs with ht-4). Wave 3 runs ht-7.
+Waves: wave 1 runs hlt-1, hlt-2, hlt-4 and hlt-6 (disjoint files). Wave 2 runs hlt-3 (shares catalog.rs and the registry with hlt-1) and hlt-5 (shares herding.rs with hlt-1 and run.rs and paseo.rs with hlt-4). Wave 3 runs hlt-7.
 
 ## Role assignments
 
@@ -92,9 +92,9 @@ Waves: wave 1 runs ht-1, ht-2, ht-4 and ht-6 (disjoint files). Wave 2 runs ht-3 
   "runtime": "claude",
   "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
   "stages": [
-    {"stage":"implementation","classification":"required","role":"code","reason":"ht-1 to ht-6 change Rust verbs, the run loop and doctor."},
+    {"stage":"implementation","classification":"required","role":"code","reason":"hlt-1 to hlt-6 change Rust verbs, the run loop and doctor."},
     {"stage":"test-and-live-proof","classification":"not-applicable","role":"test","reason":"Each code cell writes its own tests red-first; the leader drives the live proof."},
-    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"ht-7 updates concepts, the swarming reference and the config reference."},
+    {"stage":"documentation-and-capture","classification":"required","role":"docs","reason":"hlt-7 updates concepts, the swarming reference and the config reference."},
     {"stage":"planning","classification":"not-applicable","role":"plan","reason":"The leader wrote this plan."},
     {"stage":"deployment","classification":"not-applicable","role":"deploy","reason":"A release is a separate user ask."},
     {"stage":"read-only-gather","classification":"not-applicable","role":"read","reason":"Discovery is done."},
@@ -133,18 +133,18 @@ Current slice: all seven cells.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| ht-1 | Cap a herded cell from its job with the leader's proof verdict | packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs; packages/bee-rs/crates/bee/src/verbs/cells/tests.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; packages/bee-rs/crates/bee/src/herding.rs | — | bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text | related tests green |
-| ht-2 | Serve the main control plane for allow-listed verbs inside a granted worktree | packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs; packages/bee-rs/crates/bee/src/verbs/cells/util.rs; packages/bee-rs/crates/bee/src/verbs/cells/mod.rs; packages/bee-rs/crates/bee/src/verbs/drivers/close.rs; packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs | — | state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root | related tests green |
-| ht-3 | Record a judge's fenced verdicts straight from its answer | packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs; packages/bee-rs/crates/bee/src/verbs/cells/judge.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; skills/bee-hive/references/gates-and-delegation.md | ht-1 | cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell | related tests green |
-| ht-4 | Wait on Paseo events and name workers by cell and agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | the Paseo wait loop learns idle, permission, error and timeout from a paseo agent wait child it polls on the 200 ms tick and kills on every round exit | related tests green |
-| ht-5 | Give an opted-in Pi worker its own Pi config folder | packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs; packages/bee-rs/crates/bee/src/herding.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs; packages/bee-rs/crates/bee/src/herding/run.rs | ht-1, ht-4 | a pi-provider Paseo agent with isolated_config true gets .bee/runtime/pi-agent/<agent>/ with auth, optional model and npm links, trust-always settings and empty skills and extensions | related tests green |
-| ht-6 | Catch the AppImage paseo CLI and a broken isolated Pi folder in doctor | packages/bee-rs/crates/bee/src/doctor.rs; packages/bee-rs/crates/bee/src/doctor/tests.rs | — | paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script | related tests green |
-| ht-7 | Document from-job caps, worktree control verbs, judge text, Paseo wait and isolated Pi folders | docs/knowledge/areas/bee-herding/the-paseo-channel.md; docs/knowledge/areas/worktree-parallelism/control-plane-topology.md; skills/bee-swarming/references/swarming-reference.md; docs/config-reference.md | ht-1, ht-2, ht-3, ht-4, ht-5, ht-6 | the Paseo channel concept describes the event wait, isolated Pi folders, the doctor checks and worker titles with their decision ids | knowledge check green |
+| hlt-1 | Cap a herded cell from its job with the leader's proof verdict | packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs; packages/bee-rs/crates/bee/src/verbs/cells/tests.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; packages/bee-rs/crates/bee/src/herding.rs | — | bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text | related tests green |
+| hlt-2 | Serve the main control plane for allow-listed verbs inside a granted worktree | packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs; packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs; packages/bee-rs/crates/bee/src/verbs/cells/util.rs; packages/bee-rs/crates/bee/src/verbs/cells/mod.rs; packages/bee-rs/crates/bee/src/verbs/drivers/close.rs; packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs | — | state verbs, gate, route, close and cells add/list/show/ready/update/schedule/escalate/reroute/judge/judge-record/dissent/dissent-verdict/leader-check run from a granted worktree against the main store and name the main root | related tests green |
+| hlt-3 | Record a judge's fenced verdicts straight from its answer | packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs; packages/bee-rs/crates/bee/src/verbs/cells/judge.rs; packages/bee-rs/crates/bee/src/catalog.rs; packages/bee-rs/crates/bee/src/generated/registry_payload.json; skills/bee-hive/references/gates-and-delegation.md | hlt-1 | cells judge-record --from-text records every valid json <cell-id> fenced verdict on its cell | related tests green |
+| hlt-4 | Wait on Paseo events and name workers by cell and agent | packages/bee-rs/crates/bee/src/herding/run.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs | — | the Paseo wait loop learns idle, permission, error and timeout from a paseo agent wait child it polls on the 200 ms tick and kills on every round exit | related tests green |
+| hlt-5 | Give an opted-in Pi worker its own Pi config folder | packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs; packages/bee-rs/crates/bee/src/herding.rs; packages/bee-rs/crates/bee/src/herding/paseo.rs; packages/bee-rs/crates/bee/src/herding/run.rs | hlt-1, hlt-4 | a pi-provider Paseo agent with isolated_config true gets .bee/runtime/pi-agent/<agent>/ with auth, optional model and npm links, trust-always settings and empty skills and extensions | related tests green |
+| hlt-6 | Catch the AppImage paseo CLI and a broken isolated Pi folder in doctor | packages/bee-rs/crates/bee/src/doctor.rs; packages/bee-rs/crates/bee/src/doctor/tests.rs | — | paseo_ready fails with the npm FIX when --version's first line is not a bare version or the command is an AppImage wrapper script | related tests green |
+| hlt-7 | Document from-job caps, worktree control verbs, judge text, Paseo wait and isolated Pi folders | docs/knowledge/areas/bee-herding/the-paseo-channel.md; docs/knowledge/areas/worktree-parallelism/control-plane-topology.md; skills/bee-swarming/references/swarming-reference.md; docs/config-reference.md | hlt-1, hlt-2, hlt-3, hlt-4, hlt-5, hlt-6 | the Paseo channel concept describes the event wait, isolated Pi folders, the doctor checks and worker titles with their decision ids | knowledge check green |
 
 ```json
 [
   {
-    "id": "ht-1",
+    "id": "hlt-1",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
@@ -206,7 +206,7 @@ Current slice: all seven cells.
     ]
   },
   {
-    "id": "ht-2",
+    "id": "hlt-2",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
@@ -272,13 +272,13 @@ Current slice: all seven cells.
     ]
   },
   {
-    "id": "ht-3",
+    "id": "hlt-3",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
     "title": "Record a judge's fenced verdicts straight from its answer",
     "deps": [
-      "ht-1"
+      "hlt-1"
     ],
     "decisions": [
       "D3"
@@ -330,7 +330,7 @@ Current slice: all seven cells.
     "affects_specs": []
   },
   {
-    "id": "ht-4",
+    "id": "hlt-4",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
@@ -388,14 +388,14 @@ Current slice: all seven cells.
     ]
   },
   {
-    "id": "ht-5",
+    "id": "hlt-5",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
     "title": "Give an opted-in Pi worker its own Pi config folder",
     "deps": [
-      "ht-1",
-      "ht-4"
+      "hlt-1",
+      "hlt-4"
     ],
     "decisions": [
       "D5"
@@ -446,7 +446,7 @@ Current slice: all seven cells.
     ]
   },
   {
-    "id": "ht-6",
+    "id": "hlt-6",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "code",
@@ -496,18 +496,18 @@ Current slice: all seven cells.
     ]
   },
   {
-    "id": "ht-7",
+    "id": "hlt-7",
     "feature": "herding-leader-toil",
     "lane": "high-risk",
     "role": "docs",
     "title": "Document from-job caps, worktree control verbs, judge text, Paseo wait and isolated Pi folders",
     "deps": [
-      "ht-1",
-      "ht-2",
-      "ht-3",
-      "ht-4",
-      "ht-5",
-      "ht-6"
+      "hlt-1",
+      "hlt-2",
+      "hlt-3",
+      "hlt-4",
+      "hlt-5",
+      "hlt-6"
     ],
     "decisions": [
       "D1",
@@ -578,16 +578,16 @@ Current slice: all seven cells.
 
 | Dimension | Probe | Cell | Pass when |
 |---|---|---|---|
-| Happy | done result, leader passes green:unit | ht-1 | cell capped; tests line = verify — green:unit — worker proof |
-| Error | no --proof-result; other cell's job; no result | ht-1 | typed refusal, cell stays claimed |
-| Topology | route --set and cells add from a granted worktree | ht-2 | exit 0; main store changed; output names main |
-| Topology | cells claim from a granted worktree | ht-2 | GrantedWorktree refusal as before |
-| Artifact | gate --preview from a granted worktree | ht-2 | reads the worktree plan.md |
-| Parsing | two good blocks, one bad block | ht-3 | two recorded, one reported, exit non-zero |
-| Event | Timeout, Idle, Permission, Error from the fake source | ht-4 | Working, nudge path, Blocked with inspect fallback, died debounce |
-| Spin | Idle returned at once twice | ht-4 | no re-arm sooner than 3 s |
-| Files | real file where a link belongs | ht-5 | kept and reported |
-| Setup | AppImage version output; wrapper script | ht-6 | paseo_ready fails with the npm FIX |
+| Happy | done result, leader passes green:unit | hlt-1 | cell capped; tests line = verify — green:unit — worker proof |
+| Error | no --proof-result; other cell's job; no result | hlt-1 | typed refusal, cell stays claimed |
+| Topology | route --set and cells add from a granted worktree | hlt-2 | exit 0; main store changed; output names main |
+| Topology | cells claim from a granted worktree | hlt-2 | GrantedWorktree refusal as before |
+| Artifact | gate --preview from a granted worktree | hlt-2 | reads the worktree plan.md |
+| Parsing | two good blocks, one bad block | hlt-3 | two recorded, one reported, exit non-zero |
+| Event | Timeout, Idle, Permission, Error from the fake source | hlt-4 | Working, nudge path, Blocked with inspect fallback, died debounce |
+| Spin | Idle returned at once twice | hlt-4 | no re-arm sooner than 3 s |
+| Files | real file where a link belongs | hlt-5 | kept and reported |
+| Setup | AppImage version output; wrapper script | hlt-6 | paseo_ready fails with the npm FIX |
 | Live | after merge: one Paseo Pi worker with isolated_config in a sandbox, then cells finish --from-job | leader | worker runs with PI_CODING_AGENT_DIR, Paseo title is cell + agent, cap succeeds |
 
 ## Open Questions
