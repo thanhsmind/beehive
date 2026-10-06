@@ -15,10 +15,10 @@
   "created_at": "2026-10-03T11:12:19.017Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "review",
-    "asked_at": "2026-10-06T09:49:53.009Z",
-    "session": "s1"
+    "kind": "question",
+    "subject": "bee issue reporting: approval mode and pull-side shape",
+    "asked_at": "2026-10-06T10:24:19.670Z",
+    "session": "2e068655-43f1-4ecc-af66-1ce1d879eef7"
   },
   "route": {
     "class": "feature",

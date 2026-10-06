@@ -676,6 +676,10 @@
     "contract:paseo-agent-wait",
     "contract:pi-isolated-config",
     "contract:doctor-paseo-cli",
-    "scope-change"
+    "scope-change",
+    "self-improvement",
+    "github-issues",
+    "evolving",
+    "bee-report-issues"
   ]
 }
