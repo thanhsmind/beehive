@@ -6,6 +6,7 @@ pub struct PaseoSpec {
     pub model: Option<String>,
     pub thinking: Option<String>,
     pub mode: Option<String>,
+    pub isolated_config: bool,
 }
 
 impl PaseoSpec {
@@ -53,12 +54,21 @@ impl PaseoSpec {
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .map(String::from);
+        let isolated_config = if provider.trim().eq_ignore_ascii_case("pi") {
+            paseo_obj
+                .get("isolated_config")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
         Some(Ok(Self {
             provider,
             model,
             thinking,
             mode,
+            isolated_config,
         }))
     }
 }
@@ -765,6 +775,7 @@ mod tests {
                 model: Some("deepseek-flash".to_string()),
                 thinking: Some("high".to_string()),
                 mode: Some("agent".to_string()),
+                isolated_config: false,
             }
         );
     }
@@ -839,6 +850,7 @@ mod tests {
             model: Some("deepseek-flash".to_string()),
             thinking: Some("high".to_string()),
             mode: Some("arch".to_string()),
+            isolated_config: false,
         };
         let env = vec![
             ("BEE_HERDING_WORKER".to_string(), "1".to_string()),
@@ -909,6 +921,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
         let minimal_argv = run_argv(&minimal_spec, "job-1", "/cwd", &[], "task", "plain-agent", None);
         assert_eq!(
@@ -1215,5 +1228,52 @@ mod tests {
                 ("{\"unknown_key\":\"val\"}".to_string(), "".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn paseo_spec_isolated_config_parsed_only_for_pi_provider() {
+        let pi_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-pi": {
+                        "paseo": {
+                            "provider": "pi",
+                            "isolated_config": true
+                        }
+                    }
+                }
+            }
+        });
+        let spec = PaseoSpec::from_config(&pi_cfg, "w-pi").unwrap().unwrap();
+        assert!(spec.isolated_config);
+
+        let pi_default_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-pi": {
+                        "paseo": {
+                            "provider": "pi"
+                        }
+                    }
+                }
+            }
+        });
+        let default_spec = PaseoSpec::from_config(&pi_default_cfg, "w-pi").unwrap().unwrap();
+        assert!(!default_spec.isolated_config);
+
+        let claude_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-claude": {
+                        "paseo": {
+                            "provider": "claude",
+                            "isolated_config": true
+                        }
+                    }
+                }
+            }
+        });
+        let claude_spec = PaseoSpec::from_config(&claude_cfg, "w-claude").unwrap().unwrap();
+        assert!(!claude_spec.isolated_config);
     }
 }

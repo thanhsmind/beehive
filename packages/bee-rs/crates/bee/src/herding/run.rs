@@ -3345,12 +3345,34 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         })
         .unwrap_or_default();
 
-    let child_env = build_child_env(
+    let mut child_env = build_child_env(
         std::env::vars(),
         &agent_env,
         &opts.pane_env_passthrough,
         &opts.job_id,
     );
+
+    if spec.isolated_config && spec.provider == "pi" {
+        let home_buf = pi_home_dir();
+        let home = home_buf.as_path();
+        let agent_name = opts.agent.as_deref().unwrap_or("paseo");
+        match super::pi_agent_dir::ensure_pi_agent_dir(&opts.main_root, agent_name, home) {
+            Ok((dir, notes)) => {
+                for note in notes {
+                    eprintln!("{note}");
+                }
+                child_env.insert("PI_CODING_AGENT_DIR".to_string(), dir.display().to_string());
+            }
+            Err(e) => {
+                return ExecResult {
+                    outcome: RunOutcome::SpawnFailed(e),
+                    pane_id: None,
+                    closed_pane: false,
+                };
+            }
+        }
+    }
+
     let env_pairs: Vec<(String, String)> = child_env.into_iter().collect();
 
     let version_output = cli.call(&["--version".to_string()]);
@@ -3942,6 +3964,23 @@ impl Drop for RealWaitSource {
     fn drop(&mut self) {
         self.cancel();
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_PI_HOME: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+fn pi_home_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(home) = TEST_PI_HOME.with(|h| h.borrow().clone()) {
+        return home;
+    }
+    PathBuf::from(
+        std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_default(),
+    )
 }
 
 fn wait_for_round_paseo(
@@ -11677,6 +11716,7 @@ mod tests {
             model: Some("deepseek-flash".to_string()),
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11714,6 +11754,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11751,6 +11792,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11788,6 +11830,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11820,6 +11863,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11855,6 +11899,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -11893,6 +11938,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -12256,6 +12302,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let dir_clone = dir.clone();
@@ -12306,6 +12353,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -12346,6 +12394,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -12734,6 +12783,7 @@ mod tests {
             model: Some("claude-3-5-sonnet".to_string()),
             thinking: Some("high".to_string()),
             mode: None,
+            isolated_config: false,
         };
 
         let mut wait_src = FakeWaitSource::new(vec![]);
@@ -12776,6 +12826,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -12835,6 +12886,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let bee_dir = main_root.join(".bee");
@@ -12900,6 +12952,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let bee_dir = main_root.join(".bee");
@@ -12980,6 +13033,7 @@ mod tests {
             model: Some("deepseek-chat".to_string()),
             thinking: Some("high".to_string()),
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -13017,6 +13071,7 @@ mod tests {
             model: Some("deepseek-chat".to_string()),
             thinking: Some("high".to_string()),
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -13054,6 +13109,7 @@ mod tests {
             model: Some("claude-3-5-sonnet".to_string()),
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -13090,6 +13146,7 @@ mod tests {
             model: Some("claude-3-5-sonnet".to_string()),
             thinking: Some("high".to_string()),
             mode: None,
+            isolated_config: false,
         };
 
         let fake = FakePaseoCli::new(
@@ -13119,6 +13176,7 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
 
         let label = format!("bee_job={}", opts.job_id);
@@ -13142,6 +13200,138 @@ mod tests {
         match res.outcome {
             RunOutcome::SpawnFailed(ref msg) => {
                 assert!(msg.contains("agent-orphan-99"), "{msg}");
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn execute_paseo_contract_pi_isolated_config_db780128_argv_and_dir() {
+        let tmp_root = tempfile::tempdir().unwrap();
+        let main_root = tmp_root.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let tmp_home = tempfile::tempdir().unwrap();
+        let pi_home = tmp_home.path().join(".pi").join("agent");
+        std::fs::create_dir_all(&pi_home).unwrap();
+        std::fs::write(pi_home.join("auth.json"), r#"{"token":"test-token"}"#).unwrap();
+
+        struct HomeGuard;
+        impl Drop for HomeGuard {
+            fn drop(&mut self) {
+                TEST_PI_HOME.with(|h| *h.borrow_mut() = None);
+            }
+        }
+        let _guard = HomeGuard;
+        TEST_PI_HOME.with(|h| *h.borrow_mut() = Some(tmp_home.path().to_path_buf()));
+
+        let pi_iso_spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-flash".to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: true,
+        };
+
+        let fake1 = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-iso-1\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res1 = execute_paseo(&opts, &pi_iso_spec, &fake1);
+        assert!(matches!(res1.outcome, RunOutcome::Result(_)));
+
+        let calls1 = fake1.calls.lock().unwrap();
+        let run_call1 = calls1.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
+        let expected_agent = opts.agent.as_deref().unwrap_or("paseo");
+        let expected_dir = main_root.join(".bee").join("runtime").join("pi-agent").join(expected_agent);
+        let expected_env_flag = format!("PI_CODING_AGENT_DIR={}", expected_dir.display());
+        assert!(run_call1.contains(&expected_env_flag));
+
+        let pi_non_iso_spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-flash".to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        };
+        let fake2 = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-iso-2\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let res2 = execute_paseo(&opts, &pi_non_iso_spec, &fake2);
+        assert!(matches!(res2.outcome, RunOutcome::Result(_)));
+        let calls2 = fake2.calls.lock().unwrap();
+        let run_call2 = calls2.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
+        assert!(!run_call2.iter().any(|arg| arg.contains("PI_CODING_AGENT_DIR")));
+
+        let claude_iso_spec = PaseoSpec {
+            provider: "claude".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+            isolated_config: true,
+        };
+        let fake3 = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-iso-3\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let res3 = execute_paseo(&opts, &claude_iso_spec, &fake3);
+        assert!(matches!(res3.outcome, RunOutcome::Result(_)));
+        let calls3 = fake3.calls.lock().unwrap();
+        let run_call3 = calls3.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
+        assert!(!run_call3.iter().any(|arg| arg.contains("PI_CODING_AGENT_DIR")));
+    }
+
+    #[test]
+    fn execute_paseo_contract_pi_isolated_config_db780128_missing_auth_refuses() {
+        let tmp_root = tempfile::tempdir().unwrap();
+        let main_root = tmp_root.path();
+        let opts = test_options(main_root, false);
+
+        let tmp_empty_home = tempfile::tempdir().unwrap();
+        struct HomeGuard;
+        impl Drop for HomeGuard {
+            fn drop(&mut self) {
+                TEST_PI_HOME.with(|h| *h.borrow_mut() = None);
+            }
+        }
+        let _guard = HomeGuard;
+        TEST_PI_HOME.with(|h| *h.borrow_mut() = Some(tmp_empty_home.path().to_path_buf()));
+
+        let pi_iso_spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-flash".to_string()),
+            thinking: None,
+            mode: None,
+            isolated_config: true,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-fail\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &pi_iso_spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("FIX: log in with pi once"), "{msg}");
             }
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
