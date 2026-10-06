@@ -664,6 +664,10 @@
     "paseo-observe",
     "permission",
     "cancel",
-    "orphans"
+    "orphans",
+    "paseo-pi-hardening",
+    "contract:worker-guard",
+    "contract:paseo-heartbeat",
+    "contract:doctor-paseo-ready"
   ]
 }

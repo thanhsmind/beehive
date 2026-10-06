@@ -1,0 +1,1177 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-pi-hardening",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-pi-hardening\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-06T05:30:49.705Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "external-systems",
+      "audit-security",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 9,
+    "rationale": "Paseo CLI is an external system; worker denylist is a security guard; changes tested run-loop and heartbeat behavior; spans Rust herding, Pi extension, doctor and supervisor",
+    "updated_at": "2026-10-06T05:30:49.737Z",
+    "feature": "paseo-pi-hardening"
+  },
+  "gate_preview": {
+    "feature": "paseo-pi-hardening",
+    "plan_sha256": "15b122ce8221070a2b57b90c6b249718afd88d093d0a44398bfe2ba9207640b0",
+    "previewed_at": "2026-10-06T05:45:54.131Z",
+    "cells": [
+      {
+        "id": "pph-1",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Bound Paseo calls, nudge silent workers and record the real model in the run loop",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Red first. paseo.rs: add a PaseoInspect struct (state: Option<PaseoState>, updated_at: Option<String>, model: Option<String>, thinking: Option<String>) and parse_inspect_full(stdout) that reads the same first JSON value parse_inspect reads, taking UpdatedAt, Model and Thinking with the same key tolerance; Model \"-\" and Thinking \"auto\" (Paseo's sentinels) parse as None (D4). Keep parse_inspect as a thin wrapper so every existing caller is unchanged. run.rs, timeouts (D1): the two `let cli = RealPaseoCli::new(cmd);` sites in the Paseo run and continue paths gain `.with_timeout(Duration::from_secs(15))`. When the spawn call itself fails or times out, call paseo::ls_label_argv for the job's bee_job label once, and when an agent for this job exists name its id in the SpawnFailed message (report only, no adopt, no archive). run.rs, cadence (D1): in wait_for_round_paseo_driven call paseo inspect only when at least 3 s passed since the last inspect call; the result, log and ack file checks still run every 200 ms tick; a tick that does not call inspect reports liveness None, so the died debounce in run_poll_loop still needs three consecutive real Dead reads. Working stays fresh exactly as today. run.rs, silent idle (D2 revised): once the round has seen Working, an Idle inspect with no result-N.json for the round sends ONE nudge with paseo::send_argv(agent_id, text), where text names the brief file and the result file the worker owes (mailbox path helpers); never send while the last state is Working or Blocked; a failed send counts as sent. A later Idle-with-no-result inspect read at least one inspect interval after the nudge ends the wait: add a bool field to PollTick (false in every herdr and tmux tick) that decide_poll turns into PollDecision::TimedOutIdle at once, before the idle timeout, and have the Paseo caller pass the silent-idle message to diagnose_giveup_paseo in place of the generic idle_timeout_message text: the message `herding: paseo agent <id> went idle twice with no result for round <n> — agent kept for inspection: paseo logs <id>` (pass the flag back through a Cell or the closure's captured state). The agent is kept by the existing failure path. run.rs, observed model (D4 revised): on the first inspect whose model or thinking is Some, write paseo_model_observed and paseo_thinking_observed into job.json (None writes the string unverified), once per job. Compare with the job's PaseoSpec: models match when equal, or when the observed one ends with `/<configured>` or the configured one ends with `/<observed>`; thinking matches equal ignoring case; a None on either side never mismatches. On a confirmed mismatch print one stderr line `herding: paseo agent <id> runs model <observed> (thinking <t>), configured <model> (thinking <t>)` and write paseo_model_mismatch true into job.json; never archive, stop or retry. Tests with a fake PaseoCli and the driven clock: inspect at most once per 3 s of fake time while file checks run each tick; one Dead read followed by Working keeps the run going; Working then Idle with no result sends exactly one nudge and a second silent idle 3 s later ends as idle timeout with the silent-idle message; a failed send still lets the second silent idle end the round; a result after the nudge returns the result; no send while Working or Blocked; observed model and thinking land in job.json; `-`/`auto` write unverified with no warning; a provider-prefixed equal model is no mismatch; a real mismatch writes the flag; a timed-out spawn names a labelled agent; parse_inspect_full reads all four fields and tolerates their absence. Herdr and tmux runs unchanged. No code comments.",
+        "must_haves": {
+          "truths": [
+            "the Paseo run and continue paths build the CLI with a 15 second timeout, and a failed spawn names an agent found under its job label",
+            "the Paseo wait loop calls paseo inspect at most once every 3 seconds while file checks keep the 200 ms poll, and non-inspect ticks report no liveness",
+            "the first silent idle after Working sends exactly one paseo send nudge and a second silent idle at least 3 s later ends the round as idle timeout with a silent-idle message",
+            "no nudge is ever sent while the agent is Working or Blocked",
+            "job.json records the observed model and thinking, with - and auto recorded as unverified, and a confirmed mismatch sets paseo_model_mismatch and prints one warning",
+            "herdr and tmux runs are unchanged and the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "PaseoInspect and parse_inspect_full reading UpdatedAt, Model and Thinking with sentinel handling"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "timeouts, 3 s inspect cadence, silent-idle nudge and end flag, observed-model record"
+            }
+          ],
+          "key_links": [
+            "wait_for_round_paseo_driven reads parse_inspect_full",
+            "decide_poll turns the PollTick silent-idle flag into TimedOutIdle"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No new RunOutcome or PollDecision variant",
+            "No paseo send while Working or Blocked",
+            "No archive, stop or retry added",
+            "Working freshness in the run loop is unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-2",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Show stalled and model mismatch for Paseo workers in status",
+        "deps": [
+          "pph-1"
+        ],
+        "decisions": [
+          "D3",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "action": "Red first. herding.rs status, Paseo branch (search for `paseo_state`): read the inspect with paseo::parse_inspect_full (added by pph-1). Add model_mismatch (bool, from job.json paseo_model_mismatch, false when absent) and paseo_model_observed (string or null) to the JSON row, and model_mismatch=true to the text line only when true. A Working Paseo agent whose UpdatedAt (RFC 3339) is older than the shared 120 s freshness constant the status already uses for stalled shows status stalled and goes through the same stalled/recovered transition helper the pane path uses (D3 revised); a missing or unparseable UpdatedAt never shows stalled; finished, idle, blocked and dead rows are unchanged. Tests with a fake CLI and a temp mailbox: stalled for an old UpdatedAt; working for a fresh or missing one; recovered after stalled when UpdatedAt moves; model_mismatch true and false rows. No code comments.",
+        "must_haves": {
+          "truths": [
+            "bee herding status shows stalled for a Working Paseo agent whose UpdatedAt is older than 120 s, and recovered when it moves again",
+            "a missing or unparseable UpdatedAt never shows stalled",
+            "the Paseo status row carries model_mismatch and paseo_model_observed from job.json",
+            "the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding.rs",
+              "substantive": "stalled from UpdatedAt and model fields in the Paseo status row"
+            }
+          ],
+          "key_links": [
+            "status reads paseo_model_mismatch from job.json"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to herdr or tmux status rows",
+            "No Paseo call that changes state"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-3",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Guard Paseo workers and the Pi supervisor with a worker-guard hook",
+        "deps": [],
+        "decisions": [
+          "D5",
+          "D9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/index.ts",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+        ],
+        "action": "Red first. hooks/mod.rs: add worker-guard to HOOK_NAMES and route it to worker_guard::run; marker_short_circuits returns false for activity and worker-guard only, and every other name still short-circuits under BEE_HERDING_WORKER. New hooks/worker_guard.rs: read the PreToolUse JSON from stdin (same shape write-guard reads: tool_name, tool_input.command, cwd); only a Bash tool is judged, anything else allows. Mode A (D5 revised), BEE_HERDING_WORKER and PASEO_AGENT_ID both non-empty: deny when any segment of the command is a git push, a gh command that is not a read-only form, an agent launch head (claude, codex, pi, opencode) that is not a read-only codex exec, a paseo command head, or a bee command (head bee or a path ending in /bee) whose verb is dispatch, `herding run`, `worktree merge` or gate; independent of the working directory. Only BEE_HERDING_WORKER set (a herdr or tmux pane worker): allow everything, as today. Mode B (D9 revised), BEE_SUPERVISOR_ALLOWED non-empty: parse it as a comma-separated list of Claude-style entries; `Bash(<prefix>:*)` allows a segment that starts with that prefix after trimming, where a leading `bee`, `./.bee/bin/bee` or an absolute path ending in `/.bee/bin/bee` counts as `.bee/bin/bee`; other entries such as Read are ignored; a segment matching no prefix, or a command with $( ), backticks or a > redirect, is denied. A deny in either mode denies. Reuse the tokenizer and helpers instead of copying them: find_git_invocations (write_guard/paths.rs) and is_separator (write_guard/guards.rs) are already pub(crate); in write_guard/checks.rs make command_basename, outward_segment_head, gh_sub_and_args, gh_read_only_form and codex_read_only_exec pub(crate), and reuse the same deep tokenize call check_git_bash_command uses. A deny exits 2 with the reason on stderr, the verdict shape write-guard uses, plus a FIX line (for a worker: stop and report blocked; the leader does this step). Neither variable set: exit 0, print nothing. .pi/extensions/bee-guard/events.ts tool_call: when the env carries BEE_HERDING_WORKER and PASEO_AGENT_ID, or BEE_SUPERVISOR_ALLOWED, and the mapped tool is the shell tool, run the blocking hook worker-guard through runBlockingHook before the normal mapping; block on a deny, a crash, a missing binary, or a binary whose `bee hook --help` output (read once per session and cached) does not list worker-guard. index.ts: when BEE_HERDING_WORKER and PASEO_AGENT_ID are both set, do not register beeDispatchTool, beeAdvisorTool and beeSteerTool (the verdict tool stays). With none of the variables set nothing changes. Tests: Rust unit tests in worker_guard.rs for the table (git push, gh pr create, pi -p x, claude, paseo ls, bee dispatch prepare, .bee/bin/bee herding run, bee gate denied in mode A; gh pr view, cargo test, git commit, git status, bee cells list allowed; `cargo test && git push` denied; pane-only marker allows git push; mode B allows `.bee/bin/bee status --json` and denies `rm -rf x`, `.bee/bin/bee status; rm x` and `.bee/bin/bee status > f`); a mod.rs test that under the marker worker-guard and activity reach their handlers and write-guard still short-circuits. New tests/pi_worker_guard_contracts.rs modeled on pi_paseo_heartbeat_contracts.rs (node probe, skip env): with a stub bee binary, the belt blocks a Paseo worker's shell call when the stub denies, allows when it allows, blocks when the binary is missing, blocks when the stub's hook help lacks worker-guard, and does not call the stub when no variable is set; index.ts registers no dispatch tools for a Paseo worker. Cite decision 9659395e (contract:worker-guard). No code comments.",
+        "must_haves": {
+          "truths": [
+            "for a Paseo worker (BEE_HERDING_WORKER and PASEO_AGENT_ID set) worker-guard refuses git push, gh writes, agent launches, paseo commands and bee dispatch, herding run, worktree merge and gate in any working directory",
+            "for a Paseo worker ordinary work commands such as cargo test, git commit, git status and bee cells list are allowed, and a herdr or tmux pane worker keeps today's posture",
+            "with BEE_SUPERVISOR_ALLOWED set, a shell command outside the allowlist is refused",
+            "every other hook still exits 0 under the worker marker",
+            "the Pi belt blocks such a shell call on a deny, a crash, a missing binary or a binary that does not list worker-guard, and changes nothing when no variable is set",
+            "the Pi extension registers no bee_dispatch, bee_advisor or bee_steer tool for a Paseo worker"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+              "substantive": "the worker and supervisor shell guard with its allow and deny tests"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "routing of Paseo worker and supervisor shell calls to worker-guard with the hook-list check"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/index.ts",
+              "substantive": "no dispatch tools for a Paseo worker"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "node contract tests for the belt"
+            }
+          ],
+          "key_links": [
+            "hooks/mod.rs routes worker-guard past the marker",
+            "events.ts calls the worker-guard hook for Paseo worker and supervisor shell calls"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No copy of the outward tokenizer",
+            "No change to write-guard verdicts",
+            "No change for herdr or tmux pane workers"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ]
+      },
+      {
+        "id": "pph-4",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Wake the Pi leader from its own broker timer and delete its heartbeat on exit",
+        "deps": [
+          "pph-3"
+        ],
+        "decisions": [
+          "D6",
+          "D8"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Red first. paseo-heartbeat.ts: DEFAULT_CRON becomes `*/30 * * * *` (D8). readPaseoSettings also reads herding.paseo.broker_tick_secs (a positive integer, default 30; anything else falls back to 30). ensureHeartbeat (D6 revised): when the marker holds a schedule id and a cron different from settings.cron, delete that schedule (`<command> heartbeat delete <id>`) and create a new one, rewriting the marker; same cron keeps today's exists answer. Add deleteHeartbeat(mainRoot, agentId, settings, run) returning a Promise: read the marker; with a schedule id run `<command> heartbeat delete <id>`; on success remove the marker; on failure keep the marker and write delete_failed: <reason> into it; never throws. result-inbox.ts: export one helper that tells whether the leader is busy and sends a message through pi.sendUserMessage with { deliverAs: \"steer\" } when busy and no option otherwise; the drain uses this helper too, so the busy and steer rule lives in one place. paseo-heartbeat.ts: add startBrokerTimer(pi, directory, settings, deps) and stopBrokerTimer(): every broker_tick_secs seconds run `bee herding broker tick --json` (120 s timeout) unless a broker tick is already in flight — the heartbeat input handler's tickRunning flag in events.ts and the timer share ONE in-flight flag (export it from paseo-heartbeat.ts and use it in both places); parse with parseTick; only when news is true send heartbeatText(tick) through the result-inbox helper; no news sends nothing; the timer is unref'd and armed only inside session_start for a Paseo leader (isPaseoLeader), never at module load. events.ts: in session_start, for a Paseo leader, arm the broker timer next to ensureHeartbeat; in session_shutdown, for every reason except reload, stop the broker timer and, for a Paseo leader, await deleteHeartbeat with the same execFile runner ensureHeartbeat uses before the handler returns (D6 revised). The heartbeat input handler still transforms and never swallows (paseo-pi D6). Tests in tests/pi_paseo_heartbeat_contracts.rs (node): the default cron row expects */30; the timer sends nothing on no news, sends once on news, steers when busy, never overlaps a slow tick nor runs while the heartbeat tick runs, reads broker_tick_secs; deleteHeartbeat calls heartbeat delete with the marker's id and removes the marker, and on a failing delete keeps the marker with delete_failed; ensureHeartbeat re-creates on a changed cron and answers exists on the same cron; shutdown(new) then start(new) ends with exactly one heartbeat. Cite decisions a7326910 (contract:paseo-heartbeat), 7f0788a0 and 67f07142. No code comments.",
+        "must_haves": {
+          "truths": [
+            "the default heartbeat cron is */30 * * * * and a leader whose marker holds another cron gets its heartbeat re-created",
+            "the leader runs the broker tick on its own timer every broker_tick_secs seconds, default 30, sharing one in-flight flag with the heartbeat tick",
+            "a tick with no news sends nothing; a tick with news sends one message, as a steer when the leader is busy, through the same helper the result drain uses",
+            "session_shutdown for every reason except reload awaits the heartbeat delete; a successful delete removes the marker and a failed one keeps it with delete_failed",
+            "a heartbeat prompt is still transformed and never swallowed"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+              "substantive": "new default cron, cron re-create, broker timer and deleteHeartbeat"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/result-inbox.ts",
+              "substantive": "the shared busy and steer send helper"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "timer arming at session_start and awaited heartbeat delete at session_shutdown"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+              "substantive": "node tests for the timer, the delete and the cron re-create"
+            }
+          ],
+          "key_links": [
+            "events.ts session_start arms startBrokerTimer for a Paseo leader",
+            "events.ts session_shutdown awaits deleteHeartbeat",
+            "the drain and the broker timer send through one helper"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No timer at module load",
+            "No model turn on a tick with no news",
+            "No change to the heartbeat input handler's never-swallow behavior"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-5",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Check the Paseo setup in bee doctor",
+        "deps": [],
+        "decisions": [
+          "D7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "action": "Red first. doctor.rs: in the pi runtime block, after the `rows.push(pi_herding_transport_row_with_env(root, env));` line, push a paseo_ready row only when some team.pi slot is a herding slot whose agent has a paseo block (read with the same folded config every_pi_slot_runs_no_pane uses, and herding::paseo::PaseoSpec::from_config). The row checks, through a PaseoCli built with a 5 s timeout so tests can inject a fake: the daemon answers (paseo::daemon_reachable or a version call); `<command> --version` output passes paseo::version_at_least((0,10,3)); when any configured provider is pi, `~/.pi/agent/auth.json` exists (home from the env closure); and for every marker file under `<root>/.bee/runtime/paseo-heartbeat/`, `paseo inspect <agent id> --json` (paseo::inspect_argv) answers and the agent is not archived (an Archived true field, a failed inspect or a Dead state is an orphan), and no marker carries a delete_failed field (D6 revised). ok is true only when every check passes; the detail names each failed check with a FIX line (start the daemon with paseo daemon start; upgrade to 0.10.3 with npm @getpaseo/cli; log in with pi; delete the orphan heartbeat with paseo heartbeat delete <id> and remove the marker). Report only: doctor changes nothing. No Paseo slot: no row. Tests in doctor/tests.rs with a fake CLI and a temp root: no row without a Paseo slot; ok with every check passing; each failing check named; an orphan marker named; a delete_failed marker named. No code comments.",
+        "must_haves": {
+          "truths": [
+            "bee doctor on the pi runtime shows a paseo_ready row only when a team.pi slot uses a Paseo agent",
+            "the row fails and names the fix when the daemon is down, the version is below 0.10.3, the pi auth file is missing, a heartbeat marker names an archived or missing agent, or a marker records a failed delete",
+            "doctor changes no file and no Paseo state",
+            "the existing doctor tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+              "substantive": "the paseo_ready row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+              "substantive": "tests for each check"
+            }
+          ],
+          "key_links": [
+            "the pi runtime block pushes the paseo_ready row"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No Paseo call that changes state from doctor"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-6",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Run the supervisor tick on Pi when configured",
+        "deps": [
+          "pph-3"
+        ],
+        "decisions": [
+          "D9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+        ],
+        "action": "Red first. control_loop.rs: read herding.supervisor_runtime from the main root config; absent or claude keeps today's behavior byte-identical; pi selects the Pi path; any other value refuses the supervisor tick before any spawn with a FIX line naming the two legal values. Pi path (D9 revised): resolve the supervisor slot from team.pi with the same resolver supervisor_model uses (runtime pi). A herding slot whose agent's paseo block has provider pi gives its paseo model (required) and thinking; a plain model or native slot gives its model; a paseo provider other than pi, or no usable model, refuses with a FIX line (set team.pi.supervisor to a pi-provider agent). Refuse when `<main root>/.pi/extensions/bee-guard` does not exist. When herding.control_command is set it still wins and {MODEL} gets that model. Otherwise the default argv is [pi, --print, <prompt>, --model, <model>, --thinking, <level> (only when set), --no-session, --no-extensions, -e, <main root>/.pi/extensions/bee-guard, --tools, read,grep,find,ls,bash]. Spawn seam: IterationSpawner::spawn takes argv only today; add an env list and a cwd (the main root) to the spawn call (a second parameter or a small spawn-spec struct), have RealSpawner apply them, keep dispatch, merge, route and the claude supervisor passing an empty env and the current cwd, and pass BEE_SUPERVISOR_ALLOWED = SUPERVISOR_ALLOWED_TOOLS on the Pi path so worker-guard enforces the allowlist. Tests with the existing fake spawner: absent and claude give the exact current argv; pi with a pi-provider paseo slot gives the pi argv with model, thinking and the -e path; a claude-provider slot refuses; a missing extension directory refuses; pi with control_command uses the template; an illegal value refuses with no spawn; the Pi spawn carries BEE_SUPERVISOR_ALLOWED and the main root cwd. No code comments.",
+        "must_haves": {
+          "truths": [
+            "with supervisor_runtime absent or claude the supervisor argv and spawn are byte-identical to today",
+            "with supervisor_runtime pi and a pi-provider slot the supervisor runs pi --print with that model and thinking, --no-extensions -e <main root>/.pi/extensions/bee-guard and the read,grep,find,ls,bash tools, in the main root",
+            "the Pi supervisor process carries BEE_SUPERVISOR_ALLOWED equal to the supervisor allowlist",
+            "a non-pi provider slot, a missing bee-guard extension directory or an illegal supervisor_runtime refuses before any spawn",
+            "the existing control_loop tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+              "substantive": "supervisor runtime selection, the Pi argv and the env-carrying spawn seam"
+            }
+          ],
+          "key_links": [
+            "the Pi supervisor spawn sets BEE_SUPERVISOR_ALLOWED and loads bee-guard with -e"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to dispatch, merge or route argv or environment"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+        ]
+      },
+      {
+        "id": "pph-7",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "title": "Document the hardened Paseo channel, worker-guard and the Pi supervisor",
+        "deps": [
+          "pph-1",
+          "pph-2",
+          "pph-3",
+          "pph-4",
+          "pph-5",
+          "pph-6"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D10"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md"
+        ],
+        "action": "Update the concepts to match the shipped code, citing each rule as paseo-pi-hardening D1 to D10 with its store id from bee decisions search --text paseo-pi-hardening. the-paseo-channel.md: the 15 s timeout and 3 s inspect cadence (D1), the silent-idle nudge and second-idle end (D2), UpdatedAt liveness and stalled (D3), the observed model fields and model_mismatch (D4), heartbeat delete on shutdown (D6), the doctor row (D7), the broker timer and the */30 backstop replacing the 5-minute default (D8, superseding paseo-pi D7), and the parent cascade: paseo run from inside the leader records it as parent, so archiving the leader archives every in-flight worker (D10); add the new files to Pointers. hook-runtime-the-worker-outward-guard.md: a section on worker-guard, the second hook past the herded marker, its deny list and the supervisor allowlist mode (D5, D9). the-supervisor-observer-and-its-interventions.md: herding.supervisor_runtime and the Pi argv (D9); in the Paseo channel concept, say that status is bee's freshness view and paseo_state is the daemon's raw state, so status=stalled with paseo_state=working is expected. docs/config-reference.md: herding.paseo.broker_tick_secs, the new heartbeat_cron default, herding.supervisor_runtime. Plain technical English, no code comments, no deferral words.",
+        "must_haves": {
+          "truths": [
+            "the Paseo channel concept describes the timeouts, nudge, stalled, model check, heartbeat delete, doctor row, broker timer and parent cascade with their decision ids",
+            "the worker-outward guard concept describes worker-guard and the supervisor allowlist",
+            "the supervisor concept and the config reference name herding.supervisor_runtime and herding.paseo.broker_tick_secs",
+            "bee knowledge check passes"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "the hardened channel"
+            },
+            {
+              "path": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+              "substantive": "worker-guard"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+              "substantive": "Pi supervisor"
+            },
+            {
+              "path": "docs/config-reference.md",
+              "substantive": "new keys"
+            }
+          ],
+          "key_links": [
+            "each concept cites paseo-pi-hardening decision ids"
+          ],
+          "prohibitions": [
+            "No change outside docs"
+          ]
+        },
+        "verify": ".bee/bin/bee knowledge check --json",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+        ]
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pph-1 to pph-6 change the run loop, status, a hook, the Pi extension, doctor and the control loop."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first; the leader drives the live proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pph-7 updates the Paseo, hook and supervisor concepts and the config reference."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the slice judge for a behavior cell",
+          "reason": "A semantic judge may run on the guard cells."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk plan check, structure mandate."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk plan check."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-06T05:45:54.259Z",
+    "feature": "paseo-pi-hardening",
+    "newest_decision_id": "e2af1dab-22fe-4ec1-9c96-5db23ba759ef",
+    "plan_sha256": "15b122ce8221070a2b57b90c6b249718afd88d093d0a44398bfe2ba9207640b0",
+    "advisor": "hat wave: opus, fable, agy-flash, opus, agy-flash",
+    "digest_head": "# Plan check — paseo-pi-hardening (hat wave, 2026-10-06)\n\nSeats: hat-facts-gaps (opus), hat-risks (fable), hat-value (agy-flash),\nhat-alternatives (opus), hat-user-impact (agy-flash). Synthesis by the leader.\n\n```text\nPLAN CHECK\nWork: slice 1, cells pph-1..pph-7\n\nSTRUCTURE\nBLOCKERS:\n- coverage / worker self-dispatch: D5 denied bee dispatch for every herded worker, but herdr pane workers may stack their own workers (psd-12) / run.rs caller_is_worker / FIXED: D5 revised (be1699f8) to Paseo-carried"
+  },
+  "approved_cell_packet": {
+    "feature": "paseo-pi-hardening",
+    "plan_sha256": "15b122ce8221070a2b57b90c6b249718afd88d093d0a44398bfe2ba9207640b0",
+    "previewed_at": "2026-10-06T05:45:54.131Z",
+    "cells": [
+      {
+        "id": "pph-1",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Bound Paseo calls, nudge silent workers and record the real model in the run loop",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Red first. paseo.rs: add a PaseoInspect struct (state: Option<PaseoState>, updated_at: Option<String>, model: Option<String>, thinking: Option<String>) and parse_inspect_full(stdout) that reads the same first JSON value parse_inspect reads, taking UpdatedAt, Model and Thinking with the same key tolerance; Model \"-\" and Thinking \"auto\" (Paseo's sentinels) parse as None (D4). Keep parse_inspect as a thin wrapper so every existing caller is unchanged. run.rs, timeouts (D1): the two `let cli = RealPaseoCli::new(cmd);` sites in the Paseo run and continue paths gain `.with_timeout(Duration::from_secs(15))`. When the spawn call itself fails or times out, call paseo::ls_label_argv for the job's bee_job label once, and when an agent for this job exists name its id in the SpawnFailed message (report only, no adopt, no archive). run.rs, cadence (D1): in wait_for_round_paseo_driven call paseo inspect only when at least 3 s passed since the last inspect call; the result, log and ack file checks still run every 200 ms tick; a tick that does not call inspect reports liveness None, so the died debounce in run_poll_loop still needs three consecutive real Dead reads. Working stays fresh exactly as today. run.rs, silent idle (D2 revised): once the round has seen Working, an Idle inspect with no result-N.json for the round sends ONE nudge with paseo::send_argv(agent_id, text), where text names the brief file and the result file the worker owes (mailbox path helpers); never send while the last state is Working or Blocked; a failed send counts as sent. A later Idle-with-no-result inspect read at least one inspect interval after the nudge ends the wait: add a bool field to PollTick (false in every herdr and tmux tick) that decide_poll turns into PollDecision::TimedOutIdle at once, before the idle timeout, and have the Paseo caller pass the silent-idle message to diagnose_giveup_paseo in place of the generic idle_timeout_message text: the message `herding: paseo agent <id> went idle twice with no result for round <n> — agent kept for inspection: paseo logs <id>` (pass the flag back through a Cell or the closure's captured state). The agent is kept by the existing failure path. run.rs, observed model (D4 revised): on the first inspect whose model or thinking is Some, write paseo_model_observed and paseo_thinking_observed into job.json (None writes the string unverified), once per job. Compare with the job's PaseoSpec: models match when equal, or when the observed one ends with `/<configured>` or the configured one ends with `/<observed>`; thinking matches equal ignoring case; a None on either side never mismatches. On a confirmed mismatch print one stderr line `herding: paseo agent <id> runs model <observed> (thinking <t>), configured <model> (thinking <t>)` and write paseo_model_mismatch true into job.json; never archive, stop or retry. Tests with a fake PaseoCli and the driven clock: inspect at most once per 3 s of fake time while file checks run each tick; one Dead read followed by Working keeps the run going; Working then Idle with no result sends exactly one nudge and a second silent idle 3 s later ends as idle timeout with the silent-idle message; a failed send still lets the second silent idle end the round; a result after the nudge returns the result; no send while Working or Blocked; observed model and thinking land in job.json; `-`/`auto` write unverified with no warning; a provider-prefixed equal model is no mismatch; a real mismatch writes the flag; a timed-out spawn names a labelled agent; parse_inspect_full reads all four fields and tolerates their absence. Herdr and tmux runs unchanged. No code comments.",
+        "must_haves": {
+          "truths": [
+            "the Paseo run and continue paths build the CLI with a 15 second timeout, and a failed spawn names an agent found under its job label",
+            "the Paseo wait loop calls paseo inspect at most once every 3 seconds while file checks keep the 200 ms poll, and non-inspect ticks report no liveness",
+            "the first silent idle after Working sends exactly one paseo send nudge and a second silent idle at least 3 s later ends the round as idle timeout with a silent-idle message",
+            "no nudge is ever sent while the agent is Working or Blocked",
+            "job.json records the observed model and thinking, with - and auto recorded as unverified, and a confirmed mismatch sets paseo_model_mismatch and prints one warning",
+            "herdr and tmux runs are unchanged and the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "PaseoInspect and parse_inspect_full reading UpdatedAt, Model and Thinking with sentinel handling"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "timeouts, 3 s inspect cadence, silent-idle nudge and end flag, observed-model record"
+            }
+          ],
+          "key_links": [
+            "wait_for_round_paseo_driven reads parse_inspect_full",
+            "decide_poll turns the PollTick silent-idle flag into TimedOutIdle"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No new RunOutcome or PollDecision variant",
+            "No paseo send while Working or Blocked",
+            "No archive, stop or retry added",
+            "Working freshness in the run loop is unchanged"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-2",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Show stalled and model mismatch for Paseo workers in status",
+        "deps": [
+          "pph-1"
+        ],
+        "decisions": [
+          "D3",
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "action": "Red first. herding.rs status, Paseo branch (search for `paseo_state`): read the inspect with paseo::parse_inspect_full (added by pph-1). Add model_mismatch (bool, from job.json paseo_model_mismatch, false when absent) and paseo_model_observed (string or null) to the JSON row, and model_mismatch=true to the text line only when true. A Working Paseo agent whose UpdatedAt (RFC 3339) is older than the shared 120 s freshness constant the status already uses for stalled shows status stalled and goes through the same stalled/recovered transition helper the pane path uses (D3 revised); a missing or unparseable UpdatedAt never shows stalled; finished, idle, blocked and dead rows are unchanged. Tests with a fake CLI and a temp mailbox: stalled for an old UpdatedAt; working for a fresh or missing one; recovered after stalled when UpdatedAt moves; model_mismatch true and false rows. No code comments.",
+        "must_haves": {
+          "truths": [
+            "bee herding status shows stalled for a Working Paseo agent whose UpdatedAt is older than 120 s, and recovered when it moves again",
+            "a missing or unparseable UpdatedAt never shows stalled",
+            "the Paseo status row carries model_mismatch and paseo_model_observed from job.json",
+            "the existing herding tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding.rs",
+              "substantive": "stalled from UpdatedAt and model fields in the Paseo status row"
+            }
+          ],
+          "key_links": [
+            "status reads paseo_model_mismatch from job.json"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to herdr or tmux status rows",
+            "No Paseo call that changes state"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-3",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Guard Paseo workers and the Pi supervisor with a worker-guard hook",
+        "deps": [],
+        "decisions": [
+          "D5",
+          "D9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/index.ts",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+        ],
+        "action": "Red first. hooks/mod.rs: add worker-guard to HOOK_NAMES and route it to worker_guard::run; marker_short_circuits returns false for activity and worker-guard only, and every other name still short-circuits under BEE_HERDING_WORKER. New hooks/worker_guard.rs: read the PreToolUse JSON from stdin (same shape write-guard reads: tool_name, tool_input.command, cwd); only a Bash tool is judged, anything else allows. Mode A (D5 revised), BEE_HERDING_WORKER and PASEO_AGENT_ID both non-empty: deny when any segment of the command is a git push, a gh command that is not a read-only form, an agent launch head (claude, codex, pi, opencode) that is not a read-only codex exec, a paseo command head, or a bee command (head bee or a path ending in /bee) whose verb is dispatch, `herding run`, `worktree merge` or gate; independent of the working directory. Only BEE_HERDING_WORKER set (a herdr or tmux pane worker): allow everything, as today. Mode B (D9 revised), BEE_SUPERVISOR_ALLOWED non-empty: parse it as a comma-separated list of Claude-style entries; `Bash(<prefix>:*)` allows a segment that starts with that prefix after trimming, where a leading `bee`, `./.bee/bin/bee` or an absolute path ending in `/.bee/bin/bee` counts as `.bee/bin/bee`; other entries such as Read are ignored; a segment matching no prefix, or a command with $( ), backticks or a > redirect, is denied. A deny in either mode denies. Reuse the tokenizer and helpers instead of copying them: find_git_invocations (write_guard/paths.rs) and is_separator (write_guard/guards.rs) are already pub(crate); in write_guard/checks.rs make command_basename, outward_segment_head, gh_sub_and_args, gh_read_only_form and codex_read_only_exec pub(crate), and reuse the same deep tokenize call check_git_bash_command uses. A deny exits 2 with the reason on stderr, the verdict shape write-guard uses, plus a FIX line (for a worker: stop and report blocked; the leader does this step). Neither variable set: exit 0, print nothing. .pi/extensions/bee-guard/events.ts tool_call: when the env carries BEE_HERDING_WORKER and PASEO_AGENT_ID, or BEE_SUPERVISOR_ALLOWED, and the mapped tool is the shell tool, run the blocking hook worker-guard through runBlockingHook before the normal mapping; block on a deny, a crash, a missing binary, or a binary whose `bee hook --help` output (read once per session and cached) does not list worker-guard. index.ts: when BEE_HERDING_WORKER and PASEO_AGENT_ID are both set, do not register beeDispatchTool, beeAdvisorTool and beeSteerTool (the verdict tool stays). With none of the variables set nothing changes. Tests: Rust unit tests in worker_guard.rs for the table (git push, gh pr create, pi -p x, claude, paseo ls, bee dispatch prepare, .bee/bin/bee herding run, bee gate denied in mode A; gh pr view, cargo test, git commit, git status, bee cells list allowed; `cargo test && git push` denied; pane-only marker allows git push; mode B allows `.bee/bin/bee status --json` and denies `rm -rf x`, `.bee/bin/bee status; rm x` and `.bee/bin/bee status > f`); a mod.rs test that under the marker worker-guard and activity reach their handlers and write-guard still short-circuits. New tests/pi_worker_guard_contracts.rs modeled on pi_paseo_heartbeat_contracts.rs (node probe, skip env): with a stub bee binary, the belt blocks a Paseo worker's shell call when the stub denies, allows when it allows, blocks when the binary is missing, blocks when the stub's hook help lacks worker-guard, and does not call the stub when no variable is set; index.ts registers no dispatch tools for a Paseo worker. Cite decision 9659395e (contract:worker-guard). No code comments.",
+        "must_haves": {
+          "truths": [
+            "for a Paseo worker (BEE_HERDING_WORKER and PASEO_AGENT_ID set) worker-guard refuses git push, gh writes, agent launches, paseo commands and bee dispatch, herding run, worktree merge and gate in any working directory",
+            "for a Paseo worker ordinary work commands such as cargo test, git commit, git status and bee cells list are allowed, and a herdr or tmux pane worker keeps today's posture",
+            "with BEE_SUPERVISOR_ALLOWED set, a shell command outside the allowlist is refused",
+            "every other hook still exits 0 under the worker marker",
+            "the Pi belt blocks such a shell call on a deny, a crash, a missing binary or a binary that does not list worker-guard, and changes nothing when no variable is set",
+            "the Pi extension registers no bee_dispatch, bee_advisor or bee_steer tool for a Paseo worker"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+              "substantive": "the worker and supervisor shell guard with its allow and deny tests"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "routing of Paseo worker and supervisor shell calls to worker-guard with the hook-list check"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/index.ts",
+              "substantive": "no dispatch tools for a Paseo worker"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "node contract tests for the belt"
+            }
+          ],
+          "key_links": [
+            "hooks/mod.rs routes worker-guard past the marker",
+            "events.ts calls the worker-guard hook for Paseo worker and supervisor shell calls"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No copy of the outward tokenizer",
+            "No change to write-guard verdicts",
+            "No change for herdr or tmux pane workers"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee hooks && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_worker_guard_contracts --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ]
+      },
+      {
+        "id": "pph-4",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Wake the Pi leader from its own broker timer and delete its heartbeat on exit",
+        "deps": [
+          "pph-3"
+        ],
+        "decisions": [
+          "D6",
+          "D8"
+        ],
+        "files": [
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          ".pi/extensions/bee-guard/result-inbox.ts",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Red first. paseo-heartbeat.ts: DEFAULT_CRON becomes `*/30 * * * *` (D8). readPaseoSettings also reads herding.paseo.broker_tick_secs (a positive integer, default 30; anything else falls back to 30). ensureHeartbeat (D6 revised): when the marker holds a schedule id and a cron different from settings.cron, delete that schedule (`<command> heartbeat delete <id>`) and create a new one, rewriting the marker; same cron keeps today's exists answer. Add deleteHeartbeat(mainRoot, agentId, settings, run) returning a Promise: read the marker; with a schedule id run `<command> heartbeat delete <id>`; on success remove the marker; on failure keep the marker and write delete_failed: <reason> into it; never throws. result-inbox.ts: export one helper that tells whether the leader is busy and sends a message through pi.sendUserMessage with { deliverAs: \"steer\" } when busy and no option otherwise; the drain uses this helper too, so the busy and steer rule lives in one place. paseo-heartbeat.ts: add startBrokerTimer(pi, directory, settings, deps) and stopBrokerTimer(): every broker_tick_secs seconds run `bee herding broker tick --json` (120 s timeout) unless a broker tick is already in flight — the heartbeat input handler's tickRunning flag in events.ts and the timer share ONE in-flight flag (export it from paseo-heartbeat.ts and use it in both places); parse with parseTick; only when news is true send heartbeatText(tick) through the result-inbox helper; no news sends nothing; the timer is unref'd and armed only inside session_start for a Paseo leader (isPaseoLeader), never at module load. events.ts: in session_start, for a Paseo leader, arm the broker timer next to ensureHeartbeat; in session_shutdown, for every reason except reload, stop the broker timer and, for a Paseo leader, await deleteHeartbeat with the same execFile runner ensureHeartbeat uses before the handler returns (D6 revised). The heartbeat input handler still transforms and never swallows (paseo-pi D6). Tests in tests/pi_paseo_heartbeat_contracts.rs (node): the default cron row expects */30; the timer sends nothing on no news, sends once on news, steers when busy, never overlaps a slow tick nor runs while the heartbeat tick runs, reads broker_tick_secs; deleteHeartbeat calls heartbeat delete with the marker's id and removes the marker, and on a failing delete keeps the marker with delete_failed; ensureHeartbeat re-creates on a changed cron and answers exists on the same cron; shutdown(new) then start(new) ends with exactly one heartbeat. Cite decisions a7326910 (contract:paseo-heartbeat), 7f0788a0 and 67f07142. No code comments.",
+        "must_haves": {
+          "truths": [
+            "the default heartbeat cron is */30 * * * * and a leader whose marker holds another cron gets its heartbeat re-created",
+            "the leader runs the broker tick on its own timer every broker_tick_secs seconds, default 30, sharing one in-flight flag with the heartbeat tick",
+            "a tick with no news sends nothing; a tick with news sends one message, as a steer when the leader is busy, through the same helper the result drain uses",
+            "session_shutdown for every reason except reload awaits the heartbeat delete; a successful delete removes the marker and a failed one keeps it with delete_failed",
+            "a heartbeat prompt is still transformed and never swallowed"
+          ],
+          "artifacts": [
+            {
+              "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+              "substantive": "new default cron, cron re-create, broker timer and deleteHeartbeat"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/result-inbox.ts",
+              "substantive": "the shared busy and steer send helper"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/events.ts",
+              "substantive": "timer arming at session_start and awaited heartbeat delete at session_shutdown"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+              "substantive": "node tests for the timer, the delete and the cron re-create"
+            }
+          ],
+          "key_links": [
+            "events.ts session_start arms startBrokerTimer for a Paseo leader",
+            "events.ts session_shutdown awaits deleteHeartbeat",
+            "the drain and the broker timer send through one helper"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No timer at module load",
+            "No model turn on a tick with no news",
+            "No change to the heartbeat input handler's never-swallow behavior"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts --test pi_plugin_contracts",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-5",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Check the Paseo setup in bee doctor",
+        "deps": [],
+        "decisions": [
+          "D7"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+        ],
+        "action": "Red first. doctor.rs: in the pi runtime block, after the `rows.push(pi_herding_transport_row_with_env(root, env));` line, push a paseo_ready row only when some team.pi slot is a herding slot whose agent has a paseo block (read with the same folded config every_pi_slot_runs_no_pane uses, and herding::paseo::PaseoSpec::from_config). The row checks, through a PaseoCli built with a 5 s timeout so tests can inject a fake: the daemon answers (paseo::daemon_reachable or a version call); `<command> --version` output passes paseo::version_at_least((0,10,3)); when any configured provider is pi, `~/.pi/agent/auth.json` exists (home from the env closure); and for every marker file under `<root>/.bee/runtime/paseo-heartbeat/`, `paseo inspect <agent id> --json` (paseo::inspect_argv) answers and the agent is not archived (an Archived true field, a failed inspect or a Dead state is an orphan), and no marker carries a delete_failed field (D6 revised). ok is true only when every check passes; the detail names each failed check with a FIX line (start the daemon with paseo daemon start; upgrade to 0.10.3 with npm @getpaseo/cli; log in with pi; delete the orphan heartbeat with paseo heartbeat delete <id> and remove the marker). Report only: doctor changes nothing. No Paseo slot: no row. Tests in doctor/tests.rs with a fake CLI and a temp root: no row without a Paseo slot; ok with every check passing; each failing check named; an orphan marker named; a delete_failed marker named. No code comments.",
+        "must_haves": {
+          "truths": [
+            "bee doctor on the pi runtime shows a paseo_ready row only when a team.pi slot uses a Paseo agent",
+            "the row fails and names the fix when the daemon is down, the version is below 0.10.3, the pi auth file is missing, a heartbeat marker names an archived or missing agent, or a marker records a failed delete",
+            "doctor changes no file and no Paseo state",
+            "the existing doctor tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+              "substantive": "the paseo_ready row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+              "substantive": "tests for each check"
+            }
+          ],
+          "key_links": [
+            "the pi runtime block pushes the paseo_ready row"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No Paseo call that changes state from doctor"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee doctor",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ]
+      },
+      {
+        "id": "pph-6",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "code",
+        "change_class": "behavior",
+        "title": "Run the supervisor tick on Pi when configured",
+        "deps": [
+          "pph-3"
+        ],
+        "decisions": [
+          "D9"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs"
+        ],
+        "action": "Red first. control_loop.rs: read herding.supervisor_runtime from the main root config; absent or claude keeps today's behavior byte-identical; pi selects the Pi path; any other value refuses the supervisor tick before any spawn with a FIX line naming the two legal values. Pi path (D9 revised): resolve the supervisor slot from team.pi with the same resolver supervisor_model uses (runtime pi). A herding slot whose agent's paseo block has provider pi gives its paseo model (required) and thinking; a plain model or native slot gives its model; a paseo provider other than pi, or no usable model, refuses with a FIX line (set team.pi.supervisor to a pi-provider agent). Refuse when `<main root>/.pi/extensions/bee-guard` does not exist. When herding.control_command is set it still wins and {MODEL} gets that model. Otherwise the default argv is [pi, --print, <prompt>, --model, <model>, --thinking, <level> (only when set), --no-session, --no-extensions, -e, <main root>/.pi/extensions/bee-guard, --tools, read,grep,find,ls,bash]. Spawn seam: IterationSpawner::spawn takes argv only today; add an env list and a cwd (the main root) to the spawn call (a second parameter or a small spawn-spec struct), have RealSpawner apply them, keep dispatch, merge, route and the claude supervisor passing an empty env and the current cwd, and pass BEE_SUPERVISOR_ALLOWED = SUPERVISOR_ALLOWED_TOOLS on the Pi path so worker-guard enforces the allowlist. Tests with the existing fake spawner: absent and claude give the exact current argv; pi with a pi-provider paseo slot gives the pi argv with model, thinking and the -e path; a claude-provider slot refuses; a missing extension directory refuses; pi with control_command uses the template; an illegal value refuses with no spawn; the Pi spawn carries BEE_SUPERVISOR_ALLOWED and the main root cwd. No code comments.",
+        "must_haves": {
+          "truths": [
+            "with supervisor_runtime absent or claude the supervisor argv and spawn are byte-identical to today",
+            "with supervisor_runtime pi and a pi-provider slot the supervisor runs pi --print with that model and thinking, --no-extensions -e <main root>/.pi/extensions/bee-guard and the read,grep,find,ls,bash tools, in the main root",
+            "the Pi supervisor process carries BEE_SUPERVISOR_ALLOWED equal to the supervisor allowlist",
+            "a non-pi provider slot, a missing bee-guard extension directory or an illegal supervisor_runtime refuses before any spawn",
+            "the existing control_loop tests stay green"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+              "substantive": "supervisor runtime selection, the Pi argv and the env-carrying spawn seam"
+            }
+          ],
+          "key_links": [
+            "the Pi supervisor spawn sets BEE_SUPERVISOR_ALLOWED and loads bee-guard with -e"
+          ],
+          "prohibitions": [
+            "No code comments",
+            "No change to dispatch, merge or route argv or environment"
+          ]
+        },
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee control_loop",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+        ]
+      },
+      {
+        "id": "pph-7",
+        "feature": "paseo-pi-hardening",
+        "lane": "high-risk",
+        "role": "docs",
+        "change_class": "docs",
+        "title": "Document the hardened Paseo channel, worker-guard and the Pi supervisor",
+        "deps": [
+          "pph-1",
+          "pph-2",
+          "pph-3",
+          "pph-4",
+          "pph-5",
+          "pph-6"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D10"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-pi-hardening/CONTEXT.md",
+          "docs/history/paseo-pi-hardening/plan.md"
+        ],
+        "action": "Update the concepts to match the shipped code, citing each rule as paseo-pi-hardening D1 to D10 with its store id from bee decisions search --text paseo-pi-hardening. the-paseo-channel.md: the 15 s timeout and 3 s inspect cadence (D1), the silent-idle nudge and second-idle end (D2), UpdatedAt liveness and stalled (D3), the observed model fields and model_mismatch (D4), heartbeat delete on shutdown (D6), the doctor row (D7), the broker timer and the */30 backstop replacing the 5-minute default (D8, superseding paseo-pi D7), and the parent cascade: paseo run from inside the leader records it as parent, so archiving the leader archives every in-flight worker (D10); add the new files to Pointers. hook-runtime-the-worker-outward-guard.md: a section on worker-guard, the second hook past the herded marker, its deny list and the supervisor allowlist mode (D5, D9). the-supervisor-observer-and-its-interventions.md: herding.supervisor_runtime and the Pi argv (D9); in the Paseo channel concept, say that status is bee's freshness view and paseo_state is the daemon's raw state, so status=stalled with paseo_state=working is expected. docs/config-reference.md: herding.paseo.broker_tick_secs, the new heartbeat_cron default, herding.supervisor_runtime. Plain technical English, no code comments, no deferral words.",
+        "must_haves": {
+          "truths": [
+            "the Paseo channel concept describes the timeouts, nudge, stalled, model check, heartbeat delete, doctor row, broker timer and parent cascade with their decision ids",
+            "the worker-outward guard concept describes worker-guard and the supervisor allowlist",
+            "the supervisor concept and the config reference name herding.supervisor_runtime and herding.paseo.broker_tick_secs",
+            "bee knowledge check passes"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "the hardened channel"
+            },
+            {
+              "path": "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+              "substantive": "worker-guard"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+              "substantive": "Pi supervisor"
+            },
+            {
+              "path": "docs/config-reference.md",
+              "substantive": "new keys"
+            }
+          ],
+          "key_links": [
+            "each concept cites paseo-pi-hardening decision ids"
+          ],
+          "prohibitions": [
+            "No change outside docs"
+          ]
+        },
+        "verify": ".bee/bin/bee knowledge check --json",
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md"
+        ]
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "pph-1 to pph-6 change the run loop, status, a hook, the Pi extension, doctor and the control loop."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Each code cell writes its own tests red-first; the leader drives the live proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "pph-7 updates the Paseo, hook and supervisor concepts and the config reference."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the slice judge for a behavior cell",
+          "reason": "A semantic judge may run on the guard cells."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk plan check, structure mandate."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk plan check."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-06T06:48:44.843Z",
+    "branch": "wt/paseo-pi-hardening",
+    "worktree_id": "beehive--wt--paseo-pi-hardening",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
+  }
+}
