@@ -434,22 +434,21 @@ fn strip_code_blocks(text: &str, removed: &mut usize) -> String {
 
 fn rewrite(text: &str, ctx: &Ctx, counts: &mut Counts) -> String {
     let mut out = String::with_capacity(text.len());
-    for piece in text.split_inclusive(char::is_whitespace) {
-        let end = piece.find(char::is_whitespace).unwrap_or(piece.len());
-        let (token, tail) = piece.split_at(end);
-        let bare = token.trim_matches(|c: char| "\"'`(),;:".contains(c));
-        if bare == "~" || bare.starts_with("~/") || bare.starts_with("~\\") {
-            counts.paths += 1;
-            out.push_str(&token.replacen(bare, "<home>", 1));
-            out.push_str(tail);
-            continue;
+    let mut rest = text;
+    while let Some(start) = path_start(rest) {
+        out.push_str(&rest[..start]);
+        let run = &rest[start..];
+        let end = run.find(|c: char| c.is_whitespace() || PATH_END.contains(c)).unwrap_or(run.len());
+        let path = run[..end].trim_end_matches(['.', ':']);
+        counts.paths += 1;
+        if path.starts_with('~') {
+            out.push_str("<home>");
+        } else {
+            out.push_str(&crate::hooks::activity::scrub_abs_paths(path, &ctx.work_root));
         }
-        let scrubbed = crate::hooks::activity::scrub_abs_paths(piece, &ctx.work_root);
-        if scrubbed != piece {
-            counts.paths += 1;
-        }
-        out.push_str(&scrubbed);
+        rest = &run[path.len()..];
     }
+    out.push_str(rest);
     if let Some(home) = ctx.home.as_deref().filter(|h| h.len() > 1) {
         let n = out.matches(home).count();
         if n > 0 {
@@ -461,6 +460,36 @@ fn rewrite(text: &str, ctx: &Ctx, counts: &mut Counts) -> String {
         out = replace_word(&out, name, "<host-repo>", &mut counts.contacts);
     }
     out
+}
+
+const PATH_END: &str = "\"'`(),;[]<>{}=|";
+const PATH_LEAD: &str = "\"'`(),;[<{=:|";
+
+fn path_start(text: &str) -> Option<usize> {
+    let mut prev: Option<char> = None;
+    for (i, c) in text.char_indices() {
+        let led = prev.is_none_or(|p| p.is_whitespace() || PATH_LEAD.contains(p));
+        prev = Some(c);
+        if !led {
+            continue;
+        }
+        let tail = &text[i..];
+        let next = tail[c.len_utf8()..].chars().next();
+        let starts = match c {
+            '/' => !(tail.starts_with("//") && text[..i].ends_with(':')),
+            '\\' => tail.starts_with("\\\\"),
+            '~' => next.is_none_or(|n| n == '/' || n == '\\' || n.is_whitespace() || PATH_END.contains(n)),
+            c if c.is_ascii_alphabetic() => {
+                let b = tail.as_bytes();
+                b.len() >= 3 && b[1] == b':' && (b[2] == b'/' || b[2] == b'\\')
+            }
+            _ => false,
+        };
+        if starts {
+            return Some(i);
+        }
+    }
+    None
 }
 
 fn replace_word(text: &str, word: &str, with: &str, hits: &mut usize) -> String {
@@ -830,9 +859,30 @@ mod tests {
     }
 
     #[test]
+    fn report_rewrites_paths_that_follow_a_delimiter_inside_a_token() {
+        let f = fake(Some("[]"), false, false);
+        let a = args(
+            &[
+                ("symptom", "cfg=/srv/clientcorp/app/x and HOME=~/private/notes [/opt/acme-internal/y] <D:\\work\\client\\z>"),
+                ("evidence", "see path:/var/lib/clientcorp/db and https://github.com/thanhsmind/beehive/issues/3"),
+                ("command", "bee status --cwd=/srv/clientcorp/app"),
+            ],
+            true,
+        );
+        let done = execute(&a, &f.ctx()).unwrap_or_else(|e| panic!("{}", e.msg));
+        for leaked in ["/srv/", "~/", "private", "/opt/", "work", "/var/", "clientcorp"] {
+            assert!(!done.body.contains(leaked), "{leaked:?} survived:\n{}", done.body);
+        }
+        assert!(done.body.contains("https://github.com/thanhsmind/beehive/issues/3"), "{}", done.body);
+        assert!(done.body.contains("cfg=<path>") && done.body.contains("HOME=<home>"), "{}", done.body);
+        assert_eq!(done.counts.paths, 6, "{:?}", counts_value(done.counts));
+        assert!(f.log().is_empty());
+    }
+
+    #[test]
     fn report_refuses_a_home_path_that_survives_the_rewrite() {
         let f = fake(Some("[]"), false, false);
-        let err = execute(&args(&[("evidence", "file=/Users/bob/project/x")], false), &f.ctx()).err().unwrap();
+        let err = execute(&args(&[("evidence", "file mnt/Users/bob/project/x")], false), &f.ctx()).err().unwrap();
         assert_eq!(err.field, Some("evidence"));
         assert!(f.log().is_empty());
     }
