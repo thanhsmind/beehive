@@ -1250,10 +1250,64 @@ mod tests {
         assert!(err.contains("no json <cell-id> verdict block found"));
     }
 
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
     #[test]
-    fn file_with_from_text_refuses() {
+    #[ignore = "spawned by file_with_from_text_refuses"]
+    fn file_with_from_text_refuses_child() {
         let (flags, use_json) = rsv::parse_flags(&["--file", "v.json", "--from-text", "t.md"]).unwrap();
         let code = run_judge_record(flags, use_json, Instant::now());
-        assert_ne!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+        assert_eq!(code, Some(ExitCode::FAILURE));
+    }
+
+    #[test]
+    fn file_with_from_text_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("onboarding.json"), "{}").unwrap();
+
+        {
+            let _cwd = CwdGuard::enter(tmp.path());
+            let (flags, use_json) = rsv::parse_flags(&["--file", "v.json", "--from-text", "t.md"]).unwrap();
+            let code = run_judge_record(flags, use_json, Instant::now());
+            assert_eq!(code, Some(ExitCode::FAILURE));
+        }
+
+        let exe = std::env::current_exe().unwrap();
+        let out = std::process::Command::new(&exe)
+            .args([
+                "--exact",
+                "verbs::cells::handlers_meta::tests::file_with_from_text_refuses_child",
+                "--ignored",
+                "--nocapture",
+            ])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let combined = format!("{stderr}\n{stdout}");
+
+        assert!(combined.contains("cells judge-record: --file and --from-text are mutually exclusive."));
     }
 }
+

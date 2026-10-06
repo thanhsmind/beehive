@@ -3352,7 +3352,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         &opts.job_id,
     );
 
-    if spec.isolated_config && spec.provider == "pi" {
+    if spec.isolated_config && spec.provider.trim().eq_ignore_ascii_case("pi") {
         let home_buf = pi_home_dir();
         let home = home_buf.as_path();
         let agent_name = opts.agent.as_deref().unwrap_or("paseo");
@@ -5451,7 +5451,7 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     let exit = match cap_action {
         PostflightCapAction::Refuse { ref cell_id } => {
             eprintln!(
-                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:...>`",
+                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:unit> --no-mistakes`",
                 opts.job_id
             );
             ExitCode::FAILURE
