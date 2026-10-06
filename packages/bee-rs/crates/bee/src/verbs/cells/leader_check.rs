@@ -234,9 +234,19 @@ pub(crate) fn record_leader_check(
         // D3 verification:
         // (a) an artifact string that looks like a repo path (contains '/' and no whitespace)
         // MUST exist on disk relative to the repo root
+        let feature = cell_map.get("feature").and_then(Value::as_str);
+        let history_root = commit_trailer_history_root(root, feature);
+        let relative_artifact = |artifact: &str| -> String {
+            Path::new(artifact)
+                .strip_prefix(&history_root)
+                .ok()
+                .and_then(|rel| rel.to_str())
+                .map(normalize_cell_path)
+                .unwrap_or_else(|| normalize_cell_path(artifact))
+        };
         for answer in &answers {
             if answer.artifact.contains('/') && !answer.artifact.chars().any(char::is_whitespace) {
-                let p = root.join(&answer.artifact);
+                let p = history_root.join(&answer.artifact);
                 if !p.exists() {
                     return Err(Fail::Thrown(format!(
                         "{VERB}: artifact \"{}\" does not exist on disk relative to repo root.",
@@ -251,7 +261,10 @@ pub(crate) fn record_leader_check(
         if !files_changed.is_empty() {
             let has_overlap = answers
                 .iter()
-                .any(|a| files_changed.iter().any(|fc| fc == &a.artifact));
+                .any(|a| {
+                    let artifact = relative_artifact(&a.artifact);
+                    files_changed.iter().any(|fc| normalize_cell_path(fc) == artifact)
+                });
             if !has_overlap {
                 let offending = answers
                     .iter()
@@ -270,8 +283,6 @@ pub(crate) fn record_leader_check(
         let commit_diff = if files_changed.is_empty() {
             None
         } else {
-            let feature = cell_map.get("feature").and_then(Value::as_str);
-            let history_root = commit_trailer_history_root(root, feature);
             Some(match cell_commit_files(&history_root, id) {
                 None => "skipped: git unavailable",
                 Some(paths) if paths.is_empty() => {

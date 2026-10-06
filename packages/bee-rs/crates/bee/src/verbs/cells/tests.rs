@@ -9249,6 +9249,94 @@ use std::time::Instant;
         assert!(read_cell_fixture(&root, "mr-2").get("merge_ready").is_none());
     }
 
+    fn leader_check_worktree_cell(id: &str, feature: &str, files_changed: &[&str]) -> Value {
+        json!({
+            "id": id,
+            "title": format!("title {id}"),
+            "status": "capped",
+            "lane": "tiny",
+            "feature": feature,
+            "must_haves": {"truths": ["Truth A"]},
+            "trace": {
+                "worker": "w-1",
+                "files_changed": files_changed,
+                "commit_pending": "not yet committed",
+            },
+        })
+    }
+
+    #[test]
+    fn leader_check_resolves_a_worktree_only_artifact_in_the_feature_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-wt",
+            &leader_check_worktree_cell("lc-wt", "demo", &["src/new.rs"]),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "src/new.rs"}]
+        });
+        let recorded = record_leader_check(&root, "lc-wt", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "a worktree-only artifact is accepted: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
+    #[test]
+    fn leader_check_accepts_an_absolute_worktree_artifact_against_relative_files_changed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        let worktree = tmp.path().join(&wt_id);
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join("src").join("new.rs"), "x").unwrap();
+        write_cell_fixture(
+            &root,
+            "lc-abs",
+            &leader_check_worktree_cell("lc-abs", "demo", &["src/new.rs"]),
+        );
+
+        let absolute = worktree.join("src").join("new.rs");
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": absolute.to_str().unwrap()}]
+        });
+        let recorded = record_leader_check(&root, "lc-abs", "ok", &payload, None, false);
+        assert!(recorded.is_ok(), "an absolute worktree path overlaps its relative form: {:?}", recorded.err().map(|e| match e {
+            Fail::Thrown(m) => m,
+            Fail::Delegate => "delegate".into(),
+        }));
+    }
+
+    #[test]
+    fn leader_check_still_refuses_an_artifact_missing_from_both_checkouts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, _wt_id) = merge_ready_granted_worktree(tmp.path(), "demo");
+        write_cell_fixture(
+            &root,
+            "lc-miss",
+            &leader_check_worktree_cell("lc-miss", "demo", &["src/new.rs"]),
+        );
+
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "src/new.rs"}]
+        });
+        match record_leader_check(&root, "lc-miss", "ok", &payload, None, false) {
+            Err(Fail::Thrown(m)) => {
+                assert!(m.contains("does not exist on disk relative to repo root"), "{m}")
+            }
+            Err(Fail::Delegate) => panic!("expected a thrown refusal, got Delegate"),
+            Ok(v) => panic!("expected a refusal, got {v}"),
+        }
+    }
+
     #[test]
     fn merge_ready_stays_unset_while_a_sibling_cell_is_still_open() {
         let tmp = tempfile::tempdir().unwrap();
