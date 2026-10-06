@@ -49,6 +49,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::TransportKind;
+use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // role, options, CLI parsing
@@ -548,27 +549,142 @@ fn read_prompt_file(main_root: &Path, role: Role) -> Result<String, String> {
 /// and calls `build_control_argv`. Both the real CLI path
 /// (`RealArgvProvider`) and the D13 tests call this exact function — never a
 /// second, drifted copy.
-pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SpawnSpec {
+    pub env: Vec<(String, String)>,
+    pub cwd: Option<PathBuf>,
+}
+
+pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<(Argv, SpawnSpec), String> {
     if role == Role::Broker {
         let exe = std::env::current_exe()
             .map_err(|e| format!("could not resolve the bee executable: {e}"))?;
-        return Ok(vec![
-            exe.to_string_lossy().to_string(),
-            "herding".to_string(),
-            "broker".to_string(),
-            "tick".to_string(),
-            "--json".to_string(),
-        ]);
+        return Ok((
+            vec![
+                exe.to_string_lossy().to_string(),
+                "herding".to_string(),
+                "broker".to_string(),
+                "tick".to_string(),
+                "--json".to_string(),
+            ],
+            SpawnSpec::default(),
+        ));
     }
+
+    let cfg_val: Option<Value> = std::fs::read_to_string(main_root.join(".bee").join("config.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok());
+
+    if role == Role::Supervisor {
+        let supervisor_runtime_val = cfg_val
+            .as_ref()
+            .and_then(|c| c.get("herding"))
+            .and_then(|h| h.get("supervisor_runtime"));
+
+        match supervisor_runtime_val {
+            None | Some(Value::Null) => {}
+            Some(Value::String(s)) if s == "claude" => {}
+            Some(Value::String(s)) if s == "pi" => {
+                let ext_dir = main_root.join(".pi").join("extensions").join("bee-guard");
+                if !ext_dir.exists() {
+                    return Err(format!(
+                        "herding supervisor: extension directory \"{}\" does not exist. FIX: ensure .pi/extensions/bee-guard exists in the main root.",
+                        ext_dir.display()
+                    ));
+                }
+
+                let models = crate::verbs::drivers::read_models(main_root).map_err(|_| {
+                    "could not read models. FIX: set team.pi.supervisor to a pi-provider agent.".to_string()
+                })?;
+
+                let resolved = crate::verbs::drivers::resolve_role(&models, &[SUPERVISOR_MODEL_ROLE], "pi", "cell");
+                let (model, thinking) = match resolved {
+                    crate::verbs::drivers::Resolved::Herding { agent: Some(ref agent_name), .. } => {
+                        let spec = cfg_val
+                            .as_ref()
+                            .and_then(|c| crate::herding::paseo::PaseoSpec::from_config(c, agent_name))
+                            .and_then(Result::ok);
+                        match spec {
+                            Some(s) if s.provider == "pi" && s.model.as_ref().map_or(false, |m| !m.trim().is_empty()) => {
+                                (s.model.unwrap(), s.thinking)
+                            }
+                            _ => {
+                                return Err("herding supervisor: team.pi.supervisor must resolve to a pi-provider agent with a usable model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                            }
+                        }
+                    }
+                    crate::verbs::drivers::Resolved::Model { model, .. } | crate::verbs::drivers::Resolved::Native { model, .. } => {
+                        if model.trim().is_empty() {
+                            return Err("herding supervisor: team.pi.supervisor has no usable model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                        }
+                        (model, None)
+                    }
+                    _ => {
+                        return Err("herding supervisor: team.pi.supervisor must resolve to a pi-provider agent or a plain model. FIX: set team.pi.supervisor to a pi-provider agent.".to_string());
+                    }
+                };
+
+                let prompt = read_prompt_file(main_root, role)?;
+                let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
+                let template = super::read_command_template_tokens(main_root, "control_command");
+
+                let argv = match template {
+                    Some(tokens) if !tokens.is_empty() => {
+                        build_control_argv(Some(&tokens), &prompt, &model, turn_ceiling, allowed_tools)
+                    }
+                    _ => {
+                        let mut pi_argv = vec![
+                            "pi".to_string(),
+                            "--print".to_string(),
+                            prompt,
+                            "--model".to_string(),
+                            model,
+                        ];
+                        if let Some(level) = thinking.as_deref().filter(|s| !s.trim().is_empty()) {
+                            pi_argv.push("--thinking".to_string());
+                            pi_argv.push(level.to_string());
+                        }
+                        pi_argv.extend([
+                            "--no-session".to_string(),
+                            "--no-extensions".to_string(),
+                            "-e".to_string(),
+                            ext_dir.to_string_lossy().to_string(),
+                            "--tools".to_string(),
+                            "read,grep,find,ls,bash".to_string(),
+                        ]);
+                        pi_argv
+                    }
+                };
+
+                let spec = SpawnSpec {
+                    env: vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())],
+                    cwd: Some(main_root.to_path_buf()),
+                };
+
+                return Ok((argv, spec));
+            }
+            Some(other) => {
+                let name = match other {
+                    Value::String(s) => s.clone(),
+                    _ => other.to_string(),
+                };
+                return Err(format!(
+                    "herding supervisor: unknown supervisor_runtime \"{name}\". FIX: set herding.supervisor_runtime to \"claude\" or \"pi\" in .bee/config.json."
+                ));
+            }
+        }
+    }
+
     let prompt = read_prompt_file(main_root, role)?;
-    // The transport picks the allowlist (tmux-herding-cockpit D1). A missing
-    // key reads as herdr, so a repo with no key spawns the byte-identical
-    // pre-tmux argv; a typo'd key is `transport_kind`'s typed refusal and
-    // stops the loop here rather than quietly arming the other multiplexer.
     let allowed_tools = allowed_tools_for(role, super::transport_kind_at(main_root)?);
     let template = super::read_command_template_tokens(main_root, "control_command");
     let model = model_for(main_root, role);
-    Ok(build_control_argv(template.as_deref(), &prompt, &model, turn_ceiling, allowed_tools))
+    let argv = build_control_argv(template.as_deref(), &prompt, &model, turn_ceiling, allowed_tools);
+    Ok((argv, SpawnSpec::default()))
+}
+
+pub(crate) fn resolve_iteration_argv(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<Argv, String> {
+    resolve_iteration(main_root, role, turn_ceiling).map(|(argv, _)| argv)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -597,15 +713,23 @@ pub(crate) struct IterationResult {
 /// The spawn seam tests inject through instead of a real control agent —
 /// production never needs a fake here, only `RealSpawner`.
 pub(crate) trait IterationSpawner {
-    fn spawn(&self, argv: &Argv) -> std::io::Result<Child>;
+    fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child>;
 }
 
 pub(crate) struct RealSpawner;
 
 impl IterationSpawner for RealSpawner {
-    fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+    fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
         let (prog, rest) = argv.split_first().expect("argv is never empty (build_control_argv always returns >=1 token)");
-        Command::new(prog).args(rest).spawn()
+        let mut cmd = Command::new(prog);
+        cmd.args(rest);
+        if let Some(cwd) = &spec.cwd {
+            cmd.current_dir(cwd);
+        }
+        for (k, v) in &spec.env {
+            cmd.env(k, v);
+        }
+        cmd.spawn()
     }
 }
 
@@ -648,10 +772,11 @@ fn status_to_outcome(status: ExitStatus) -> IterationOutcome {
 /// Reaching descendants would need that extra grouping; it is not built.
 pub(crate) fn run_iteration_with_ceiling(
     argv: &Argv,
+    spec: &SpawnSpec,
     timeout: Duration,
     spawner: &dyn IterationSpawner,
 ) -> IterationResult {
-    let mut child = match spawner.spawn(argv) {
+    let mut child = match spawner.spawn(argv, spec) {
         Ok(c) => c,
         Err(e) => return IterationResult { pid: None, outcome: IterationOutcome::Errored(e.to_string()) },
     };
@@ -741,6 +866,9 @@ pub(crate) enum LoopOutcome {
 /// binary nor a running herdr (per-cell requirement).
 pub(crate) trait ArgvProvider {
     fn argv_for(&self, iteration: u64) -> Result<Argv, String>;
+    fn spec_for(&self, iteration: u64) -> Result<(Argv, SpawnSpec), String> {
+        self.argv_for(iteration).map(|argv| (argv, SpawnSpec::default()))
+    }
 }
 
 /// The real wiring `control_loop()` (the CLI entry point) uses — a named
@@ -755,6 +883,10 @@ pub(crate) struct RealArgvProvider {
 impl ArgvProvider for RealArgvProvider {
     fn argv_for(&self, _iteration: u64) -> Result<Argv, String> {
         resolve_iteration_argv(&self.main_root, self.role, self.turn_ceiling)
+    }
+
+    fn spec_for(&self, _iteration: u64) -> Result<(Argv, SpawnSpec), String> {
+        resolve_iteration(&self.main_root, self.role, self.turn_ceiling)
     }
 }
 
@@ -804,8 +936,8 @@ pub(crate) fn run_loop(
             return LoopOutcome::NormalStop;
         }
 
-        let outcome = match argv_provider.argv_for(count) {
-            Ok(argv) => run_iteration_with_ceiling(&argv, Duration::from_secs(opts.timeout), spawner).outcome,
+        let outcome = match argv_provider.spec_for(count) {
+            Ok((argv, spec)) => run_iteration_with_ceiling(&argv, &spec, Duration::from_secs(opts.timeout), spawner).outcome,
             Err(e) => IterationOutcome::Errored(e),
         };
 
@@ -1237,6 +1369,339 @@ mod tests {
             ]],
             "the supervisor tick's whole invocation must reach the spawner intact"
         );
+    }
+
+    #[test]
+    fn supervisor_runtime_absent_and_claude_give_exact_current_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::write(bee_dir.join("config.json"), r#"{"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_claude_argv = vec![
+            "claude".to_string(),
+            "-p".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "haiku".to_string(),
+            "--max-turns".to_string(),
+            DEFAULT_TURN_CEILING.to_string(),
+            "--allowedTools".to_string(),
+            SUPERVISOR_ALLOWED_TOOLS.to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_claude_argv.clone()]);
+        assert_eq!(counting.seen_specs()[0].env, Vec::<(String, String)>::new());
+        assert_eq!(counting.seen_specs()[0].cwd, None);
+
+        std::fs::write(bee_dir.join("config.json"), r#"{"herding":{"supervisor_runtime":"claude"},"models":{"claude":{"supervisor":"haiku"}}}"#).unwrap();
+        let counting2 = CountingSpawner::new(&real_spawner);
+        let outcome2 = run_loop(&parsed, &stop_file, &provider, &counting2, &sleeper);
+        assert_eq!(outcome2, LoopOutcome::NormalStop);
+        assert_eq!(counting2.call_count(), 1);
+        assert_eq!(counting2.seen(), vec![expected_claude_argv]);
+        assert_eq!(counting2.seen_specs()[0].env, Vec::<(String, String)>::new());
+        assert_eq!(counting2.seen_specs()[0].cwd, None);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_pi_provider_slot_spawns_pi_argv_and_carries_env_and_cwd() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1",
+                            "thinking": "high"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_pi_argv = vec![
+            "pi".to_string(),
+            "--print".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "deepseek-r1".to_string(),
+            "--thinking".to_string(),
+            "high".to_string(),
+            "--no-session".to_string(),
+            "--no-extensions".to_string(),
+            "-e".to_string(),
+            guard_ext.to_string_lossy().to_string(),
+            "--tools".to_string(),
+            "read,grep,find,ls,bash".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_pi_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_plain_model_slot_spawns_pi_argv() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi"
+            },
+            "team": {
+                "pi": {
+                    "supervisor": "qwen2.5-coder"
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_pi_argv = vec![
+            "pi".to_string(),
+            "--print".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+            "--model".to_string(),
+            "qwen2.5-coder".to_string(),
+            "--no-session".to_string(),
+            "--no-extensions".to_string(),
+            "-e".to_string(),
+            guard_ext.to_string_lossy().to_string(),
+            "--tools".to_string(),
+            "read,grep,find,ls,bash".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_pi_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_claude_provider_slot_refuses() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "claude",
+                            "model": "claude-3-7-sonnet"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("FIX: set team.pi.supervisor to a pi-provider agent"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_missing_extension_directory_refuses() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("extension directory"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
+    }
+
+    #[test]
+    fn supervisor_runtime_pi_with_control_command_uses_template() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+        let guard_ext = tmp.path().join(".pi").join("extensions").join("bee-guard");
+        std::fs::create_dir_all(&guard_ext).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "pi",
+                "control_command": ["custom-pi", "--m", "{MODEL}", "--p", "{PROMPT}"],
+                "agents": {
+                    "sup-agent": {
+                        "paseo": {
+                            "provider": "pi",
+                            "model": "deepseek-r1"
+                        }
+                    }
+                }
+            },
+            "team": {
+                "pi": {
+                    "supervisor": {
+                        "kind": "herding",
+                        "agent": "sup-agent"
+                    }
+                }
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 1);
+        let expected_custom_argv = vec![
+            "custom-pi".to_string(),
+            "--m".to_string(),
+            "deepseek-r1".to_string(),
+            "--p".to_string(),
+            "PROMPT BODY supervisor\n".to_string(),
+        ];
+        assert_eq!(counting.seen(), vec![expected_custom_argv]);
+        assert_eq!(
+            counting.seen_specs()[0].env,
+            vec![("BEE_SUPERVISOR_ALLOWED".to_string(), SUPERVISOR_ALLOWED_TOOLS.to_string())]
+        );
+        assert_eq!(counting.seen_specs()[0].cwd, Some(tmp.path().to_path_buf()));
+    }
+
+    #[test]
+    fn supervisor_runtime_illegal_value_refuses_with_no_spawn() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+
+        let cfg = serde_json::json!({
+            "herding": {
+                "supervisor_runtime": "gemini"
+            }
+        });
+        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+
+        let parsed = Options::parse(&["--role", "supervisor", "--once"]).expect("parses");
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: parsed.role, turn_ceiling: parsed.turn_ceiling };
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let err = provider.spec_for(0).unwrap_err();
+        assert!(err.contains("claude") && err.contains("pi") && err.contains("FIX:"), "{err}");
+
+        let outcome = run_loop(&parsed, &stop_file, &provider, &counting, &sleeper);
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(counting.call_count(), 0);
     }
 
     // ── the router role (herding-route-role hrr-1) ─────────────────────────
@@ -1703,29 +2168,43 @@ mod tests {
         env_var: &'static str,
         env_value: &'static str,
         received: Mutex<Vec<Argv>>,
+        received_specs: Mutex<Vec<SpawnSpec>>,
     }
 
     impl SelfExecSpawner {
         fn new(test_name: &'static str, env_var: &'static str, env_value: &'static str) -> Self {
-            SelfExecSpawner { test_name, env_var, env_value, received: Mutex::new(Vec::new()) }
+            SelfExecSpawner {
+                test_name,
+                env_var,
+                env_value,
+                received: Mutex::new(Vec::new()),
+                received_specs: Mutex::new(Vec::new()),
+            }
         }
         fn received(&self) -> Vec<Argv> {
             self.received.lock().unwrap().clone()
         }
+        #[allow(dead_code)]
+        fn received_specs(&self) -> Vec<SpawnSpec> {
+            self.received_specs.lock().unwrap().clone()
+        }
     }
 
     impl IterationSpawner for SelfExecSpawner {
-        fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+        fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
             self.received.lock().unwrap().push(argv.clone());
+            self.received_specs.lock().unwrap().push(spec.clone());
             let exe = std::env::current_exe().expect("test binary path");
-            // Null the child's stdio: the child is a full libtest harness, and a
-            // deliberately FAILING child would otherwise print its own
-            // "test ... FAILED" report into THIS suite's inherited output stream,
-            // where it reads as a failure of the parent suite.
-            Command::new(exe)
-                .args([self.test_name, "--exact"])
-                .env(self.env_var, self.env_value)
-                .stdout(std::process::Stdio::null())
+            let mut cmd = Command::new(exe);
+            cmd.args([self.test_name, "--exact"])
+                .env(self.env_var, self.env_value);
+            if let Some(cwd) = &spec.cwd {
+                cmd.current_dir(cwd);
+            }
+            for (k, v) in &spec.env {
+                cmd.env(k, v);
+            }
+            cmd.stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .spawn()
         }
@@ -1747,7 +2226,7 @@ mod tests {
         // OBSERVED unaltered — asserted below via `spawner.received()`.
         let argv: Argv = vec!["placeholder".to_string()];
 
-        let result = run_iteration_with_ceiling(&argv, Duration::from_millis(250), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_millis(250), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::TimedOut), "{:?}", result.outcome);
         assert_eq!(
             spawner.received(),
@@ -1776,7 +2255,7 @@ mod tests {
         let spawner =
             SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
         let argv: Argv = vec!["placeholder".to_string()];
-        let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Success), "{:?}", result.outcome);
         assert_eq!(spawner.received(), vec![argv.clone()]);
     }
@@ -1785,7 +2264,7 @@ mod tests {
     fn a_failing_iteration_reports_failed_not_timed_out() {
         let spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "fail");
         let argv: Argv = vec!["placeholder".to_string()];
-        let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
+        let result = run_iteration_with_ceiling(&argv, &SpawnSpec::default(), Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Failed(_)), "{:?}", result.outcome);
         assert_eq!(spawner.received(), vec![argv.clone()]);
     }
@@ -1815,11 +2294,17 @@ mod tests {
         inner: &'a dyn IterationSpawner,
         calls: AtomicUsize,
         seen: Mutex<Vec<Argv>>,
+        seen_specs: Mutex<Vec<SpawnSpec>>,
     }
 
     impl<'a> CountingSpawner<'a> {
         fn new(inner: &'a dyn IterationSpawner) -> Self {
-            CountingSpawner { inner, calls: AtomicUsize::new(0), seen: Mutex::new(Vec::new()) }
+            CountingSpawner {
+                inner,
+                calls: AtomicUsize::new(0),
+                seen: Mutex::new(Vec::new()),
+                seen_specs: Mutex::new(Vec::new()),
+            }
         }
         fn call_count(&self) -> usize {
             self.calls.load(Ordering::SeqCst)
@@ -1827,13 +2312,17 @@ mod tests {
         fn seen(&self) -> Vec<Argv> {
             self.seen.lock().unwrap().clone()
         }
+        fn seen_specs(&self) -> Vec<SpawnSpec> {
+            self.seen_specs.lock().unwrap().clone()
+        }
     }
 
     impl<'a> IterationSpawner for CountingSpawner<'a> {
-        fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+        fn spawn(&self, argv: &Argv, spec: &SpawnSpec) -> std::io::Result<Child> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.seen.lock().unwrap().push(argv.clone());
-            self.inner.spawn(argv)
+            self.seen_specs.lock().unwrap().push(spec.clone());
+            self.inner.spawn(argv, spec)
         }
     }
 
@@ -2048,7 +2537,7 @@ mod tests {
             "herding::control_loop::tests::quick_exit_helper".to_string(),
             "--exact".to_string(),
         ];
-        let mut child = RealSpawner.spawn(&argv).expect("RealSpawner must be able to spawn a real program");
+        let mut child = RealSpawner.spawn(&argv, &SpawnSpec::default()).expect("RealSpawner must be able to spawn a real program");
         let status = child.wait().expect("spawned child must be waitable");
         assert!(status.success(), "{status:?}");
     }
