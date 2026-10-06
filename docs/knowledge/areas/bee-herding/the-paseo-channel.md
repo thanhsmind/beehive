@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D7 8ae5134d (the heartbeat fires every 5 minutes by default; a config key changes it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2"]
+  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D7 8ae5134d (the heartbeat fires every 5 minutes by default; a config key changes it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2"]
   sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
   owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs]
@@ -157,6 +157,29 @@ FIX: wait for it to finish, then run bee herding run --continue <job>
 The runner makes no send call when the agent is busy.
 
 The command `bee herding steer` steers a running turn on Paseo (paseo-answers D2, store `e13feabc`). The steer path depends on the provider of the Paseo agent. For `claude`, `codex`, and `opencode` providers, the command steers through the Paseo daemon helper. This daemon helper requires Node.js and the npm package `@getpaseo/cli`. The helper sends the steer message with `activeTurnBehavior: "steer"`. For a `pi` provider, the command writes a steer file to the mailbox as before. The runner refuses steer requests for other providers with an error and a `FIX:` message. The command never uses `paseo send` to steer because an ordinary send interrupts and replaces a running turn.
+
+## Watching and controlling Paseo workers
+
+The command `bee herding status` displays information for Paseo workers. The status output includes five specific fields:
+- `transport`: Shows the value `paseo`.
+- `paseo_agent_id`: Shows the agent identifier from Paseo.
+- `paseo_state`: Shows the current state: `working`, `idle`, `blocked`, `dead`, or `unknown`.
+- `permissions`: Lists pending permission requests and tool names when a worker is blocked.
+- `untracked_paseo_agents`: Lists labeled agents that no active job tracks.
+
+An `unknown` state means that agent inspection failed. The `unknown` state is neither alive nor dead. The system does not mark an unknown worker as interrupted.
+
+The command `bee herding interrupt` stops an active turn with `paseo stop`. The command keeps the Paseo agent intact for inspection.
+
+The command `bee herding cancel` stops the active turn with `paseo stop`. It then archives the agent with `paseo archive`. The command enforces an own-agent guard. It compares the target agent identifier with `PASEO_AGENT_ID`. The command never stops or archives the caller's own agent.
+
+The command `bee herding permit` resolves a pending tool permission. When a Paseo worker requests a tool permission, its state becomes blocked. The command `bee herding run` keeps waiting while the worker is blocked. The mailbox broker files a permission decision in the human-decision queue. A person answers the decision with `bee herding permit`. The worker receives the decision, and the same turn continues.
+
+Occupancy counting adds labeled, active Paseo agents to the live worker count.
+
+The command `bee herding pane read` shows the recent log tail of a Paseo worker with `paseo logs`.
+
+The field `untracked_paseo_agents` reports labeled Paseo agents that have no active mailbox or job. The system reports these untracked agents only. The system never archives untracked agents.
 
 ## Pointers
 
