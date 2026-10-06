@@ -1533,5 +1533,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-10-06T10:08:09.166Z"
+  },
+  "bee-report-issues": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-06T11:31:20.503Z"
   }
 }

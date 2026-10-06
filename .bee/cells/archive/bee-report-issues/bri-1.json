@@ -1,0 +1,495 @@
+{
+  "id": "bri-1",
+  "feature": "bee-report-issues",
+  "lane": "high-risk",
+  "title": "Add bee report issue to file a scrubbed bee-report issue",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "b58c1cef",
+    "c3be1e3f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+  ],
+  "read_first": [
+    "docs/history/bee-report-issues/CONTEXT.md",
+    "docs/history/bee-report-issues/plan.md",
+    "docs/history/bee-report-issues/reports/plan-check.md",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "action": "Add the verb `bee report issue` as a new module verbs/report.rs, declared in verbs/mod.rs and added to its try_native chain, and registered in catalog.rs and generated/registry_payload.json the way commit a1341ec54 added a verb (router.rs is not touched). Required flags: --title (one line, max 120 chars), --symptom, --evidence, --root-cause, --command. Optional: --output, --exit-code, --dry-run, --json. Bump PINNED_FLAG_COUNT in catalog.rs by exactly the number of new distinct flag names and give the reason in the commit body (no code comments). Body: markdown sections Symptom, Evidence, Output (fenced), Suspected root cause, Command, Exit code, Environment (bee version, OS). Scrub per D2, before any gh call: (a) refuse, typed, naming the field, with zero gh calls, when has_secret or has_injection (verbs/feedback.rs) flags any field, or any field holds an email address, an IPv4 address, a URL whose host is not github.com, or a `--token|--password|--key|--secret <value>` pair; (b) rewrite absolute paths like hooks/activity.rs scrub_abs_paths (lift it to pub(crate) without changing its behavior), rewrite `~/...` paths, the home directory and the host repo directory name to `<home>` and `<host-repo>`, in every field including the title; (c) in --evidence replace every fenced and every 4-space-indented code block with `[code block removed]`; --output keeps its fences; (d) cap evidence at 2000 and output at 4000 chars; (e) backstop: refuse if `/home/`, `/Users/` or `\\Users\\` survives anywhere. Refuse a dispatched worker in a linked worktree with the same outward-guard check and refusal text that hooks/write_guard/checks.rs applies to `gh issue create`. Repo = raw config `bee_report.repo` (default `thanhsmind/beehive`), refused unless it matches `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`. gh program = env BEE_GH_BIN if set, else `gh`. Dedupe: `gh issue list -R <repo> --label bee-report --state open --limit 100 --json number,title`; compare normalize_title (verbs/feedback.rs) of each title with the new one; match -> `gh issue comment <n> -R <repo> --body-file -`; else `gh issue create -R <repo> --title <title> --label bee-report --body-file -`; if create fails with a label error, create again without --label and with the title prefixed `[bee-report] `, and say a maintainer must add the label; a failing list falls through to create. gh missing or failing: typed error naming `gh auth login`; save the scrubbed body to `.bee/reports/<timestamp>-<slug>.md` and print that path. Never put gh stderr in the body or the JSON. Plain output always prints target repo, action, URL and scrub counts; JSON {repo, action: created|commented|dry-run, number, url, labeled, scrubbed: {paths, contacts, code_blocks, truncated}, saved_body}. --dry-run prints the scrubbed body and the target and makes zero gh calls. Tests red-first in report.rs, `#[cfg(unix)]`, with a fake gh shell script set through BEE_GH_BIN that logs argv and stdin to a temp file.",
+  "must_haves": {
+    "truths": [
+      "A secret, email, IPv4, non-GitHub URL or --token pair in any field refuses the report and the fake gh log is empty",
+      "The stdin the fake gh receives holds no absolute path, no ~/ path, no home directory and no evidence code block",
+      "bee's own --output text keeps its fences and survives the scrub",
+      "An open issue whose normalized title matches gets a comment, never a second issue",
+      "A label failure produces an unlabeled `[bee-report] ` issue and says so",
+      "A dispatched worker in a linked worktree is refused",
+      "--dry-run makes zero gh calls and prints the scrubbed body"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/report.rs",
+        "substantive": "the report verb, the scrub, the gh calls, and its tests; no stubs"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs declares the report module and calls report::try_native in its chain",
+      "catalog.rs PINNED_FLAG_COUNT and registry_payload.json carry the new verb and flags"
+    ],
+    "prohibitions": [
+      "No code comments (no_code_comments is on)",
+      "No network call in any test; every test uses BEE_GH_BIN",
+      "Never read or send host repo files beyond the flag values given"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -- report distinct_flag_vocabulary registry",
+  "behavior_change": true,
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "w-bri-1-uat",
+    "outcome": "bee report issue reads the gh list JSON from the first line starting with [ and the issue URL from the last https://github.com/ line, and checks the 120-char title limit after the scrub",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/report.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T11:25:55.238Z",
+    "behavior_change": true,
+    "verification_evidence": "touched only report.rs gh output parsing and title check; both new tests seen ok by name; full suite not run; not driven live against the mise gh wrapper",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -- report distinct_flag_vocabulary registry",
+    "claimed_at": "2026-10-06T11:23:28.597Z",
+    "sync_ack": "bri-3 owns the skills/bee-evolving update for this feature; bri-1 only lifts normalize_title to pub(crate) in feedback.rs",
+    "mistakes": [
+      {
+        "wrong": "the fake gh in report.rs tests printed only clean output, so the dedupe list parse never met a wrapper noise line until the live uat run",
+        "better": "make the fake gh able to print a noise line first",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "existing_issue() parses from the first line starting with [; issue_url() takes the last line starting with https://github.com/ (repo arg dropped); TITLE_MAX check moved after clean(title) via title_refusal(); tests report_reads_list_json_and_url_past_a_wrapper_noise_line (fake gh prints a mise noise line first: comment path taken, number 7 and comment URL parsed; create path number 42 and URL parsed) and report_checks_the_title_length_after_the_scrub (150+ char title with /opt path passes as <path>, a 150-char plain title still refuses)",
+      "commit": "8bb605bbe",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/report.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml -- report distinct_flag_vocabulary registry — green:unit — touched only report.rs gh output parsing and title check; both new tests seen ok by name; full suite not run; not driven live against the mise gh wrapper",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "the fake gh in report.rs tests printed only clean output, so the dedupe list parse never met a wrapper noise line until the live uat run — make the fake gh able to print a noise line first — check"
+      ],
+      "baseline": "new tests not run on 2901082c8; the live uat run on main showed the dedupe falling through to create under the mise wrapper"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verified_at": null,
+    "baseline": "new tests not run on 2901082c8; the live uat run on main showed the dedupe falling through to create under the mise wrapper",
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-06T11:23:15.681Z",
+    "reopened_reason": "Live uat run on main: this machine's gh (~/.local/bin/gh, a mise wrapper) prints a 'mise ... tools: gh@2.101.0' line on stdout before any output, so the dedupe list in bee report issue cannot parse and falls through to create (duplicate issues). Per decision 9839a31c-ebcf-4537-8bac-be0d31b48d28 (1) parse gh issue list JSON from the first line that starts with '[', and read the created/commented issue URL from the last line that starts with 'https://github.com/'; (2) check the 120-character title limit after the scrub so a title holding a long host path is accepted once rewritten. Add tests: fake gh prints a noise line before the list JSON and before the URL, assert the comment path is taken and the URL/number are parsed; a title with a long absolute path passes once scrubbed. Touch only verbs/report.rs; one commit with trailer cell: bri-1.",
+    "no_mistakes": true,
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "refuse-secret-contact-url-flag",
+            "status": "PASS",
+            "evidence": "report.rs:226-231 runs refusal_reason over every parsed field (exit-code and title included) before any gh call; SECRET_FLAGS at report.rs:23 is [--token,--password,--secret,--api-key], which matches decision 34de614a. Tests report_refuses_secrets_contacts_and_foreign_urls_with_zero_gh_calls (report.rs:759) and report_allows_config_key_flag_and_refuses_api_key_value (report.rs:780) assert that the fake gh log is empty. Both pass."
+          },
+          {
+            "id": "gh-stdin-no-abs-or-tilde-path",
+            "status": "FAIL",
+            "evidence": "rewrite (report.rs:435-464) and scrub_abs_paths (hooks/activity.rs:535-555) rewrite a path only when it starts a whitespace token, after trimming the characters \"'`(),;:. A path after '=', '[', '<' or 'key:' is not rewritten. The backstop (report.rs:253) catches only /home/, /Users/ and \\Users\\. Probe: built bee, --dry-run in a scratch repo, --symptom 'cfg=/srv/clientcorp/app/x and HOME=~/private/notes [/opt/acme-internal/y] <D:\\work\\client\\z>' --evidence 'see path:/var/lib/clientcorp/db' --command 'bee status --cwd=/srv/clientcorp/app'. Output: 'Scrubbed: 0 paths', and the body holds every path unchanged. The test at report.rs:802 checks only paths that start a token."
+          },
+          {
+            "id": "evidence-code-blocks-removed",
+            "status": "PASS",
+            "evidence": "strip_code_blocks (report.rs:396-433) removes fenced and indented blocks in evidence only (report.rs:243); test at report.rs:802 asserts removal."
+          },
+          {
+            "id": "output-keeps-fences",
+            "status": "PASS",
+            "evidence": "--output is not code-stripped; fenced() (report.rs:271-280, 290); test at report.rs:827-828."
+          },
+          {
+            "id": "dedupe-comment-not-second-issue",
+            "status": "PASS",
+            "evidence": "existing_issue (report.rs:525-538) compares normalize_title; file() (report.rs:555-565) comments on a match; test at report.rs:850."
+          },
+          {
+            "id": "label-failure-unlabeled-prefixed",
+            "status": "PASS",
+            "evidence": "report.rs:576-577 retries without --label with the '[bee-report] ' prefix; plain() says a maintainer must add the label; test at report.rs:868."
+          },
+          {
+            "id": "linked-worktree-worker-refused",
+            "status": "PASS",
+            "evidence": "outward_refusal (report.rs:120-141) calls check_git_bash_command with 'gh issue create'; test at report.rs:933 builds a real worktree and asserts the refusal."
+          },
+          {
+            "id": "dry-run-zero-gh-prints-body",
+            "status": "PASS",
+            "evidence": "execute returns before file() on dry_run (report.rs:206-217); tests at report.rs:905 and 950 assert an empty gh log."
+          },
+          {
+            "id": "no-stderr-in-body-or-json",
+            "status": "PASS",
+            "evidence": "gh() (report.rs:495-513) reads stderr only to detect 'label'; tests at report.rs:876 and 892."
+          },
+          {
+            "id": "key-links-registry-flagcount",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs declares and chains report; registry_payload.json carries report issue; PINNED_FLAG_COUNT 216 -> 222; distinct_flag_vocabulary registry: 33 passed."
+          },
+          {
+            "id": "tests-green-no-comments",
+            "status": "PASS",
+            "evidence": "verbs::report verbs::feedback: 48 passed, 0 failed; no comments in added lines."
+          }
+        ],
+        "failure_signature": "report scrub misses absolute and ~/ paths that do not start a whitespace token (cfg=/srv/x, [/opt/y], path:/var/z, --cwd=/srv/x, HOME=~/x), so a non-home host path reaches the public issue body",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-06T11:01:15.520Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "refusal-zero-gh-calls",
+            "status": "PASS",
+            "evidence": "Release binary probe: IPv4, email, non-GitHub URL, --token, --api-key=, --password, ghp_ token and an injection line were each refused with the field named; fake gh log only saw the allowed --key input. SECRET_FLAGS report.rs:23."
+          },
+          {
+            "id": "gh-stdin-no-abs-or-tilde-path",
+            "status": "FAIL",
+            "evidence": "Round-one shapes are rewritten now, plus quotes, parens, comma, semicolon, C:/, UNC, braces, pipe. Still verbatim: '2>/srv/x15', '>>/var/x16', '-C/srv/x17', '@/srv/x21', '*/srv/x22', '!/srv/x23', '&/srv/x24', '+/srv/x25', 'x-/srv/x26'; '/srv/my dir/x11' leaks 'dir/x11'. Cause: report.rs:466 PATH_LEAD is a denylist of lead characters and report.rs:471 starts a path only after whitespace or a PATH_LEAD char."
+          },
+          {
+            "id": "home-path-backstop-test",
+            "status": "PASS",
+            "evidence": "report.rs:883-888 'file mnt/Users/bob/project/x' reaches only the HOME_MARKERS backstop (report.rs:252-254) and refuses."
+          },
+          {
+            "id": "evidence-code-blocks-removed",
+            "status": "PASS",
+            "evidence": "Dry-run: fenced and indented evidence blocks became '[code block removed]'."
+          },
+          {
+            "id": "output-keeps-fences",
+            "status": "PASS",
+            "evidence": "--output fences kept; inner path rewritten."
+          },
+          {
+            "id": "dedupe-comment-not-second-issue",
+            "status": "PASS",
+            "evidence": "report_comments_on_an_open_issue_with_the_same_normalized_title passed."
+          },
+          {
+            "id": "label-failure-unlabeled-prefixed",
+            "status": "PASS",
+            "evidence": "report_retries_unlabeled_with_a_title_prefix_on_a_label_error passed."
+          },
+          {
+            "id": "linked-worktree-worker-refused",
+            "status": "PASS",
+            "evidence": "report_is_refused_for_a_worker_in_a_linked_worktree passed."
+          },
+          {
+            "id": "dry-run-zero-gh-prints-body",
+            "status": "PASS",
+            "evidence": "CLI dry-run printed the body with no gh call."
+          },
+          {
+            "id": "github-links-survive",
+            "status": "PASS",
+            "evidence": "https://github.com/thanhsmind/beehive/issues/3 unchanged; path_start skips '//' after ':' (report.rs:479)."
+          }
+        ],
+        "failure_signature": "report.rs:466 PATH_LEAD denylist misses '>', '-' short-flag attach, '@', '*', '!', '&', '+'; non-home absolute paths after shell redirection or attached short flags reach gh stdin verbatim; a path with a space leaks its tail",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-06T11:09:16.423Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "verify-command",
+            "status": "PASS",
+            "evidence": "cargo test --release -- report distinct_flag_vocabulary registry: exit 0; 16 verbs::report tests pass; flag pin and registry tests pass."
+          },
+          {
+            "id": "refuse-secret-contact-url-flag-zero-gh",
+            "status": "PASS",
+            "evidence": "report_refuses_secrets_contacts_and_foreign_urls_with_zero_gh_calls passes; file:///srv/a and ssh://host/srv/x refused as non-github URL; git@github.com:org/repo refused as email (report.rs:301-321)."
+          },
+          {
+            "id": "gh-stdin-no-abs-or-tilde-path",
+            "status": "FAIL",
+            "evidence": "path_start skip at report.rs:475-477 jumps from any ':' + '//' to the next whitespace, without stopping at a path delimiter and without the ASCII-letter scheme check has_foreign_url uses at report.rs:367. Fake gh stdin held verbatim: 'https://github.com/o/r/blob/main/a.rs,/opt/acme-corp/secret.txt', 'https://github.com/o/r,~/.ssh/id_rsa', '1://srv/leak'; dry-run same for 'see(https://github.com/o/r)/srv/x', 'é://srv/leak2', 'https://github.com/o/r;C:\\proj\\acme'. All round-two shapes and other new hostile shapes are cleaned."
+          },
+          {
+            "id": "evidence-code-blocks-removed",
+            "status": "PASS",
+            "evidence": "report_body_sent_to_gh_holds_no_paths_home_or_evidence_code passes; strip_code_blocks report.rs:396-433."
+          },
+          {
+            "id": "output-keeps-fences",
+            "status": "PASS",
+            "evidence": "render() wraps --output in fenced(o,\"text\") (report.rs:290)."
+          },
+          {
+            "id": "prose-survives",
+            "status": "PASS",
+            "evidence": "'and/or', '1/2', 'w/ x', 'bee 2.51.0', github issue link unchanged; minor: 'a / b' -> 'a <path> b'."
+          },
+          {
+            "id": "dedupe-comment",
+            "status": "PASS",
+            "evidence": "report_comments_on_an_open_issue_with_the_same_normalized_title passes."
+          },
+          {
+            "id": "label-failure-prefix",
+            "status": "PASS",
+            "evidence": "report_retries_unlabeled_with_a_title_prefix_on_a_label_error passes."
+          },
+          {
+            "id": "worker-in-linked-worktree-refused",
+            "status": "PASS",
+            "evidence": "report_is_refused_for_a_worker_in_a_linked_worktree passes."
+          },
+          {
+            "id": "dry-run-zero-gh",
+            "status": "PASS",
+            "evidence": "report_dry_run_makes_no_gh_call_and_returns_the_body passes."
+          },
+          {
+            "id": "key-links",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs:33 pub mod report; verbs/mod.rs:108 report::try_native."
+          },
+          {
+            "id": "no-code-comments",
+            "status": "PASS",
+            "evidence": "no comment lines in report.rs."
+          },
+          {
+            "id": "flag-refusal-narrowed-34de614a",
+            "status": "PASS",
+            "evidence": "report_allows_config_key_flag_and_refuses_api_key_value passes; minor drift: --help still says --token/--password/--key/--secret."
+          }
+        ],
+        "failure_signature": "gh-stdin-no-abs-or-tilde-path: report.rs:475-477 skips from '://' to the next whitespace, so a path glued to a github.com URL by , ; ) and a path after a non-ASCII-alpha scheme like '1://' or 'é://' reach gh unscrubbed",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-06T11:14:41.768Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "refuse-secret-email-ipv4-foreign-url-token-zero-gh",
+            "status": "PASS",
+            "evidence": "Live fake-gh: --token value refused with no ARGV line in gh.log; foreign hosts, file://, inner foreign URL and userinfo tricks refused (has_foreign_url report.rs:363-379); refusal tests ok."
+          },
+          {
+            "id": "gh-stdin-no-abs-or-tilde-path",
+            "status": "PASS",
+            "evidence": "63 shapes from a scratch repo with fake gh: all round-2/3 leak shapes rewritten (https://github.com/o/r,<path>, see(https://github.com/o/r)<path>, 1:<path>, é:<path>), redirects, short/long flags, drives, UNC, ~, unicode punctuation; only text inside a github.com URL stays. URL_CHARS report.rs:503, url_scheme report.rs:505-507."
+          },
+          {
+            "id": "github-url-forms-accepted",
+            "status": "PASS",
+            "evidence": "http://github.com/o/r, HTTPS://GITHUB.COM/o/r, https://github.com:443/srv/x unchanged."
+          },
+          {
+            "id": "evidence-code-blocks-removed",
+            "status": "PASS",
+            "evidence": "Fenced and 4-space blocks in --evidence became [code block removed] in live stdin."
+          },
+          {
+            "id": "output-keeps-fences",
+            "status": "PASS",
+            "evidence": "--output sent as ````text fence with inner ``` kept and path scrubbed."
+          },
+          {
+            "id": "dedupe-normalized-title-comments",
+            "status": "PASS",
+            "evidence": "Listed 'Bee crashes on start!' vs new '  BEE crashes  on start! ' -> issue comment 7, no create."
+          },
+          {
+            "id": "label-failure-unlabeled-prefix",
+            "status": "PASS",
+            "evidence": "report_retries_unlabeled_with_a_title_prefix_on_a_label_error ok."
+          },
+          {
+            "id": "worker-in-linked-worktree-refused",
+            "status": "PASS",
+            "evidence": "report_is_refused_for_a_worker_in_a_linked_worktree ok."
+          },
+          {
+            "id": "dry-run-zero-gh-prints-body",
+            "status": "PASS",
+            "evidence": "--dry-run prints 'Dry run: nothing was sent' with counts and body; test ok."
+          },
+          {
+            "id": "gh-missing-typed-error-saved-body",
+            "status": "PASS",
+            "evidence": "BEE_GH_BIN=/nonexistent/gh exits 1 naming gh auth login and saves the body under .bee/reports/."
+          },
+          {
+            "id": "key-links-registry-flags",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs:33 and :108; catalog.rs:819 PINNED_FLAG_COUNT 222; help names --token/--password/--secret/--api-key."
+          },
+          {
+            "id": "verify-command",
+            "status": "PASS",
+            "evidence": "plan verify filter: 212 passed in the main crate, 0 failed; narrowed, not the full suite."
+          },
+          {
+            "id": "no-code-comments",
+            "status": "PASS",
+            "evidence": "no comments in lines added by 2901082c8."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-06T11:20:00.038Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-10-06T11:01:15.520Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A secret, email, IPv4, non-GitHub URL or --token pair in any field refuses the report and the fake gh log is empty",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "The stdin the fake gh receives holds no absolute path, no ~/ path, no home directory and no evidence code block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "bee's own --output text keeps its fences and survives the scrub",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "An open issue whose normalized title matches gets a comment, never a second issue",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "A label failure produces an unlabeled `[bee-report] ` issue and says so",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "A dispatched worker in a linked worktree is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "--dry-run makes zero gh calls and prints the scrubbed body",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "verbs/mod.rs declares the report module and calls report::try_native in its chain",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "catalog.rs PINNED_FLAG_COUNT and registry_payload.json carry the new verb and flags",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-06T11:22:21.871Z",
+        "recorded_by": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A secret, email, IPv4, non-GitHub URL or --token pair in any field refuses the report and the fake gh log is empty",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "The stdin the fake gh receives holds no absolute path, no ~/ path, no home directory and no evidence code block",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "bee's own --output text keeps its fences and survives the scrub",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "An open issue whose normalized title matches gets a comment, never a second issue",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "A label failure produces an unlabeled `[bee-report] ` issue and says so",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "A dispatched worker in a linked worktree is refused",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "--dry-run makes zero gh calls and prints the scrubbed body",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/report.rs"
+          },
+          {
+            "requirement": "verbs/mod.rs declares the report module and calls report::try_native in its chain",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "catalog.rs PINNED_FLAG_COUNT and registry_payload.json carry the new verb and flags",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-06T11:28:18.835Z",
+        "recorded_by": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

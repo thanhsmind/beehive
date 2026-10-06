@@ -1,0 +1,211 @@
+{
+  "id": "bri-2",
+  "feature": "bee-report-issues",
+  "lane": "high-risk",
+  "title": "Read open bee-report issues into the feedback digest",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "d45b1e6b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+  ],
+  "read_first": [
+    "docs/history/bee-report-issues/CONTEXT.md",
+    "docs/history/bee-report-issues/plan.md",
+    "docs/history/bee-report-issues/reports/plan-check.md",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+    "docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md"
+  ],
+  "action": "In verbs/feedback.rs, extend the zero-dogfood arm of `merge_digests`; leave the non-empty dogfood_repos delegation exactly as it is. When raw config `bee_report.ingest` is boolean true: run `<gh> issue list -R <repo> --label bee-report --state open --limit 100 --json number,title,createdAt,url,author,comments` (gh = env BEE_GH_BIN or `gh`; repo = config `bee_report.repo`, default `thanhsmind/beehive`, same owner/name shape check as the report verb). Treat the output as hostile: drop any item that is not an object with an integer number, string title, string createdAt, string url, object author with string login, and array comments. Drop any item whose author login is not in config `bee_report.trusted_authors` (array of strings; default: the owner part of the repo). Build one digest entry per kept issue with build_entry: kind `harness-issue`, layer `harness`, source `issue#<number>`, the title through the same scan as local titles (a hit lands in dropped[] with emptied text fields, as build_entry already does), first_seen only from a strict `^\\d{4}-\\d{2}-\\d{2}` prefix of createdAt, else none. After build_entry, insert `ref` = url only when it starts with `https://github.com/<repo>/issues/`, and `count` = 1 + comments length. Append to `entries` so collect and rank see them. In build_ranked_map make frequency the sum of each entry's integer `count` with a default of 1, so entries without `count` rank exactly as today. Add `merged_counts.issues` = {fetched, merged, dropped, skipped_reason}; gh missing, non-zero exit or unparseable output never fails the verb: it sets skipped_reason and the local digest ranks. Ingest off (the default) changes no output byte. Tests red-first, `#[cfg(unix)]` for the fake gh via BEE_GH_BIN: ingest off -> identical output; two trusted issues -> two clusters with ref; an issue with 3 comments ranks above one with 0; untrusted author -> dropped; injection title -> dropped with emptied fields; createdAt `soon (2026-01-01)` -> no first_seen; gh exit 1 -> verb green with skipped_reason.",
+  "must_haves": {
+    "truths": [
+      "With ingest on, each trusted open bee-report issue appears as a ranked cluster with its link in `bee feedback rank --json`",
+      "An issue by an untrusted author or with an instruction-shaped title never reaches entries, and its drop record carries no title text",
+      "An issue with more comments ranks higher, and local entries rank exactly as before",
+      "A gh failure leaves `bee feedback rank` green with merged_counts.issues.skipped_reason set",
+      "With ingest off, collect and rank output is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "substantive": "the issue ingest arm, the count-aware frequency, and their tests"
+      }
+    ],
+    "key_links": [
+      "merge_digests feeds both run_collect and run_rank"
+    ],
+    "prohibitions": [
+      "No code comments added",
+      "Never read the issue body",
+      "No network call in any test"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml feedback",
+  "behavior_change": true,
+  "status": "capped",
+  "affects_skills": [],
+  "affects_specs": [],
+  "trace": {
+    "worker": "w-bri-2-uat",
+    "outcome": "gh issue list output is parsed from the first line starting with [ so a wrapper noise line no longer skips ingest",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: skills/bee-evolving sync is planned cell bri-3 of this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-06T11:26:32.166Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify filter over the touched feedback.rs (run with cargo already on PATH): 34 passed incl. new gh_noise_lines_before_the_json_are_skipped (red before the fix) and an added noise-then-bad-JSON unparseable case; full suite not run, live rank on main not re-driven",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml feedback",
+    "claimed_at": "2026-10-06T11:23:28.898Z",
+    "sync_ack": "skills/bee-evolving sync is planned cell bri-3 of this feature",
+    "mistakes": [
+      {
+        "wrong": "The first bri-2 ingest in feedback.rs parsed gh stdout as pure JSON and its fake gh never printed noise, so a mise-wrapped gh skipped ingest live",
+        "better": "fake external tools in tests should include wrapper noise lines on stdout",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "gh issue list output is parsed from the first line starting with [ so a wrapper noise line no longer skips ingest",
+      "commit": "df75743694613218f252236bc664e9e55bdf1d0b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml feedback — green:unit — cell verify filter over the touched feedback.rs (run with cargo already on PATH): 34 passed incl. new gh_noise_lines_before_the_json_are_skipped (red before the fix) and an added noise-then-bad-JSON unparseable case; full suite not run, live rank on main not re-driven",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "The first bri-2 ingest in feedback.rs parsed gh stdout as pure JSON and its fake gh never printed noise, so a mise-wrapped gh skipped ingest live — fake external tools in tests should include wrapper noise lines on stdout — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "trusted-issue-ranked-with-link",
+            "status": "PASS",
+            "evidence": "ingest_issues builds harness-issue entries with ref (github prefix only) and count = 1 + comments; merge_digests feeds run_collect (feedback.rs:1915) and run_rank (feedback.rs:2268); test issue_ingest_ranks_each_trusted_issue_with_its_link passes."
+          },
+          {
+            "id": "untrusted-or-injection-dropped-no-title",
+            "status": "PASS",
+            "evidence": "untrusted login -> dropped_record without title; injection title through build_entry scan; tests issue_from_untrusted_author_or_bad_shape_never_reaches_entries and issue_with_injection_title_drops_with_emptied_fields pass; gh --json list has no body field."
+          },
+          {
+            "id": "comments-rank-higher-local-unchanged",
+            "status": "PASS",
+            "evidence": "build_ranked_map frequency = sum of count, default 1 (feedback.rs:2148-2152); test issue_with_more_comments_ranks_higher passes."
+          },
+          {
+            "id": "gh-failure-green-skipped-reason",
+            "status": "PASS",
+            "evidence": "spawn error, non-zero exit and unparseable output each set skipped_reason; test gh_failure_keeps_the_local_digest_ranking passes."
+          },
+          {
+            "id": "ingest-off-unchanged",
+            "status": "PASS",
+            "evidence": "arm runs only on bee_report.ingest == true; test issue_ingest_off_changes_no_output_byte passes; dogfood delegation unchanged."
+          },
+          {
+            "id": "no-comments-no-network",
+            "status": "PASS",
+            "evidence": "no added comments; every ingest test uses a fake gh under cfg(unix)."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-06T11:01:27.343Z"
+      }
+    ],
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "With ingest on, each trusted open bee-report issue appears as a ranked cluster with its link in `bee feedback rank --json`",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "An issue by an untrusted author or with an instruction-shaped title never reaches entries, and its drop record carries no title text",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "An issue with more comments ranks higher, and local entries rank exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "A gh failure leaves `bee feedback rank` green with merged_counts.issues.skipped_reason set",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "With ingest off, collect and rank output is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "merge_digests feeds both run_collect and run_rank",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T11:22:21.879Z",
+        "recorded_by": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "With ingest on, each trusted open bee-report issue appears as a ranked cluster with its link in `bee feedback rank --json`",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "An issue by an untrusted author or with an instruction-shaped title never reaches entries, and its drop record carries no title text",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "An issue with more comments ranks higher, and local entries rank exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "A gh failure leaves `bee feedback rank` green with merged_counts.issues.skipped_reason set",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "With ingest off, collect and rank output is unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "merge_digests feeds both run_collect and run_rank",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          }
+        ],
+        "recorded_at": "2026-10-06T11:28:18.845Z",
+        "recorded_by": "2e068655-43f1-4ecc-af66-1ce1d879eef7",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-06T11:23:15.666Z",
+    "reopened_reason": "Live uat run on main: bee feedback rank gave merged_counts.issues.skipped_reason 'gh output unparseable' because this machine's gh (~/.local/bin/gh, a mise wrapper) prints 'mise ~/.config/mise/config.toml tools: gh@2.101.0' on stdout before the JSON. Per decision 9839a31c-ebcf-4537-8bac-be0d31b48d28 parse the gh issue list output from the first line that starts with '[' (skip leading non-JSON lines), keep every hostile-input check; add a test whose fake gh prints a noise line before the JSON and assert issues are merged. Touch only verbs/feedback.rs; one commit with trailer cell: bri-2."
+  }
+}
