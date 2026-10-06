@@ -3368,7 +3368,16 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         };
     }
 
-    let argv = paseo::run_argv(spec, &opts.job_id, &opts.cwd.display().to_string(), &env_pairs, &pointer);
+    let agent_name = opts.agent.as_deref().unwrap_or("paseo");
+    let argv = paseo::run_argv(
+        spec,
+        &opts.job_id,
+        &opts.cwd.display().to_string(),
+        &env_pairs,
+        &pointer,
+        agent_name,
+        opts.cell_id.as_deref(),
+    );
     let run_res = cli.call(&argv);
     let stdout = match run_res {
         Ok(out) => out,
@@ -3432,6 +3441,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         cli,
         Some(spec),
         &silent_idle_occurred,
+        &paseo::paseo_command(&cfg),
     );
 
     let outcome = match decision {
@@ -3756,6 +3766,7 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         cli,
         continue_spec.as_ref(),
         &silent_idle_occurred,
+        &paseo::paseo_command(&main_cfg),
     );
 
     let outcome = match decision {
@@ -3848,6 +3859,91 @@ fn record_observed_model(
     }
 }
 
+pub trait WaitSource {
+    fn arm(&mut self, timeout_secs: u64);
+    fn poll(&mut self) -> Option<paseo::WaitStatus>;
+    fn cancel(&mut self);
+}
+
+pub struct RealWaitSource {
+    command: String,
+    agent_id: String,
+    child: Option<std::process::Child>,
+    spawn_failed: bool,
+}
+
+impl RealWaitSource {
+    pub fn new(command: impl Into<String>, agent_id: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+            agent_id: agent_id.into(),
+            child: None,
+            spawn_failed: false,
+        }
+    }
+}
+
+impl WaitSource for RealWaitSource {
+    fn arm(&mut self, timeout_secs: u64) {
+        self.cancel();
+        let argv = paseo::wait_argv(&self.agent_id, timeout_secs);
+        match std::process::Command::new(&self.command)
+            .args(&argv)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => {
+                self.child = Some(child);
+                self.spawn_failed = false;
+            }
+            Err(_) => {
+                self.child = None;
+                self.spawn_failed = true;
+            }
+        }
+    }
+
+    fn poll(&mut self) -> Option<paseo::WaitStatus> {
+        if self.spawn_failed {
+            self.spawn_failed = false;
+            return Some(paseo::WaitStatus::Error);
+        }
+        let child = self.child.as_mut()?;
+        match child.try_wait() {
+            Ok(Some(_status)) => {
+                let mut child = self.child.take().unwrap();
+                let mut stdout = Vec::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = std::io::Read::read_to_end(&mut out, &mut stdout);
+                }
+                let stdout_str = String::from_utf8_lossy(&stdout);
+                paseo::parse_wait(&stdout_str).or(Some(paseo::WaitStatus::Error))
+            }
+            Ok(None) => None,
+            Err(_) => {
+                self.cancel();
+                Some(paseo::WaitStatus::Error)
+            }
+        }
+    }
+
+    fn cancel(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.spawn_failed = false;
+    }
+}
+
+impl Drop for RealWaitSource {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
 fn wait_for_round_paseo(
     bee_dir: &Path,
     job_id: &str,
@@ -3859,7 +3955,9 @@ fn wait_for_round_paseo(
     cli: &dyn PaseoCli,
     spec: Option<&PaseoSpec>,
     silent_idle_occurred: &std::cell::Cell<bool>,
+    cmd: &str,
 ) -> PollDecision {
+    let mut wait_source = RealWaitSource::new(cmd, agent_id);
     wait_for_round_paseo_driven(
         bee_dir,
         job_id,
@@ -3871,6 +3969,7 @@ fn wait_for_round_paseo(
         cli,
         spec,
         silent_idle_occurred,
+        &mut wait_source,
         POLL_INTERVAL,
         |d| std::thread::sleep(d),
         now_ms,
@@ -3888,10 +3987,19 @@ fn wait_for_round_paseo_driven(
     cli: &dyn PaseoCli,
     spec: Option<&PaseoSpec>,
     silent_idle_occurred: &std::cell::Cell<bool>,
+    wait_source: &mut dyn WaitSource,
     poll_interval: Duration,
     sleep: impl FnMut(Duration),
     now: impl FnMut() -> i64,
 ) -> PollDecision {
+    struct WaitCancelGuard<'a>(&'a mut dyn WaitSource);
+    impl<'a> Drop for WaitCancelGuard<'a> {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+    let cancel_guard = WaitCancelGuard(wait_source);
+
     let log_file_path = mailbox::log_path(bee_dir, job_id);
     let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
@@ -3903,6 +4011,14 @@ fn wait_for_round_paseo_driven(
     let mut nudge_sent_at_ms: Option<i64> = None;
     let mut model_recorded = false;
     let mut last_inspect_full: Option<paseo::PaseoInspect> = None;
+
+    let mut wait_active = false;
+    let mut last_wait_returned_at_ms: Option<i64> = None;
+    let mut is_blocked = false;
+    let mut in_error_fallback = false;
+    let mut can_rearm = false;
+    let mut last_heartbeat_ms = started_at_ms;
+    let mut post_spawn_inspect_done = false;
 
     let current_time = std::rc::Rc::new(std::cell::Cell::new(started_at_ms));
     let current_time_for_loop = current_time.clone();
@@ -3947,16 +4063,15 @@ fn wait_for_round_paseo_driven(
                     }
                 }
             }
-
-            let should_inspect = match last_inspect_ms {
-                None => true,
-                Some(t) => current_time_ms.saturating_sub(t) >= 3000,
-            };
+            if heartbeat_fresh {
+                last_heartbeat_ms = current_time_ms;
+            }
 
             let mut liveness = None;
             let mut silent_idle = false;
 
-            if should_inspect {
+            if !post_spawn_inspect_done {
+                post_spawn_inspect_done = true;
                 last_inspect_ms = Some(current_time_ms);
                 let inspect_args = paseo::inspect_argv(agent_id);
                 let inspect_res = cli.call(&inspect_args);
@@ -3979,36 +4094,181 @@ fn wait_for_round_paseo_driven(
                     Some(PaseoState::Working) => {
                         seen_working = true;
                         heartbeat_fresh = true;
+                        last_heartbeat_ms = current_time_ms;
                         liveness = Some(Liveness::Alive { pid: 0 });
+                        can_rearm = true;
                     }
                     Some(PaseoState::Idle) => {
                         liveness = Some(Liveness::Alive { pid: 0 });
-                        if seen_working && !result_ready {
-                            if !nudge_sent {
-                                nudge_sent = true;
-                                nudge_sent_at_ms = Some(current_time_ms);
-                                let b_path = mailbox::brief_path(bee_dir, job_id, min_round);
-                                let r_path = mailbox::result_path(bee_dir, job_id, min_round);
-                                let text = format!("Round {min_round} brief: {}. Write your result to: {}", b_path.display(), r_path.display());
-                                let send_args = paseo::send_argv(agent_id, &text);
-                                let _ = cli.call(&send_args);
-                            } else if let Some(sent_at) = nudge_sent_at_ms {
-                                if current_time_ms.saturating_sub(sent_at) >= 3000 {
-                                    silent_idle = true;
-                                    silent_idle_occurred.set(true);
-                                }
-                            }
-                        }
+                        can_rearm = true;
                     }
                     Some(PaseoState::Blocked) => {
+                        is_blocked = true;
                         liveness = Some(Liveness::Alive { pid: 0 });
                     }
                     Some(PaseoState::Dead) => {
+                        in_error_fallback = true;
                         liveness = Some(Liveness::Absent);
                     }
                     None => {
                         liveness = Some(Liveness::Unknown);
+                        can_rearm = true;
                     }
+                }
+
+                if !is_blocked && !in_error_fallback {
+                    let elapsed_idle = (current_time_ms.saturating_sub(last_heartbeat_ms) / 1000) as u64;
+                    let remaining_idle = idle_timeout_secs.saturating_sub(elapsed_idle);
+                    let wait_timeout = 60.min(remaining_idle.max(1));
+                    cancel_guard.0.cancel();
+                    cancel_guard.0.arm(wait_timeout);
+                    wait_active = true;
+                    can_rearm = false;
+                }
+            } else if is_blocked || in_error_fallback {
+                let should_inspect = match last_inspect_ms {
+                    None => true,
+                    Some(t) => current_time_ms.saturating_sub(t) >= 3000,
+                };
+                if should_inspect {
+                    last_inspect_ms = Some(current_time_ms);
+                    let inspect_args = paseo::inspect_argv(agent_id);
+                    let inspect_res = cli.call(&inspect_args);
+                    let inspect_full = inspect_res.ok().and_then(|out| paseo::parse_inspect_full(&out));
+                    if inspect_full.is_some() {
+                        last_inspect_full = inspect_full.clone();
+                    }
+
+                    if !model_recorded {
+                        if let Some(ref info) = inspect_full {
+                            if info.model.is_some() || info.thinking.is_some() {
+                                model_recorded = true;
+                                record_observed_model(bee_dir, job_id, agent_id, info, spec);
+                            }
+                        }
+                    }
+
+                    let paseo_state = inspect_full.as_ref().and_then(|i| i.state);
+                    match paseo_state {
+                        Some(PaseoState::Working) => {
+                            is_blocked = false;
+                            in_error_fallback = false;
+                            seen_working = true;
+                            heartbeat_fresh = true;
+                            last_heartbeat_ms = current_time_ms;
+                            liveness = Some(Liveness::Alive { pid: 0 });
+                            can_rearm = true;
+                            last_wait_returned_at_ms = Some(current_time_ms);
+                        }
+                        Some(PaseoState::Idle) => {
+                            is_blocked = false;
+                            in_error_fallback = false;
+                            liveness = Some(Liveness::Alive { pid: 0 });
+                            if seen_working && !result_ready {
+                                if !nudge_sent {
+                                    nudge_sent = true;
+                                    nudge_sent_at_ms = Some(current_time_ms);
+                                    let b_path = mailbox::brief_path(bee_dir, job_id, min_round);
+                                    let r_path = mailbox::result_path(bee_dir, job_id, min_round);
+                                    let text = format!(
+                                        "Round {min_round} brief: {}. Write your result to: {}",
+                                        b_path.display(),
+                                        r_path.display()
+                                    );
+                                    let send_args = paseo::send_argv(agent_id, &text);
+                                    let _ = cli.call(&send_args);
+                                } else if let Some(sent_at) = nudge_sent_at_ms {
+                                    if current_time_ms.saturating_sub(sent_at) >= 3000 {
+                                        silent_idle = true;
+                                        silent_idle_occurred.set(true);
+                                    }
+                                }
+                            }
+                            can_rearm = true;
+                            last_wait_returned_at_ms = Some(current_time_ms);
+                        }
+                        Some(PaseoState::Blocked) => {
+                            is_blocked = true;
+                            in_error_fallback = false;
+                            liveness = Some(Liveness::Alive { pid: 0 });
+                        }
+                        Some(PaseoState::Dead) => {
+                            is_blocked = false;
+                            in_error_fallback = true;
+                            liveness = Some(Liveness::Absent);
+                        }
+                        None => {
+                            liveness = Some(Liveness::Unknown);
+                        }
+                    }
+                }
+            } else {
+                if wait_active {
+                    let wait_status = cancel_guard.0.poll();
+                    if let Some(status) = wait_status {
+                        wait_active = false;
+                        last_wait_returned_at_ms = Some(current_time_ms);
+                        match status {
+                            paseo::WaitStatus::Timeout => {
+                                seen_working = true;
+                                heartbeat_fresh = true;
+                                last_heartbeat_ms = current_time_ms;
+                                liveness = Some(Liveness::Alive { pid: 0 });
+                                can_rearm = true;
+                            }
+                            paseo::WaitStatus::Idle => {
+                                liveness = Some(Liveness::Alive { pid: 0 });
+                                if seen_working && !result_ready {
+                                    if !nudge_sent {
+                                        nudge_sent = true;
+                                        nudge_sent_at_ms = Some(current_time_ms);
+                                        let b_path = mailbox::brief_path(bee_dir, job_id, min_round);
+                                        let r_path = mailbox::result_path(bee_dir, job_id, min_round);
+                                        let text = format!(
+                                            "Round {min_round} brief: {}. Write your result to: {}",
+                                            b_path.display(),
+                                            r_path.display()
+                                        );
+                                        let send_args = paseo::send_argv(agent_id, &text);
+                                        let _ = cli.call(&send_args);
+                                    } else if let Some(sent_at) = nudge_sent_at_ms {
+                                        if current_time_ms.saturating_sub(sent_at) >= 3000 {
+                                            silent_idle = true;
+                                            silent_idle_occurred.set(true);
+                                        }
+                                    }
+                                }
+                                can_rearm = true;
+                            }
+                            paseo::WaitStatus::Permission => {
+                                is_blocked = true;
+                                can_rearm = false;
+                                liveness = Some(Liveness::Alive { pid: 0 });
+                                last_inspect_ms = Some(current_time_ms);
+                            }
+                            paseo::WaitStatus::Error => {
+                                in_error_fallback = true;
+                                can_rearm = false;
+                                last_inspect_ms = Some(current_time_ms);
+                            }
+                        }
+                    }
+                }
+
+                if !wait_active
+                    && !is_blocked
+                    && !in_error_fallback
+                    && can_rearm
+                    && !silent_idle
+                    && last_wait_returned_at_ms.map_or(true, |t| current_time_ms.saturating_sub(t) >= 3000)
+                {
+                    let elapsed_idle = (current_time_ms.saturating_sub(last_heartbeat_ms) / 1000) as u64;
+                    let remaining_idle = idle_timeout_secs.saturating_sub(elapsed_idle);
+                    let wait_timeout = 60.min(remaining_idle.max(1));
+                    cancel_guard.0.cancel();
+                    cancel_guard.0.arm(wait_timeout);
+                    wait_active = true;
+                    can_rearm = false;
                 }
             }
 
@@ -5152,7 +5412,8 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     let exit = match cap_action {
         PostflightCapAction::Refuse { ref cell_id } => {
             eprintln!(
-                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish`"
+                "bee herding run: worker reported success for cell \"{cell_id}\" without capping it — settle with `bee cells finish --id {cell_id} --from-job {} --proof-result <green:...>`",
+                opts.job_id
             );
             ExitCode::FAILURE
         }
@@ -11353,6 +11614,50 @@ mod tests {
         }
     }
 
+    struct FakeWaitSource {
+        status_queue: std::collections::VecDeque<Option<paseo::WaitStatus>>,
+        armed_timeouts: Vec<u64>,
+        cancel_count: usize,
+        active: bool,
+    }
+
+    impl FakeWaitSource {
+        fn new(queue: Vec<Option<paseo::WaitStatus>>) -> Self {
+            Self {
+                status_queue: std::collections::VecDeque::from(queue),
+                armed_timeouts: Vec::new(),
+                cancel_count: 0,
+                active: false,
+            }
+        }
+    }
+
+    impl WaitSource for FakeWaitSource {
+        fn arm(&mut self, timeout_secs: u64) {
+            self.armed_timeouts.push(timeout_secs);
+            self.active = true;
+        }
+
+        fn poll(&mut self) -> Option<paseo::WaitStatus> {
+            if !self.active {
+                return None;
+            }
+            if let Some(st) = self.status_queue.pop_front() {
+                if st.is_some() {
+                    self.active = false;
+                }
+                st
+            } else {
+                None
+            }
+        }
+
+        fn cancel(&mut self) {
+            self.cancel_count += 1;
+            self.active = false;
+        }
+    }
+
     #[test]
     fn execute_paseo_happy_path_archives_agent() {
         let tmp = tempfile::tempdir().unwrap();
@@ -12064,161 +12369,41 @@ mod tests {
     }
 
     #[test]
-    fn wait_for_round_paseo_inspects_at_most_once_per_3_seconds() {
+    fn wait_for_round_paseo_idle_after_working_nudges_once_and_ends_on_second_idle() {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
         let bee_dir = main_root.join(".bee");
-        let job_id = "job-cadence";
+        let job_id = "job-si-1";
         let dir = mailbox::mailbox_dir(&bee_dir, job_id);
         std::fs::create_dir_all(&dir).unwrap();
-
-        let inspect_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
-        let count_clone = inspect_count.clone();
-
-        let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
-            Ok("{\"agentId\":\"agent-c\"}\n".to_string()),
-            Ok("{\"Status\":\"running\"}\n".to_string()),
-            Ok("archived\n".to_string()),
-        )
-        .with_on_inspect(move || {
-            count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        });
-
-        let mut clock = 0i64;
-        let mut ticks = 0u32;
-        let silent_idle_cell = std::cell::Cell::new(false);
-
-        let decision = wait_for_round_paseo_driven(
-            &bee_dir,
-            job_id,
-            "agent-c",
-            1,
-            0,
-            60,
-            3600,
-            &fake,
-            None,
-            &silent_idle_cell,
-            Duration::from_millis(200),
-            |_| {},
-            || {
-                ticks += 1;
-                if ticks == 16 {
-                    std::fs::write(
-                        dir.join("result-1.json"),
-                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
-                    )
-                    .unwrap();
-                }
-                let current = clock;
-                clock += 200;
-                current
-            },
-        );
-
-        assert_eq!(decision, PollDecision::ResultReady);
-        assert_eq!(inspect_count.load(std::sync::atomic::Ordering::SeqCst), 2);
-    }
-
-    #[test]
-    fn wait_for_round_paseo_one_dead_read_followed_by_working_keeps_run_going() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main_root = tmp.path();
-        let bee_dir = main_root.join(".bee");
-        let job_id = "job-dead-working";
-        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
-            Ok("{\"agentId\":\"agent-dw\"}\n".to_string()),
-            Ok("{\"Status\":\"running\"}\n".to_string()),
-            Ok("archived\n".to_string()),
-        )
-        .with_inspect_queue(vec![
-            Ok("{\"Status\":\"closed\"}\n".to_string()),
-            Ok("{\"Status\":\"running\"}\n".to_string()),
-        ]);
-
-        let mut clock = 0i64;
-        let mut ticks = 0u32;
-        let silent_idle_cell = std::cell::Cell::new(false);
-
-        let decision = wait_for_round_paseo_driven(
-            &bee_dir,
-            job_id,
-            "agent-dw",
-            1,
-            0,
-            60,
-            3600,
-            &fake,
-            None,
-            &silent_idle_cell,
-            Duration::from_millis(200),
-            |_| {},
-            || {
-                ticks += 1;
-                if ticks == 17 {
-                    std::fs::write(
-                        dir.join("result-1.json"),
-                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
-                    )
-                    .unwrap();
-                }
-                let current = clock;
-                clock += 200;
-                current
-            },
-        );
-
-        assert_eq!(decision, PollDecision::ResultReady);
-    }
-
-    #[test]
-    fn execute_paseo_working_then_idle_sends_nudge_and_second_silent_idle_times_out() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main_root = tmp.path();
-        let mut opts = test_options(main_root, false);
-        opts.job_id = "job-silent-idle-1".to_string();
-
-        let spec = PaseoSpec {
-            provider: "pi".to_string(),
-            model: None,
-            thinking: None,
-            mode: None,
-        };
 
         let fake = FakePaseoCli::new(
             Ok("0.10.3\n".to_string()),
             Ok("{\"agentId\":\"agent-si\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-            Ok("archived\n".to_string()),
-        )
-        .with_inspect_queue(vec![
             Ok("{\"Status\":\"running\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Idle),
+            Some(paseo::WaitStatus::Idle),
         ]);
 
         let mut clock = 0i64;
         let silent_idle_cell = std::cell::Cell::new(false);
-        let bee_dir = main_root.join(".bee");
-        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
-        std::fs::create_dir_all(&dir).unwrap();
 
         let decision = wait_for_round_paseo_driven(
             &bee_dir,
-            &opts.job_id,
+            job_id,
             "agent-si",
             1,
             0,
             60,
             3600,
             &fake,
-            Some(&spec),
+            None,
             &silent_idle_cell,
+            &mut wait_src,
             Duration::from_millis(200),
             |_| {},
             || {
@@ -12239,6 +12424,347 @@ mod tests {
     }
 
     #[test]
+    fn wait_for_round_paseo_timeout_keeps_the_run_alive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-timeout-alive";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-ta\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Timeout),
+        ]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-ta",
+            1,
+            0,
+            2,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 8 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert!(!silent_idle_cell.get());
+    }
+
+    #[test]
+    fn wait_for_round_paseo_permission_then_idle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-perm-idle";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-pi\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+        ]);
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Permission),
+        ]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-pi",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 20 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+    }
+
+    #[test]
+    fn wait_for_round_paseo_error_switches_to_inspect_fallback_and_three_dead_inspects_die() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-err-died";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-ed\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"closed\"}\n".to_string()),
+            Ok("{\"Status\":\"closed\"}\n".to_string()),
+            Ok("{\"Status\":\"closed\"}\n".to_string()),
+        ]);
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Error),
+        ]);
+
+        let mut clock = 0i64;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-ed",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert!(matches!(decision, PollDecision::Died { .. }));
+    }
+
+    #[test]
+    fn wait_for_round_paseo_no_wait_is_armed_while_blocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-no-arm-blocked";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-nab\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_inspect_queue(vec![
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
+        ]);
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Permission),
+        ]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-nab",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 35 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 200;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(wait_src.armed_timeouts.len(), 1);
+    }
+
+    #[test]
+    fn wait_for_round_paseo_cancel_kills_child_on_every_round_exit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-cancel-exit";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-ce\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let mut wait_src = FakeWaitSource::new(vec![]);
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-ce",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || 0,
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert!(wait_src.cancel_count > 0);
+        assert!(!wait_src.active);
+    }
+
+    #[test]
+    fn wait_for_round_paseo_post_spawn_inspect_records_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-post-spawn-model";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let job_file = mailbox::job_path(&bee_dir, job_id);
+        let job_val = serde_json::json!({
+            "job_id": job_id,
+            "round": 1,
+        });
+        std::fs::write(&job_file, serde_json::to_string(&job_val).unwrap()).unwrap();
+
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-psm\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"claude-3-5-sonnet\",\"Thinking\":\"high\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("claude-3-5-sonnet".to_string()),
+            thinking: Some("high".to_string()),
+            mode: None,
+        };
+
+        let mut wait_src = FakeWaitSource::new(vec![]);
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-psm",
+            1,
+            0,
+            60,
+            3600,
+            &fake,
+            Some(&spec),
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || 0,
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+
+        let content = std::fs::read_to_string(&job_file).unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["paseo_model_observed"], "claude-3-5-sonnet");
+        assert_eq!(parsed["paseo_thinking_observed"], "high");
+    }
+
+    #[test]
     fn execute_paseo_failed_send_still_lets_second_silent_idle_end_round() {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
@@ -12252,18 +12778,19 @@ mod tests {
             mode: None,
         };
 
-        let mut fake = FakePaseoCli::new(
+        let fake = FakePaseoCli::new(
             Ok("0.10.3\n".to_string()),
             Ok("{\"agentId\":\"agent-fs\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-            Ok("archived\n".to_string()),
-        )
-        .with_inspect_queue(vec![
             Ok("{\"Status\":\"running\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-        ]);
+            Ok("archived\n".to_string()),
+        );
+        let mut fake = fake;
         fake.send = Err("failed to send".to_string());
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Idle),
+            Some(paseo::WaitStatus::Idle),
+        ]);
 
         let mut clock = 0i64;
         let silent_idle_cell = std::cell::Cell::new(false);
@@ -12282,6 +12809,7 @@ mod tests {
             &fake,
             Some(&spec),
             &silent_idle_cell,
+            &mut wait_src,
             Duration::from_millis(200),
             |_| {},
             || {
@@ -12317,13 +12845,9 @@ mod tests {
         let fake = FakePaseoCli::new(
             Ok("0.10.3\n".to_string()),
             Ok("{\"agentId\":\"agent-ran\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
         )
-        .with_inspect_queue(vec![
-            Ok("{\"Status\":\"running\"}\n".to_string()),
-            Ok("{\"Status\":\"idle\"}\n".to_string()),
-        ])
         .with_on_send(move || {
             std::fs::write(
                 dir_clone.join("result-1.json"),
@@ -12331,6 +12855,10 @@ mod tests {
             )
             .unwrap();
         });
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Idle),
+        ]);
 
         let mut clock = 0i64;
         let silent_idle_cell = std::cell::Cell::new(false);
@@ -12346,6 +12874,7 @@ mod tests {
             &fake,
             Some(&spec),
             &silent_idle_cell,
+            &mut wait_src,
             Duration::from_millis(200),
             |_| {},
             || {
@@ -12384,9 +12913,13 @@ mod tests {
             Ok("archived\n".to_string()),
         )
         .with_inspect_queue(vec![
-            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
             Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
+        ]);
+
+        let mut wait_src = FakeWaitSource::new(vec![
+            Some(paseo::WaitStatus::Permission),
         ]);
 
         let mut clock = 0i64;
@@ -12404,6 +12937,7 @@ mod tests {
             &fake,
             Some(&spec),
             &silent_idle_cell,
+            &mut wait_src,
             Duration::from_millis(200),
             |_| {},
             || {
