@@ -387,6 +387,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `herding.supervisor_runtime` | selects the supervisor observer runtime: `"claude"` (default) or `"pi"` (paseo-pi-hardening D9). With `"pi"`, runs `team.pi.supervisor` under `worker-guard` with `BEE_SUPERVISOR_ALLOWED`. | `"claude"` |
 | `herding.paseo.broker_tick_secs` | interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8). Runs `bee herding broker tick --json` and sends news to the leader. | `30` |
 | `herding.paseo.heartbeat_cron` | cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8). Replaces the previous 5-minute default (`*/5 * * * *`). | `"*/30 * * * *"` |
+| `herding.agents.<name>.paseo.isolated_config` | boolean flag for a Pi Paseo agent (herding-leader-toil D5). When true, creates an isolated Pi folder at `.bee/runtime/pi-agent/<name>/` and sets `PI_CODING_AGENT_DIR`. | `false` |
 
 ### `guards.worker_outward` — the three commands a worktree never runs
 
@@ -538,6 +539,22 @@ Sets the cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8, 
 The default value is `"*/30 * * * *"` (superseding the previous 5-minute default).
 If the marker file contains a different cron, `ensureHeartbeat` updates the heartbeat schedule on session start.
 On session shutdown (except reload), the extension stops the broker timer and awaits heartbeat deletion (`paseo heartbeat delete <id>`).
+
+#### `herding.agents.<name>.paseo.isolated_config`
+
+Configures an isolated Pi directory for a Paseo agent (herding-leader-toil D5, store `8fa9692a`, contract store `db780128`).
+This key applies only when `provider` is `"pi"`.
+The default value is `false`.
+
+When set to `true`:
+- bee keeps an isolated Pi directory at `.bee/runtime/pi-agent/<name>/`.
+- The directory links `auth.json` to `~/.pi/agent/auth.json`.
+- The directory links `models.json`, `models-store.json`, and `npm` when those sources exist in `~/.pi/agent/`.
+- The directory writes `settings.json` with `{"defaultProjectTrust": "always", "quietStartup": true}`.
+- The directory creates empty `skills/` and `extensions/` subdirectories.
+- bee passes `PI_CODING_AGENT_DIR=<path>` in the environment of the worker process.
+- bee never replaces an existing real file or directory where a link belongs; it reports the item.
+- A missing `~/.pi/agent/auth.json` refuses the worker spawn with a `FIX:` message.
 
 ## Full sample to copy
 

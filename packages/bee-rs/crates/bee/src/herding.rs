@@ -86,7 +86,7 @@ mod control_loop;
 // The file mailbox worker-completion contract (herding-executor feature:
 // mailbox layout and the self-contained-brief requirement, both locked in
 // .bee/decisions.jsonl feature=herding-executor). See mailbox.rs.
-mod mailbox;
+pub(crate) mod mailbox;
 
 // `bee herding run` (herding-executor D1/D2/D5/D6/D9) — the scope-A verb:
 // spawn one bee-ignorant external agent into a pane, wait on the mailbox
@@ -121,6 +121,7 @@ pub(crate) mod job_verbs;
 pub(crate) mod broker;
 pub(crate) mod paseo;
 pub(crate) mod paseo_steer;
+pub(crate) mod pi_agent_dir;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 

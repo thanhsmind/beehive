@@ -24,6 +24,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Instant;
 
+pub(crate) static TEST_CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // ═══ dispatch prepare ══════════════════════════════════════════════════════
 
 /// pi-stage-dispatch D6: `dispatch prepare` and `state advisor-ref
@@ -52,8 +54,13 @@ pub(crate) fn ctx_serving_granted(
     t0: Instant,
 ) -> Option<Result<crate::verbs::reservations::Ctx, ExitCode>> {
     let cwd = std::env::current_dir().ok()?;
-    let root = match resolve_root_serving_granted(&cwd).0 {
-        Roots::Ordinary(r) => r,
+    let (resolved, here) = resolve_root_serving_granted(&cwd);
+    let root = match resolved {
+        Roots::Ordinary(r) => {
+            let served = here.is_some().then(|| r.clone());
+            SERVED_CONTROL_ROOT.with(|s| *s.borrow_mut() = served);
+            r
+        }
         Roots::Unsupported(why) => return Some(Err(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))),
         Roots::None => return Some(Err(emit_no_root_error(&cwd, cmd, use_json, t0))),
     };
@@ -67,6 +74,48 @@ pub(crate) fn ctx_serving_granted(
         drift_hint: drift.hint,
     }))
 }
+
+thread_local! {
+    pub(crate) static SERVED_CONTROL_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(crate) fn take_served_control_root() -> Option<PathBuf> {
+    SERVED_CONTROL_ROOT.with(|s| s.borrow_mut().take())
+}
+
+pub(crate) fn is_serving_granted(cwd: &Path) -> Option<PathBuf> {
+    match resolve_root_serving_granted(cwd) {
+        (Roots::Ordinary(main_root), Some(_here)) => Some(main_root),
+        _ => None,
+    }
+}
+
+pub(crate) fn augment_served_output(
+    result: &mut Value,
+    text: &mut String,
+    main_root: &Path,
+) {
+    if let Value::Object(map) = result {
+        map.insert("control_root".to_string(), Value::String(main_root.display().to_string()));
+    }
+    if !text.starts_with("control plane: ") {
+        *text = format!("control plane: {}\n{text}", main_root.display());
+    }
+}
+
+pub(crate) fn finish_serving_granted(
+    ctx: &crate::verbs::reservations::Ctx,
+    mut out: crate::verbs::reservations::R2<crate::verbs::reservations::Out>,
+    served_main: Option<&Path>,
+) -> Option<ExitCode> {
+    if let Some(main_root) = served_main {
+        if let Ok(crate::verbs::reservations::Out::Emit(ref mut result, ref mut text, _)) = out {
+            augment_served_output(result, text, main_root);
+        }
+    }
+    crate::verbs::reservations::finish(ctx, out)
+}
+
 
 /// pi-stage-dispatch D7: a non-cell dispatch with no `--feature` and no bound
 /// lane takes the feature of the granted worktree it runs in, so it runs

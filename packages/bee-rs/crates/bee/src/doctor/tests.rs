@@ -1415,5 +1415,279 @@ fn paseo_ready_delete_failed_marker_named() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_version_output_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let appimage_cli = FakeDoctorPaseoCli {
+        version_out: Ok("[desktop] app startup { version: '0.10.3' }\n0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&appimage_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains("set herding.paseo.command to the npm @getpaseo/cli paseo"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_wrapper_script_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let script_path = bin_dir.join("paseo");
+    std::fs::write(&script_path, "#!/bin/sh\nexec /opt/Paseo.AppImage \"$@\"\n").unwrap();
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let bin_str = bin_dir.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        "PATH" => Some(bin_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains("set herding.paseo.command to the npm @getpaseo/cli paseo"),
+        "{}",
+        row.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_npm_style_passes() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "paseo-worker"}}"#,
+        r#"{"paseo-worker": {"paseo": {"provider": "pi"}}}"#,
+    );
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let script_path = bin_dir.join("paseo");
+    std::fs::write(&script_path, "#!/bin/sh\nexec node /usr/lib/node_modules/@getpaseo/cli/bin/paseo.js \"$@\"\n").unwrap();
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+    let home_str = home.to_string_lossy().to_string();
+    let bin_str = bin_dir.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        "PATH" => Some(bin_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_isolated_folder_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    let home_auth = home.join(".pi/agent/auth.json");
+    std::fs::write(&home_auth, "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "never"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(&home_auth, agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("defaultProjectTrust"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_replaced_non_link_auth_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::fs::write(agent_dir.join("auth.json"), "{}").unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("auth.json"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_symlink_auth_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(home.join(".pi/agent/nonexistent.json"), agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("pi-iso"), "{}", row.detail);
+    assert!(row.detail.contains("auth.json"), "{}", row.detail);
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_missing_folder_home_auth_present_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    std::fs::write(home.join(".pi/agent/auth.json"), "{}").unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_good_isolated_folder_passes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = pi_repo_with_paseo(
+        tmp.path(),
+        r#"{"planner": {"kind": "herding", "agent": "pi-iso"}}"#,
+        r#"{"pi-iso": {"paseo": {"provider": "pi", "isolated_config": true}}}"#,
+    );
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".pi/agent")).unwrap();
+    let home_auth = home.join(".pi/agent/auth.json");
+    std::fs::write(&home_auth, "{}").unwrap();
+
+    let agent_dir = root.join(".bee/runtime/pi-agent/pi-iso");
+    std::fs::create_dir_all(&agent_dir).unwrap();
+    std::fs::write(
+        agent_dir.join("settings.json"),
+        r#"{"defaultProjectTrust": "always"}"#,
+    ).unwrap();
+    std::os::unix::fs::symlink(&home_auth, agent_dir.join("auth.json")).unwrap();
+
+    let home_str = home.to_string_lossy().to_string();
+    let env = move |k: &str| match k {
+        "HOME" => Some(home_str.clone()),
+        _ => mock_herdr_env(k),
+    };
+    let passing_cli = FakeDoctorPaseoCli {
+        version_out: Ok("0.10.3".to_string()),
+        inspect_map: std::collections::HashMap::new(),
+    };
+    let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
+    assert_eq!(row.ok, Some(true));
+}
+
+
 
 

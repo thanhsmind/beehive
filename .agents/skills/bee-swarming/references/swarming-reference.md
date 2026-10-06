@@ -245,9 +245,12 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      skip); any `NEEDS_REVISION` escalates that worker to judge-every-slice
      for the feature's remainder (tier table in
      `bee-hive/references/gates-and-delegation.md`, "Goal-check judge
-     tier"). The judge returns one verdict per cell and each verdict is
-     recorded with `cells judge-record` — per-cell records and cap teeth
-     unchanged; a single-cell slice is identical to the old per-cell shape.
+     tier"). The judge returns one verdict per cell. The leader records
+     each verdict with `cells judge-record` or records all verdicts from
+     the judge answer with `bee cells judge-record --from-text <path|->`
+     (herding-leader-toil D3, store `6824f849`, contract store `e7509db5`) —
+     per-cell records and cap teeth unchanged; a single-cell slice is
+     identical to the old per-cell shape.
      This is goal-check verification, distinct from the no-auto-reviewer
      stance above and from any user-invoked review session (Gate 3 and the
      candidates ledger are separate) —
@@ -469,14 +472,21 @@ The orchestrator's loop for one herding cell:
    with neither keeps the exact key set it had before this pair existed,
    so a legacy worker stays legal. Read the file at `report_path` yourself
    when you want the digest; `summary` and `proof` stay one line each.
-4. **Do the bookkeeping the worker never could:** verify per the cell's
-   own proof type (re-run the declared test/parity check against the
-   `files_changed` diff), then `.bee/bin/bee cells finish --id <id>
-   --report <proof line>` carrying the worker's evidence, confirm
-   reservations released, and run goal-check/judge exactly as step 7 of
-   the Operating Contract already requires for any `[DONE]`. A `status:
-   blocked` result is never force-capped — treat it as a `[BLOCKED]`
-   report and re-triage.
+4. **Do the bookkeeping the worker never could:** verify the work.
+   Re-run the declared test or parity check against the `files_changed` diff.
+   Check the work.
+   Then cap the cell with:
+   `bee cells finish --id <cell> --from-job <job> --proof-result <green:unit|green:static|green:live> [--proof-reason <text>]`
+   (herding-leader-toil D1, store `cb3dc85d`, contract store `d248942f`).
+   Pass the mistakes answer (`--no-mistakes` or `--mistake <text> --fix-at <layer>`).
+   This command builds the cap report from `result-N.json` and git changes in the job directory.
+   A manual cap can also use `.bee/bin/bee cells finish --id <cell> --report <proof line>`.
+   Confirm reservations are released.
+   Run goal-check and judge steps as step 7 requires for each `[DONE]`.
+   Record the slice judge's answer with `bee cells judge-record --from-text <path|->`
+   (herding-leader-toil D3, store `6824f849`, contract store `e7509db5`).
+   Never force-cap a `status: blocked` result.
+   Treat it as a `[BLOCKED]` report and re-triage.
 5. **Blocked → `--continue`, not a fresh spawn.** When the result (or the
    orchestrator's own verify) surfaces something the same agent should
    retry — a failing test, a narrower ask — send the next round through

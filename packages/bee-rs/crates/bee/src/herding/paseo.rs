@@ -6,6 +6,7 @@ pub struct PaseoSpec {
     pub model: Option<String>,
     pub thinking: Option<String>,
     pub mode: Option<String>,
+    pub isolated_config: bool,
 }
 
 impl PaseoSpec {
@@ -53,12 +54,21 @@ impl PaseoSpec {
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .map(String::from);
+        let isolated_config = if provider.trim().eq_ignore_ascii_case("pi") {
+            paseo_obj
+                .get("isolated_config")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
         Some(Ok(Self {
             provider,
             model,
             thinking,
             mode,
+            isolated_config,
         }))
     }
 }
@@ -80,6 +90,8 @@ pub fn run_argv(
     cwd: &str,
     env: &[(String, String)],
     prompt: &str,
+    agent: &str,
+    cell_id: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         "run".to_string(),
@@ -107,11 +119,23 @@ pub fn run_argv(
     argv.push("--cwd".to_string());
     argv.push(cwd.to_string());
 
+    let title = match cell_id.filter(|c| !c.trim().is_empty()) {
+        Some(c) => format!("{c} {agent}"),
+        None => format!("{agent} {job_id}"),
+    };
     argv.push("--title".to_string());
-    argv.push(job_id.to_string());
+    argv.push(title);
 
     argv.push("--label".to_string());
     argv.push(format!("bee_job={job_id}"));
+
+    argv.push("--label".to_string());
+    argv.push(format!("bee_agent={agent}"));
+
+    if let Some(c) = cell_id.filter(|c| !c.trim().is_empty()) {
+        argv.push("--label".to_string());
+        argv.push(format!("bee_cell={c}"));
+    }
 
     for (k, v) in env {
         argv.push("--env".to_string());
@@ -146,6 +170,14 @@ pub enum PaseoState {
     Idle,
     Blocked,
     Dead,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitStatus {
+    Idle,
+    Permission,
+    Error,
+    Timeout,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -226,6 +258,31 @@ pub fn parse_inspect(stdout: &str) -> Option<PaseoState> {
     parse_inspect_full(stdout).and_then(|i| i.state)
 }
 
+pub fn parse_wait(stdout: &str) -> Option<WaitStatus> {
+    for (i, c) in stdout.char_indices() {
+        if c == '{' {
+            let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
+            if let Some(Ok(Value::Object(map))) = de.next() {
+                let status_str = map
+                    .get("status")
+                    .or_else(|| map.get("Status"))
+                    .and_then(Value::as_str);
+                if let Some(status) = status_str {
+                    match status.to_ascii_lowercase().as_str() {
+                        "idle" => return Some(WaitStatus::Idle),
+                        "permission" => return Some(WaitStatus::Permission),
+                        "error" => return Some(WaitStatus::Error),
+                        "timeout" => return Some(WaitStatus::Timeout),
+                        _ => return None,
+                    }
+                }
+                return None;
+            }
+        }
+    }
+    None
+}
+
 pub fn version_at_least(output: &str, required: (u64, u64, u64)) -> bool {
     let mut last_semver = None;
     for token in output.split_whitespace() {
@@ -258,6 +315,17 @@ pub fn inspect_argv(id: &str) -> Vec<String> {
         "inspect".to_string(),
         "--json".to_string(),
         id.to_string(),
+    ]
+}
+
+pub fn wait_argv(id: &str, timeout_secs: u64) -> Vec<String> {
+    vec![
+        "agent".to_string(),
+        "wait".to_string(),
+        id.to_string(),
+        "--timeout".to_string(),
+        timeout_secs.to_string(),
+        "--json".to_string(),
     ]
 }
 
@@ -707,6 +775,7 @@ mod tests {
                 model: Some("deepseek-flash".to_string()),
                 thinking: Some("high".to_string()),
                 mode: Some("agent".to_string()),
+                isolated_config: false,
             }
         );
     }
@@ -781,12 +850,13 @@ mod tests {
             model: Some("deepseek-flash".to_string()),
             thinking: Some("high".to_string()),
             mode: Some("arch".to_string()),
+            isolated_config: false,
         };
         let env = vec![
             ("BEE_HERDING_WORKER".to_string(), "1".to_string()),
             ("JOB_VAR".to_string(), "xyz".to_string()),
         ];
-        let argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task");
+        let argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", None);
         assert_eq!(
             argv,
             vec![
@@ -802,9 +872,42 @@ mod tests {
                 "--cwd",
                 "/path/to/cwd",
                 "--title",
-                "job-42",
+                "w-worker job-42",
                 "--label",
                 "bee_job=job-42",
+                "--label",
+                "bee_agent=w-worker",
+                "--env",
+                "BEE_HERDING_WORKER=1",
+                "--env",
+                "JOB_VAR=xyz",
+                "do task"
+            ]
+        );
+
+        let cell_argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", Some("hlt-4"));
+        assert_eq!(
+            cell_argv,
+            vec![
+                "run",
+                "-d",
+                "--json",
+                "--provider",
+                "pi/deepseek-flash",
+                "--thinking",
+                "high",
+                "--mode",
+                "arch",
+                "--cwd",
+                "/path/to/cwd",
+                "--title",
+                "hlt-4 w-worker",
+                "--label",
+                "bee_job=job-42",
+                "--label",
+                "bee_agent=w-worker",
+                "--label",
+                "bee_cell=hlt-4",
                 "--env",
                 "BEE_HERDING_WORKER=1",
                 "--env",
@@ -818,8 +921,9 @@ mod tests {
             model: None,
             thinking: None,
             mode: None,
+            isolated_config: false,
         };
-        let minimal_argv = run_argv(&minimal_spec, "job-1", "/cwd", &[], "task");
+        let minimal_argv = run_argv(&minimal_spec, "job-1", "/cwd", &[], "task", "plain-agent", None);
         assert_eq!(
             minimal_argv,
             vec![
@@ -831,12 +935,41 @@ mod tests {
                 "--cwd",
                 "/cwd",
                 "--title",
-                "job-1",
+                "plain-agent job-1",
                 "--label",
                 "bee_job=job-1",
+                "--label",
+                "bee_agent=plain-agent",
                 "task"
             ]
         );
+    }
+
+    #[test]
+    fn wait_argv_builds_expected_tokens() {
+        assert_eq!(
+            wait_argv("agent-123", 45),
+            vec!["agent", "wait", "agent-123", "--timeout", "45", "--json"]
+        );
+    }
+
+    #[test]
+    fn parse_wait_reads_status_skipping_leading_lines() {
+        let out_idle = "Paseo starting...\n{\"agentId\":\"a1\",\"status\":\"idle\"}\n";
+        assert_eq!(parse_wait(out_idle), Some(WaitStatus::Idle));
+
+        let out_perm = "log\n{\"status\":\"permission\"}";
+        assert_eq!(parse_wait(out_perm), Some(WaitStatus::Permission));
+
+        let out_err = "{\"Status\":\"Error\"}";
+        assert_eq!(parse_wait(out_err), Some(WaitStatus::Error));
+
+        let out_timeout = "{\"status\":\"timeout\"}";
+        assert_eq!(parse_wait(out_timeout), Some(WaitStatus::Timeout));
+
+        assert_eq!(parse_wait("not json"), None);
+        assert_eq!(parse_wait("{\"status\":\"other\"}"), None);
+        assert_eq!(parse_wait("{\"no_status\":true}"), None);
     }
 
     #[test]
@@ -1095,5 +1228,52 @@ mod tests {
                 ("{\"unknown_key\":\"val\"}".to_string(), "".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn paseo_spec_isolated_config_parsed_only_for_pi_provider() {
+        let pi_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-pi": {
+                        "paseo": {
+                            "provider": "pi",
+                            "isolated_config": true
+                        }
+                    }
+                }
+            }
+        });
+        let spec = PaseoSpec::from_config(&pi_cfg, "w-pi").unwrap().unwrap();
+        assert!(spec.isolated_config);
+
+        let pi_default_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-pi": {
+                        "paseo": {
+                            "provider": "pi"
+                        }
+                    }
+                }
+            }
+        });
+        let default_spec = PaseoSpec::from_config(&pi_default_cfg, "w-pi").unwrap().unwrap();
+        assert!(!default_spec.isolated_config);
+
+        let claude_cfg = json!({
+            "herding": {
+                "agents": {
+                    "w-claude": {
+                        "paseo": {
+                            "provider": "claude",
+                            "isolated_config": true
+                        }
+                    }
+                }
+            }
+        });
+        let claude_spec = PaseoSpec::from_config(&claude_cfg, "w-claude").unwrap().unwrap();
+        assert!(!claude_spec.isolated_config);
     }
 }

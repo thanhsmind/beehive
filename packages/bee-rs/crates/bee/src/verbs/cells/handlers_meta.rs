@@ -166,148 +166,315 @@ pub(crate) fn run_reset_budget(flags: rsv::Flags, use_json: bool, t0: Instant) -
 
 // ── cells judge-record ─────────────────────────────────────────────────────
 
+pub(crate) fn record_one(
+    root: &Path,
+    id: &str,
+    verdict_map: &Map<String, Value>,
+    builder_model: Option<&str>,
+    judge_model: Option<&str>,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    let independence = derive_model_independence(
+        builder_model,
+        builder_model.map(|_| PINNED_MODEL_STATUS),
+        judge_model,
+        judge_model.map(|_| PINNED_MODEL_STATUS),
+    );
+    prescan_claim(root, id)?;
+    delegate_only(load_taxonomy(root))?;
+    let mut reopened = false;
+    let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
+    let saved = (|| -> MR<Value> {
+        assert_not_archived(root, "recordJudgeVerdict", id)?;
+        let cell = read_cell_norm(root, id)?;
+        let Some(cell) = cell else {
+            return Err(Fail::Thrown(format!("recordJudgeVerdict: cell \"{id}\" not found.")));
+        };
+        let Value::Object(mut cell_map) = cell else { return Err(Fail::Delegate) };
+        let mut entry = Map::new();
+        entry.insert("schema".into(), verdict_map.get("schema").cloned().unwrap_or(Value::Null));
+        entry.insert("verdict".into(), verdict_map.get("verdict").cloned().unwrap_or(Value::Null));
+        entry.insert("checks".into(), verdict_map.get("checks").cloned().unwrap_or(Value::Null));
+        entry.insert(
+            "failure_signature".into(),
+            match verdict_map.get("failure_signature") {
+                None | Some(Value::Null) => Value::Null,
+                Some(v) => v.clone(),
+            },
+        );
+        entry.insert(
+            "fixability".into(),
+            verdict_map.get("fixability").cloned().unwrap_or(Value::Null),
+        );
+        entry.insert(
+            "confidence".into(),
+            verdict_map.get("confidence").cloned().unwrap_or(Value::Null),
+        );
+        let model_or_null = |m: Option<&str>| match m {
+            Some(s) if !js_trim(s).is_empty() => Value::String(s.to_string()),
+            _ => Value::Null,
+        };
+        entry.insert("builder_model".into(), model_or_null(builder_model));
+        entry.insert("judge_model".into(), model_or_null(judge_model));
+        entry.insert("model_independence".into(), Value::String(independence.to_string()));
+        entry.insert("recorded_at".into(), Value::String(utc_now()));
+        let mut trace = merge_trace(cell_map.get("trace"))?;
+        trace = guard_claim_ownership(
+            root,
+            id,
+            trace,
+            "recordJudgeVerdict",
+            session_flag,
+            force,
+        )?;
+        let existing: Vec<Value> = match trace.get("semantic_judge") {
+            Some(Value::Array(a)) => a.clone(),
+            _ => Vec::new(),
+        };
+        let mut next = existing;
+        next.push(Value::Object(entry));
+        trace.insert("semantic_judge".into(), Value::Array(next));
+        let needs_revision =
+            matches!(verdict_map.get("verdict"), Some(Value::String(s)) if s == "NEEDS_REVISION");
+        let capped = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "capped");
+        if needs_revision && capped {
+            cell_map.insert("status".into(), Value::String("open".into()));
+            let mut rework = Map::new();
+            rework.insert("at".into(), Value::String(utc_now()));
+            rework.insert(
+                "reason".into(),
+                Value::String("NEEDS_REVISION semantic-judge verdict recorded after cap".into()),
+            );
+            trace.insert("reopened_for_rework".into(), Value::Object(rework));
+            trace = release_trace(trace);
+            reopened = true;
+            log_decision(
+                root,
+                &format!(
+                    "«cells judge-record: cell \"{id}\" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»"
+                ),
+                "A NEEDS_REVISION verdict recorded after cap must have teeth: the cell is reopened to open (clean slate) for rework, with claim + verify evidence cleared, instead of being silently logged into an inert trace entry (hardening-3) or left falsely \"claimed\" with stale verify_passed that a later PASS verdict could re-cap on with zero fresh verify (hardening-1-7-10 D7).",
+                &["cells", "judge"],
+            )?;
+        }
+        cell_map.insert("trace".into(), Value::Object(trace));
+        let value = Value::Object(cell_map);
+        write_cell(root, &value)?;
+        Ok(value)
+    })();
+    guard.release();
+    let cell = saved?;
+    if reopened {
+        release_claim_file_best_effort(root, id);
+        clear_merge_ready_for(root, &cell);
+    }
+    Ok(cell)
+}
+
+pub(crate) fn record_verdict_blocks(
+    root: &Path,
+    blocks: Vec<(String, Value)>,
+    builder_model: Option<&str>,
+    judge_model: Option<&str>,
+    session_flag: Option<&str>,
+    force: bool,
+) -> (Value, String, u8) {
+    let mut any_failed = false;
+    let mut results = Vec::new();
+    let mut text_lines = Vec::new();
+
+    for (cell_id, verdict_val) in blocks {
+        let (ok, val_errors) = validate_judge_verdict(&verdict_val);
+        if !ok {
+            any_failed = true;
+            let line = format!("{cell_id}: {}", val_errors.join(" "));
+            text_lines.push(line);
+            results.push(json!({
+                "id": cell_id,
+                "recorded": false,
+                "errors": val_errors,
+            }));
+            continue;
+        }
+
+        let verdict_map = match &verdict_val {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+
+        match record_one(
+            root,
+            &cell_id,
+            verdict_map,
+            builder_model,
+            judge_model,
+            session_flag,
+            force,
+        ) {
+            Ok(cell) => {
+                let entries = cell.get("trace").and_then(|t| t.get("semantic_judge"));
+                let latest = match entries {
+                    Some(Value::Array(a)) => a.last().cloned().unwrap_or(Value::Null),
+                    _ => Value::Null,
+                };
+                let text = format!(
+                    "Recorded judge verdict on {}: {} (model_independence={}).",
+                    js_string_or_undefined(cell.get("id")),
+                    js_string_or_undefined(latest.get("verdict")),
+                    js_string_or_undefined(latest.get("model_independence"))
+                );
+                text_lines.push(text);
+                results.push(json!({
+                    "id": cell_id,
+                    "recorded": true,
+                    "errors": Vec::<String>::new(),
+                }));
+            }
+            Err(e) => {
+                any_failed = true;
+                let err_msg = match e {
+                    Fail::Thrown(msg) => msg,
+                    Fail::Delegate => "delegated".to_string(),
+                };
+                text_lines.push(format!("{cell_id}: {err_msg}"));
+                results.push(json!({
+                    "id": cell_id,
+                    "recorded": false,
+                    "errors": vec![err_msg],
+                }));
+            }
+        }
+    }
+
+    let code = if any_failed { 1 } else { 0 };
+    (Value::Array(results), text_lines.join("\n"), code)
+}
+
+pub(crate) fn process_judge_from_text(
+    root: &Path,
+    text_raw: &str,
+    expected_id: Option<&str>,
+    builder_model: Option<&str>,
+    judge_model: Option<&str>,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Out> {
+    let blocks = extract_fenced_verdicts(text_raw)
+        .map_err(|e| Fail::Thrown(format!("cells judge-record: {e}")))?;
+    if let Some(expected) = expected_id {
+        for (block_id, _) in &blocks {
+            if block_id != expected {
+                return Err(Fail::Thrown(format!(
+                    "cells judge-record: verdict block id \"{block_id}\" does not match --id \"{expected}\""
+                )));
+            }
+        }
+    }
+    let (json_array, text, code) = record_verdict_blocks(
+        root,
+        blocks,
+        builder_model,
+        judge_model,
+        session_flag,
+        force,
+    );
+    Ok(Out::Emit(json_array, text, code))
+}
+
 pub(crate) fn run_judge_record(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(
         &flags,
-        &["id", "file", "builder-model", "judge-model", "session-id", "force-ownership"],
+        &[
+            "id",
+            "file",
+            "from-text",
+            "builder-model",
+            "judge-model",
+            "session-id",
+            "force-ownership",
+        ],
     ) {
         return None;
     }
-    let id = flags.req_str("id")?.to_string();
-    let file = flags.req_str("file")?.to_string();
+    let id = opt_string_flag(&flags, "id")?;
+    let file = opt_string_flag(&flags, "file")?;
+    let from_text = opt_string_flag(&flags, "from-text")?;
     let builder_model = opt_string_flag(&flags, "builder-model")?;
     let judge_model = opt_string_flag(&flags, "judge-model")?;
     let (session_flag, force) = ownership_args(&flags)?;
-    dispatch("cells judge-record", use_json, t0, move |ctx| {
-        let root = ctx.root.clone();
-        let raw = read_file_text(&file, "judge verdict")?;
-        let verdict = match parse_json_js(&raw, false) {
-            JsParse::Value(v) => v,
-            // free prose — validator rejects it; a lone-surrogate escape is
-            // "not JSON this CLI can parse" and takes the same branch.
-            JsParse::NotJson => Value::String(raw.clone()),
-        };
-        let (ok, errors) = validate_judge_verdict(&verdict);
-        if !ok {
-            return Err(Fail::Thrown(format!(
-                "recordJudgeVerdict: cell \"{id}\" verdict rejected against schema \"judge-verdict/1\" — {} FIX: the judge dispatch must return the schema verbatim (never free prose); re-dispatch once, then record model_independence \"unverified\" if it fails again (D5).",
-                errors.join(" ")
-            )));
-        }
-        let verdict_map = match &verdict {
-            Value::Object(m) => m.clone(),
-            _ => unreachable!("validated object"),
-        };
-        let independence = derive_model_independence(
-            builder_model.as_deref(),
-            builder_model.as_deref().map(|_| PINNED_MODEL_STATUS),
-            judge_model.as_deref(),
-            judge_model.as_deref().map(|_| PINNED_MODEL_STATUS),
-        );
-        prescan_claim(&root, &id)?;
-        delegate_only(load_taxonomy(&root))?;
-        let mut reopened = false;
-        let mut guard = acquire_named_lock(&root, &format!("cells:{id}"))?;
-        let saved = (|| -> MR<Value> {
-            assert_not_archived(&root, "recordJudgeVerdict", &id)?;
-            let cell = read_cell_norm(&root, &id)?;
-            let Some(cell) = cell else {
-                return Err(Fail::Thrown(format!("recordJudgeVerdict: cell \"{id}\" not found.")));
+
+    if file.is_some() && from_text.is_some() {
+        return dispatch("cells judge-record", use_json, t0, |_ctx| {
+            Err(Fail::Thrown(
+                "cells judge-record: --file and --from-text are mutually exclusive.".to_string(),
+            ))
+        });
+    }
+
+    if let Some(file_path) = file {
+        let id_val = id?;
+        dispatch("cells judge-record", use_json, t0, move |ctx| {
+            let root = ctx.root.clone();
+            let raw = read_file_text(&file_path, "judge verdict")?;
+            let verdict = match parse_json_js(&raw, false) {
+                JsParse::Value(v) => v,
+                JsParse::NotJson => Value::String(raw.clone()),
             };
-            let Value::Object(mut cell_map) = cell else { return Err(Fail::Delegate) };
-            let mut entry = Map::new();
-            entry.insert("schema".into(), verdict_map.get("schema").cloned().unwrap_or(Value::Null));
-            entry.insert("verdict".into(), verdict_map.get("verdict").cloned().unwrap_or(Value::Null));
-            entry.insert("checks".into(), verdict_map.get("checks").cloned().unwrap_or(Value::Null));
-            entry.insert(
-                "failure_signature".into(),
-                match verdict_map.get("failure_signature") {
-                    None | Some(Value::Null) => Value::Null, // ?? null
-                    Some(v) => v.clone(),
-                },
-            );
-            entry.insert(
-                "fixability".into(),
-                verdict_map.get("fixability").cloned().unwrap_or(Value::Null),
-            );
-            entry.insert(
-                "confidence".into(),
-                verdict_map.get("confidence").cloned().unwrap_or(Value::Null),
-            );
-            let model_or_null = |m: &Option<String>| match m {
-                Some(s) if !js_trim(s).is_empty() => Value::String(s.clone()),
-                _ => Value::Null,
+            let (ok, errors) = validate_judge_verdict(&verdict);
+            if !ok {
+                return Err(Fail::Thrown(format!(
+                    "recordJudgeVerdict: cell \"{id_val}\" verdict rejected against schema \"judge-verdict/1\" — {} FIX: the judge dispatch must return the schema verbatim (never free prose); re-dispatch once, then record model_independence \"unverified\" if it fails again (D5).",
+                    errors.join(" ")
+                )));
+            }
+            let verdict_map = match &verdict {
+                Value::Object(m) => m,
+                _ => unreachable!("validated object"),
             };
-            entry.insert("builder_model".into(), model_or_null(&builder_model));
-            entry.insert("judge_model".into(), model_or_null(&judge_model));
-            entry.insert("model_independence".into(), Value::String(independence.to_string()));
-            entry.insert("recorded_at".into(), Value::String(utc_now()));
-            let mut trace = merge_trace(cell_map.get("trace"))?;
-            trace = guard_claim_ownership(
+            let cell = record_one(
                 &root,
-                &id,
-                trace,
-                "recordJudgeVerdict",
+                &id_val,
+                verdict_map,
+                builder_model.as_deref(),
+                judge_model.as_deref(),
                 session_flag.as_deref(),
                 force,
             )?;
-            let existing: Vec<Value> = match trace.get("semantic_judge") {
-                Some(Value::Array(a)) => a.clone(),
-                _ => Vec::new(),
+            let entries = cell.get("trace").and_then(|t| t.get("semantic_judge"));
+            let latest = match entries {
+                Some(Value::Array(a)) => a.last().cloned().unwrap_or(Value::Null),
+                _ => Value::Null,
             };
-            let mut next = existing;
-            next.push(Value::Object(entry));
-            trace.insert("semantic_judge".into(), Value::Array(next));
-            let needs_revision =
-                matches!(verdict_map.get("verdict"), Some(Value::String(s)) if s == "NEEDS_REVISION");
-            let capped = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "capped");
-            if needs_revision && capped {
-                cell_map.insert("status".into(), Value::String("open".into()));
-                let mut rework = Map::new();
-                rework.insert("at".into(), Value::String(utc_now()));
-                rework.insert(
-                    "reason".into(),
-                    Value::String("NEEDS_REVISION semantic-judge verdict recorded after cap".into()),
-                );
-                trace.insert("reopened_for_rework".into(), Value::Object(rework));
-                trace = release_trace(trace);
-                reopened = true;
-                log_decision(
-                    &root,
-                    &format!(
-                        "«cells judge-record: cell \"{id}\" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»"
-                    ),
-                    "A NEEDS_REVISION verdict recorded after cap must have teeth: the cell is reopened to open (clean slate) for rework, with claim + verify evidence cleared, instead of being silently logged into an inert trace entry (hardening-3) or left falsely \"claimed\" with stale verify_passed that a later PASS verdict could re-cap on with zero fresh verify (hardening-1-7-10 D7).",
-                    &["cells", "judge"],
-                )?;
-            }
-            cell_map.insert("trace".into(), Value::Object(trace));
-            let value = Value::Object(cell_map);
-            write_cell(&root, &value)?;
-            Ok(value)
-        })();
-        guard.release();
-        let cell = saved?;
-        if reopened {
-            release_claim_file_best_effort(&root, &id);
-            // merge-ready-fact D2: a NEEDS_REVISION verdict that flips a
-            // capped cell back to open is a reopen like any other — the
-            // feature stops being finished, so the stored fact goes.
-            clear_merge_ready_for(&root, &cell);
-        }
-        let entries = cell.get("trace").and_then(|t| t.get("semantic_judge"));
-        let latest = match entries {
-            Some(Value::Array(a)) => a.last().cloned().unwrap_or(Value::Null),
-            _ => Value::Null,
-        };
-        let text = format!(
-            "Recorded judge verdict on {}: {} (model_independence={}).",
-            js_string_or_undefined(cell.get("id")),
-            js_string_or_undefined(latest.get("verdict")),
-            js_string_or_undefined(latest.get("model_independence"))
-        );
-        Ok(Out::Emit(cell, text, 0))
-    })
+            let text = format!(
+                "Recorded judge verdict on {}: {} (model_independence={}).",
+                js_string_or_undefined(cell.get("id")),
+                js_string_or_undefined(latest.get("verdict")),
+                js_string_or_undefined(latest.get("model_independence"))
+            );
+            Ok(Out::Emit(cell, text, 0))
+        })
+    } else if let Some(from_text_path) = from_text {
+        dispatch("cells judge-record", use_json, t0, move |ctx| {
+            let root = ctx.root.clone();
+            let raw = if from_text_path == "-" {
+                read_stdin_text()?
+            } else {
+                read_file_text(&from_text_path, "judge text")?
+            };
+            process_judge_from_text(
+                &root,
+                &raw,
+                id.as_deref(),
+                builder_model.as_deref(),
+                judge_model.as_deref(),
+                session_flag.as_deref(),
+                force,
+            )
+        })
+    } else {
+        None
+    }
 }
 
 // ── cells schedule (read-only computed schedule) ───────────────────────────
@@ -915,3 +1082,232 @@ pub(crate) fn archive_feature_for_close(root: &Path, feature: &str) -> Result<us
         Err(_) => Err(format!("feature \"{slug}\" could not be archived")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_cell_fixture(root: &Path, id: &str, body: &Value) {
+        let dir = cells_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(body)).unwrap();
+    }
+
+    fn read_cell_fixture(root: &Path, id: &str) -> Value {
+        match read_json(&cells_dir(root).join(format!("{id}.json"))) {
+            ReadJson::Parsed(v) => v,
+            ReadJson::Missing => panic!("cell {id} fixture missing"),
+            ReadJson::Corrupt => panic!("cell {id} fixture corrupt"),
+        }
+    }
+
+    fn cell(id: &str, status: &str) -> Value {
+        json!({
+            "id": id,
+            "title": format!("title {id}"),
+            "status": status,
+            "lane": "standard",
+            "feature": "f",
+            "deps": [],
+            "verify": "echo ok",
+            "trace": { "worker": "w-1" },
+        })
+    }
+
+    #[test]
+    fn two_valid_blocks_record_two_verdicts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c1", &cell("c1", "open"));
+        write_cell_fixture(root, "c2", &cell("c2", "open"));
+
+        let text = "\
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+```json c2
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t2\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let out = process_judge_from_text(root, text, None, None, None, None, false).unwrap();
+        match out {
+            Out::Emit(val, text, code) => {
+                assert_eq!(code, 0);
+                assert_eq!(val[0]["id"], "c1");
+                assert_eq!(val[0]["recorded"], true);
+                assert_eq!(val[0]["errors"].as_array().unwrap().len(), 0);
+                assert_eq!(val[1]["id"], "c2");
+                assert_eq!(val[1]["recorded"], true);
+                assert_eq!(val[1]["errors"].as_array().unwrap().len(), 0);
+                assert_eq!(text.lines().count(), 2);
+            }
+            _ => panic!("expected Out::Emit"),
+        }
+
+        let c1_disk = read_cell_fixture(root, "c1");
+        assert_eq!(c1_disk["trace"]["semantic_judge"].as_array().unwrap().len(), 1);
+        let c2_disk = read_cell_fixture(root, "c2");
+        assert_eq!(c2_disk["trace"]["semantic_judge"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn invalid_block_is_reported_and_exit_is_nonzero_while_valid_one_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c1", &cell("c1", "open"));
+        write_cell_fixture(root, "c2", &cell("c2", "open"));
+
+        let text = "\
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+```json c2
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"INVALID\", \"checks\": [], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let out = process_judge_from_text(root, text, None, None, None, None, false).unwrap();
+        match out {
+            Out::Emit(val, text, code) => {
+                assert_eq!(code, 1);
+                assert_eq!(val[0]["id"], "c1");
+                assert_eq!(val[0]["recorded"], true);
+                assert_eq!(val[0]["errors"].as_array().unwrap().len(), 0);
+                assert_eq!(val[1]["id"], "c2");
+                assert_eq!(val[1]["recorded"], false);
+                assert!(val[1]["errors"].as_array().unwrap().len() > 0);
+                assert_eq!(text.lines().count(), 2);
+            }
+            _ => panic!("expected Out::Emit"),
+        }
+
+        let c1_disk = read_cell_fixture(root, "c1");
+        assert_eq!(c1_disk["trace"]["semantic_judge"].as_array().unwrap().len(), 1);
+        let c2_disk = read_cell_fixture(root, "c2");
+        assert!(c2_disk["trace"].get("semantic_judge").is_none());
+    }
+
+    #[test]
+    fn duplicate_ids_refuse() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c1", &cell("c1", "open"));
+
+        let text = "\
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let err = match process_judge_from_text(root, text, None, None, None, None, false) {
+            Err(Fail::Thrown(msg)) => msg,
+            Err(Fail::Delegate) => panic!("expected Fail::Thrown, got Fail::Delegate"),
+            Ok(_) => panic!("expected Fail::Thrown, got Ok"),
+        };
+        assert!(err.contains("duplicate cell id \"c1\" in verdict blocks"));
+
+        let c1_disk = read_cell_fixture(root, "c1");
+        assert!(c1_disk["trace"].get("semantic_judge").is_none());
+    }
+
+    #[test]
+    fn id_mismatch_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c1", &cell("c1", "open"));
+        write_cell_fixture(root, "c2", &cell("c2", "open"));
+
+        let text = "\
+```json c1
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t1\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+```json c2
+{\"schema\": \"judge-verdict/1\", \"verdict\": \"PASS\", \"checks\": [{\"id\": \"t2\", \"status\": \"PASS\", \"evidence\": \"ok\"}], \"fixability\": \"automatic\", \"confidence\": \"high\"}
+```
+";
+        let err = match process_judge_from_text(root, text, Some("c1"), None, None, None, false) {
+            Err(Fail::Thrown(msg)) => msg,
+            Err(Fail::Delegate) => panic!("expected Fail::Thrown, got Fail::Delegate"),
+            Ok(_) => panic!("expected Fail::Thrown, got Ok"),
+        };
+        assert!(err.contains("verdict block id \"c2\" does not match --id \"c1\""));
+
+        let c1_disk = read_cell_fixture(root, "c1");
+        assert!(c1_disk["trace"].get("semantic_judge").is_none());
+    }
+
+    #[test]
+    fn answer_with_no_blocks_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        let err = match process_judge_from_text(root, "just free text", None, None, None, None, false) {
+            Err(Fail::Thrown(msg)) => msg,
+            Err(Fail::Delegate) => panic!("expected Fail::Thrown, got Fail::Delegate"),
+            Ok(_) => panic!("expected Fail::Thrown, got Ok"),
+        };
+        assert!(err.contains("no json <cell-id> verdict block found"));
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    #[test]
+    #[ignore = "spawned by file_with_from_text_refuses"]
+    fn file_with_from_text_refuses_child() {
+        let (flags, use_json) = rsv::parse_flags(&["--file", "v.json", "--from-text", "t.md"]).unwrap();
+        let code = run_judge_record(flags, use_json, Instant::now());
+        assert_eq!(code, Some(ExitCode::FAILURE));
+    }
+
+    #[test]
+    fn file_with_from_text_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("onboarding.json"), "{}").unwrap();
+
+        {
+            let _cwd = CwdGuard::enter(tmp.path());
+            let (flags, use_json) = rsv::parse_flags(&["--file", "v.json", "--from-text", "t.md"]).unwrap();
+            let code = run_judge_record(flags, use_json, Instant::now());
+            assert_eq!(code, Some(ExitCode::FAILURE));
+        }
+
+        let exe = std::env::current_exe().unwrap();
+        let out = std::process::Command::new(&exe)
+            .args([
+                "--exact",
+                "verbs::cells::handlers_meta::tests::file_with_from_text_refuses_child",
+                "--ignored",
+                "--nocapture",
+            ])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let combined = format!("{stderr}\n{stdout}");
+
+        assert!(combined.contains("cells judge-record: --file and --from-text are mutually exclusive."));
+    }
+}
+

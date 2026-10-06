@@ -125,12 +125,14 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     }
 }
 
+
 pub(crate) fn go(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Result<Ctx, ExitCode>> {
-    match prelude(cmd, use_json, t0)? {
-        Pre::Go(c) => Some(Ok(c)),
-        Pre::Emitted(code) => Some(Err(code)),
+    match crate::verbs::drivers::ctx_serving_granted(cmd, use_json, t0)? {
+        Ok(c) => Some(Ok(c)),
+        Err(code) => Some(Err(code)),
     }
 }
+
 
 // ─── state set ─────────────────────────────────────────────────────────────
 
@@ -3025,5 +3027,243 @@ mod tests {
             json.get("gate_durable_stamp_skipped").is_none(),
             "the field must not appear on the default-record path: {json:?}"
         );
+    }
+
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(target: &Path) -> Self {
+            let guard = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(target).unwrap();
+            Self { _lock: guard, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn fixture_e32f3a66(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        crate::verbs::worktree::run_git(&main, &["init", "-q", "-b", "main", "."]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.email", "a@b.c"]);
+        crate::verbs::worktree::run_git(&main, &["config", "user.name", "t"]);
+        crate::verbs::worktree::run_git(&main, &["add", "-A"]);
+        crate::verbs::worktree::run_git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        let ungranted = tmp.join("wt-ungranted");
+        crate::verbs::worktree::run_git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(ungranted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(ungranted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            ungranted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo-ungranted\"}\n",
+        )
+        .unwrap();
+        (main, granted, ungranted)
+    }
+
+    #[test]
+    #[ignore = "spawned by contract_control_plane_from_worktree_e32f3a66_state_verbs"]
+    fn served_state_verbs_name_the_main_root_child() {
+        let set = try_native(
+            &[
+                OsString::from("state"),
+                OsString::from("waiting-on"),
+                OsString::from("set"),
+                OsString::from("--kind"),
+                OsString::from("gate"),
+                OsString::from("--subject"),
+                OsString::from("review"),
+                OsString::from("--session-id"),
+                OsString::from("s1"),
+                OsString::from("--json"),
+            ],
+            Instant::now(),
+        );
+        assert_eq!(set, Some(ExitCode::SUCCESS));
+        let clear = try_native(
+            &[OsString::from("state"), OsString::from("waiting-on"), OsString::from("clear")],
+            Instant::now(),
+        );
+        assert_eq!(clear, Some(ExitCode::SUCCESS));
+    }
+
+    #[test]
+    fn contract_control_plane_from_worktree_e32f3a66_state_verbs() {
+        let tmp = tmp_root();
+        let (main, granted, ungranted) = fixture_e32f3a66(tmp.path());
+        w(&main, ".bee/state.json", r#"{"schema_version":"1.0","phase":"idle","feature":null}"#);
+
+        {
+            let _cwd = CwdGuard::enter(&granted);
+            let code = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--feature"),
+                    OsString::from("demo"),
+                    OsString::from("--owner"),
+                    OsString::from("idle"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code, Some(ExitCode::SUCCESS));
+            let state: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state["phase"], "planning");
+            assert_eq!(state["feature"], "demo");
+
+            let code_route = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("route"),
+                    OsString::from("--set"),
+                    OsString::from("--class"),
+                    OsString::from("feature"),
+                    OsString::from("--lane"),
+                    OsString::from("standard"),
+                    OsString::from("--flags"),
+                    OsString::from("multi-domain"),
+                    OsString::from("--files"),
+                    OsString::from("7"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_route, Some(ExitCode::SUCCESS));
+            let state_after_route: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_after_route["route"]["class"], "feature");
+
+            w(
+                &granted,
+                "docs/history/demo/plan.md",
+                "# Plan: demo\n\n## Cells, current slice preview\n\n```json\n[{\"id\":\"c1\",\"feature\":\"demo\",\"title\":\"Do thing\",\"lane\":\"standard\",\"role\":\"code\",\"action\":\"Implement it\",\"files\":[\"src/main.rs\"],\"read_first\":[],\"must_haves\":{\"truths\":[\"It works\"]},\"verify\":\"cargo check\"}]\n```\n",
+            );
+            let code_preview = crate::router::try_native(
+                &[
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_preview, Some(ExitCode::SUCCESS));
+            let code_state_preview = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("gate"),
+                    OsString::from("--preview"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_state_preview, Some(ExitCode::SUCCESS));
+
+            let code_waiting_set = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("set"),
+                    OsString::from("--kind"),
+                    OsString::from("gate"),
+                    OsString::from("--subject"),
+                    OsString::from("review"),
+                    OsString::from("--session-id"),
+                    OsString::from("s1"),
+                    OsString::from("--json"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_set, Some(ExitCode::SUCCESS));
+
+            let code_waiting_clear = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("waiting-on"),
+                    OsString::from("clear"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_waiting_clear, Some(ExitCode::SUCCESS));
+
+            let exe = std::env::current_exe().expect("test binary path");
+            let out = std::process::Command::new(&exe)
+                .args([
+                    "--exact",
+                    "verbs::state_group::set_gate::tests::served_state_verbs_name_the_main_root_child",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .current_dir(&granted)
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(out.status.success(), "{stdout}");
+            assert!(stdout.contains(&format!("\"control_root\": \"{}\"", main.display())), "{stdout}");
+            assert!(stdout.contains(&format!("control plane: {}", main.display())), "{stdout}");
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&main);
+            let code_main = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("swarming"),
+                    OsString::from("--owner"),
+                    OsString::from("planning"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_main, Some(ExitCode::SUCCESS));
+            let state_main: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_main["phase"], "swarming");
+        }
+
+        {
+            let _cwd = CwdGuard::enter(&ungranted);
+            let code_ungranted = try_native(
+                &[
+                    OsString::from("state"),
+                    OsString::from("set"),
+                    OsString::from("--phase"),
+                    OsString::from("planning"),
+                    OsString::from("--owner"),
+                    OsString::from("swarming"),
+                ],
+                Instant::now(),
+            );
+            assert_eq!(code_ungranted, Some(ExitCode::SUCCESS));
+            let state_ungranted: Value = serde_json::from_str(&std::fs::read_to_string(main.join(".bee").join("state.json")).unwrap()).unwrap();
+            assert_eq!(state_ungranted["phase"], "planning");
+        }
     }
 }

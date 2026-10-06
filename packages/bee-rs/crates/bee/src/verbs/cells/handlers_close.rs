@@ -51,6 +51,28 @@ pub(crate) const CAP_FLAGS: [&str; 16] = [
     "fix-at",
 ];
 
+pub(crate) const FINISH_FLAGS: [&str; 19] = [
+    "id",
+    "outcome",
+    "files",
+    "deviations-file",
+    "deviation",
+    "friction",
+    "override-judge",
+    "session-id",
+    "force-ownership",
+    "commit-pending",
+    "inline-reason",
+    "report",
+    "sync-ack",
+    "mistake",
+    "no-mistakes",
+    "fix-at",
+    "from-job",
+    "proof-result",
+    "proof-reason",
+];
+
 /// resolveDeclaredBehaviorChange (E6).
 pub(crate) fn resolve_declared_behavior_change(cell: &Map<String, Value>) -> bool {
     match cell.get("behavior_change") {
@@ -84,6 +106,7 @@ pub(crate) fn parse_deviations_file(file: &str) -> MR<Vec<Value>> {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct CapFlags {
     pub(crate) id: String,
     pub(crate) outcome: Option<String>,       // flags.outcome ? String : undefined
@@ -144,6 +167,9 @@ pub(crate) struct CapFlags {
     /// applied_at, prediction) when non-empty. Stored on trace.sync_ack and
     /// appended to trace.deviations.
     pub(crate) sync_ack: Option<String>,
+    pub(crate) from_job: Option<String>,
+    pub(crate) proof_result: Option<String>,
+    pub(crate) proof_reason: Option<String>,
 }
 
 /// wp-1: is `worker` (the cap's own `trace.worker`) a REGISTERED worker for
@@ -1134,6 +1160,9 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // `--deviation`'s own probe takes above.
     let report = opt_string_flag(flags, "report")?;
     let sync_ack = opt_string_flag(flags, "sync-ack")?;
+    let from_job = opt_string_flag(flags, "from-job")?;
+    let proof_result = opt_string_flag(flags, "proof-result")?;
+    let proof_reason = opt_string_flag(flags, "proof-reason")?;
     Some(CapFlags {
         id,
         outcome,
@@ -1151,6 +1180,9 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         inline_reason,
         report,
         sync_ack,
+        from_job,
+        proof_result,
+        proof_reason,
     })
 }
 
@@ -1174,7 +1206,8 @@ pub(crate) fn cap_text(cell: &Value) -> String {
 /// `cells finish` is the one mutating verb ported onto the FULL door —
 /// `run_finish` below — per wf-1's logged decision.
 pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &CAP_FLAGS) {
+    let allowed: &[&str] = if finish { &FINISH_FLAGS } else { &CAP_FLAGS };
+    if !rsv::keys_known(&flags, allowed) {
         return None;
     }
     let cap_flags = cap_flags_from(&flags)?;
@@ -1269,6 +1302,153 @@ pub(crate) fn finish_cap_and_release(
             cap_flags.deviations = parse_deviations_file(file)?;
         }
     }
+    let mut files_source: Option<&'static str> = None;
+    if let Some(job_id) = &cap_flags.from_job {
+        if cap_flags.report.is_some() {
+            return Err(Fail::Thrown(
+                "cells finish: --from-job cannot be combined with --report (FIX: omit --report when capping from a job)".to_string(),
+            ));
+        }
+        let proof_result = match &cap_flags.proof_result {
+            Some(s) if !js_trim(s).is_empty() => js_trim(s),
+            _ => {
+                return Err(Fail::Thrown(
+                    "cells finish: --from-job requires --proof-result <green:unit|green:static|green:live> (FIX: pass --proof-result)".to_string(),
+                ));
+            }
+        };
+        if !PROOF_RESULT_VALUES.contains(&proof_result) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --proof-result \"{proof_result}\" is invalid — must be one of: green:unit, green:static, green:live (FIX: pass a valid --proof-result)"
+            )));
+        }
+        if !cap_flags.no_mistakes && cap_flags.mistake.is_none() {
+            return Err(Fail::Thrown(
+                "cells finish: --from-job requires a mistakes answer: pass --no-mistakes or --mistake \"<what went wrong> — <what would have been better>\" --fix-at <architecture|check|doctrine|none> (FIX: pass --no-mistakes or --mistake with --fix-at)".to_string(),
+            ));
+        }
+
+        let bee_dir = root.join(".bee");
+        let job_file = crate::herding::mailbox::job_path(&bee_dir, job_id);
+        let job_raw = match std::fs::read_to_string(&job_file) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: job \"{job_id}\" not found (no job.json at {})",
+                    job_file.display()
+                )));
+            }
+        };
+        let job_val: Value = serde_json::from_str(&job_raw).map_err(|e| {
+            Fail::Thrown(format!(
+                "cells finish: failed to parse {}: {e}",
+                job_file.display()
+            ))
+        })?;
+
+        if let Some(job_cell) = job_val.get("cell_id").and_then(Value::as_str) {
+            if job_cell != cap_flags.id {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: job \"{job_id}\" is for cell \"{job_cell}\", but --id is \"{}\" (FIX: verify the job id or cell id)",
+                    cap_flags.id
+                )));
+            }
+        }
+
+        let job_cwd_str = job_val.get("cwd").and_then(Value::as_str).unwrap_or("");
+        let job_cwd = Path::new(job_cwd_str);
+        if job_cwd_str.is_empty() || !job_cwd.exists() || !job_cwd.is_dir() {
+            return Err(Fail::Thrown(format!(
+                "cells finish: job \"{job_id}\" working directory \"{job_cwd_str}\" does not exist (FIX: pass --report)"
+            )));
+        }
+
+        let mbox_dir = crate::herding::mailbox::mailbox_dir(&bee_dir, job_id);
+        let mut entries = Vec::new();
+        if let Ok(dir_entries) = std::fs::read_dir(&mbox_dir) {
+            for entry in dir_entries.flatten() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    entries.push(name);
+                }
+            }
+        }
+        let round = match crate::herding::mailbox::select_latest_round(&entries) {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: no result file found for job \"{job_id}\" in {} (FIX: wait for the job or inspect the worker)",
+                    mbox_dir.display()
+                )));
+            }
+        };
+        let res_path = crate::herding::mailbox::result_path(&bee_dir, job_id, round);
+        let res_text = match std::fs::read_to_string(&res_path) {
+            Ok(t) => t,
+            Err(_) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: could not read result file at {}",
+                    res_path.display()
+                )));
+            }
+        };
+        let mailbox_result = match crate::herding::mailbox::parse_result_text(round, &res_text) {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: failed to parse result file {}: {e}",
+                    res_path.display()
+                )));
+            }
+        };
+        if mailbox_result.status != crate::herding::mailbox::MailboxStatus::Done {
+            return Err(Fail::Thrown(format!(
+                "cells finish: job \"{job_id}\" result status is not done (was {:?}) (FIX: wait for the job to complete or pass --report)",
+                mailbox_result.status
+            )));
+        }
+
+        let worker_proof = mailbox_result.proof.trim();
+        let leader_reason = cap_flags.proof_reason.as_deref().unwrap_or("").trim();
+        if worker_proof.is_empty() && leader_reason.is_empty() {
+            return Err(Fail::Thrown(
+                "cells finish: worker result proof text is empty (FIX: pass --proof-reason)".to_string(),
+            ));
+        }
+
+        let git_facts = read_job_git_facts(job_cwd, root);
+
+        let cell_opt = read_cell_norm(root, &cap_flags.id)?;
+        let cell_val = cell_opt.ok_or_else(|| {
+            Fail::Thrown(format!("capCell: cell \"{}\" not found.", cap_flags.id))
+        })?;
+        let cell_verify = cell_val.get("verify").and_then(Value::as_str).unwrap_or("").trim();
+
+        let report_json = report_from_job(
+            &job_val,
+            &mailbox_result,
+            git_facts,
+            cell_verify,
+            &proof_result,
+            cap_flags.proof_reason.as_deref(),
+        )
+        .map_err(Fail::Thrown)?;
+
+        files_source = Some(if mailbox_result.files_changed.is_empty() {
+            "git fallback"
+        } else {
+            "worker files_changed"
+        });
+        let parsed_report: Value = serde_json::from_str(&report_json).unwrap_or(Value::Null);
+        if let Some(files_arr) = parsed_report.get("files").and_then(Value::as_array) {
+            cap_flags.files_changed = files_arr.clone();
+        }
+        if cap_flags.outcome.is_none() {
+            if let Some(o) = parsed_report.get("outcome").and_then(Value::as_str) {
+                cap_flags.outcome = Some(o.to_string());
+            }
+        }
+        cap_flags.report = Some(report_json);
+    }
     let cell = cap_cell_from_flags(root, &cap_flags, true)?;
 
     // cells.finish: release every reservation the claiming agent holds.
@@ -1311,7 +1491,13 @@ pub(crate) fn finish_cap_and_release(
         rf.insert("fix".into(), Value::String(fix.clone()));
         result.insert("release_failed".into(), Value::Object(rf));
     }
+    if let Some(source) = files_source {
+        result.insert("files_source".into(), Value::String(source.to_string()));
+    }
     let mut lines = vec![cap_text(&cell)];
+    if let Some(source) = files_source {
+        lines.push(format!("Files source: {source}."));
+    }
     lines.push(match (&release_failure, released.len()) {
         (Some((error, fix)), _) => {
             format!("Cap stands, but releasing reservations FAILED ({error}) — run: {fix}")
@@ -1875,6 +2061,9 @@ mod tests {
                 .to_string(),
             ),
             sync_ack: None,
+            from_job: None,
+            proof_result: None,
+            proof_reason: None,
         }
     }
 

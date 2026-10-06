@@ -740,6 +740,54 @@ fn team_pi_paseo_specs(cfg: &Value) -> Vec<Result<crate::herding::paseo::PaseoSp
     specs
 }
 
+fn is_bare_version(line: &str) -> bool {
+    let s = line.trim();
+    let s = s.strip_prefix('v').or_else(|| s.strip_prefix('V')).unwrap_or(s);
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn is_appimage_wrapper_script(cmd: &str, env: &dyn Fn(&str) -> Option<String>) -> bool {
+    let resolved_path = if cmd.contains('/') || cmd.contains('\\') {
+        let p = PathBuf::from(cmd);
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
+    } else {
+        let path_val = env("PATH");
+        path_val.and_then(|val| {
+            for dir in std::env::split_paths(&val) {
+                let candidate = dir.join(cmd);
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+                #[cfg(windows)]
+                {
+                    for ext in [".exe", ".cmd", ".bat"] {
+                        let cand_ext = dir.join(format!("{cmd}{ext}"));
+                        if cand_ext.is_file() {
+                            return Some(cand_ext);
+                        }
+                    }
+                }
+            }
+            None
+        })
+    };
+
+    if let Some(path) = resolved_path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            return content.contains("AppImage");
+        }
+    }
+    false
+}
+
 fn paseo_ready_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Option<Row> {
     paseo_ready_row_with_env_and_cli(root, env, None, None)
 }
@@ -772,18 +820,31 @@ fn paseo_ready_row_with_env_and_cli(
         failures.push("paseo daemon is down — FIX: start the daemon with paseo daemon start".to_string());
     }
 
+    let is_wrapper = is_appimage_wrapper_script(&cmd, env);
     match cli.call(&["--version".to_string()]) {
         Ok(out) => {
-            if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {
+            let first_line = out.lines().find(|l| !l.trim().is_empty()).map(str::trim);
+            let bare = first_line.is_some_and(is_bare_version);
+            if !bare || is_wrapper {
+                failures.push(format!(
+                    "{cmd} is an AppImage CLI — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo"
+                ));
+            } else if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {
                 failures.push(format!(
                     "{cmd} version is below 0.10.3 — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
                 ));
             }
         }
         Err(e) => {
-            failures.push(format!(
-                "{cmd} --version failed ({e}) — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
-            ));
+            if is_wrapper {
+                failures.push(format!(
+                    "{cmd} is an AppImage CLI — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo"
+                ));
+            } else {
+                failures.push(format!(
+                    "{cmd} --version failed ({e}) — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
+                ));
+            }
         }
     }
 
@@ -798,6 +859,75 @@ fn paseo_ready_row_with_env_and_cli(
             .is_some_and(|h| Path::new(h).join(".pi/agent/auth.json").is_file());
         if !auth_exists {
             failures.push("~/.pi/agent/auth.json is missing — FIX: log in with pi".to_string());
+        }
+    }
+
+    let mut herding_agents = std::collections::BTreeMap::new();
+    if let Some(map) = cfg.get("agents").and_then(Value::as_object) {
+        for (name, val) in map {
+            herding_agents.insert(name.clone(), val.clone());
+        }
+    }
+    if let Some(map) = cfg.pointer("/herding/agents").and_then(Value::as_object) {
+        for (name, val) in map {
+            herding_agents.insert(name.clone(), val.clone());
+        }
+    }
+
+    for (agent, val) in &herding_agents {
+        let Some(paseo_obj) = val.get("paseo").and_then(Value::as_object) else {
+            continue;
+        };
+        let is_pi = paseo_obj
+            .get("provider")
+            .and_then(Value::as_str)
+            .is_some_and(|s| s.trim().eq_ignore_ascii_case("pi"));
+        let isolated = paseo_obj
+            .get("isolated_config")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !is_pi || !isolated {
+            continue;
+        }
+
+        let agent_dir = root.join(".bee/runtime/pi-agent").join(agent);
+        if agent_dir.exists() {
+            let settings_file = agent_dir.join("settings.json");
+            let settings_ok = std::fs::read_to_string(&settings_file)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|v| {
+                    v.get("defaultProjectTrust")
+                        .and_then(Value::as_str)
+                        .map(|s| s == "always")
+                })
+                .unwrap_or(false);
+            if !settings_ok {
+                failures.push(format!(
+                    "isolated agent folder .bee/runtime/pi-agent/{agent} settings.json does not set defaultProjectTrust to always — FIX: recreate isolated config for {agent}"
+                ));
+            }
+
+            let auth_file = agent_dir.join("auth.json");
+            let auth_ok = std::fs::symlink_metadata(&auth_file)
+                .map(|meta| meta.file_type().is_symlink())
+                .unwrap_or(false)
+                && auth_file.exists();
+            if !auth_ok {
+                failures.push(format!(
+                    "isolated agent folder .bee/runtime/pi-agent/{agent} auth.json is not a resolving symlink — FIX: recreate isolated config for {agent}"
+                ));
+            }
+        } else {
+            let home = env("HOME").or_else(|| env("USERPROFILE"));
+            let home_auth_exists = home
+                .as_deref()
+                .is_some_and(|h| Path::new(h).join(".pi/agent/auth.json").is_file());
+            if !home_auth_exists {
+                failures.push(format!(
+                    "~/.pi/agent/auth.json is missing for agent {agent} — FIX: log in with pi for {agent}"
+                ));
+            }
         }
     }
 
