@@ -3397,6 +3397,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
 
     if let Value::Object(ref mut m) = job_value {
         m.insert("paseo_agent_id".into(), Value::String(agent_id.clone()));
+        m.insert("kind".into(), Value::String(opts.agent.as_deref().unwrap_or("paseo").to_string()));
     }
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
         return ExecResult {
@@ -3405,6 +3406,9 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
             closed_pane: false,
         };
     }
+
+    let kind = opts.agent.as_deref().unwrap_or("paseo");
+    record_dispatch(&opts.main_root, opts, kind, &agent_id);
 
     let started_at_ms = now_ms();
     let decision = wait_for_round_paseo(
@@ -3422,13 +3426,14 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         PollDecision::ResultReady => read_result_for_round(&bee_dir, &opts.job_id, 1),
         PollDecision::TimedOutIdle => {
             let generic = idle_timeout_message(opts.idle_timeout_secs);
-            RunOutcome::TimedOutIdle(generic)
+            RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
         PollDecision::Died { pid } => RunOutcome::Died { pid },
         PollDecision::Blocked => {
-            RunOutcome::PaneBlocked(format!("herding: paseo agent {agent_id} blocked on permissions"))
+            let generic = format!("herding: paseo agent {agent_id} blocked on permissions — agent kept for inspection: paseo logs {agent_id}");
+            RunOutcome::PaneBlocked(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
@@ -3442,6 +3447,21 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         outcome,
         pane_id: Some(agent_id),
         closed_pane,
+    }
+}
+
+fn diagnose_giveup_paseo(
+    cli: &dyn PaseoCli,
+    agent_id: &str,
+    generic: String,
+) -> String {
+    let replaced = generic.replace("pane kept for inspection", &format!("agent kept for inspection: paseo logs {agent_id}"));
+    let args = paseo::logs_tail_argv(agent_id, 40, None);
+    match cli.call(&args) {
+        Ok(out) if !out.trim().is_empty() => {
+            format!("{replaced}\n{}", out.trim_end_matches('\n'))
+        }
+        _ => replaced,
     }
 }
 
@@ -3472,7 +3492,7 @@ fn handle_paseo_archive(
         eprintln!("bee herding run: keeping paseo agent {agent_id} for the answer");
         false
     } else {
-        eprintln!("bee herding run: keeping paseo agent {agent_id}");
+        eprintln!("bee herding run: agent kept for inspection: paseo logs {agent_id}");
         false
     }
 }
@@ -3687,6 +3707,9 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         };
     }
 
+    let kind = job_value.get("kind").or_else(|| job_value.get("agent")).and_then(Value::as_str).unwrap_or("paseo");
+    record_dispatch(&opts.main_root, opts, kind, &agent_id);
+
     let started_at_ms = now_ms();
     let decision = wait_for_round_paseo(
         &bee_dir,
@@ -3703,13 +3726,14 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         PollDecision::ResultReady => read_result_for_round(&bee_dir, job_id, next_round),
         PollDecision::TimedOutIdle => {
             let generic = idle_timeout_message(opts.idle_timeout_secs);
-            RunOutcome::TimedOutIdle(generic)
+            RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
         PollDecision::Died { pid } => RunOutcome::Died { pid },
         PollDecision::Blocked => {
-            RunOutcome::PaneBlocked(format!("herding: paseo agent {agent_id} blocked on permissions"))
+            let generic = format!("herding: paseo agent {agent_id} blocked on permissions — agent kept for inspection: paseo logs {agent_id}");
+            RunOutcome::PaneBlocked(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
@@ -3807,7 +3831,6 @@ fn wait_for_round_paseo_driven(
             let inspect_res = cli.call(&inspect_args);
             let paseo_state = inspect_res.ok().and_then(|out| paseo::parse_inspect(&out));
 
-            let mut blocked = false;
             let liveness = match paseo_state {
                 Some(PaseoState::Working) => {
                     heartbeat_fresh = true;
@@ -3817,7 +3840,6 @@ fn wait_for_round_paseo_driven(
                     Some(Liveness::Alive { pid: 0 })
                 }
                 Some(PaseoState::Blocked) => {
-                    blocked = true;
                     Some(Liveness::Alive { pid: 0 })
                 }
                 Some(PaseoState::Dead) => {
@@ -3834,7 +3856,7 @@ fn wait_for_round_paseo_driven(
                 heartbeat_fresh,
                 pane_text: None,
                 liveness,
-                blocked,
+                blocked: false,
                 mark,
             }
         },
@@ -11060,7 +11082,9 @@ mod tests {
         inspect: Result<String, String>,
         archive: Result<String, String>,
         send: Result<String, String>,
+        logs: Result<String, String>,
         on_send: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
+        on_inspect: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
     }
 
     impl FakePaseoCli {
@@ -11077,12 +11101,24 @@ mod tests {
                 inspect,
                 archive,
                 send: Ok("sent\n".to_string()),
+                logs: Ok("logs output\n".to_string()),
                 on_send: None,
+                on_inspect: None,
             }
         }
 
         fn with_on_send(mut self, on_send: impl Fn() + Send + Sync + 'static) -> Self {
             self.on_send = Some(std::sync::Arc::new(on_send));
+            self
+        }
+
+        fn with_on_inspect(mut self, on_inspect: impl Fn() + Send + Sync + 'static) -> Self {
+            self.on_inspect = Some(std::sync::Arc::new(on_inspect));
+            self
+        }
+
+        fn with_logs(mut self, logs: Result<String, String>) -> Self {
+            self.logs = logs;
             self
         }
     }
@@ -11095,6 +11131,9 @@ mod tests {
             } else if args.first().map(|s| s.as_str()) == Some("run") {
                 self.run.clone()
             } else if args.first().map(|s| s.as_str()) == Some("inspect") {
+                if let Some(ref cb) = self.on_inspect {
+                    cb();
+                }
                 self.inspect.clone()
             } else if args.first().map(|s| s.as_str()) == Some("archive") {
                 self.archive.clone()
@@ -11103,6 +11142,8 @@ mod tests {
                     cb();
                 }
                 self.send.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("logs") {
+                self.logs.clone()
             } else {
                 Err(format!("unexpected command: {:?}", args))
             }
@@ -11692,6 +11733,131 @@ mod tests {
             "--json",
         ]);
         assert_eq!(exit, ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn execute_paseo_blocked_then_result_returns_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let dir_clone = dir.clone();
+        let count = std::sync::atomic::AtomicUsize::new(0);
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-blocked-result\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_on_inspect(move || {
+            let c = count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if c >= 1 {
+                let res_path = dir_clone.join("result-1.json");
+                if !res_path.exists() {
+                    let _ = std::fs::create_dir_all(&dir_clone);
+                    let res = serde_json::json!({
+                        "status": "done",
+                        "summary": "finished work",
+                        "files_changed": [],
+                        "proof": "cargo test",
+                    });
+                    let _ = std::fs::write(&res_path, serde_json::to_string(&res).unwrap());
+                }
+            }
+        });
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::Result(ref r) => {
+                assert_eq!(r.status, MailboxStatus::Done);
+                assert_eq!(r.summary, "finished work");
+            }
+            ref other => panic!("expected Result, got {other:?}"),
+        }
+        assert_eq!(res.pane_id, Some("paseo-agent-blocked-result".to_string()));
+    }
+
+    #[test]
+    fn execute_paseo_blocked_until_idle_timeout_times_out_with_log_tail_in_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.idle_timeout_secs = 1;
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-timeout\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_logs(Ok("last log line 1\nlast log line 2\n".to_string()));
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::TimedOutIdle(ref msg) => {
+                assert!(msg.contains("no heartbeat for 1s (idle timeout) — agent kept for inspection: paseo logs paseo-agent-timeout"), "{msg}");
+                assert!(msg.contains("last log line 1"), "{msg}");
+                assert!(msg.contains("last log line 2"), "{msg}");
+            }
+            ref other => panic!("expected TimedOutIdle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn execute_paseo_run_writes_one_ledger_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-ledger\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+
+        let ledger_path = wave_ledger::wave_ledger_path(main_root);
+        assert!(ledger_path.exists(), "wave-ledger.jsonl should exist");
+        let content = std::fs::read_to_string(&ledger_path).unwrap();
+        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert_eq!(lines.len(), 1, "expected exactly one ledger row: {content}");
+        let row: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(row["wave_id"], opts.job_id);
+        assert_eq!(row["workers"][0]["pane_id"], "paseo-agent-ledger");
     }
 }
 
