@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "leader-check-windows-paths",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"leader-check-windows-paths\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 347ed82; capture what settled, then bee close --feature leader-check-windows-paths.",
+  "next_action": "bee close --feature leader-check-windows-paths",
   "created_at": "2026-10-06T17:12:50.797Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -123,5 +123,14 @@
         "behavior_change": true
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "leader-check-windows-paths",
+    "date": "2026-10-06",
+    "at": "2026-10-06T17:15:31.827Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "bee close --feature leader-check-windows-paths"
   }
 }
