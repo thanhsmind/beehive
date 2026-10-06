@@ -19,6 +19,7 @@ When bee itself breaks in a host repository, the agent there does not fix bee. I
 scrubbed report as a GitHub issue on `thanhsmind/beehive` (b58c1cef). The bee repository then
 reads the open issues as one more feedback source, and `bee-evolving` ranks and fixes them through
 its two gates (d45b1e6b). The host rule is `agents-bee-defect-report` in the AGENTS block.
+The locked decisions are bee-report-issues D1–D3 (b58c1cef, c3be1e3f, d45b1e6b).
 
 ## Entry Points & Triggers
 
@@ -31,7 +32,8 @@ its two gates (d45b1e6b). The host rule is `agents-bee-defect-report` in the AGE
 
 ### B1 — Filing a report
 
-**Flags:** `--title` (one line, 1 to 120 characters), `--symptom`, `--evidence`, `--root-cause`,
+**Flags:** `--title` (one line, 1 to 120 characters after the scrub, so a title holding a long
+host path fits once the path is rewritten), `--symptom`, `--evidence`, `--root-cause`,
 `--command` are required; `--output` (bee's exact output), `--exit-code` (an integer),
 `--dry-run` and `--json` are optional. The body has the sections Symptom, Evidence, Output
 (fenced), Suspected root cause, Command, Exit code and Environment (bee version, OS).
@@ -45,7 +47,13 @@ its two gates (d45b1e6b). The host rule is `agents-bee-defect-report` in the AGE
   can quote `bee config set --key …`.
 - **Rewrite** in every field, the title included: absolute paths become repo-relative, else
   `<path>`; `~/` paths and the home directory become `<home>`; the host repository's directory
-  name becomes `<host-repo>`.
+  name becomes `<host-repo>`. A path starts at `/`, `~`, a drive (`X:\` or `X:/`) or a UNC
+  prefix (`\\`) whenever the character before it is not a letter or a digit, and after a short
+  flag with an attached value (`-C/srv`). This start rule is an allow-list on purpose: a list of
+  allowed lead characters leaked a new path shape in each of three judge rounds (`2>/srv`,
+  `@/srv`, a path glued to a link by `,`). A `scheme://` link is skipped only for an ASCII-letter
+  scheme and only over URL-legal characters, so a GitHub link survives and a path glued after it
+  is still rewritten. Prose such as `and/or` stays as written.
 - **Remove** every fenced and every indented code block in `--evidence`; each becomes
   `[code block removed]`. `--output` keeps its fences, with the same refusals and rewrites.
 - **Cap** evidence at 2000 and output at 4000 characters, marked `[truncated]`.
@@ -112,9 +120,20 @@ non-zero exit or unparseable output sets `skipped_reason` (`gh not found`, `gh e
 
 ## Edge Cases Settled
 
+- **A `gh` wrapper prints extra lines.** Some machines run `gh` through a wrapper (for example a
+  mise shim) that prints a line on stdout before the real output. Both edges read the issue list
+  JSON from the first line that starts with `[`, and filing reads the issue URL from the last line
+  that starts with `https://github.com/` (decision 9839a31c). Before this, ingest reported
+  `gh output unparseable` and dedupe fell through to create.
+
 - **A report leaked something.** The repository is public, so delete the issue at once:
   `gh issue delete -R thanhsmind/beehive <n> --yes`. Notifications and emails already went out
   and cannot be pulled back; treat any leaked secret as exposed and rotate it.
+
+## Open Gaps
+
+- **A path that holds a space** is rewritten only up to the space: `/srv/my dir/x` leaves `dir/x`.
+  The scrub cannot know where such a path ends and does not guess.
 
 ## Pointers (implementation)
 

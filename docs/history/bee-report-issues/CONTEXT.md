@@ -32,6 +32,8 @@ These are fixed. Planning must implement them exactly — cited, never reinterpr
 
 - AICoworker `aicoworker-self-patch` skill (`~/aicoworker/openclaw/skills/aicoworker-self-patch/SKILL.md`): a patch record with `symptom` and `rootCause` as one plain sentence each, evidence in notes, and a check after each app update whether the fix already shipped. Bee takes the record shape and the "root cause in source, not in the symptom" discipline; it does not take the live patch.
 
+<!-- bee:not-a-deferral: section heading of the template; nothing was deferred -->
 ## Deferred Ideas
 
 None.
+<!-- /bee:not-a-deferral -->

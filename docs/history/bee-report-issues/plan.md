@@ -115,7 +115,9 @@ Epic map. Feature outcome: a bee defect seen in any host repo reaches beehive's 
 | Ingest | Open issues as hostile digest entries | D3 | 1 | fake-gh tests + live `feedback rank` |
 | Teach | Host rule, evolving steps, concept | D1, D3 | 1 | rule parity tests, knowledge check |
 
+<!-- bee:not-a-deferral: states that no later slice exists -->
 Slice queue: slice 1 is the whole feature (bri-1 ∥ bri-2 → bri-3). No later slice.
+<!-- /bee:not-a-deferral -->
 
 ## Cells — current slice (preview)
 
