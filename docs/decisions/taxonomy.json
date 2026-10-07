@@ -691,6 +691,7 @@
     "contract:windows-path-tests",
     "piggery-followup",
     "contract:set-gate-windows-json",
-    "contract:set-gate-windows-longpath"
+    "contract:set-gate-windows-longpath",
+    "contract:pi-tests-unix-stubs"
   ]
 }

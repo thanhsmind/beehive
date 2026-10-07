@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-tests-unix-stubs",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-tests-unix-stubs\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-07T07:05:03.107Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "cross-platform"
+    ],
+    "product_files": 2,
+    "rationale": "eight pi contract tests spawn POSIX sh stubs that Windows cannot run; gate them unix-only like pi_plugin_contracts.rs:1564; not proof-weakening because they never passed on Windows and Linux CI keeps them",
+    "updated_at": "2026-10-07T07:05:03.142Z",
+    "feature": "pi-tests-unix-stubs"
+  },
+  "gate_preview": {
+    "feature": "pi-tests-unix-stubs",
+    "plan_sha256": "49c2710469190cd6e80e3667cf2964f9a95a310756c6b8033b5af777c5009280",
+    "previewed_at": "2026-10-07T07:05:39.826Z",
+    "cells": [
+      {
+        "id": "pts-1",
+        "feature": "pi-tests-unix-stubs",
+        "title": "Compile the sh-stub pi contract tests only on unix",
+        "lane": "small",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "9875b230-997a-479f-b007-8c568d7fc85a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add #[cfg(unix)] to the eight tests whose assertions need a POSIX sh stub bee or paseo to run, following the precedent at pi_plugin_contracts.rs:1564 (write_stub_bee is #[cfg(unix)]): in pi_paseo_heartbeat_contracts.rs test_leader_session_start_calls_stub_paseo_once, test_heartbeat_input_with_news_returns_transform_news, test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge, test_leader_shutdown_deletes_heartbeat_and_restart_creates_one, test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it, test_worker_keeps_its_id_guard_and_hidden_leader_tools; in pi_worker_guard_contracts.rs test_belt_blocks_paseo_worker_shell_call_when_stub_denies, test_belt_allows_paseo_worker_shell_call_when_stub_allows. If a helper becomes unused on Windows after this, gate it the same way so the Windows build has no dead-code warning turned error. Do not change what any test asserts. Check every other test in the two files: one that also needs a sh stub to execute (not just to exist) gets the same gate; one that passed on Windows CI stays as it is. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts",
+        "must_haves": {
+          "truths": [
+            "The eight sh-stub tests are compiled only on unix",
+            "Every test in the two files still runs on Linux and passes",
+            "No test assertion changes"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+              "substantive": "#[cfg(unix)] on six tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "#[cfg(unix)] on two tests"
+            }
+          ],
+          "key_links": [
+            "Windows CI verify-windows no longer runs these eight tests"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No assertion changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "pi-tests-unix-stubs",
+    "plan_sha256": "49c2710469190cd6e80e3667cf2964f9a95a310756c6b8033b5af777c5009280",
+    "previewed_at": "2026-10-07T07:05:39.826Z",
+    "cells": [
+      {
+        "id": "pts-1",
+        "feature": "pi-tests-unix-stubs",
+        "title": "Compile the sh-stub pi contract tests only on unix",
+        "lane": "small",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "9875b230-997a-479f-b007-8c568d7fc85a"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Add #[cfg(unix)] to the eight tests whose assertions need a POSIX sh stub bee or paseo to run, following the precedent at pi_plugin_contracts.rs:1564 (write_stub_bee is #[cfg(unix)]): in pi_paseo_heartbeat_contracts.rs test_leader_session_start_calls_stub_paseo_once, test_heartbeat_input_with_news_returns_transform_news, test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge, test_leader_shutdown_deletes_heartbeat_and_restart_creates_one, test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it, test_worker_keeps_its_id_guard_and_hidden_leader_tools; in pi_worker_guard_contracts.rs test_belt_blocks_paseo_worker_shell_call_when_stub_denies, test_belt_allows_paseo_worker_shell_call_when_stub_allows. If a helper becomes unused on Windows after this, gate it the same way so the Windows build has no dead-code warning turned error. Do not change what any test asserts. Check every other test in the two files: one that also needs a sh stub to execute (not just to exist) gets the same gate; one that passed on Windows CI stays as it is. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts",
+        "must_haves": {
+          "truths": [
+            "The eight sh-stub tests are compiled only on unix",
+            "Every test in the two files still runs on Linux and passes",
+            "No test assertion changes"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+              "substantive": "#[cfg(unix)] on six tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "#[cfg(unix)] on two tests"
+            }
+          ],
+          "key_links": [
+            "Windows CI verify-windows no longer runs these eight tests"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No assertion changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-07T07:07:43.884Z",
+    "branch": "wt/pi-tests-unix-stubs",
+    "worktree_id": "beehive--wt--pi-tests-unix-stubs",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
