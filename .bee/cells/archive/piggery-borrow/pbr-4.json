@@ -1,0 +1,160 @@
+{
+  "id": "pbr-4",
+  "feature": "piggery-borrow",
+  "title": "Make bee herding cancel stop the worker's whole process tree",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7a25e4ed-c3c4-49cb-8b89-4dd72f2b4174"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md"
+  ],
+  "action": "Per piggery-borrow D2 (revised). In cancel_with_backends_and_timeout (job_verbs.rs:317; the Alive branch at :501-512), on unix, before closing the pane: read the process tree below the captured foreground pid with one ps -A -o pid=,ppid=,pgid= call, SIGTERM every member, wait up to 2 s, re-read, SIGKILL the members still alive; then close the pane and confirm exit as today. Put BOTH the tree reader and the signal sender behind seams; every existing cancel test (job_verbs.rs:1346-1348 passes the test runner's own pid) must use a no-op sender so nothing signals the test process. Keep the 5 s fail-closed rule and cancel_termination_failed. Windows keeps today's path; Paseo workers keep paseo stop; say both in the cancel help text. Red first: a unix test that starts sh which spawns a detached sleep under setsid, runs the real tree-kill path against that tree, and asserts both pids are gone.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::job_verbs",
+  "must_haves": {
+    "truths": [
+      "Cancel stops detached children of the worker on unix",
+      "No existing cancel test signals the test runner",
+      "The fail-closed confirm and cancel_termination_failed are unchanged",
+      "The cancel help says Windows and Paseo keep today's behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "substantive": "tree read, TERM, wait, KILL behind seams"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D2 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-4",
+    "outcome": "herding cancel kills the worker process tree on unix (TERM, 2 s, KILL) behind a ProcessTree seam; help text updated",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "edited packages/bee-rs/crates/bee/src/generated/registry_payload.json (reserved first) — the cancel help text lives only in that hand-maintained registry payload, not in job_verbs.rs — the plan was wrong about a fact",
+      "the setsid test is cfg(target_os = linux) instead of cfg(unix) — macOS ships no setsid command and CI tests run on ubuntu — hit an unforeseen obstacle",
+      "moved cancel_with_transport and cancel_with_transport_and_timeout into the test module and wired them to NoopTree — they had no production callers, so the no-op seam cannot leak into the real path — found a better route",
+      "red-first shown as a compile red (test written against kill_tree before it existed), not a runtime red against the old path — the old path never signals the tree, so the setsid sleep survives by construction — something else had to be fixed first",
+      "sync-ack: plan sets affects_skills to none for pbr-4; the bee-herding skill does not describe cancel internals, and the affected spec docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md is the scribe step"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T02:43:23.888Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify (run with CARGO_HOME unset so PATH=$HOME/.cargo/bin, the same expansion), 20 passed incl. kill_tree_stops_a_detached_setsid_child (real ps + signals) and kill_tree_terms_then_kills_descendants_and_group_members_only; also --test registry_contracts --test registry_dispatch green (12 + 9) for the help text edit; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::job_verbs",
+    "claimed_at": "2026-10-07T02:33:49.479Z",
+    "sync_ack": "plan sets affects_skills to none for pbr-4; the bee-herding skill does not describe cancel internals, and the affected spec docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md is the scribe step",
+    "mistakes": [
+      {
+        "wrong": "first cargo test call used ${CARGO_HOME:-...} and the worktree guard refused it",
+        "better": "use a plain $HOME/.cargo/bin PATH in worktree sessions",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "cancel Alive branch calls kill_tree(tree, pid, 2 s) before pane_close; ps -A -o pid=,ppid=,pgid= reader and libc::kill sender sit behind trait ProcessTree (RealProcessTree; no-op on non-unix); existing cancel tests use NoopTree; 5 s confirm and cancel_termination_failed untouched; help text in registry_payload.json herding.cancel",
+      "commit": "f556fa8bf",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::job_verbs — green:unit — cell verify (run with CARGO_HOME unset so PATH=$HOME/.cargo/bin, the same expansion), 20 passed incl. kill_tree_stops_a_detached_setsid_child (real ps + signals) and kill_tree_terms_then_kills_descendants_and_group_members_only; also --test registry_contracts --test registry_dispatch green (12 + 9) for the help text edit; full suite not run",
+      "deviations": [
+        "edited packages/bee-rs/crates/bee/src/generated/registry_payload.json (reserved first) — the cancel help text lives only in that hand-maintained registry payload, not in job_verbs.rs — the plan was wrong about a fact",
+        "the setsid test is cfg(target_os = linux) instead of cfg(unix) — macOS ships no setsid command and CI tests run on ubuntu — hit an unforeseen obstacle",
+        "moved cancel_with_transport and cancel_with_transport_and_timeout into the test module and wired them to NoopTree — they had no production callers, so the no-op seam cannot leak into the real path — found a better route",
+        "red-first shown as a compile red (test written against kill_tree before it existed), not a runtime red against the old path — the old path never signals the tree, so the setsid sleep survives by construction — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "first cargo test call used ${CARGO_HOME:-...} and the worktree guard refused it — use a plain $HOME/.cargo/bin PATH in worktree sessions — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Cancel stops detached children of the worker on unix",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "No existing cancel test signals the test runner",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "The fail-closed confirm and cancel_termination_failed are unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "The cancel help says Windows and Paseo keep today's behavior",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.923Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "cancel-kills-detached-tree",
+            "status": "PASS",
+            "evidence": "job_verbs.rs Alive arm calls kill_tree before pane_close; kill_tree_stops_a_detached_setsid_child passes on linux; gap: cancel-path tests use NoopTree so the call site itself is untested"
+          },
+          {
+            "id": "tests-never-signal-runner",
+            "status": "PASS",
+            "evidence": "existing cancel tests use NoopTree; tree_members skips pid<=1 and the test process"
+          },
+          {
+            "id": "fail-closed-unchanged",
+            "status": "PASS",
+            "evidence": "confirm loop and cancel_termination_failed untouched"
+          },
+          {
+            "id": "help-names-windows-paseo",
+            "status": "PASS",
+            "evidence": "bee herding cancel --help names Windows and Paseo behavior"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.950Z"
+      }
+    ]
+  }
+}

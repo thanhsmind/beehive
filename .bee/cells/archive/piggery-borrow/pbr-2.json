@@ -1,0 +1,185 @@
+{
+  "id": "pbr-2",
+  "feature": "piggery-borrow",
+  "title": "Keep pi belt state on one globalThis slot and leader identity out of children",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "pbr-1"
+  ],
+  "decisions": [
+    "1bf2611c-a21b-4204-9089-167337871cac"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/state.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    ".pi/extensions/bee-guard/bee-cli.ts",
+    ".pi/extensions/bee-guard/hooks.ts",
+    ".pi/extensions/bee-guard/tool-dispatch.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    ".pi/extensions/bee-guard/state.ts",
+    ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/index.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/work/pi-result-mailbox/delivery.md"
+  ],
+  "action": "Per piggery-borrow D5 (revised). Put the belt state on globalThis[Symbol.for(\"bee.pi.state\")] with ??=, fill missing default fields on a kept slot, and move inFlightClaims, promptDepths (result-inbox.ts:65,76), forcedContinuationSessions and pbr-1's outcome record and hold set onto it. Decide isPaseoLeader once per process; ONLY for the leader, keep PASEO_AGENT_ID in the slot and delete it from process.env. Move every reader to the slot: events.ts:80-83, :165-170, :355, :846-851; index.ts:141-144; paseo-heartbeat.ts:77-81. Pass the id back on every belt spawn of bee or paseo: bee-cli.ts, hooks.ts:46 and :147, tool-dispatch.ts:53, paseo-heartbeat.ts:439. Workers keep the id (worker Bash guard and hidden leader tools unchanged). Never strip BEE_HERDING_WORKER or BEE_HERDING_JOB_ID. Red first, and the reload test MUST fail before the fix (the harness caches child modules, so load the extension in a way that gives a fresh module scope, e.g. a cache-busting query on every module): reload keeps state and runs session-init once with one drain timer; a leader child sees no PASEO_AGENT_ID while bee and paseo spawns still get it; a worker still hides the leader tools and still runs the worker guard.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "A /reload with a fresh module scope keeps belt state and does not re-run session-init",
+      "A child of the leader's shell does not see PASEO_AGENT_ID",
+      "The belt's bee and paseo spawns still receive the leader's agent id",
+      "A Paseo worker keeps its id, its worker guard and its hidden leader tools"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/state.ts",
+        "substantive": "state on a globalThis Symbol.for slot"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D5 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-2",
+    "outcome": "Belt state, claim sets, prompt depths and settle outcomes sit on globalThis[Symbol.for(\"bee.pi.state\")]; the Paseo leader keeps its id in the slot, strips it from process.env, and every belt bee/paseo spawn gets it back via beltEnv()",
+    "files_changed": [
+      ".pi/extensions/bee-guard/state.ts",
+      ".pi/extensions/bee-guard/index.ts",
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+      ".pi/extensions/bee-guard/bee-cli.ts",
+      ".pi/extensions/bee-guard/hooks.ts",
+      ".pi/extensions/bee-guard/tool-dispatch.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The slot also holds a worker's PASEO_AGENT_ID (paseoAgentId), but only the leader deletes it from process.env — the worker readers at events.ts:80 and index.ts:141 must read the slot too, and they need the worker's id — the plan was wrong about a fact",
+      "events.ts spawns of session-close, the heartbeat broker tick and the paseo heartbeat runners also pass beltEnv(), beyond the four files D5 names — D5 says every belt spawn of bee or paseo, and those are such spawns — found a better route",
+      "tool-steer.ts:102 (bee herding steer, leader-only) still spawns with process.env and so gets no PASEO_AGENT_ID; it is outside this cell's files and is left as a scope question for the orchestrator — something else had to be fixed first",
+      "docs/knowledge/work/pi-result-mailbox/delivery.md (affects_specs) is not edited here; it is not in the cell files and is left for the scribe step — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T02:54:15.516Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify run verbatim (PATH=$HOME/.cargo/bin form for the worktree guard): 119+26+7 passed, manifest 419 files match; the three new tests were red before the fix",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-07T02:43:51.580Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Belt state, claim sets, prompt depths and settle outcomes sit on globalThis[Symbol.for(\"bee.pi.state\")]; the Paseo leader keeps its id in the slot, strips it from process.env, and every belt bee/paseo spawn gets it back via beltEnv()",
+      "commit": "4842539d946f6532b921a4ced880a22be98ca1fe",
+      "files": [
+        ".pi/extensions/bee-guard/state.ts",
+        ".pi/extensions/bee-guard/index.ts",
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+        ".pi/extensions/bee-guard/bee-cli.ts",
+        ".pi/extensions/bee-guard/hooks.ts",
+        ".pi/extensions/bee-guard/tool-dispatch.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts && .bee/bin/bee dev release-manifest --check — green:unit — cell verify run verbatim (PATH=$HOME/.cargo/bin form for the worktree guard): 119+26+7 passed, manifest 419 files match; the three new tests were red before the fix",
+      "deviations": [
+        "The slot also holds a worker's PASEO_AGENT_ID (paseoAgentId), but only the leader deletes it from process.env — the worker readers at events.ts:80 and index.ts:141 must read the slot too, and they need the worker's id — the plan was wrong about a fact",
+        "events.ts spawns of session-close, the heartbeat broker tick and the paseo heartbeat runners also pass beltEnv(), beyond the four files D5 names — D5 says every belt spawn of bee or paseo, and those are such spawns — found a better route",
+        "tool-steer.ts:102 (bee herding steer, leader-only) still spawns with process.env and so gets no PASEO_AGENT_ID; it is outside this cell's files and is left as a scope question for the orchestrator — something else had to be fixed first",
+        "docs/knowledge/work/pi-result-mailbox/delivery.md (affects_specs) is not edited here; it is not in the cell files and is left for the scribe step — something else had to be fixed first"
+      ],
+      "mistakes": [],
+      "baseline": "On the base commit the new reload test re-injects PREAMBLE-MARK after a fresh-scope reload and the new leader test sees PASEO_AGENT_ID still in process.env (both red); the worker test and all pre-existing rows passed"
+    },
+    "baseline": "On the base commit the new reload test re-injects PREAMBLE-MARK after a fresh-scope reload and the new leader test sees PASEO_AGENT_ID still in process.env (both red); the worker test and all pre-existing rows passed",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A /reload with a fresh module scope keeps belt state and does not re-run session-init",
+            "artifact": ".pi/extensions/bee-guard/state.ts"
+          },
+          {
+            "requirement": "A child of the leader's shell does not see PASEO_AGENT_ID",
+            "artifact": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
+          },
+          {
+            "requirement": "The belt's bee and paseo spawns still receive the leader's agent id",
+            "artifact": ".pi/extensions/bee-guard/state.ts"
+          },
+          {
+            "requirement": "A Paseo worker keeps its id, its worker guard and its hidden leader tools",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.903Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "reload-keeps-state",
+            "status": "PASS",
+            "evidence": "state.ts slot on globalThis Symbol.for(bee.pi.state) with default fill; test a_reload_with_a_fresh_module_scope_keeps_belt_state_and_one_drain_timer"
+          },
+          {
+            "id": "child-loses-id",
+            "status": "PASS",
+            "evidence": "paseo-heartbeat.ts decidePaseoIdentity deletes PASEO_AGENT_ID for the leader once; test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it"
+          },
+          {
+            "id": "belt-spawns-keep-id",
+            "status": "PASS",
+            "evidence": "beltEnv() on bee-cli, hooks, tool-dispatch, events and paseo-heartbeat spawns; tool-steer fixed in pbr-3"
+          },
+          {
+            "id": "worker-unchanged",
+            "status": "PASS",
+            "evidence": "test_worker_keeps_its_id_guard_and_hidden_leader_tools"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.949Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier"
+}

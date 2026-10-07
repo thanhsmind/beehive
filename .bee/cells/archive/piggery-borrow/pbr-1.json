@@ -1,0 +1,176 @@
+{
+  "id": "pbr-1",
+  "feature": "piggery-borrow",
+  "title": "Keep a worker result when the leader turn is aborted, without waking the leader",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "60824879-eec0-4b05-aba3-cff8954ec841"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/result-inbox.ts"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/work/pi-result-mailbox/delivery.md"
+  ],
+  "action": "Per piggery-borrow D1 (revised). In the agent_before_settle handler (events.ts:450) record event.outcome for the active session BEFORE any early return (pi 1.0.0 sends completed, aborted or error; older pi has no event). In the agent_settled handler (the rmSync loop at events.ts:528): completed -> delete claims as today; aborted or error -> requeueClaim (result-inbox.ts:159) each claim and mark them held so the drain does not inject them until the next turn the user starts (the next input event clears the hold); no outcome seen -> today's delete. Clear the recorded outcome after settle. In the drain tick, skip while promptDepths.get(session) > 0 and skip held claims. Red first in pi_plugin_contracts.rs with the existing stub harness: (a) abort -> marker back under its queued name AND no new turn starts on its own within two drain ticks; (b) after the next user input the held result is delivered; (c) completed turn -> marker gone, including a completed turn that went through a forced continuation; (d) open UI prompt -> no inject; (e) no before_settle event -> today's delete.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "An aborted or errored leader turn requeues its in-flight result claims and does not start a new turn on its own",
+      "A held result is delivered on the next turn the user starts",
+      "A completed leader turn deletes its in-flight result claims",
+      "The drain does not inject while a UI prompt is open",
+      "With no before_settle outcome the belt keeps today's delete"
+    ],
+    "artifacts": [
+      {
+        "path": ".pi/extensions/bee-guard/events.ts",
+        "substantive": "settle branches on the recorded outcome"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D1 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-1",
+    "outcome": "Aborted or errored leader turns requeue and hold their result claims until the next user input; completed or outcome-less turns delete; drain skips while a UI prompt is open",
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/result-inbox.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The hold clears only on an input event whose source is not extension — pi 1.0.0 sendUserMessage emits input with source extension, so a belt nudge would otherwise clear the hold — the plan was wrong about a fact",
+      "Reserved and regenerated docs/history/codex-harness-hardening/release-manifest.json (two hashes) — leader note assigned the regen to this cell — something else had to be fixed first",
+      "heldClaims is also cleared at startResultDrain beside inFlightClaims — a session boundary resets every drain latch — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T02:43:31.542Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify; 118 passed in the pi belt contract suite, manifest 419 files match; the rest of the workspace suite was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-07T02:33:49.205Z",
+    "mistakes": [
+      {
+        "wrong": "First commit 913f2fbbc put the cell: pbr-1 trailer before the Co-Authored-By line, so it was not the last body line; amended to c1db82f45",
+        "better": "write the attribution line first and the cell trailer last",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Aborted or errored leader turns requeue and hold their result claims until the next user input; completed or outcome-less turns delete; drain skips while a UI prompt is open. Outcome recorded at top of agent_before_settle (events.ts); settle branches via holdClaim vs rmSync (events.ts agent_settled); hold set heldClaims + holdClaim + promptDepths skip in drainResultInbox (result-inbox.ts); hold cleared on input whose source is not extension (events.ts input). Tests: an_aborted_turn_requeues_its_result_and_holds_it_until_the_user_starts_a_turn (a,b; aborted and error), a_completed_turn_consumes_its_result_even_after_a_forced_continuation (c), the_drain_does_not_inject_while_a_ui_prompt_is_open (d), a_settle_with_no_outcome_keeps_the_delete (e).",
+      "commit": "c1db82f45",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/result-inbox.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check — green:unit — the cell verify; 118 passed in the pi belt contract suite, manifest 419 files match; the rest of the workspace suite was not run",
+      "deviations": [
+        "The hold clears only on an input event whose source is not extension — pi 1.0.0 sendUserMessage emits input with source extension, so a belt nudge would otherwise clear the hold — the plan was wrong about a fact",
+        "Reserved and regenerated docs/history/codex-harness-hardening/release-manifest.json (two hashes) — leader note assigned the regen to this cell — something else had to be fixed first",
+        "heldClaims is also cleared at startResultDrain beside inFlightClaims — a session boundary resets every drain latch — found a better route"
+      ],
+      "mistakes": [
+        "First commit 913f2fbbc put the cell: pbr-1 trailer before the Co-Authored-By line, so it was not the last body line; amended to c1db82f45 — write the attribution line first and the cell trailer last — doctrine"
+      ],
+      "baseline": "On base with the new tests added: 2 of the 4 new tests red (abort hold, UI prompt), completed and no-outcome rows green; the other 114 tests green"
+    },
+    "baseline": "On base with the new tests added: 2 of the 4 new tests red (abort hold, UI prompt), completed and no-outcome rows green; the other 114 tests green",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "An aborted or errored leader turn requeues its in-flight result claims and does not start a new turn on its own",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "A held result is delivered on the next turn the user starts",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "A completed leader turn deletes its in-flight result claims",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": "The drain does not inject while a UI prompt is open",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "With no before_settle outcome the belt keeps today's delete",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.893Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "abort-requeue-no-wake",
+            "status": "PASS",
+            "evidence": "events.ts agent_settled: outcome aborted|error -> holdClaim; drain skips heldClaims; test an_aborted_turn_requeues_its_result_and_holds_it_until_the_user_starts_a_turn fails on old code"
+          },
+          {
+            "id": "held-delivered-on-user-turn",
+            "status": "PASS",
+            "evidence": "events.ts input handler clears heldClaims for non-extension input; same test asserts delivery after user_input"
+          },
+          {
+            "id": "completed-deletes",
+            "status": "PASS",
+            "evidence": "test a_completed_turn_consumes_its_result_even_after_a_forced_continuation"
+          },
+          {
+            "id": "no-inject-during-ui-prompt",
+            "status": "PASS",
+            "evidence": "result-inbox.ts drain returns while promptDepths > 0; test the_drain_does_not_inject_while_a_ui_prompt_is_open"
+          },
+          {
+            "id": "no-outcome-keeps-delete",
+            "status": "PASS",
+            "evidence": "test a_settle_with_no_outcome_keeps_the_delete; outcome recorded before any early return"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.948Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier"
+}

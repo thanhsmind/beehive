@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"piggery-borrow\" started at phase \"exploring\" (lane).",
   "next_action": "bee close --feature piggery-borrow",
   "created_at": "2026-10-07T02:21:12.009Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat for piggery-borrow: test the seven changes on main, then approve or report",
-    "asked_at": "2026-10-07T03:18:18.952Z",
-    "session": "cf5b2d35-87b1-4a82-918d-150b82523d2b"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

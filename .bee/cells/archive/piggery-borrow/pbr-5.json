@@ -1,0 +1,160 @@
+{
+  "id": "pbr-5",
+  "feature": "piggery-borrow",
+  "title": "Report each worker's context tokens and turns in bee herding status",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "7edc0153-b2fa-4ed1-b332-2aeb5882b3f4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/devtools/statusline.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/waves-and-occupancy.md"
+  ],
+  "action": "Per piggery-borrow D6 (revised). Make the activity hook write the worker's transcript_path (activity.rs:458 already reads it from the payload) into the job's mailbox activity record when BEE_HERDING_JOB_ID is set. In bee herding status (herding.rs), read that transcript with the usage parser bee dev statusline already has (statusline.rs:263, :372-385; expose it pub(crate) rather than copy it) and add ctx_tokens (input plus cache tokens of the latest assistant request) and turns (assistant messages) per job to the JSON, and a ctx=12.3k turns=4 suffix to the plain line (format 950, 12.3k, 1.2M). No transcript path or an unreadable file -> both null and no suffix. Do not touch the pi widget. Red first: unit tests on a fixture transcript (fields and suffix), a missing-path case, and the activity record write.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding:: hooks::activity devtools::statusline",
+  "must_haves": {
+    "truths": [
+      "herding status JSON carries ctx_tokens and turns per job when a transcript is recorded",
+      "The plain line shows ctx and turns when known and omits them when not",
+      "The activity hook records transcript_path for a herded job"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding.rs",
+        "substantive": "status reads usage from the recorded transcript"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D6 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-5",
+    "outcome": "herding status reports ctx_tokens and turns per job from the transcript_path the activity hook now records",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/devtools/statusline.rs",
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+    ],
+    "deviations": [
+      "made devtools/mod.rs declare statusline pub(crate) — the parser cannot be shared without it and the cell said expose it rather than copy it — the plan was wrong about a fact",
+      "the knowledge doc docs/knowledge/areas/bee-herding/waves-and-occupancy.md (affects_specs) is not updated — it is outside the cell files; left for scribe — the plan was wrong about a fact",
+      "sync-ack: cell affects_skills is empty; the new status fields are additive JSON and a plain suffix, the area doc sync is left to scribe"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T02:43:01.261Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify over the three touched modules, 756 passed; full suite not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding:: hooks::activity devtools::statusline",
+    "claimed_at": "2026-10-07T02:33:49.709Z",
+    "sync_ack": "cell affects_skills is empty; the new status fields are additive JSON and a plain suffix, the area doc sync is left to scribe",
+    "mistakes": [
+      {
+        "wrong": "commit 56c6d0958 has cell: pbr-5 before the Co-Authored-By line, not as the last body line, and a sibling commit landed on top so it cannot be amended",
+        "better": "put the cell trailer after the attribution line",
+        "fix_at": "doctrine"
+      },
+      {
+        "wrong": "wrote the tests and the code in one pass and never ran the new tests red first, as the cell action asked",
+        "better": "add the tests, run them red, then implement",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "activity.rs record_activity herded arm writes transcript_path (test herded_record_carries_the_transcript_path); statusline.rs usage_rows extracted from compute_line + pub(crate) context_and_turns (test context_and_turns_reads_the_latest_request_and_counts_messages); herding.rs job_usage/fmt_ctx/insert_usage add ctx_tokens, turns and the ctx=12.3k turns=N suffix on both herdr and paseo rows (tests status_reports_context_and_turns_from_the_recorded_transcript incl. missing-file null case, fmt_ctx_uses_k_and_m_with_one_decimal, status_lists_job_with_mark_null asserts null when no transcript)",
+      "commit": "56c6d0958",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/activity.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/devtools/statusline.rs",
+        "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding:: hooks::activity devtools::statusline — green:unit — the cell verify over the three touched modules, 756 passed; full suite not run",
+      "deviations": [
+        "made devtools/mod.rs declare statusline pub(crate) — the parser cannot be shared without it and the cell said expose it rather than copy it — the plan was wrong about a fact",
+        "the knowledge doc docs/knowledge/areas/bee-herding/waves-and-occupancy.md (affects_specs) is not updated — it is outside the cell files; left for scribe — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "commit 56c6d0958 has cell: pbr-5 before the Co-Authored-By line, not as the last body line, and a sibling commit landed on top so it cannot be amended — put the cell trailer after the attribution line — doctrine",
+        "wrote the tests and the code in one pass and never ran the new tests red first, as the cell action asked — add the tests, run them red, then implement — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "herding status JSON carries ctx_tokens and turns per job when a transcript is recorded",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "The plain line shows ctx and turns when known and omits them when not",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "The activity hook records transcript_path for a herded job",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/activity.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.934Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "json-ctx-turns",
+            "status": "PASS",
+            "evidence": "herding.rs job_usage via statusline::context_and_turns; status_reports_context_and_turns_from_the_recorded_transcript asserts 12300 and 2"
+          },
+          {
+            "id": "plain-suffix-conditional",
+            "status": "PASS",
+            "evidence": "same test asserts the suffix and the null case without suffix"
+          },
+          {
+            "id": "activity-records-path",
+            "status": "PASS",
+            "evidence": "activity.rs herded arm writes transcript_path; herded_record_carries_the_transcript_path"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.951Z"
+      }
+    ]
+  }
+}

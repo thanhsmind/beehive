@@ -1,0 +1,171 @@
+{
+  "id": "pbr-7",
+  "feature": "piggery-borrow",
+  "title": "Print one advisory line per runtime with a fix command in bee doctor",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "da84d0f0-115e-47f4-a2cf-84c85033d716"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/piggery-borrow/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Per piggery-borrow D7 (revised). Add one ADVISORY row per runtime (claude, codex, opencode, pi, paseo) to every bee doctor run, in the advisory channel (doctor.rs:1276-1287) so the verdict (doctor.rs:1258) never changes because of them. Each row: tool found on PATH (locate only, never execute; pi on this machine is a wrapper script that changes global config), the repo's bee wiring present and current (reuse the existing wiring checks for claude, codex and pi; opencode wiring is .opencode/plugins/bee-guard.ts; paseo wiring is the herding.paseo config), and on every not-ok row a fix line (bee onboard --apply for stale or missing wiring, an install line naming the tool when only the tool is missing). The pi and opencode rows also compare the belt source's BELT_CONTRACT_VERSION constant (absent = unknown, reported, not a failure) with a binary const BELT_CONTRACT = 1 shared with session-init (define it where pbr-3 can import it, e.g. hooks/mod.rs is NOT in this cell, so define it in doctor.rs as pub(crate) and pbr-3 imports it). Red first: doctor tests for a current runtime, a stale pi belt (fix names bee onboard --apply), a missing tool, an absent runtime that never changes the verdict, and a belt contract mismatch.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee doctor",
+  "must_haves": {
+    "truths": [
+      "bee doctor prints one advisory runtime row per supported runtime",
+      "Every not-ok runtime row carries a fix line",
+      "The runtime rows never change the doctor verdict",
+      "The pi and opencode rows report the belt contract check",
+      "No tool is executed to read a version"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "advisory runtime rows with fix lines"
+      }
+    ],
+    "key_links": [
+      "implements piggery-borrow D7 as revised after the hat wave (docs/history/piggery-borrow/CONTEXT.md)"
+    ],
+    "prohibitions": [
+      "No new code comments in any language (no_code_comments is on)",
+      "No behavior change outside this cell's decision"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pbr-7",
+    "outcome": "bee doctor prints one advisory row per runtime with a fix line; verdict untouched; BELT_CONTRACT shared const added",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "The paseo row checks for a paseo agent under herding.agents (or herding.paseo) and its fix line says to add one to .bee/config.json, not bee onboard --apply — onboard never writes paseo config and this repo configures paseo per agent, so bee onboard --apply would be a wrong fix — the plan was wrong about a fact",
+      "The opencode row counts the plugin as current when the file is present, then checks the belt contract — bee embeds no opencode plugin text to compare bytes against — the plan was wrong about a fact",
+      "I moved the wiring check into wiring_row() and the PATH lookup into locate_on_path(), and split doctor_report() out of run_doctor() — the runtime rows reuse those checks without starting the paseo or bee binaries, and the verdict test can call doctor_report() directly — found a better route",
+      "I wrote the code before the tests, so I did not see the tests fail first — I edited doctor.rs first, then wrote all five tests — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T02:45:03.200Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell's verify, filtered to doctor tests (62 passed, 4103 filtered out); I also ran the rebuilt binary with bee doctor --runtime claude and --runtime pi in this worktree and saw all five runtime rows",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee doctor",
+    "claimed_at": "2026-10-07T02:33:50.331Z",
+    "mistakes": [
+      {
+        "wrong": "I wrote the doctor.rs code before the five tests, so they never ran red first",
+        "better": "write the tests first and run them red, then write the code",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "bee doctor prints one advisory row per runtime (claude, codex, opencode, pi, paseo) with a fix line on every not-ok row; verdict untouched; BELT_CONTRACT = 1 is pub(crate) in doctor.rs for pbr-3",
+      "commit": "4060e8828",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee doctor — green:unit — the cell's verify, filtered to doctor tests (62 passed, 4103 filtered out); I also ran the rebuilt binary with bee doctor --runtime claude and --runtime pi in this worktree and saw all five runtime rows",
+      "deviations": [
+        "The paseo row checks for a paseo agent under herding.agents (or herding.paseo) and its fix line says to add one to .bee/config.json, not bee onboard --apply — onboard never writes paseo config and this repo configures paseo per agent, so bee onboard --apply would be a wrong fix — the plan was wrong about a fact",
+        "The opencode row counts the plugin as current when the file is present, then checks the belt contract — bee embeds no opencode plugin text to compare bytes against — the plan was wrong about a fact",
+        "I moved the wiring check into wiring_row() and the PATH lookup into locate_on_path(), and split doctor_report() out of run_doctor() — the runtime rows reuse those checks without starting the paseo or bee binaries, and the verdict test can call doctor_report() directly — found a better route",
+        "I wrote the code before the tests, so I did not see the tests fail first — I edited doctor.rs first, then wrote all five tests — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "I wrote the doctor.rs code before the five tests, so they never ran red first — write the tests first and run them red, then write the code — doctrine"
+      ],
+      "baseline": "on the base commit the five new tests do not exist and the names they use (runtime_checks_with_env, doctor_report, BELT_CONTRACT) do not compile"
+    },
+    "baseline": "on the base commit the five new tests do not exist and the names they use (runtime_checks_with_env, doctor_report, BELT_CONTRACT) do not compile",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee doctor prints one advisory runtime row per supported runtime",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "Every not-ok runtime row carries a fix line",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "The runtime rows never change the doctor verdict",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "The pi and opencode rows report the belt contract check",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "No tool is executed to read a version",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T03:05:17.957Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-row-per-runtime",
+            "status": "PASS",
+            "evidence": "absent_runtimes_print_advisory_rows_and_never_change_the_verdict asserts the five rows"
+          },
+          {
+            "id": "not-ok-has-fix",
+            "status": "PASS",
+            "evidence": "ok = fix.is_none(); missing-tool and stale-pi-belt tests"
+          },
+          {
+            "id": "verdict-unchanged",
+            "status": "PASS",
+            "evidence": "advisory rows; overall_status ready with five not-ok rows"
+          },
+          {
+            "id": "belt-contract-rows",
+            "status": "PASS",
+            "evidence": "the_opencode_row_reports_the_belt_contract_check; gap: no test drives the pi row branch"
+          },
+          {
+            "id": "no-exec",
+            "status": "PASS",
+            "evidence": "a_current_runtime_row_is_ok_without_a_fix_and_the_tool_is_never_run"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-07T03:18:04.952Z"
+      }
+    ]
+  }
+}
