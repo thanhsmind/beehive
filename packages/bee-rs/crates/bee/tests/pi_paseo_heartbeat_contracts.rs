@@ -373,6 +373,7 @@ assert.equal(textNull, "bee heartbeat: no news. Reply with the single word ok an
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_leader_session_start_calls_stub_paseo_once() {
     run_extension_test(
@@ -483,6 +484,7 @@ assert.deepEqual(res, {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_heartbeat_input_with_news_returns_transform_news() {
     run_extension_test(
@@ -520,6 +522,7 @@ assert.deepEqual(res, { action: "continue" });
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge() {
     run_extension_test(
@@ -840,6 +843,7 @@ assert.equal(tickCalls, callsAfterStop);
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_leader_shutdown_deletes_heartbeat_and_restart_creates_one() {
     run_extension_test(
@@ -1035,10 +1039,12 @@ assert.ok(markerData.delete_failed.includes("heartbeat delete failed: connection
     );
 }
 
+#[cfg(unix)]
 fn belt_dir() -> String {
     repo_root().join(".pi/extensions/bee-guard").to_str().expect("valid utf-8 path").to_string()
 }
 
+#[cfg(unix)]
 const IDENTITY_STUBS_JS: &str = r#"
 import cp from "node:child_process";
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-identity-"));
@@ -1071,6 +1077,7 @@ const waitFor = async (pred) => {
 };
 "#;
 
+#[cfg(unix)]
 #[test]
 fn test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it() {
     let belt = belt_dir();
@@ -1113,6 +1120,7 @@ for (const line of lines) {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_worker_keeps_its_id_guard_and_hidden_leader_tools() {
     let code = format!(
