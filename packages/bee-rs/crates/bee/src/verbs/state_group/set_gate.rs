@@ -3226,7 +3226,8 @@ mod tests {
                 .unwrap();
             let stdout = String::from_utf8_lossy(&out.stdout);
             assert!(out.status.success(), "{stdout}");
-            assert!(stdout.contains(&format!("\"control_root\": \"{}\"", main.display())), "{stdout}");
+            let control_root_json = serde_json::to_string(&main.display().to_string()).unwrap();
+            assert!(stdout.contains(&format!("\"control_root\": {control_root_json}")), "{stdout}");
             assert!(stdout.contains(&format!("control plane: {}", main.display())), "{stdout}");
         }
 
