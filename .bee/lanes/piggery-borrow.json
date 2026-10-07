@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "piggery-borrow",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"piggery-borrow\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 93332a8; reload the product and test \"piggery-borrow\", then either approve uat (\"bee gate --name uat --approved true --lane piggery-borrow\") or fix it in the worktree and merge again.",
+  "next_action": "bee close --feature piggery-borrow",
   "created_at": "2026-10-07T02:21:12.009Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: piggery-borrow",
-    "asked_at": "2026-10-07T03:12:01.849Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat for piggery-borrow: test the seven changes on main, then approve or report",
+    "asked_at": "2026-10-07T03:18:18.952Z",
+    "session": "cf5b2d35-87b1-4a82-918d-150b82523d2b"
   },
   "route": {
     "class": "feature",
@@ -782,5 +782,15 @@
         "behavior_change": true
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "piggery-borrow",
+    "date": "2026-10-07",
+    "at": "2026-10-07T03:13:12.591Z",
+    "areas_synced": [
+      "bee-herding",
+      "hook-runtime"
+    ],
+    "next_action": "bee close --feature piggery-borrow"
   }
 }
