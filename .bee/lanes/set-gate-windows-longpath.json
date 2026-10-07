@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "feature": "set-gate-windows-longpath",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"set-gate-windows-longpath\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-07T07:00:07.979Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [
+      "cross-platform"
+    ],
+    "product_files": 1,
+    "rationale": "the set_gate test compares the 8.3 short temp path with the long path bee prints; Windows only",
+    "updated_at": "2026-10-07T07:00:08.014Z",
+    "feature": "set-gate-windows-longpath"
+  },
+  "gate_preview": {
+    "feature": "set-gate-windows-longpath",
+    "plan_sha256": "f441f64a41a3dc5e55237a795458b9db99f4d257a3c8738132ec8f2840c91e58",
+    "previewed_at": "2026-10-07T07:00:34.099Z",
+    "cells": [
+      {
+        "id": "sgl-1",
+        "feature": "set-gate-windows-longpath",
+        "title": "Compare the set_gate control-plane output with the canonical main path",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "2fe20916-16d7-4c07-88a4-b089eaf26a60"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In contract_control_plane_from_worktree_e32f3a66_state_verbs (set_gate.rs:3229-3231), take main through dunce::canonicalize before building both the JSON-escaped control_root text and the plain control plane line, so the Windows 8.3 short temp path matches the long path bee prints. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+        "must_haves": {
+          "truths": [
+            "Both control-plane assertions compare against the canonical main path"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+              "substantive": "dunce::canonicalize of main before both assertions"
+            }
+          ],
+          "key_links": [
+            "Windows CI verify-windows green for this test"
+          ],
+          "prohibitions": [
+            "No new code comments"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "set-gate-windows-longpath",
+    "plan_sha256": "f441f64a41a3dc5e55237a795458b9db99f4d257a3c8738132ec8f2840c91e58",
+    "previewed_at": "2026-10-07T07:00:34.099Z",
+    "cells": [
+      {
+        "id": "sgl-1",
+        "feature": "set-gate-windows-longpath",
+        "title": "Compare the set_gate control-plane output with the canonical main path",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "2fe20916-16d7-4c07-88a4-b089eaf26a60"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In contract_control_plane_from_worktree_e32f3a66_state_verbs (set_gate.rs:3229-3231), take main through dunce::canonicalize before building both the JSON-escaped control_root text and the plain control plane line, so the Windows 8.3 short temp path matches the long path bee prints. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+        "must_haves": {
+          "truths": [
+            "Both control-plane assertions compare against the canonical main path"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+              "substantive": "dunce::canonicalize of main before both assertions"
+            }
+          ],
+          "key_links": [
+            "Windows CI verify-windows green for this test"
+          ],
+          "prohibitions": [
+            "No new code comments"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-07T07:02:05.181Z",
+    "branch": "wt/set-gate-windows-longpath",
+    "worktree_id": "beehive--wt--set-gate-windows-longpath",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
