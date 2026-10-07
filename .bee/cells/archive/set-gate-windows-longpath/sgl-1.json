@@ -1,0 +1,95 @@
+{
+  "id": "sgl-1",
+  "feature": "set-gate-windows-longpath",
+  "title": "Compare the set_gate control-plane output with the canonical main path",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "2fe20916-16d7-4c07-88a4-b089eaf26a60"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In contract_control_plane_from_worktree_e32f3a66_state_verbs (set_gate.rs:3229-3231), take main through dunce::canonicalize before building both the JSON-escaped control_root text and the plain control plane line, so the Windows 8.3 short temp path matches the long path bee prints. No new code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+  "must_haves": {
+    "truths": [
+      "Both control-plane assertions compare against the canonical main path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "dunce::canonicalize of main before both assertions"
+      }
+    ],
+    "key_links": [
+      "Windows CI verify-windows green for this test"
+    ],
+    "prohibitions": [
+      "No new code comments"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "both control-plane assertions compare against the canonical main path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: test-only change"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T07:02:05.175Z",
+    "behavior_change": false,
+    "verification_evidence": "65 set_gate tests on Linux; the Windows-only red cannot run here, Windows CI is the proof",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+    "claimed_at": "2026-10-07T07:00:34.465Z",
+    "sync_ack": "test-only change",
+    "mistakes": [
+      {
+        "wrong": "set-gate-windows-json fixed the JSON escaping but not the 8.3 short path in the same assertion",
+        "better": "check every Windows path difference (escaping, short names, case) in one pass when a path assertion fails — doctrine",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "both control-plane assertions compare against the canonical main path",
+      "commit": "3218c4b36",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate — green:unit — 65 set_gate tests on Linux; the Windows-only red cannot run here, Windows CI is the proof",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Both control-plane assertions compare against the canonical main path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T07:02:12.757Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
