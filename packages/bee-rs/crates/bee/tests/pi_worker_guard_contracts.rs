@@ -161,6 +161,7 @@ assert.ok(toolNames.includes("bee_steer"));
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_belt_blocks_paseo_worker_shell_call_when_stub_denies() {
     run_extension_test(
@@ -196,6 +197,7 @@ assert.ok(res.reason.includes("worker-guard denied"));
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_belt_allows_paseo_worker_shell_call_when_stub_allows() {
     run_extension_test(
