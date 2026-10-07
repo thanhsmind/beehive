@@ -687,6 +687,8 @@
     "contract:leader-check-windows-paths",
     "contract:piggery-borrow",
     "piggery-borrow",
-    "piggery"
+    "piggery",
+    "contract:windows-path-tests",
+    "piggery-followup"
   ]
 }
