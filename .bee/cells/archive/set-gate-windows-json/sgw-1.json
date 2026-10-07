@@ -1,0 +1,95 @@
+{
+  "id": "sgw-1",
+  "feature": "set-gate-windows-json",
+  "title": "Match control_root in the set_gate test against the JSON-escaped path",
+  "lane": "tiny",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "c2bcea41-6dbc-42e8-80de-7ef1080bcd3b"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In contract_control_plane_from_worktree_e32f3a66_state_verbs (set_gate.rs:3229), build the expected control_root text from serde_json::to_string of the main path string, so a Windows path's backslashes are escaped the way the JSON output escapes them. Leave the plain 'control plane:' assertion as it is. No new code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+  "must_haves": {
+    "truths": [
+      "The control_root assertion compares against the JSON-escaped main path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "serde_json::to_string of the main path in the control_root assertion"
+      }
+    ],
+    "key_links": [
+      "Windows CI verify-windows green for this test"
+    ],
+    "prohibitions": [
+      "No new code comments"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "control_root assertion compares against the JSON-escaped main path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: test-only change"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T06:49:38.407Z",
+    "behavior_change": false,
+    "verification_evidence": "65 set_gate tests on Linux; the Windows-only red cannot run here, Windows CI is the proof",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate",
+    "claimed_at": "2026-10-07T06:48:17.102Z",
+    "sync_ack": "test-only change",
+    "mistakes": [
+      {
+        "wrong": "windows-path-tests read the set_gate PoisonError as only a cascade and did not check the test's own assertions for Windows paths",
+        "better": "read every assertion of a test that failed by cascade before calling it a cascade — doctrine",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "control_root assertion compares against the JSON-escaped main path",
+      "commit": "1dbf7e799",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee verbs::state_group::set_gate — green:unit — 65 set_gate tests on Linux; the Windows-only red cannot run here, Windows CI is the proof",
+      "deviations": [
+        "followed the plan"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The control_root assertion compares against the JSON-escaped main path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T06:49:38.500Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

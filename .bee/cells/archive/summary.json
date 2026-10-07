@@ -1563,5 +1563,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-07T06:37:29.396Z"
+  },
+  "set-gate-windows-json": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T06:49:49.575Z"
   }
 }
