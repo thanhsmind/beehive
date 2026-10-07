@@ -74,6 +74,8 @@ const CAPSULE_SOURCE: &str = "compact";
 /// ADOPT_SOURCES — the anchor is a prefix, never a router.
 const ANCHOR_LEAD_SOURCES: [&str; 2] = ["compact", "resume"];
 
+const BELT_CONTRACT_LEAD: &str = "bee belt contract:";
+
 /// Allowlist of dispatch runtimes accepted by session-init.
 /// Missing, null, non-string, and unknown values fall back to "claude".
 pub(crate) fn normalize_dispatch_runtime(value: Option<&Value>) -> &'static str {
@@ -120,11 +122,23 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         handoff_outcome.as_ref(),
         runtime,
     );
+    let output = match belt_contract_line(&root, &ctx.payload) {
+        Some(line) => format!("{line}\n\n{output}"),
+        None => output,
+    };
     if !output.trim().is_empty() {
         use std::io::Write;
         let _ = std::io::stdout().write_all(output.as_bytes());
     }
     Outcome::Done(ExitCode::SUCCESS)
+}
+
+fn belt_contract_line(root: &Path, payload: &Map<String, Value>) -> Option<String> {
+    let contract = payload.get("belt_contract")?;
+    let belt = contract.get("belt").and_then(Value::as_str)?;
+    let version = u32::try_from(contract.get("version")?.as_u64()?).ok()?;
+    let (detail, fix) = crate::doctor::belt_contract_check(root, Some(version));
+    Some(format!("{BELT_CONTRACT_LEAD} {belt} {detail}. Fix: {}", fix?))
 }
 
 /// `typeof v === 'string' && v.trim() ? v.trim() : null`.
@@ -1012,5 +1026,42 @@ mod tests {
         // Fallback with unknown runtime
         let out_unknown = compose_output_with_runtime(tmp.path(), "startup", Some("s1"), None, "unknown");
         assert!(out_unknown.contains("--runtime claude"), "{out_unknown}");
+    }
+
+    fn contract(belt: &str, version: u32) -> Map<String, Value> {
+        json!({ "belt_contract": { "belt": belt, "version": version } }).as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn a_belt_on_the_binary_contract_says_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(belt_contract_line(tmp.path(), &contract("pi", crate::doctor::BELT_CONTRACT)), None);
+    }
+
+    #[test]
+    fn an_older_belt_is_told_to_onboard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let line = belt_contract_line(tmp.path(), &contract("pi", crate::doctor::BELT_CONTRACT - 1)).unwrap();
+        assert!(line.starts_with(BELT_CONTRACT_LEAD), "{line}");
+        assert!(line.contains("pi belt") && line.contains("bee onboard --apply"), "{line}");
+        assert!(!line.contains('\n'), "{line}");
+    }
+
+    #[test]
+    fn an_older_binary_is_told_the_binary_freshness_remedy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let line =
+            belt_contract_line(tmp.path(), &contract("opencode", crate::doctor::BELT_CONTRACT + 1)).unwrap();
+        assert!(line.starts_with(BELT_CONTRACT_LEAD), "{line}");
+        assert!(line.contains("opencode belt") && line.contains("installer"), "{line}");
+        assert!(!line.contains("onboard"), "{line}");
+    }
+
+    #[test]
+    fn an_absent_or_malformed_contract_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(belt_contract_line(tmp.path(), &Map::new()), None);
+        let bad = json!({ "belt_contract": "pi" }).as_object().unwrap().clone();
+        assert_eq!(belt_contract_line(tmp.path(), &bad), None);
     }
 }

@@ -1767,7 +1767,7 @@
     },
     {
       "path": ".opencode/plugins/bee-guard.ts",
-      "sha256": "3b4dd463fc66f46d749585c2852ca7a4c2cb2019c6d16cba0c4730fc352e77dc",
+      "sha256": "4dc537fb90ade83a5762c8c3d70c3b1bcc01ed4d9f74d178c0a8eacb25163be8",
       "mode": "644",
       "role": "opencode_plugin",
       "packagePath": ".opencode/plugins/bee-guard.ts"
@@ -1788,7 +1788,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/events.ts",
-      "sha256": "841804d3a653f6a9ca7df93ccd58df6a2e01fd0d48e245e16b14e361546bacd4",
+      "sha256": "5b67d7f72b5c57a8546a1d0a19e59a83a895977061516830b2f7553d0e84cc21",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/events.ts"
@@ -1865,7 +1865,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/tool-steer.ts",
-      "sha256": "d10131ab1acfe572598117a501bc5f4e31f38f9260da559a17e9d4833ec828c3",
+      "sha256": "cc8d34f8a73bc5cfab10f2d1f7cabe130ce342f236589c12d5dd98840e7b0b9b",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/tool-steer.ts"

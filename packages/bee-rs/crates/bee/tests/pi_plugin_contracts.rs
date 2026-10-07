@@ -600,6 +600,7 @@ cp.execFile = function(file, args, options, callback) {
     args: Array.isArray(args) ? [...args] : [],
     timeout: options?.timeout,
     cwd: options?.cwd,
+    paseo_agent_id: options?.env?.PASEO_AGENT_ID ?? null,
   });
   return originalExecFile.call(this, file, args, options, callback);
 };
@@ -1544,6 +1545,7 @@ enum StubBehavior {
     SessionCloseObligations {
         obligations: Vec<Value>,
     },
+    BeltContractLine(String),
 }
 
 const PREAMBLE_MARK: &str = "PREAMBLE-MARK";
@@ -1593,6 +1595,9 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
             format!("printf '%s' '{stdout}'\nexit 0\n")
         }
         StubBehavior::UnparseableVerdict => "printf '%s' 'not-json{{{'\nexit 0\n".to_string(),
+        StubBehavior::BeltContractLine(line) => format!(
+            "case \"$2\" in\n  session-init) cp \"$d/last_stdin.json\" \"$d/session_init_stdin.json\"; printf '%s\\n\\n%s' '{line}' '{PREAMBLE_MARK}' ;;\nesac\nexit 0\n"
+        ),
         StubBehavior::AdvisoryMarks => format!(
             "case \"$2\" in\n  session-init) printf '%s' '{PREAMBLE_MARK}' ;;\n  prompt-context) printf '%s' '{DELTA_MARK}' ;;\nesac\nexit 0\n"
         ),
@@ -2698,6 +2703,58 @@ fn a_reload_with_a_fresh_module_scope_keeps_belt_state_and_one_drain_timer() {
     );
     assert_eq!(run.live_intervals, 1, "exactly one drain timer may stay armed across a fresh-scope /reload");
     assert!(run.results.iter().all(|r| !r.threw), "no advisory surface may throw: {:?}", run.results);
+}
+
+#[cfg(unix)]
+#[test]
+fn session_init_carries_the_belt_contract_and_a_mismatch_line_is_notified() {
+    node_or_skip!("session_init_carries_the_belt_contract_and_a_mismatch_line_is_notified");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let line = "bee belt contract: pi belt contract 0 is older than the binary. Fix: bee onboard --apply";
+    write_stub_bee(dir.path(), &StubBehavior::BeltContractLine(line.to_string()));
+
+    let run = run_harness(&harness, vec![session_start(dir.path(), "sess-contract", "new")]);
+
+    let sent: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join(".bee/bin/session_init_stdin.json")).expect("session-init stdin"),
+    )
+    .expect("session-init stdin is JSON");
+    assert_eq!(sent["belt_contract"], json!({"belt": "pi", "version": 1}), "{sent}");
+    assert!(
+        run.notifications.iter().any(|n| n["message"] == line && n["type"] == "warning"),
+        "the mismatch line must reach the human: {:?}",
+        run.notifications
+    );
+    assert!(run.results.iter().all(|r| !r.threw), "{:?}", run.results);
+}
+
+#[cfg(unix)]
+#[test]
+fn the_leader_steer_spawn_gets_the_agent_id_back() {
+    node_or_skip!("the_leader_steer_spawn_gets_the_agent_id_back");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+    let mbox = job_mailbox(dir.path(), "job-1");
+    std::fs::write(mbox.join("brief-1.txt"), "brief").unwrap();
+
+    let run = run_harness_spec_with_env(
+        &harness,
+        json!({ "calls": [execute_tool_call(dir.path(), "sess-steer-env", "bee_steer", json!({"text": "go"}))] }),
+        &[("PASEO_AGENT_ID", "agent-leader-steer")],
+    );
+    assert!(!run.results[0].threw, "{:?}", run.results[0].message);
+    let steer = run
+        .exec_calls
+        .iter()
+        .find(|c| c["args"].as_array().is_some_and(|a| a.iter().any(|arg| arg == "steer")))
+        .unwrap_or_else(|| panic!("no steer spawn: {:?}", run.exec_calls));
+    assert_eq!(steer["paseo_agent_id"], "agent-leader-steer", "{steer}");
 }
 
 /// The dispatch command the injected preamble publishes, filled in with a

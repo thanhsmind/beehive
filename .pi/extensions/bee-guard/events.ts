@@ -38,6 +38,8 @@ import {
 import { drainWorkerSteer } from "./tool-steer.ts"
 import { beltEnv, state } from "./state.ts"
 
+export const BELT_CONTRACT_VERSION = 1
+
 let quietHeartbeatTurn = false
 let cachedWorkerGuardHelp: boolean | null = null
 
@@ -205,9 +207,14 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         source: sessionSource(reason),
         cwd: directory,
         runtime: "pi",
+        belt_contract: { belt: "pi", version: BELT_CONTRACT_VERSION },
       })
       state.sessionInitRun = true
       if (text) state.cachedPreamble = text
+      const contractLine = text?.split("\n").find((line) => line.startsWith("bee belt contract:"))
+      if (contractLine && ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+        ctx.ui.notify(contractLine, "warning")
+      }
     } catch (err: any) {
       console.error(`bee session-init (advisory): ${err?.message ?? err}`)
     }

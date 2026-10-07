@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, renameSync, statSync } from "node:fs"
 import path from "node:path"
 import { isDirectory, mainCheckoutRoot, resolveBeeBinary } from "./locate.ts"
 import { directoryOf } from "./session.ts"
-import { state } from "./state.ts"
+import { beltEnv, state } from "./state.ts"
 
 export function findRunningJobs(mailboxRoot: string): string[] {
   if (!isDirectory(mailboxRoot)) return []
@@ -102,7 +102,7 @@ export async function executeBeeSteerTool(
     const child = cp.execFile(
       beeBinary,
       ["herding", "steer", jobId, "--text", text, "--json"],
-      { cwd: directory },
+      { cwd: directory, env: beltEnv() },
       (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr?.toString()?.trim() || stdout?.toString()?.trim() || error.message))

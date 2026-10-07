@@ -845,8 +845,8 @@ fn belt_sources(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn belt_contract_check(root: &Path, sources: &[PathBuf]) -> (String, Option<String>) {
-    match belt_contract_version(sources) {
+pub(crate) fn belt_contract_check(root: &Path, version: Option<u32>) -> (String, Option<String>) {
+    match version {
         None => (format!("belt contract unknown (no BELT_CONTRACT_VERSION; binary is {BELT_CONTRACT})"), None),
         Some(v) if v == BELT_CONTRACT => (format!("belt contract {v} matches the binary"), None),
         Some(v) if v < BELT_CONTRACT => (
@@ -890,7 +890,7 @@ fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) ->
                 "opencode" => {
                     let plugin = root.join(".opencode/plugins/bee-guard.ts");
                     if plugin.is_file() {
-                        let belt = belt_contract_check(root, std::slice::from_ref(&plugin));
+                        let belt = belt_contract_check(root, belt_contract_version(std::slice::from_ref(&plugin)));
                         (".opencode/plugins/bee-guard.ts present".to_string(), None, Some(belt))
                     } else {
                         (".opencode/plugins/bee-guard.ts is missing".to_string(), onboard(), None)
@@ -918,7 +918,7 @@ fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) ->
                     let bytes = std::fs::read(root.join(runtime.hooks_rel())).ok();
                     let row = wiring_row(root, runtime, bytes.as_deref());
                     let belt = (runtime == Runtime::Pi).then(|| {
-                        belt_contract_check(root, &belt_sources(&root.join(".pi/extensions/bee-guard")))
+                        belt_contract_check(root, belt_contract_version(&belt_sources(&root.join(".pi/extensions/bee-guard"))))
                     });
                     let fix = if row.ok == Some(true) { None } else { onboard() };
                     (format!("wiring: {}", row.detail), fix, belt)
