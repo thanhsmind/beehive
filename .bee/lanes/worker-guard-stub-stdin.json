@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-guard-stub-stdin",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"worker-guard-stub-stdin\" started at phase \"planning\" (lane).",
-  "next_action": "bee close --feature worker-guard-stub-stdin",
+  "next_action": "bee close finished \"worker-guard-stub-stdin\" — feature is closed.",
   "created_at": "2026-10-07T07:46:50.624Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
