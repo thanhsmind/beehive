@@ -1853,12 +1853,14 @@ fn ingest_issues(
     if !valid_repo(repo) {
         return issue_counts(0, 0, 0, Some("invalid repo"));
     }
-    let output = std::process::Command::new(gh)
-        .args(["issue", "list", "-R", repo, "--label", "bee-report", "--state", "open"])
-        .args(["--limit", "100", "--json", "number,title,createdAt,url,author,comments"])
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output();
+    let output = crate::fsutil::retry_executable_busy(|| {
+        std::process::Command::new(gh)
+            .args(["issue", "list", "-R", repo, "--label", "bee-report", "--state", "open"])
+            .args(["--limit", "100", "--json", "number,title,createdAt,url,author,comments"])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+    });
     let stdout = match output {
         Err(_) => return issue_counts(0, 0, 0, Some("gh not found")),
         Ok(o) if !o.status.success() => return issue_counts(0, 0, 0, Some("gh exited non-zero")),
