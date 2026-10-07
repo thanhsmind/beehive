@@ -684,6 +684,9 @@
     "gh",
     "contract:leader-check-worktree-root",
     "contract:occupancy-test-pane-fixture",
-    "contract:leader-check-windows-paths"
+    "contract:leader-check-windows-paths",
+    "contract:piggery-borrow",
+    "piggery-borrow",
+    "piggery"
   ]
 }
