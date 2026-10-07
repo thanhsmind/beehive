@@ -6328,7 +6328,7 @@ mod paseo_probe_tests {
     #[test]
     fn paseo_agent_ready_when_command_resolves_on_path() {
         let tmp = tempfile::tempdir().unwrap();
-        let bin_dir = tmp.path().join("bin");
+        let bin_dir = tmp.path().join("bin\\dir");
         std::fs::create_dir_all(&bin_dir).unwrap();
         let stub_paseo = bin_dir.join("stub-paseo");
         std::fs::write(&stub_paseo, "").unwrap();
@@ -6338,7 +6338,7 @@ mod paseo_probe_tests {
             "team": {{"pi": {{"code": {{"kind": "herding", "agent": "paseo-worker"}}}}}},
             "herding": {{
                 "transport": "herdr",
-                "paseo": {{"command": "{}"}},
+                "paseo": {{"command": {}}},
                 "agents": {{
                     "paseo-worker": {{
                         "paseo": {{
@@ -6349,7 +6349,7 @@ mod paseo_probe_tests {
                 }}
             }}
         }}"#,
-            stub_paseo.display()
+            serde_json::to_string(&stub_paseo.to_string_lossy()).unwrap()
         );
         let root = repo(&tmp, &cfg);
         w_cell(&root, "c-1");

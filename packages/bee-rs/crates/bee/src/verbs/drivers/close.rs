@@ -822,12 +822,12 @@ pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &s
 pub(crate) fn docs_root_for_feature(root: &Path, feature: &str) -> PathBuf {
     if let Ok(cwd) = std::env::current_dir() {
         if let (Roots::Ordinary(main_root), Some(here)) = crate::verbs::drivers::resolve_root_serving_granted(&cwd) {
-            if main_root == root {
+            if crate::roots::same_path(&main_root.to_string_lossy(), &root.to_string_lossy()) {
                 if feature.is_empty() {
                     return here;
                 }
                 let owns_feature = crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
-                    .is_some_and(|(_, worktree_root)| here == Path::new(&worktree_root));
+                    .is_some_and(|(_, worktree_root)| crate::roots::same_path(&here.to_string_lossy(), &worktree_root));
                 return if owns_feature { here } else { root.to_path_buf() };
             }
         }
@@ -6083,7 +6083,7 @@ mod tests {
 
     impl CwdGuard {
         fn enter(path: &Path) -> Self {
-            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let orig = std::env::current_dir().unwrap();
             std::env::set_current_dir(path).unwrap();
             Self { _lock: lock, orig }
@@ -6165,6 +6165,20 @@ mod tests {
             let _cwd = CwdGuard::enter(&main);
             assert_eq!(docs_root_for_feature(&main, "demo"), main);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn docs_root_for_feature_matches_an_aliased_main_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = fixture_e32f3a66_close(tmp.path());
+        let alias = tmp.path().join("main-alias");
+        std::os::unix::fs::symlink(&main, &alias).unwrap();
+        let _cwd = CwdGuard::enter(&granted);
+        assert_eq!(
+            std::fs::canonicalize(docs_root_for_feature(&alias, "demo")).unwrap(),
+            std::fs::canonicalize(&granted).unwrap()
+        );
     }
 }
 

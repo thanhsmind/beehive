@@ -1257,7 +1257,7 @@ mod tests {
 
     impl CwdGuard {
         fn enter(path: &Path) -> Self {
-            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap();
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let orig = std::env::current_dir().unwrap();
             std::env::set_current_dir(path).unwrap();
             Self { _lock: lock, orig }
