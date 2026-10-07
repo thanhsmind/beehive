@@ -94,6 +94,8 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { registerEvents, type Belt } from "./events.ts"
+import { decidePaseoIdentity } from "./paseo-heartbeat.ts"
+import { state } from "./state.ts"
 import { registerCommands } from "./commands.ts"
 import {
   executeVerdictTool,
@@ -128,6 +130,7 @@ import {
 // ─── the belt ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
+  decidePaseoIdentity()
   const belt: Belt = {
     fullToolSet: null,
     lastStage: null,
@@ -140,8 +143,8 @@ export default function (pi: ExtensionAPI) {
   const isPaseoWorker = Boolean(
     process.env.BEE_HERDING_WORKER &&
       process.env.BEE_HERDING_WORKER.trim().length > 0 &&
-      process.env.PASEO_AGENT_ID &&
-      process.env.PASEO_AGENT_ID.trim().length > 0,
+      state.paseoAgentId &&
+      state.paseoAgentId.trim().length > 0,
   )
 
   if (typeof (pi as any).registerTool === "function") {

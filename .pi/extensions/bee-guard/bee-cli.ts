@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
 import { resolveBeeBinary } from "./locate.ts"
+import { beltEnv } from "./state.ts"
 
 export interface ExecBeeResult {
   stdout: string
@@ -37,7 +38,7 @@ export function execBeeCli(
         exitCode: 127,
       })
     }
-    const env = { ...process.env }
+    const env = beltEnv()
     if (sessionId) {
       env.PI_SESSION_ID = sessionId
     }

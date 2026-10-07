@@ -62,10 +62,10 @@ export const HEADER_VALUE_MAX = 400
  * the CURRENT turn. They stay claimed until the turn ends at `agent_settled`,
  * so a claim covers the whole turn and not merely the host's acceptance of
  * `sendUserMessage`. */
-export const inFlightClaims = new Set<string>()
-export const forcedContinuationSessions = new Set<string>()
-export const settleOutcomes = new Map<string, string>()
-export const heldClaims = new Set<string>()
+export const inFlightClaims = state.inFlightClaims
+export const forcedContinuationSessions = state.forcedContinuationSessions
+export const settleOutcomes = state.settleOutcomes
+export const heldClaims = state.heldClaims
 
 /**
  * Nested UI prompt depth tracking across sessions.
@@ -75,7 +75,7 @@ export const heldClaims = new Set<string>()
  * Matching outer ui_prompt_end emits UserPromptSubmit (without prompt text) to return to working.
  * Unmatched ends are ignored. Unended prompts remain waiting until Stop (agent_settled).
  */
-export const promptDepths = new Map<string, number>()
+export const promptDepths = state.promptDepths
 
 /** Where a previous module instance parked its timer. Pi's `/reload` can hand
  * this file a fresh module scope while the old interval is still armed; the

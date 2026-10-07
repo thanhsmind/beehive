@@ -8,7 +8,6 @@ import {
   ensureHeartbeat,
   heartbeatText,
   isHeartbeatPrompt,
-  isPaseoLeader,
   parseTick,
   readPaseoSettings,
   setTickRunning,
@@ -37,7 +36,7 @@ import {
   revalidateDeferredIntent,
 } from "./transition.ts"
 import { drainWorkerSteer } from "./tool-steer.ts"
-import { state } from "./state.ts"
+import { beltEnv, state } from "./state.ts"
 
 let quietHeartbeatTurn = false
 let cachedWorkerGuardHelp: boolean | null = null
@@ -82,8 +81,8 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     const isHerdedPaseoWorker = Boolean(
       process.env.BEE_HERDING_WORKER &&
         process.env.BEE_HERDING_WORKER.trim().length > 0 &&
-        process.env.PASEO_AGENT_ID &&
-        process.env.PASEO_AGENT_ID.trim().length > 0,
+        state.paseoAgentId &&
+        state.paseoAgentId.trim().length > 0,
     )
     const isSupervisorGuarded = Boolean(
       process.env.BEE_SUPERVISOR_ALLOWED &&
@@ -165,19 +164,19 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       } catch (err: any) {
         console.error(`bee result-inbox (advisory) could not start: ${err?.message ?? err}`)
       }
-      if (isPaseoLeader()) {
+      if (state.paseoLeader) {
         const mainRoot = mainCheckoutRoot(directory)
         const settings = readPaseoSettings(mainRoot)
         ensureHeartbeat(
           mainRoot,
-          process.env.PASEO_AGENT_ID ?? "",
+          state.paseoAgentId ?? "",
           settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
                 command,
                 args,
-                { timeout: 30000, encoding: "utf8" },
+                { timeout: 30000, encoding: "utf8", env: beltEnv() },
                 (error, stdout) => {
                   if (error) {
                     reject(error)
@@ -347,7 +346,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           const child = cp.execFile(
             beeBinary,
             ["hook", "session-close"],
-            { cwd: directory, timeout: 5000 },
+            { cwd: directory, timeout: 5000, env: beltEnv() },
             () => {},
           )
           child.stdin?.on("error", () => {})
@@ -356,7 +355,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
     } catch {}
     const text = typeof event?.text === "string" ? event.text : ""
-    if (isPaseoLeader() && isHeartbeatPrompt(text)) {
+    if (state.paseoLeader && isHeartbeatPrompt(text)) {
       if (tickRunning) {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
@@ -373,7 +372,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           const child = cp.execFile(
             beeBinary,
             ["herding", "broker", "tick", "--json"],
-            { cwd: directory, timeout: 120000, encoding: "utf8" },
+            { cwd: directory, timeout: 120000, encoding: "utf8", env: beltEnv() },
             (error, stdout) => {
               if (error) {
                 reject(error)
@@ -853,19 +852,19 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
       if (reason === "reload") return undefined
       stopBrokerTimer()
-      if (isPaseoLeader()) {
+      if (state.paseoLeader) {
         const mainRoot = mainCheckoutRoot(directoryOf(ctx))
         const settings = readPaseoSettings(mainRoot)
         await deleteHeartbeat(
           mainRoot,
-          process.env.PASEO_AGENT_ID ?? "",
+          state.paseoAgentId ?? "",
           settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
                 command,
                 args,
-                { timeout: 30000, encoding: "utf8" },
+                { timeout: 30000, encoding: "utf8", env: beltEnv() },
                 (error, stdout) => {
                   if (error) {
                     reject(error)

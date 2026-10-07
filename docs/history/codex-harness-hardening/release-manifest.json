@@ -1774,7 +1774,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/bee-cli.ts",
-      "sha256": "432701d473dc64cd0610df51a55f6a235af22a33242bd495074df13d304a379f",
+      "sha256": "b06bc4b64799bc8782ebfe693b9d92b8598874021122b4d58b7d71fad297127d",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/bee-cli.ts"
@@ -1788,21 +1788,21 @@
     },
     {
       "path": ".pi/extensions/bee-guard/events.ts",
-      "sha256": "1a7acf7b609b637ee82808da67a718f78fb3ec4e984c379274b251280d748b03",
+      "sha256": "841804d3a653f6a9ca7df93ccd58df6a2e01fd0d48e245e16b14e361546bacd4",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/events.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/hooks.ts",
-      "sha256": "2cbad6c13dcc350b7fa095882b1f15b722a8b8e495cb482aa53b1e2e6b28aa0e",
+      "sha256": "c9417c648d7d273509434ce06d5e53c6c43ae6518c1b05371c93be82f63c9fe2",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/hooks.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/index.ts",
-      "sha256": "3b2bbebfaca66b83ca2a6b3b5e638fca55ed15822d68828c3190944f024a222a",
+      "sha256": "7e51176cd03a56567ba65566478596387877df92f1789ec134844ba5ff2ad978",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/index.ts"
@@ -1823,14 +1823,14 @@
     },
     {
       "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
-      "sha256": "2424b70e0df9428e366421b080924fcef92ddd3e666c353890263bf93105e7a4",
+      "sha256": "3c25d7a694dbaa64fd30d1474d5333db59afcdb265f3f6995f3fbbfb92439122",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/paseo-heartbeat.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "dc00faaa701b5ece943c081518a6df6bf9ff50cb2779243d9078a67795ba769c",
+      "sha256": "7f012b720992f11e340bca47fe954cf9ff78fd1dcbf2a0dc825c3b79be330d27",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
@@ -1844,14 +1844,14 @@
     },
     {
       "path": ".pi/extensions/bee-guard/state.ts",
-      "sha256": "7388377fb88c37d401a9be03e9dd4ee78ede866998f98669bbbae98df6e5cf5e",
+      "sha256": "7f2585141ba1e687e6ada8189b5f745b644f23c29d012397f8492b451fdd978f",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/state.ts"
     },
     {
       "path": ".pi/extensions/bee-guard/tool-dispatch.ts",
-      "sha256": "a0f0174c2835fa0d1e0e92246f6e4b76ca3fba1523c7469f16869e9d2543db7d",
+      "sha256": "32c52126e02ba15b464d5d5d24ba403c1347f83cbe52dcd8b764290da3d50332",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/tool-dispatch.ts"

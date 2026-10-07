@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSyn
 import path from "node:path"
 import { resolveBeeBinary } from "./locate.ts"
 import { sendLeaderMessage } from "./result-inbox.ts"
-import { state } from "./state.ts"
+import { beltEnv, state } from "./state.ts"
 
 export const HEARTBEAT_NAME = "bee-leader"
 export const DEFAULT_CRON = "*/30 * * * *"
@@ -74,7 +74,7 @@ function extractFirstJsonObject(text: string): Record<string, any> | null {
   return null
 }
 
-export function isPaseoLeader(env: Record<string, string | undefined> = process.env): boolean {
+export function isPaseoLeader(env: Record<string, string | undefined>): boolean {
   if (!env || typeof env !== "object") {
     return false
   }
@@ -87,6 +87,13 @@ export function isPaseoLeader(env: Record<string, string | undefined> = process.
     return false
   }
   return true
+}
+
+export function decidePaseoIdentity(): void {
+  if (state.paseoLeader !== null) return
+  state.paseoAgentId = process.env.PASEO_AGENT_ID ?? null
+  state.paseoLeader = isPaseoLeader(process.env)
+  if (state.paseoLeader) delete process.env.PASEO_AGENT_ID
 }
 
 export function isHeartbeatPrompt(text: unknown): boolean {
@@ -439,7 +446,7 @@ export function startBrokerTimer(
             const child = cp.execFile(
               beeBinary,
               ["herding", "broker", "tick", "--json"],
-              { cwd: directory, timeout: 120000, encoding: "utf8" },
+              { cwd: directory, timeout: 120000, encoding: "utf8", env: beltEnv() },
               (error, out) => {
                 if (error) {
                   reject(error)

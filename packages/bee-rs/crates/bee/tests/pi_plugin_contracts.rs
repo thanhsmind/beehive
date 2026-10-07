@@ -583,6 +583,7 @@ const HARNESS_JS: &str = r#"
 import { pathToFileURL } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import cp from "node:child_process";
 
 const [, , extensionPath] = process.argv;
@@ -601,6 +602,19 @@ cp.execFile = function(file, args, options, callback) {
     cwd: options?.cwd,
   });
   return originalExecFile.call(this, file, args, options, callback);
+};
+
+const liveIntervals = new Set();
+const originalSetInterval = globalThis.setInterval;
+const originalClearInterval = globalThis.clearInterval;
+globalThis.setInterval = function(...args) {
+  const handle = originalSetInterval.apply(this, args);
+  liveIntervals.add(handle);
+  return handle;
+};
+globalThis.clearInterval = function(handle) {
+  liveIntervals.delete(handle);
+  return originalClearInterval.call(this, handle);
 };
 
 function readStdin() {
@@ -890,6 +904,22 @@ for (const call of spec.calls) {
       results.push(step({ switches_seen: switches.length }));
       continue;
     }
+    case "reload_fresh": {
+      const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), "bee-pi-reload-"));
+      fs.cpSync(path.dirname(extensionPath), freshDir, { recursive: true });
+      fs.writeFileSync(path.join(freshDir, "package.json"), JSON.stringify({ type: "module" }));
+      handlers.clear();
+      commands.clear();
+      tools.clear();
+      try {
+        const fresh = await import(pathToFileURL(path.join(freshDir, path.basename(extensionPath))).href);
+        await fresh.default(pi);
+      } finally {
+        fs.rmSync(freshDir, { recursive: true, force: true });
+      }
+      results.push(step(null));
+      continue;
+    }
     case "snapshot": {
       let entries = null;
       try { entries = fs.readdirSync(call.path).sort(); } catch { entries = null; }
@@ -987,6 +1017,7 @@ console.log(JSON.stringify({
   activeTools,
   activeToolsHistory,
   customMessages,
+  liveIntervals: liveIntervals.size,
   process_cwd_unchanged: initialProcessCwd === finalProcessCwd,
 }));
 
@@ -1058,6 +1089,7 @@ struct HarnessRun {
     active_tools_history: Vec<Vec<String>>,
     #[allow(dead_code)]
     custom_messages: Vec<Value>,
+    live_intervals: u64,
 }
 
 impl HarnessRun {
@@ -1272,6 +1304,7 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         })
         .unwrap_or_default();
     let custom_messages = v.get("customMessages").and_then(Value::as_array).cloned().unwrap_or_default();
+    let live_intervals = v.get("liveIntervals").and_then(Value::as_u64).unwrap_or(0);
     HarnessRun {
         results,
         messages,
@@ -1289,6 +1322,7 @@ fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &st
         active_tools,
         active_tools_history,
         custom_messages,
+        live_intervals,
     }
 }
 
@@ -2612,6 +2646,58 @@ fn the_session_preamble_is_injected_once_and_a_reload_never_re_runs_session_init
         "no advisory surface may throw: {:?}",
         run.results
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_reload_with_a_fresh_module_scope_keeps_belt_state_and_one_drain_timer() {
+    node_or_skip!("a_reload_with_a_fresh_module_scope_keeps_belt_state_and_one_drain_timer");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::AdvisoryMarks);
+
+    let turn = |prompt: &str| {
+        advisory_call(
+            "before_agent_start",
+            dir.path(),
+            "sess-reload",
+            json!({"prompt": prompt, "systemPrompt": "BASE"}),
+        )
+    };
+    let start = |reason: &str| advisory_call("session_start", dir.path(), "sess-reload", json!({"reason": reason}));
+
+    let run = run_harness(
+        &harness,
+        vec![
+            start("new"),
+            turn("first"),
+            json!({"kind": "reload_fresh"}),
+            start("reload"),
+            turn("second"),
+        ],
+    );
+
+    let second = run.results[4]
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        !second.contains(PREAMBLE_MARK) && second.contains(DELTA_MARK),
+        "a /reload that hands the belt a fresh module scope must keep the injected preamble state, got {second:?}"
+    );
+    assert_eq!(
+        count_invocations(dir.path(), "session-init"),
+        1,
+        "a /reload with a fresh module scope must not re-run session-init: invocations={:?}",
+        stub_invocations(dir.path())
+    );
+    assert_eq!(run.live_intervals, 1, "exactly one drain timer may stay armed across a fresh-scope /reload");
+    assert!(run.results.iter().all(|r| !r.threw), "no advisory surface may throw: {:?}", run.results);
 }
 
 /// The dispatch command the injected preamble publishes, filled in with a

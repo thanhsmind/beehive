@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { resolveBeeBinary } from "./locate.ts"
-import { state } from "./state.ts"
+import { beltEnv, state } from "./state.ts"
 import { directoryOf, sessionIdOf } from "./session.ts"
 import { usableInboxToken } from "./result-inbox.ts"
 import { execBeeCli } from "./bee-cli.ts"
@@ -52,6 +52,7 @@ export async function runBeeDispatch(prepareArgs: string[], ctx: any) {
   const jobId = `job-${Date.now()}-${process.pid}-${state.dispatchCounter}`
   const child = spawn(beeBinary, [...argv.slice(1), "--inbox-session", token, "--job-id", jobId], {
     cwd: directory,
+    env: beltEnv(),
     detached: true,
     stdio: ["pipe", "ignore", "ignore"],
   })
