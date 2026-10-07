@@ -174,6 +174,7 @@ fs.mkdirSync(beeBinDir, { recursive: true });
 fs.writeFileSync(path.join(tmpDir, ".bee", "onboarding.json"), "{}");
 const stubBee = path.join(beeBinDir, "bee");
 fs.writeFileSync(stubBee, `#!/bin/sh
+cat > /dev/null
 if [ "$1" = "hook" ] && [ "$2" = "--help" ]; then
   echo "hooks:"
   echo "  activity"
@@ -210,6 +211,7 @@ fs.mkdirSync(beeBinDir, { recursive: true });
 fs.writeFileSync(path.join(tmpDir, ".bee", "onboarding.json"), "{}");
 const stubBee = path.join(beeBinDir, "bee");
 fs.writeFileSync(stubBee, `#!/bin/sh
+cat > /dev/null
 if [ "$1" = "hook" ] && [ "$2" = "--help" ]; then
   echo "hooks:"
   echo "  activity"
@@ -258,6 +260,7 @@ fs.mkdirSync(beeBinDir, { recursive: true });
 fs.writeFileSync(path.join(tmpDir, ".bee", "onboarding.json"), "{}");
 const stubBee = path.join(beeBinDir, "bee");
 fs.writeFileSync(stubBee, `#!/bin/sh
+cat > /dev/null
 if [ "$1" = "hook" ] && [ "$2" = "--help" ]; then
   echo "hooks:"
   echo "  activity"
@@ -290,6 +293,7 @@ fs.writeFileSync(path.join(tmpDir, ".bee", "onboarding.json"), "{}");
 const stubBee = path.join(beeBinDir, "bee");
 const callsLog = path.join(tmpDir, "worker-guard-calls.log");
 fs.writeFileSync(stubBee, `#!/bin/sh
+cat > /dev/null
 if [ "$1" = "hook" ] && [ "$2" = "worker-guard" ]; then
   echo "$*" >> "${callsLog}"
   exit 0
