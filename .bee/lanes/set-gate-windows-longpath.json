@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"set-gate-windows-longpath\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at bd256af; capture what settled, then bee close --feature set-gate-windows-longpath.",
   "created_at": "2026-10-07T07:00:07.979Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -117,12 +117,5 @@
         "behavior_change": false
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-07T07:02:05.181Z",
-    "branch": "wt/set-gate-windows-longpath",
-    "worktree_id": "beehive--wt--set-gate-windows-longpath",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
