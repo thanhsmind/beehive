@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0",
+  "feature": "worker-guard-stub-stdin",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"worker-guard-stub-stdin\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-07T07:46:50.624Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": "re-routed down on evidence: one test file, two stub bodies, no assertion change",
+    "updated_at": "2026-10-07T07:47:23.433Z",
+    "feature": "worker-guard-stub-stdin",
+    "demoted_at": "2026-10-07T07:47:23.468Z"
+  },
+  "gate_preview": {
+    "feature": "worker-guard-stub-stdin",
+    "plan_sha256": "51e4cf2b5164d6a70574f3ce01a563da91b10ea0e407f8a84a0d38a24eebbb4e",
+    "previewed_at": "2026-10-07T07:47:23.548Z",
+    "cells": [
+      {
+        "id": "wgs-1",
+        "feature": "worker-guard-stub-stdin",
+        "title": "Drain stdin in the worker-guard test stubs",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "49c907f8-e331-4099-a1d0-afc0709d3ff2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In pi_worker_guard_contracts.rs, make every sh stub bee that the belt calls with JSON on stdin read all of stdin first (cat > /dev/null) before it answers, as write_stub_bee in pi_plugin_contracts.rs does (cat > last_stdin.json). This covers the allow stub and the deny stub at least. Do not change what any test asserts. No new code comments. Proof: the cell verify, plus the stress loop (8 parallel loops x 15 runs of each worker-guard stub test) with zero failures.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_worker_guard_contracts",
+        "must_haves": {
+          "truths": [
+            "Every worker-guard stub bee drains stdin before it answers",
+            "The allow test passes 120 of 120 runs under 8 parallel loops"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "cat > /dev/null in the stub hook branches"
+            }
+          ],
+          "key_links": [
+            "Linux CI green for test_belt_allows_paseo_worker_shell_call_when_stub_allows"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No assertion changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "worker-guard-stub-stdin",
+    "plan_sha256": "51e4cf2b5164d6a70574f3ce01a563da91b10ea0e407f8a84a0d38a24eebbb4e",
+    "previewed_at": "2026-10-07T07:47:23.548Z",
+    "cells": [
+      {
+        "id": "wgs-1",
+        "feature": "worker-guard-stub-stdin",
+        "title": "Drain stdin in the worker-guard test stubs",
+        "lane": "tiny",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "49c907f8-e331-4099-a1d0-afc0709d3ff2"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In pi_worker_guard_contracts.rs, make every sh stub bee that the belt calls with JSON on stdin read all of stdin first (cat > /dev/null) before it answers, as write_stub_bee in pi_plugin_contracts.rs does (cat > last_stdin.json). This covers the allow stub and the deny stub at least. Do not change what any test asserts. No new code comments. Proof: the cell verify, plus the stress loop (8 parallel loops x 15 runs of each worker-guard stub test) with zero failures.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_worker_guard_contracts",
+        "must_haves": {
+          "truths": [
+            "Every worker-guard stub bee drains stdin before it answers",
+            "The allow test passes 120 of 120 runs under 8 parallel loops"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+              "substantive": "cat > /dev/null in the stub hook branches"
+            }
+          ],
+          "key_links": [
+            "Linux CI green for test_belt_allows_paseo_worker_shell_call_when_stub_allows"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No assertion changes"
+          ]
+        },
+        "behavior_change": false
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-07T07:48:53.403Z",
+    "branch": "wt/worker-guard-stub-stdin",
+    "worktree_id": "beehive--wt--worker-guard-stub-stdin",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
