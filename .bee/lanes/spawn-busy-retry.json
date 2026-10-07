@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"spawn-busy-retry\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 86bd0dc; capture what settled, then bee close --feature spawn-busy-retry.",
   "created_at": "2026-10-07T11:20:59.414Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -131,12 +131,5 @@
         "behavior_change": true
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-07T11:25:05.654Z",
-    "branch": "wt/spawn-busy-retry",
-    "worktree_id": "beehive--wt--spawn-busy-retry",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
