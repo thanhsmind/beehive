@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pi-tests-unix-stubs\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 59a37c4; capture what settled, then bee close --feature pi-tests-unix-stubs.",
   "created_at": "2026-10-07T07:05:03.107Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -137,12 +137,5 @@
         "behavior_change": false
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-07T07:07:43.884Z",
-    "branch": "wt/pi-tests-unix-stubs",
-    "worktree_id": "beehive--wt--pi-tests-unix-stubs",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
