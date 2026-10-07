@@ -3378,6 +3378,178 @@ fn a_restart_before_the_turn_settled_redelivers_the_same_job_id_at_least_once() 
     );
 }
 
+fn settle_outcome(cwd: &Path, session_id: &str, outcome: &str) -> Value {
+    advisory_call("agent_before_settle", cwd, session_id, json!({ "entries": [], "outcome": outcome }))
+}
+
+fn user_input(cwd: &Path, session_id: &str) -> Value {
+    advisory_call("input", cwd, session_id, json!({ "text": "go on", "source": "interactive" }))
+}
+
+fn one_finished_job(root: &Path, token: &str) -> PathBuf {
+    let mailbox = job_mailbox(root, "job-100");
+    write_result(&mailbox, 1, &result_envelope("ok", "the gather landed", "cargo test — green"));
+    write_marker(root, token, "job-100", &mailbox, Some("cell-7"));
+    inbox_dir(root, token)
+}
+
+#[cfg(unix)]
+#[test]
+fn an_aborted_turn_requeues_its_result_and_holds_it_until_the_user_starts_a_turn() {
+    node_or_skip!("an_aborted_turn_requeues_its_result_and_holds_it_until_the_user_starts_a_turn");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    for outcome in ["aborted", "error"] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_stub_bee(dir.path(), &StubBehavior::Allow);
+        const TOKEN: &str = "sess-drain-abort";
+        let inbox = one_finished_job(dir.path(), TOKEN);
+
+        let run = run_harness(
+            &harness,
+            vec![
+                session_start(dir.path(), TOKEN, "new"),
+                await_injections(1),
+                turn_starts(dir.path(), TOKEN),
+                settle_outcome(dir.path(), TOKEN, outcome),
+                advisory_call("agent_settled", dir.path(), TOKEN, json!({})),
+                snapshot_step(&inbox),
+                await_injections_in_vain(2),
+                user_input(dir.path(), TOKEN),
+                turn_starts(dir.path(), TOKEN),
+                await_injections(2),
+            ],
+        );
+
+        assert_eq!(
+            run.snapshot(5),
+            vec!["job-100.json".to_string()],
+            "an {outcome} turn must put its in-flight result back under its queued name (stderr={})",
+            run.stderr.trim()
+        );
+        assert_eq!(
+            run.messages_seen(6),
+            1,
+            "an {outcome} turn must not start a new turn on its own: {:?}",
+            run.messages
+        );
+        assert_eq!(
+            run.messages.len(),
+            2,
+            "the held result must be delivered once the user starts the next turn: {:?}",
+            run.messages
+        );
+        assert!(run.messages[1].text.contains("job_id: job-100"), "{}", run.messages[1].text);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_completed_turn_consumes_its_result_even_after_a_forced_continuation() {
+    node_or_skip!("a_completed_turn_consumes_its_result_even_after_a_forced_continuation");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(
+        dir.path(),
+        &StubBehavior::SessionCloseObligations {
+            obligations: vec![json!({
+                "key": "demo:cap:demo-1",
+                "kind": "cap",
+                "cell": "demo-1",
+                "message": "bee: cell demo-1 is claimed and not capped. Cap it now.",
+            })],
+        },
+    );
+    const TOKEN: &str = "sess-drain-completed";
+    let inbox = one_finished_job(dir.path(), TOKEN);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections(1),
+            turn_starts(dir.path(), TOKEN),
+            settle_outcome(dir.path(), TOKEN, "completed"),
+            settle_outcome(dir.path(), TOKEN, "completed"),
+            advisory_call("agent_settled", dir.path(), TOKEN, json!({})),
+            snapshot_step(&inbox),
+        ],
+    );
+
+    assert_eq!(
+        run.results[3].result.as_ref().map(|r| r["continue"].clone()),
+        Some(json!(true)),
+        "the fixture must go through a forced continuation: {:?}",
+        run.results[3]
+    );
+    assert!(
+        run.snapshot(6).is_empty(),
+        "a completed turn consumes its in-flight result: {:?} (stderr={})",
+        run.snapshot(6),
+        run.stderr.trim()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_settle_with_no_outcome_keeps_the_delete() {
+    node_or_skip!("a_settle_with_no_outcome_keeps_the_delete");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+    const TOKEN: &str = "sess-drain-no-outcome";
+    let inbox = one_finished_job(dir.path(), TOKEN);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            await_injections(1),
+            turn_starts(dir.path(), TOKEN),
+            advisory_call("agent_settled", dir.path(), TOKEN, json!({})),
+            snapshot_step(&inbox),
+        ],
+    );
+
+    assert!(
+        run.snapshot(4).is_empty(),
+        "a pi with no agent_before_settle outcome keeps the delete at settle: {:?}",
+        run.snapshot(4)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn the_drain_does_not_inject_while_a_ui_prompt_is_open() {
+    node_or_skip!("the_drain_does_not_inject_while_a_ui_prompt_is_open");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::Allow);
+    const TOKEN: &str = "sess-drain-ui-prompt";
+    one_finished_job(dir.path(), TOKEN);
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            advisory_call("ui_prompt_start", dir.path(), TOKEN, json!({"kind": "select"})),
+            await_injections_in_vain(1),
+            advisory_call("ui_prompt_end", dir.path(), TOKEN, json!({})),
+            await_injections(1),
+        ],
+    );
+
+    assert_eq!(run.messages_seen(2), 0, "no inject while a UI prompt is open: {:?}", run.messages);
+    assert_eq!(run.messages.len(), 1, "the result arrives once the prompt closes: {:?}", run.messages);
+}
+
 #[cfg(unix)]
 #[test]
 fn a_marker_whose_job_has_not_finished_is_never_injected() {

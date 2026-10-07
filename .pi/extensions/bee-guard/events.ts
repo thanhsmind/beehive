@@ -21,8 +21,11 @@ import { runBlockingHook, runAdvisoryHook, block } from "./hooks.ts"
 import { refreshModelUsageStatus } from "./model-usage.ts"
 import {
   forcedContinuationSessions,
+  heldClaims,
+  holdClaim,
   inFlightClaims,
   promptDepths,
+  settleOutcomes,
   startResultDrain,
 } from "./result-inbox.ts"
 import {
@@ -326,6 +329,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
   }) as any)
 
   pi.on("input", (async (event: any, ctx: any) => {
+    if (event?.source !== "extension") heldClaims.clear()
     try {
       const text = typeof event?.text === "string" ? event.text : ""
       const behavior = typeof event?.streamingBehavior === "string" ? event.streamingBehavior : ""
@@ -449,6 +453,8 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
 
   pi.on("agent_before_settle", (async (event: any, ctx: any) => {
     try {
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      if (typeof event?.outcome === "string") settleOutcomes.set(activeSessionId, event.outcome)
       const directory = directoryOf(ctx)
       const raw = runAdvisoryHook(directory, "session-close", {
         hook_event_name: "Stop",
@@ -478,7 +484,6 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           }
         }
       }
-      const activeSessionId = sessionIdOf(ctx) ?? ""
       if (activeSessionId) {
         forcedContinuationSessions.add(activeSessionId)
       }
@@ -519,13 +524,18 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     const activeSessionId = sessionIdOf(ctx) ?? ""
     const hadForcedContinuation = forcedContinuationSessions.has(activeSessionId)
     forcedContinuationSessions.delete(activeSessionId)
+    const outcome = settleOutcomes.get(activeSessionId)
+    settleOutcomes.delete(activeSessionId)
     const wasQuietHeartbeat = quietHeartbeatTurn
     quietHeartbeatTurn = false
     try {
       promptDepths.delete(activeSessionId)
       state.selfBusy = false
       state.turnStartPending = false
-      for (const processing of inFlightClaims) rmSync(processing, { force: true })
+      for (const processing of inFlightClaims) {
+        if (outcome === "aborted" || outcome === "error") holdClaim(processing)
+        else rmSync(processing, { force: true })
+      }
       inFlightClaims.clear()
     } catch (err: any) {
       console.error(`bee result-inbox (advisory): could not consume a claim: ${err?.message ?? err}`)

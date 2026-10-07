@@ -1788,7 +1788,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/events.ts",
-      "sha256": "755fdead8ce2382721fa132d799bf0b4e904944ad3805b569d417ecaa614cf5a",
+      "sha256": "1a7acf7b609b637ee82808da67a718f78fb3ec4e984c379274b251280d748b03",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/events.ts"
@@ -1830,7 +1830,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "0f36e20d92e96fd0fa0bfc1afb435d38733006ed6130a4807b6079b56456aa9a",
+      "sha256": "dc00faaa701b5ece943c081518a6df6bf9ff50cb2779243d9078a67795ba769c",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
