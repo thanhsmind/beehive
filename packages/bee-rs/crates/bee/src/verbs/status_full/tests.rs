@@ -793,10 +793,9 @@ use crate::version::BEE_VERSION;
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted, _ungranted) = worktree_fixture(tmp.path());
         write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"demo\"}");
-        assert_eq!(
-            find_unmerged_granted_worktree_for_feature(&main, "demo"),
-            Some(("wt-granted".to_string(), granted.to_str().unwrap().to_string()))
-        );
+        let (id, path) = find_unmerged_granted_worktree_for_feature(&main, "demo").unwrap();
+        assert_eq!(id, "wt-granted");
+        assert!(crate::roots::same_path(&path, granted.to_str().unwrap()), "{path}");
         let mut status_main = JMap::new();
         status_main.insert("feature".into(), json!("demo"));
         status_main.insert("route".into(), json!({"lane": "small"}));
@@ -819,10 +818,9 @@ use crate::version::BEE_VERSION;
             ".git/worktrees/wt-granted/HEAD",
             "0123456789abcdef0123456789abcdef01234567\n",
         );
-        assert_eq!(
-            find_unmerged_granted_worktree_for_feature(&main, "demo"),
-            Some(("wt-granted".to_string(), granted.to_str().unwrap().to_string()))
-        );
+        let (id, path) = find_unmerged_granted_worktree_for_feature(&main, "demo").unwrap();
+        assert_eq!(id, "wt-granted");
+        assert!(crate::roots::same_path(&path, granted.to_str().unwrap()), "{path}");
     }
 
     /// The whole orient packet from inside a granted worktree carries the
