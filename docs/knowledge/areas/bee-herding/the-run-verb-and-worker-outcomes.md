@@ -479,6 +479,16 @@ Two CLI verbs provide deterministic control over running workers (herding-cockpi
   - The wave failure policy `FirstSuccessCancelRest` routes through this exact
     fail-closed cancel path.
 
+### Cancel stops the whole process tree on unix (piggery-borrow D2, 2026-10-07)
+
+Before `bee herding cancel` closes the pane, it reads the process tree below the captured foreground pid with one `ps -A -o pid=,ppid=,pgid=` call, sends SIGTERM to every member, waits up to 2 seconds, reads again, and sends SIGKILL to the members still alive (decision `7a25e4ed`).
+It reads the tree first because a child whose parent died is moved under init and cannot be found later.
+The 5-second fail-closed confirm and `cancel_termination_failed` are unchanged.
+The tree reader and the signal sender sit behind the `ProcessTree` seam, so tests never signal the test runner.
+Windows keeps the old path, and Paseo workers keep `paseo stop`.
+
+Pointers: `packages/bee-rs/crates/bee/src/herding/job_verbs.rs` (`kill_tree`, `ProcessTree`, `RealProcessTree`).
+
 ### Job marks in `job.json`
 
 Job state in `.bee/mailbox/<job-id>/job.json` tracks marks and lifecycle transitions

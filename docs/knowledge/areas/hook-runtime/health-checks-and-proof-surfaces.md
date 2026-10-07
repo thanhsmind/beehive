@@ -155,6 +155,23 @@ against isolated fixtures, asserting that a denied action changed nothing.
   checklist with named metrics and are never auto-asserted
   (codex-native-runtime-v2, cnr2-14).
 
+### Runtime rows and the belt contract (piggery-borrow D4 and D7, 2026-10-07)
+
+`bee doctor` prints one advisory row per runtime: claude, codex, opencode, pi and paseo (decision `da84d0f0`).
+The rows sit in the advisory channel, so they never change the verdict.
+Each row says whether the tool is on PATH (located, never run, so a wrapper script never runs) and whether the repo's bee wiring for that runtime is present and current.
+Every not-ok row carries a `fix:` line: `bee onboard --apply` for stale or missing wiring, or an install line for a missing tool.
+Paseo counts as wired when a `herding.agents` entry has a `paseo` block or `herding.paseo` is set; its fix tells the user to add such an agent, because `bee onboard --apply` never writes paseo config.
+The opencode plugin counts as current when the file exists.
+
+The pi and opencode belts send `belt_contract: {belt, version}` in the session-init payload (decision `d79958fd`).
+session-init compares it with `doctor::BELT_CONTRACT`; on a mismatch it puts one line at the top of its output naming the side to update, and the belt shows that line to the human (`ctx.ui.notify` on pi, a toast on opencode).
+A payload with no contract is accepted silently.
+The pi and opencode runtime rows carry the same check.
+Bump rule: any change to a `bee hook` stdin shape or a belt-visible verdict shape bumps `BELT_CONTRACT_VERSION` in both belts and `BELT_CONTRACT` in the binary.
+
+Pointers: `packages/bee-rs/crates/bee/src/doctor.rs` (`runtime_checks_with_env`, `locate_on_path`, `BELT_CONTRACT`, `belt_contract_check`), `packages/bee-rs/crates/bee/src/hooks/session_init.rs` (`belt_contract_line`), `.pi/extensions/bee-guard/events.ts`, `.opencode/plugins/bee-guard.ts`.
+
 ## Pointers (implementation)
 
 - The freshness row and its two arms are `binary_freshness_row`,

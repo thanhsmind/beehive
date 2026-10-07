@@ -90,6 +90,27 @@ It relaunches nothing (9615be76). By marking dead panes as `interrupted`, the
 sweep ensures dead workers are resolved and do not leak into active occupancy
 counts.
 
+### Declared limits are refused at the door (piggery-borrow D3, 2026-10-07)
+
+`.bee/config.json` may set `herding.limits.concurrency` and `herding.limits.depth` (decision `ffa4e772`).
+Absent means no limit, and the output is byte-identical to a config without the key.
+`bee herding run` checks both before it starts a worker, and `bee dispatch prepare` checks them when the role resolves to a herding agent.
+Both count occupancy with `quiet_occupancy`, which prints nothing and writes nothing; the `occupancy` verb is not used here because it prints and marks orphans.
+Paseo agents count as live even when no pane list is available.
+The refusals are `limits.concurrency` (with `live`, `limit`, `retryable: true` and a fix), `limits.unverifiable` (only a fallback count exists while a concurrency limit is set) and `limits.depth`.
+Depth travels in `BEE_HERDING_DEPTH`, exported to the child as the caller's depth plus one, and only when a depth limit is set.
+`bee herding run --continue` is not checked, because it reuses a live worker.
+`bee dispatch prepare --explain` prints each check (role, claim, limits) with pass, refuse or skip, and writes nothing.
+The cockpit spawn path (`herdr agent start` plus `record-worker`) is outside these two doors.
+
+### Status shows each worker's context and turns (piggery-borrow D6, 2026-10-07)
+
+The activity hook writes the worker's `transcript_path` into the job's `activity.json` (decision `7edc0153`).
+`bee herding status` reads that transcript with the same usage reader as `bee dev statusline` and adds `ctx_tokens` (input plus cache tokens of the latest request) and `turns` to the JSON, and a `ctx=12.3k turns=4` suffix to the plain line.
+With no recorded transcript, both fields are `null` and there is no suffix: pi child workers run with `--no-session`, and Paseo pi workers share one agent folder.
+
+Pointers: `packages/bee-rs/crates/bee/src/herding/wave.rs` (`quiet_occupancy`, `check_limits`), `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs` (`explain_checks`), `packages/bee-rs/crates/bee/src/herding.rs` (`job_usage`, `fmt_ctx`), `packages/bee-rs/crates/bee/src/devtools/statusline.rs` (`context_and_turns`), `packages/bee-rs/crates/bee/src/hooks/activity.rs`.
+
 ## On tmux
 
 **The multiplexer is a configuration choice, and waves and occupancy make it
