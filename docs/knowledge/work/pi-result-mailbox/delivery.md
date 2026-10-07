@@ -42,6 +42,22 @@ All green.
 - **prm-4** — Committed with an explicit `--` pathspec through the shared index guard, excluding a sibling cell's in-flight test file.
 - **prm-5** — Added a local `#[cfg(test)] mod detached_delivery_tests` inside `prepare.rs` to pin the `--inbox-session` payload claim.
 
+## Settle outcome and reload (piggery-borrow, 2026-10-07)
+
+piggery-borrow D1 (decision `60824879`) changes when a delivered result is consumed.
+The belt records the `outcome` that `agent_before_settle` reports for the leader turn: `completed`, `aborted` or `error` (pi 0.87.0 and newer).
+At `agent_settled`, a `completed` turn deletes its in-flight claims, as before.
+An `aborted` or `error` turn requeues each claim and holds it.
+A held claim is not injected until the next turn the user starts: an `input` event whose source is not `extension` clears the hold.
+So pressing Esc keeps the result and does not wake the leader again.
+When no outcome was seen (an older pi), the belt keeps the old delete.
+The drain also skips its tick while a UI prompt is open for the session.
+
+piggery-borrow D5 (decision `1bf2611c`) moves the belt state onto one `globalThis[Symbol.for("bee.pi.state")]` slot, so a `/reload` with a fresh module scope keeps the claim sets, the settle outcomes and the held claims, and session-init runs once.
+Only the Paseo leader removes `PASEO_AGENT_ID` from its own environment; `beltEnv()` gives it back to every `bee` and `paseo` spawn the belt makes.
+
+Pointers: `.pi/extensions/bee-guard/events.ts`, `.pi/extensions/bee-guard/result-inbox.ts`, `.pi/extensions/bee-guard/state.ts`, `.pi/extensions/bee-guard/paseo-heartbeat.ts`.
+
 ## Provenance
 
 Mined from 5 capped cell traces in `.bee/cells/` and `docs/history/pi-result-mailbox/CONTEXT.md`, `docs/history/pi-result-mailbox/plan.md`. No `bee.areas` declared — no area sync performed.

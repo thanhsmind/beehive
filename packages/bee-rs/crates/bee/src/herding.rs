@@ -881,6 +881,29 @@ fn compute_job_status(
     existing_word
 }
 
+fn job_usage(bee_dir: &Path, job_id: &str) -> Option<(u64, u64)> {
+    let text = std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id)).ok()?;
+    let record: Value = serde_json::from_str(&text).ok()?;
+    let path = record.get("transcript_path")?.as_str()?;
+    crate::devtools::statusline::context_and_turns(path)
+}
+
+fn fmt_ctx(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1e6)
+    } else if n >= 1_000 {
+        format!("{:.1}k", n as f64 / 1e3)
+    } else {
+        n.to_string()
+    }
+}
+
+fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>) -> String {
+    job_map.insert("ctx_tokens".into(), usage.map_or(Value::Null, |(c, _)| c.into()));
+    job_map.insert("turns".into(), usage.map_or(Value::Null, |(_, t)| t.into()));
+    usage.map_or(String::new(), |(c, t)| format!(" ctx={} turns={t}", fmt_ctx(c)))
+}
+
 fn collect_jobs(
     bee_dir: &Path,
     _main_root: &Path,
@@ -1060,6 +1083,7 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
+            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
 
             jobs_json.push(Value::Object(job_map));
 
@@ -1081,7 +1105,7 @@ fn collect_jobs(
                 ""
             };
             plain_lines.push(format!(
-                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{mismatch_disp}"
+                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{mismatch_disp}{usage_disp}"
             ));
             continue;
         }
@@ -1145,6 +1169,7 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
+        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
 
         jobs_json.push(Value::Object(job_map));
 
@@ -1152,7 +1177,7 @@ fn collect_jobs(
         let mark_disp = mark_str.as_deref().unwrap_or("null");
         let reason_disp = mark_reason_str.as_deref().unwrap_or("null");
         plain_lines.push(format!(
-            "{job_id}: pane_id={pane_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status}"
+            "{job_id}: pane_id={pane_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status}{usage_disp}"
         ));
     }
 
@@ -1891,6 +1916,8 @@ mod tests {
         assert_eq!(job.get("mark"), Some(&Value::Null));
         assert_eq!(job.get("mark_reason"), Some(&Value::Null));
         assert_eq!(job.get("status"), Some(&Value::String("working".to_string())));
+        assert_eq!(job.get("ctx_tokens"), Some(&Value::Null));
+        assert_eq!(job.get("turns"), Some(&Value::Null));
 
         // Check non-json plain output format
         let (_exit, _val, lines) = status_with_panes_and_transport(
@@ -1903,6 +1930,55 @@ mod tests {
             lines[0],
             "job-normal: pane_id=w4:p1 round=1 mark=null mark_reason=null status=working"
         );
+    }
+
+    #[test]
+    fn status_reports_context_and_turns_from_the_recorded_transcript() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-ctx");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        std::fs::write(
+            job_dir.join("job.json"),
+            serde_json::json!({"job_id": "job-ctx", "pane_id": "w4:p1", "round": 1}).to_string(),
+        )
+        .unwrap();
+        let transcript = root.join("t.jsonl");
+        let rows = [
+            serde_json::json!({"message": {"id": "a", "model": "claude-opus-4-7", "usage": {"input_tokens": 9}}}),
+            serde_json::json!({"message": {"id": "b", "model": "claude-opus-4-7", "usage": {"input_tokens": 3, "cache_read_input_tokens": 12000, "cache_creation_input_tokens": 297}}}),
+        ];
+        std::fs::write(&transcript, rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")).unwrap();
+        let write_activity = |path: &str| {
+            std::fs::write(
+                job_dir.join("activity.json"),
+                serde_json::json!({"state": "working", "round": 1, "at": "2020-01-01T00:00:00Z", "transcript_path": path}).to_string(),
+            )
+            .unwrap();
+        };
+        write_activity(transcript.to_str().unwrap());
+
+        let panes = || Some(Some(["w4:p1".to_string()].into_iter().collect::<HashSet<String>>()));
+        let (_exit, val, lines) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, panes());
+        let job = &val["jobs"][0];
+        assert_eq!(job["ctx_tokens"], serde_json::json!(12300));
+        assert_eq!(job["turns"], serde_json::json!(2));
+        assert!(lines[0].ends_with(" ctx=12.3k turns=2"), "{}", lines[0]);
+
+        write_activity(root.join("gone.jsonl").to_str().unwrap());
+        let (_exit, val, lines) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, panes());
+        assert_eq!(val["jobs"][0]["ctx_tokens"], Value::Null);
+        assert_eq!(val["jobs"][0]["turns"], Value::Null);
+        assert!(!lines[0].contains("ctx="), "{}", lines[0]);
+    }
+
+    #[test]
+    fn fmt_ctx_uses_k_and_m_with_one_decimal() {
+        assert_eq!(fmt_ctx(950), "950");
+        assert_eq!(fmt_ctx(12_300), "12.3k");
+        assert_eq!(fmt_ctx(1_200_000), "1.2M");
     }
 
     #[test]

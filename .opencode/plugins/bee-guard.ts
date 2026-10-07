@@ -66,6 +66,8 @@ import { existsSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import path from "node:path"
 
+const BELT_CONTRACT_VERSION = 1
+
 const BINARY_NAMES = ["bee", "bee.exe"]
 
 /** Every path this project's OpenCode session might find a bee binary at,
@@ -387,7 +389,7 @@ function mapToolCall(tool: string, args: any): MappedCall | null {
  * ADOPT_SOURCES-gated adoption). */
 const sessionInitRun = new Set<string>()
 
-export default (async ({ directory }) => {
+export default (async ({ directory, client }) => {
   return {
     // ── BLOCKING: write-guard (write/edit/bash/apply_patch/read/grep/glob/
     // question) + model-guard (task) — throw on deny, fail CLOSED. ─────────
@@ -429,8 +431,17 @@ export default (async ({ directory }) => {
           // first message of a session.
           source: "startup",
           cwd: directory,
+          belt_contract: { belt: "opencode", version: BELT_CONTRACT_VERSION },
         })
         if (initText) digestParts.push(initText)
+        const contractLine = initText?.split("\n").find((line) => line.startsWith("bee belt contract:"))
+        if (contractLine) {
+          try {
+            await (client as any)?.tui?.showToast?.({ body: { message: contractLine, variant: "warning" } })
+          } catch (err: any) {
+            console.error(`bee session-init (advisory): could not show the belt contract toast — ${err?.message ?? err}`)
+          }
+        }
       }
 
       const promptText = runAdvisoryHook(directory, "prompt-context", {

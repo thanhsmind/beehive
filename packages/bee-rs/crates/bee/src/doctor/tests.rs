@@ -1688,6 +1688,122 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_good_isolated_folder_passes() 
     assert_eq!(row.ok, Some(true));
 }
 
+fn claude_ready_repo(tmp: &Path) -> PathBuf {
+    let root = repo(tmp, true, true, None);
+    std::fs::create_dir_all(root.join(".claude")).unwrap();
+    std::fs::write(
+        root.join(".claude/settings.json"),
+        r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook write-guard"}]}]}}"#,
+    )
+    .unwrap();
+    root
+}
 
+fn path_with_tools(dir: &Path, tools: &[&str]) -> impl Fn(&str) -> Option<String> + use<> {
+    std::fs::create_dir_all(dir).unwrap();
+    let marker = dir.join("executed");
+    for tool in tools {
+        std::fs::write(dir.join(tool), format!("#!/bin/sh\ntouch {}\n", marker.display())).unwrap();
+    }
+    let path = dir.to_string_lossy().to_string();
+    move |k: &str| (k == "PATH").then(|| path.clone())
+}
 
+fn runtime_check<'a>(checks: &'a [RuntimeCheck], name: &str) -> &'a RuntimeCheck {
+    checks.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("no runtime row for {name}"))
+}
 
+#[test]
+fn a_current_runtime_row_is_ok_without_a_fix_and_the_tool_is_never_run() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let bin_dir = tmp.path().join("bin");
+    let env = path_with_tools(&bin_dir, &["claude"]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let claude = runtime_check(&checks, "claude");
+    assert!(claude.fix.is_none(), "{}", claude.detail);
+    assert!(claude.detail.contains("claude found at"), "{}", claude.detail);
+    assert!(!bin_dir.join("executed").exists(), "doctor must locate the tool, never run it");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stale_pi_belt_row_names_bee_onboard_apply() {
+    let tmp = tempfile::tempdir().unwrap();
+    let drifted = format!("{PI_EXTENSION_SOURCE}\n");
+    let root = pi_repo(tmp.path(), true, true, Some(&drifted), Some("0.1.0"), None);
+    let env = path_with_tools(&tmp.path().join("bin"), &["pi"]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let pi = runtime_check(&checks, "pi");
+    assert_eq!(pi.fix.as_deref(), Some("bee onboard --apply"), "{}", pi.detail);
+    assert!(pi.lines().iter().any(|l| l.contains("fix: bee onboard --apply")));
+}
+
+#[test]
+fn a_missing_tool_row_names_an_install_line_for_that_tool() {
+    let tmp = tempfile::tempdir().unwrap();
+    let good = crate::devtools::render_projection_text_for("codex").unwrap();
+    let root = repo(tmp.path(), true, true, Some(&good));
+    let env = path_with_tools(&tmp.path().join("bin"), &[]);
+    let checks = runtime_checks_with_env(&root, &env);
+    let codex = runtime_check(&checks, "codex");
+    assert_eq!(codex.fix.as_deref(), Some("install codex: npm install -g @openai/codex"), "{}", codex.detail);
+}
+
+#[test]
+fn absent_runtimes_print_advisory_rows_and_never_change_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let env = path_with_tools(&tmp.path().join("bin"), &[]);
+    let (payload, lines) = doctor_report(&root, Runtime::Claude, &env);
+    assert_eq!(payload["overall_status"], "ready", "{payload}");
+    let runtime_rows: Vec<&Value> = payload["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["row"].as_str().is_some_and(|k| k.starts_with("runtime_")))
+        .collect();
+    let names: Vec<&str> = runtime_rows.iter().map(|r| r["row"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["runtime_claude", "runtime_codex", "runtime_opencode", "runtime_pi", "runtime_paseo"]
+    );
+    for row in &runtime_rows {
+        assert_eq!(row["status"], "advisory");
+        assert_eq!(row["ok"], false, "{row}");
+        assert!(row["fix"].as_str().is_some_and(|f| !f.is_empty()), "{row}");
+    }
+    assert!(lines.iter().any(|l| l.contains("fix: install opencode")), "{lines:?}");
+    assert!(lines.last().unwrap().contains("ready"), "{lines:?}");
+}
+
+#[test]
+fn the_opencode_row_reports_the_belt_contract_check() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    std::fs::create_dir_all(root.join(".opencode/plugins")).unwrap();
+    let plugin = root.join(".opencode/plugins/bee-guard.ts");
+    let env = path_with_tools(&tmp.path().join("bin"), &["opencode"]);
+    let opencode = |root: &Path| {
+        let checks = runtime_checks_with_env(root, &env);
+        let c = runtime_check(&checks, "opencode");
+        (c.detail.clone(), c.fix.clone())
+    };
+
+    std::fs::write(&plugin, format!("export const BELT_CONTRACT_VERSION = {BELT_CONTRACT};\n")).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(fix.is_none() && detail.contains("matches the binary"), "{detail}");
+
+    std::fs::write(&plugin, format!("const BELT_CONTRACT_VERSION = {};\n", BELT_CONTRACT - 1)).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert_eq!(fix.as_deref(), Some("bee onboard --apply"), "{detail}");
+
+    std::fs::write(&plugin, format!("const BELT_CONTRACT_VERSION = {};\n", BELT_CONTRACT + 1)).unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(detail.contains("newer than the binary"), "{detail}");
+    assert!(fix.as_deref().is_some_and(|f| f.contains("install.sh")), "{fix:?}");
+
+    std::fs::write(&plugin, "export default {};\n").unwrap();
+    let (detail, fix) = opencode(&root);
+    assert!(fix.is_none() && detail.contains("belt contract unknown"), "{detail}");
+}

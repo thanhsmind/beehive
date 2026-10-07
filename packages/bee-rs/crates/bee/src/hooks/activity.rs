@@ -328,6 +328,9 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
         Some(job) => {
             activity.insert("job_id".into(), Value::String(job.clone()));
             activity.insert("round".into(), Value::Number(current_round(&ctrl, job).into()));
+            if let Some(path) = field(&ctx.payload, "transcript_path") {
+                activity.insert("transcript_path".into(), Value::String(path));
+            }
             write_activity_herded(&ctrl, job, &activity, prompt.as_deref())
         }
         None => {
@@ -2391,5 +2394,19 @@ mod tests {
         fire_herded(&repo, Some("job-res"), event("Stop", "s-res"));
         let rec2 = mailbox_record(&repo, "job-res");
         assert_eq!(rec2["work"]["status"].as_str(), Some("done"));
+    }
+
+    #[test]
+    fn herded_record_carries_the_transcript_path() {
+        let repo = repo();
+        brief(&repo, "job-tp", 1);
+        let mut payload = event("Stop", "s-tp");
+        payload["transcript_path"] = Value::String("/tmp/s-tp.jsonl".into());
+        fire_herded(&repo, Some("job-tp"), payload);
+        let rec = mailbox_record(&repo, "job-tp");
+        assert_eq!(rec.get("transcript_path").and_then(Value::as_str), Some("/tmp/s-tp.jsonl"));
+
+        fire_herded(&repo, Some("job-none"), event("Stop", "s-none"));
+        assert!(mailbox_record(&repo, "job-none").get("transcript_path").is_none());
     }
 }

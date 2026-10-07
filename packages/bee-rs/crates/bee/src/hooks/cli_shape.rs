@@ -1149,7 +1149,7 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 13] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 14] = [
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
         // plan carries this span as a cell TITLE naming the verb the cell adds
         // ("Add bee cells rebind-session --from --to") — a name for the flag
@@ -1190,6 +1190,7 @@ mod documented_invocations {
         r#"bee cells finish --from-job with --proof-result and a mistakes answer caps a cell whose job result is done, with tests built from the cell verify, the leader's proof result and the worker proof text""#,
         r#"bee cells judge-record --from-text"#,
         r#"bee cells finish --from-job""#,
+        r#"bee dispatch prepare runs the same checks when the role resolves to Resolved::Herding (prepare.rs:228) and refuses with the role_not_configured shape (prepare.rs:2129). Add --explain: print each check (role, claim, limits) with pass or refuse, plain and --json, and return before any claim, reservation or record write. Document herding.limits in docs/config-reference.md. Red first: unit tests for each reason, the no-limits byte-identical case, the Paseo-without-panes count, and --explain writing nothing.""#,
     ];
 
     #[test]

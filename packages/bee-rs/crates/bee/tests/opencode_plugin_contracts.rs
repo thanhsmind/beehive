@@ -688,7 +688,9 @@ function readStdin() {
 
 const payload = JSON.parse(await readStdin());
 const mod = await import(pathToFileURL(pluginPath).href);
-const hooks = await mod.default({ directory, worktree: directory, client: {}, $: {}, project: {}, app: {} });
+const toasts = [];
+const client = { tui: { showToast: async (arg) => { toasts.push(arg); return true; } } };
+const hooks = await mod.default({ directory, worktree: directory, client, $: {}, project: {}, app: {} });
 
 const fn = hooks[surface];
 if (typeof fn !== "function") {
@@ -721,6 +723,7 @@ try {
 } catch (err) {
   result = { threw: true, message: String(err && err.message ? err.message : err), output: null };
 }
+result.toasts = toasts;
 console.log(JSON.stringify(result));
 "#;
 
@@ -728,6 +731,7 @@ struct HarnessResult {
     threw: bool,
     message: Option<String>,
     output: Option<Value>,
+    toasts: Vec<Value>,
 }
 
 fn write_harness(dir: &Path) -> PathBuf {
@@ -773,6 +777,7 @@ fn run_harness(harness: &Path, plugin: &Path, directory: &Path, surface: &str, p
         threw: v["threw"].as_bool().unwrap_or(false),
         message: v["message"].as_str().map(str::to_string),
         output: v.get("output").cloned().filter(|o| !o.is_null()),
+        toasts: v["toasts"].as_array().cloned().unwrap_or_default(),
     }
 }
 
@@ -798,6 +803,7 @@ enum StubBehavior {
     /// D6: exit-0 stdout that is non-empty but not valid JSON — undecidable,
     /// and undecidable must stay fail-closed on the BLOCKING path.
     UnparseableVerdict,
+    BeltContractLine(String),
 }
 
 /// Writes (or, for `Missing`, deliberately does NOT write) a stub
@@ -838,6 +844,9 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
                 format!("#!/bin/sh\n{capture}\nprintf '%s' '{stdout}'\nexit 0\n")
             }
             StubBehavior::UnparseableVerdict => format!("#!/bin/sh\n{capture}\nprintf '%s' 'not-json{{{{{{'\nexit 0\n"),
+            StubBehavior::BeltContractLine(line) => format!(
+                "#!/bin/sh\n{capture}\ncase \"$2\" in\n  session-init) cp \"$(dirname \"$0\")/last_stdin.json\" \"$(dirname \"$0\")/session_init_stdin.json\"; printf '%s\\n\\nPREAMBLE' '{line}' ;;\nesac\nexit 0\n"
+            ),
             StubBehavior::Missing => unreachable!(),
         };
         let path = bin_dir.join("bee");
@@ -2166,5 +2175,30 @@ fn every_advisory_hook_the_opencode_belt_calls_is_a_hook_bee_serves() {
          advisory wrapper, so the behaviour they were wired for silently does nothing. \
          Add the hook to HOOK_NAMES (and a module beside the others), or stop calling it. \
          Derived names: {names:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn session_init_carries_the_belt_contract_and_a_mismatch_line_is_toasted() {
+    node_or_skip!("session_init_carries_the_belt_contract_and_a_mismatch_line_is_toasted");
+    let harness_dir = tempfile::tempdir().expect("tempdir");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    let line = "bee belt contract: opencode belt contract 0 is older than the binary. Fix: bee onboard --apply";
+    write_stub_bee(dir.path(), &StubBehavior::BeltContractLine(line.to_string()));
+
+    let plugin = repo_root().join(".opencode/plugins/bee-guard.ts");
+    let r = run_harness(&harness, &plugin, dir.path(), "chat.message", &json!({"sessionID": "s1", "messageID": "m1"}));
+    assert!(!r.threw, "{:?}", r.message);
+    let sent: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join(".bee/bin/session_init_stdin.json")).expect("session-init stdin"),
+    )
+    .expect("session-init stdin is JSON");
+    assert_eq!(sent["belt_contract"], json!({"belt": "opencode", "version": 1}), "{sent}");
+    assert!(
+        r.toasts.iter().any(|t| t["body"]["message"] == line && t["body"]["variant"] == "warning"),
+        "the mismatch line must reach the human as a toast: {:?}",
+        r.toasts
     );
 }

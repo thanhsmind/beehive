@@ -108,12 +108,13 @@ import assert from "node:assert/strict";
 
 const handlers = new Map();
 const messages = [];
+const tools = [];
 const pi = {{
   on(event, handler) {{
     if (!handlers.has(event)) handlers.set(event, []);
     handlers.get(event).push(handler);
   }},
-  registerTool() {{}},
+  registerTool(tool) {{ tools.push(tool.name); }},
   registerCommand() {{}},
   getActiveTools() {{ return []; }},
   setActiveTools() {{}},
@@ -1031,6 +1032,111 @@ assert.equal(markerData.schedule_id, "sched-old-fail");
 assert.ok(markerData.delete_failed);
 assert.ok(markerData.delete_failed.includes("heartbeat delete failed: connection refused"));
 "#,
+    );
+}
+
+fn belt_dir() -> String {
+    repo_root().join(".pi/extensions/bee-guard").to_str().expect("valid utf-8 path").to_string()
+}
+
+const IDENTITY_STUBS_JS: &str = r#"
+import cp from "node:child_process";
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "phb-identity-"));
+const envLog = path.join(tmpDir, "env.log");
+const binDir = path.join(tmpDir, ".bee", "bin");
+fs.mkdirSync(binDir, { recursive: true });
+const stubBee = path.join(binDir, "bee");
+fs.writeFileSync(stubBee, `#!/bin/sh
+printf 'bee %s %s|%s\\n' "$1" "$2" "$PASEO_AGENT_ID" >> "${envLog}"
+cat >/dev/null
+case "$1 $2" in
+  "hook --help") printf 'worker-guard\\n' ;;
+  "dispatch prepare") printf '{"tool":"Bash","payload":{"command":".bee/bin/bee herding run --probe","stdin":""}}' ;;
+  "herding broker") printf '{"claimed":0,"notices_sent":0,"news":false}' ;;
+esac
+exit 0
+`);
+fs.chmodSync(stubBee, 0o755);
+const stubPaseo = path.join(tmpDir, "stub-paseo.sh");
+fs.writeFileSync(stubPaseo, `#!/bin/sh
+printf 'paseo %s %s|%s\\n' "$1" "$2" "$PASEO_AGENT_ID" >> "${envLog}"
+printf '{"id":"sched-identity"}'
+`);
+fs.chmodSync(stubPaseo, 0o755);
+fs.writeFileSync(path.join(tmpDir, ".bee", "config.json"), JSON.stringify({ herding: { paseo: { command: stubPaseo } } }));
+const envLines = () => (fs.existsSync(envLog) ? fs.readFileSync(envLog, "utf8").trim().split("\n").filter(Boolean) : []);
+const waitFor = async (pred) => {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline && !pred()) await new Promise((r) => setTimeout(r, 20));
+};
+"#;
+
+#[test]
+fn test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it() {
+    let belt = belt_dir();
+    let code = format!(
+        "{IDENTITY_STUBS_JS}{}",
+        r#"
+assert.equal(process.env.PASEO_AGENT_ID, undefined, "the leader's own env must no longer carry the agent id");
+const childSees = cp.execFileSync("sh", ["-c", 'printf %s "$PASEO_AGENT_ID"'], { encoding: "utf8" });
+assert.equal(childSees, "", "a child of the leader's shell must not see PASEO_AGENT_ID");
+
+const beltDir = process.env.BEE_TEST_BELT_DIR;
+const cli = await import(pathToFileURL(path.join(beltDir, "bee-cli.ts")).href);
+const dispatch = await import(pathToFileURL(path.join(beltDir, "tool-dispatch.ts")).href);
+const heartbeat = await import(pathToFileURL(path.join(beltDir, "paseo-heartbeat.ts")).href);
+
+const ctx = { cwd: tmpDir, sessionId: "sess-identity" };
+await fire("session_start", { reason: "new" }, ctx);
+await fire("tool_call", { toolName: "bash", input: { command: "ls" } }, ctx);
+await fire("input", { text: '<paseo-system>Schedule "bee-leader" fired</paseo-system>', source: "extension" }, ctx);
+await cli.execBeeCli(tmpDir, ["cli", "probe"]);
+await dispatch.runBeeDispatch(["--kind", "gather"], { cwd: tmpDir, sessionId: "sess-identity", ui: { notify() {} } });
+heartbeat.startBrokerTimer(pi, tmpDir, { command: stubPaseo, cron: "*/30 * * * *", broker_tick_secs: 1 });
+await waitFor(() => envLines().filter((l) => l.startsWith("bee herding broker|")).length >= 2 && envLines().some((l) => l.startsWith("bee herding run|")) && envLines().some((l) => l.startsWith("paseo heartbeat create|")));
+heartbeat.stopBrokerTimer();
+
+const lines = envLines();
+for (const expected of ["bee hook session-init", "bee hook write-guard", "bee cli probe", "bee dispatch prepare", "bee herding run", "paseo heartbeat create"]) {
+  assert.ok(lines.some((l) => l.startsWith(expected + "|")), `missing spawn ${expected}: ${JSON.stringify(lines)}`);
+}
+assert.ok(lines.filter((l) => l.startsWith("bee herding broker|")).length >= 2, `the input tick and the timer tick must both run: ${JSON.stringify(lines)}`);
+for (const line of lines) {
+  assert.ok(line.endsWith("|agent-leader-env"), `every belt spawn of bee or paseo must get the agent id back: ${line}`);
+}
+"#
+    );
+    run_extension_test(
+        "test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it",
+        &[("PASEO_AGENT_ID", "agent-leader-env"), ("BEE_TEST_BELT_DIR", &belt)],
+        &code,
+    );
+}
+
+#[test]
+fn test_worker_keeps_its_id_guard_and_hidden_leader_tools() {
+    let code = format!(
+        "{IDENTITY_STUBS_JS}{}",
+        r#"
+assert.equal(process.env.PASEO_AGENT_ID, "agent-worker-env");
+assert.equal(process.env.BEE_HERDING_WORKER, "1");
+assert.equal(process.env.BEE_HERDING_JOB_ID, "job-worker-env");
+for (const hidden of ["bee_dispatch", "bee_advisor", "bee_steer"]) {
+  assert.equal(tools.includes(hidden), false, `a worker must not see ${hidden}`);
+}
+await fire("tool_call", { toolName: "bash", input: { command: "ls" } }, { cwd: tmpDir, sessionId: "sess-worker-env" });
+const lines = envLines();
+assert.ok(lines.includes("bee hook worker-guard|agent-worker-env"), `the worker guard must still run: ${JSON.stringify(lines)}`);
+"#
+    );
+    run_extension_test(
+        "test_worker_keeps_its_id_guard_and_hidden_leader_tools",
+        &[
+            ("PASEO_AGENT_ID", "agent-worker-env"),
+            ("BEE_HERDING_WORKER", "1"),
+            ("BEE_HERDING_JOB_ID", "job-worker-env"),
+        ],
+        &code,
     );
 }
 

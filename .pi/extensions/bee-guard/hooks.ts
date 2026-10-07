@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { beeStorePresent, resolveBeeBinary } from "./locate.ts"
+import { beltEnv } from "./state.ts"
 
 // ─── the blocking surface (tool_call): fail CLOSED ─────────────────────────
 
@@ -47,6 +48,7 @@ export function runBlockingHook(
       input: JSON.stringify(payload),
       encoding: "utf8",
       cwd: directory,
+      env: beltEnv(),
     })
   } catch (err: any) {
     if (err?.status === 2) {
@@ -148,6 +150,7 @@ export function runAdvisoryHook(
       input: JSON.stringify(payload),
       encoding: "utf8",
       cwd: directory,
+      env: beltEnv(),
     })
     const text = stdout.trim()
     return text.length > 0 ? text : null

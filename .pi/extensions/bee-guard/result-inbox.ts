@@ -62,8 +62,10 @@ export const HEADER_VALUE_MAX = 400
  * the CURRENT turn. They stay claimed until the turn ends at `agent_settled`,
  * so a claim covers the whole turn and not merely the host's acceptance of
  * `sendUserMessage`. */
-export const inFlightClaims = new Set<string>()
-export const forcedContinuationSessions = new Set<string>()
+export const inFlightClaims = state.inFlightClaims
+export const forcedContinuationSessions = state.forcedContinuationSessions
+export const settleOutcomes = state.settleOutcomes
+export const heldClaims = state.heldClaims
 
 /**
  * Nested UI prompt depth tracking across sessions.
@@ -73,7 +75,7 @@ export const forcedContinuationSessions = new Set<string>()
  * Matching outer ui_prompt_end emits UserPromptSubmit (without prompt text) to return to working.
  * Unmatched ends are ignored. Unended prompts remain waiting until Stop (agent_settled).
  */
-export const promptDepths = new Map<string, number>()
+export const promptDepths = state.promptDepths
 
 /** Where a previous module instance parked its timer. Pi's `/reload` can hand
  * this file a fresh module scope while the old interval is still armed; the
@@ -165,6 +167,11 @@ export function requeueClaim(processing: string): void {
     // The queued name already exists, or the claim vanished — either way the
     // marker is not lost, and losing the RACE is not losing the message.
   }
+}
+
+export function holdClaim(processing: string): void {
+  requeueClaim(processing)
+  heldClaims.add(processing.replace(/\.processing$/, ""))
 }
 
 /** Claims orphaned by a crash mid-injection: a previous runtime renamed the
@@ -311,6 +318,7 @@ export async function sendLeaderMessage(pi: any, message: string): Promise<boole
  * relocation, resolved under the MAIN checkout's .bee. */
 export async function drainResultInbox(pi: any, directory: string, token: string): Promise<void> {
   if (state.turnStartPending) return // F1: an idle injection is still opening its turn
+  if ((promptDepths.get(token) ?? 0) > 0) return
   const mainRoot = mainCheckoutRoot(directory)
   loadRelocationCarry(mainRoot)
 
@@ -339,6 +347,7 @@ export async function drainResultInbox(pi: any, directory: string, token: string
 
   for (const { dir, name } of candidates) {
     const markerPath = path.join(dir, name)
+    if (heldClaims.has(markerPath)) continue
     const marker = readJsonObject(markerPath)
     const mailbox = typeof marker?.mailbox === "string" ? (marker.mailbox as string) : null
     // A marker this drain cannot read is LEFT where it is, never deleted: it is
@@ -405,6 +414,7 @@ export function startResultDrain(pi: any, directory: string, sessionId: string |
   state.turnStartPending = false
   state.selfBusy = false
   inFlightClaims.clear()
+  heldClaims.clear()
   state.drainToken = null
   state.drainDirectory = null
   state.activeDrainCtx = ctx ?? null

@@ -1,6 +1,6 @@
 // ─── advisory session state (process-lifetime only, never persisted) ───────
 
-export const state: {
+export interface BeltState {
   cachedPreamble: string | null
   preambleInjected: boolean
   sessionInitRun: boolean
@@ -19,7 +19,18 @@ export const state: {
   isFetchingLimits: boolean
   dispatchCounter: number
   workerSteerDrainInFlight: boolean
-} = {
+  inFlightClaims: Set<string>
+  forcedContinuationSessions: Set<string>
+  settleOutcomes: Map<string, string>
+  heldClaims: Set<string>
+  promptDepths: Map<string, number>
+  paseoLeader: boolean | null
+  paseoAgentId: string | null
+}
+
+export const STATE_SLOT = Symbol.for("bee.pi.state")
+
+const defaults = (): BeltState => ({
   // D8 (CONTEXT.md): the full session preamble is fetched ONCE per session_start
   // and injected ONCE, on the first turn of the session; every turn after that
   // carries only `bee hook prompt-context`'s own per-turn delta. `/reload` fires
@@ -56,4 +67,24 @@ export const state: {
   isFetchingLimits: false,
   dispatchCounter: 0,
   workerSteerDrainInFlight: false,
+  inFlightClaims: new Set(),
+  forcedContinuationSessions: new Set(),
+  settleOutcomes: new Map(),
+  heldClaims: new Set(),
+  promptDepths: new Map(),
+  paseoLeader: null,
+  paseoAgentId: null,
+})
+
+const slot = ((globalThis as any)[STATE_SLOT] ??= {}) as Partial<BeltState>
+for (const [key, value] of Object.entries(defaults())) {
+  if (!(key in slot)) (slot as any)[key] = value
+}
+
+export const state = slot as BeltState
+
+export function beltEnv(): NodeJS.ProcessEnv {
+  return state.paseoLeader && state.paseoAgentId
+    ? { ...process.env, PASEO_AGENT_ID: state.paseoAgentId }
+    : { ...process.env }
 }

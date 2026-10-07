@@ -142,6 +142,7 @@ fn sha256_of(bytes: &[u8]) -> String {
 /// exception: a missing installed binary is not_ok on `hook_handler` already,
 /// so `binary_freshness` reports unknown there rather than repeating the
 /// same verdict under a second name.
+#[cfg(test)]
 fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
     mechanical_rows_with_env(root, runtime, &|k| std::env::var(k).ok())
 }
@@ -221,6 +222,26 @@ fn mechanical_rows_with_env(
         detail: skills_detail,
     });
 
+    rows.push(wiring_row(root, runtime, hooks_bytes.as_deref()));
+    match runtime {
+        Runtime::Codex | Runtime::Claude => {
+            if let Some(row) = binary_freshness_row(root) {
+                rows.push(row);
+            }
+        }
+        Runtime::Pi => {
+            rows.push(pi_binary_freshness_row(root));
+            rows.push(pi_herding_transport_row_with_env(root, env));
+            if let Some(row) = paseo_ready_row_with_env(root, env) {
+                rows.push(row);
+            }
+        }
+    }
+
+    rows
+}
+
+fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row {
     // The byte match. See the header: this stands in for the retired
     // capability baseline, against an artifact that still exists.
     //
@@ -237,7 +258,7 @@ fn mechanical_rows_with_env(
     match runtime {
         Runtime::Codex => {
             let rendered = crate::devtools::render_projection_text_for(runtime.name());
-            rows.push(match (hooks_bytes.as_ref(), rendered) {
+            match (hooks_bytes, rendered) {
                 (Some(on_disk), Some(expected)) => {
                     let same = sha256_of(on_disk) == sha256_of(expected.as_bytes());
                     Row {
@@ -255,15 +276,12 @@ fn mechanical_rows_with_env(
                     ok: Some(false),
                     detail: "no .codex/hooks.json to compare".to_string(),
                 },
-            });
-
-            if let Some(row) = binary_freshness_row(root) {
-                rows.push(row);
             }
+
         }
         Runtime::Claude => {
             let parsed: Option<Value> =
-                hooks_bytes.as_ref().and_then(|b| serde_json::from_slice(b).ok());
+                hooks_bytes.and_then(|b| serde_json::from_slice(b).ok());
             let mut total = 0usize;
             let mut wrong: Vec<String> = Vec::new();
             if let Some(Value::Object(hooks)) = parsed.as_ref().and_then(|v| v.get("hooks")) {
@@ -279,7 +297,7 @@ fn mechanical_rows_with_env(
                     }
                 }
             }
-            rows.push(Row {
+            Row {
                 key: "wiring_points_at_the_binary",
                 ok: Some(total > 0 && wrong.is_empty()),
                 detail: if total == 0 {
@@ -293,11 +311,8 @@ fn mechanical_rows_with_env(
                         wrong.join("; ")
                     )
                 },
-            });
-
-            if let Some(row) = binary_freshness_row(root) {
-                rows.push(row);
             }
+
         }
         Runtime::Pi => {
             let legacy_path = root.join(".pi/extensions/bee-guard.ts");
@@ -394,17 +409,9 @@ fn mechanical_rows_with_env(
                     }
                 }
             };
-            rows.push(extension_match);
-
-            rows.push(pi_binary_freshness_row(root));
-            rows.push(pi_herding_transport_row_with_env(root, env));
-            if let Some(row) = paseo_ready_row_with_env(root, env) {
-                rows.push(row);
-            }
+            extension_match
         }
     }
-
-    rows
 }
 
 /// The configured `hat-*` slots on this runtime that carry no description —
@@ -549,12 +556,13 @@ fn pi_binary_freshness_row(root: &Path) -> Row {
     binary_freshness_row_impl(root, true).expect("pi binary freshness is always present")
 }
 
+const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
+    -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
+const HOST_REMEDY: &str = "FIX: re-run the bee installer in this repo: curl -fsSL \
+    https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+
 fn binary_freshness_row_impl(root: &Path, is_pi: bool) -> Option<Row> {
     const KEY: &str = "binary_freshness";
-    const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
-        -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
-    const HOST_REMEDY: &str = "FIX: re-run the bee installer in this repo: curl -fsSL \
-        https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
     const PLUGIN_MANIFEST: &str = ".claude-plugin/plugin.json";
     const ONBOARDING_RECORD: &str = ".bee/onboarding.json";
 
@@ -751,41 +759,184 @@ fn is_bare_version(line: &str) -> bool {
 }
 
 fn is_appimage_wrapper_script(cmd: &str, env: &dyn Fn(&str) -> Option<String>) -> bool {
-    let resolved_path = if cmd.contains('/') || cmd.contains('\\') {
+    locate_on_path(cmd, env)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .is_some_and(|content| content.contains("AppImage"))
+}
+
+fn locate_on_path(cmd: &str, env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    if cmd.contains('/') || cmd.contains('\\') {
         let p = PathBuf::from(cmd);
-        if p.exists() {
-            Some(p)
-        } else {
-            None
+        return p.exists().then_some(p);
+    }
+    let val = env("PATH")?;
+    for dir in std::env::split_paths(&val) {
+        let candidate = dir.join(cmd);
+        if candidate.is_file() {
+            return Some(candidate);
         }
-    } else {
-        let path_val = env("PATH");
-        path_val.and_then(|val| {
-            for dir in std::env::split_paths(&val) {
-                let candidate = dir.join(cmd);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-                #[cfg(windows)]
-                {
-                    for ext in [".exe", ".cmd", ".bat"] {
-                        let cand_ext = dir.join(format!("{cmd}{ext}"));
-                        if cand_ext.is_file() {
-                            return Some(cand_ext);
-                        }
-                    }
+        #[cfg(windows)]
+        {
+            for ext in [".exe", ".cmd", ".bat"] {
+                let cand_ext = dir.join(format!("{cmd}{ext}"));
+                if cand_ext.is_file() {
+                    return Some(cand_ext);
                 }
             }
-            None
-        })
-    };
-
-    if let Some(path) = resolved_path {
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            return content.contains("AppImage");
         }
     }
-    false
+    None
+}
+
+pub(crate) const BELT_CONTRACT: u32 = 1;
+
+const ONBOARD_FIX: &str = "bee onboard --apply";
+
+struct RuntimeCheck {
+    name: &'static str,
+    detail: String,
+    fix: Option<String>,
+}
+
+impl RuntimeCheck {
+    fn key(&self) -> String {
+        format!("runtime_{}", self.name)
+    }
+
+    fn value(&self) -> Value {
+        json!({
+            "row": self.key(),
+            "status": "advisory",
+            "ok": self.fix.is_none(),
+            "detail": self.detail,
+            "fix": self.fix,
+        })
+    }
+
+    fn lines(&self) -> Vec<String> {
+        let mark = if self.fix.is_none() { "ok  " } else { "note" };
+        let mut out = vec![format!("  {mark} {:<22} {}", self.key(), self.detail)];
+        if let Some(fix) = &self.fix {
+            out.push(format!("       {:<22} fix: {fix}", ""));
+        }
+        out
+    }
+}
+
+fn belt_contract_version(sources: &[PathBuf]) -> Option<u32> {
+    sources.iter().find_map(|path| {
+        let text = std::fs::read_to_string(path).ok()?;
+        let after = &text[text.find("BELT_CONTRACT_VERSION")? + "BELT_CONTRACT_VERSION".len()..];
+        let after = after.trim_start_matches(|c: char| c == '=' || c == ':' || c.is_whitespace());
+        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse().ok()
+    })
+}
+
+fn belt_sources(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "ts"))
+        .collect();
+    out.sort();
+    out
+}
+
+pub(crate) fn belt_contract_check(root: &Path, version: Option<u32>) -> (String, Option<String>) {
+    match version {
+        None => (format!("belt contract unknown (no BELT_CONTRACT_VERSION; binary is {BELT_CONTRACT})"), None),
+        Some(v) if v == BELT_CONTRACT => (format!("belt contract {v} matches the binary"), None),
+        Some(v) if v < BELT_CONTRACT => (
+            format!("belt contract {v} is older than the binary's {BELT_CONTRACT}"),
+            Some(ONBOARD_FIX.to_string()),
+        ),
+        Some(v) => {
+            let remedy = if root.join("packages/bee-rs/Cargo.toml").is_file() { REMEDY } else { HOST_REMEDY };
+            (
+                format!("belt contract {v} is newer than the binary's {BELT_CONTRACT}"),
+                Some(remedy.trim_start_matches("FIX: ").to_string()),
+            )
+        }
+    }
+}
+
+fn runtime_checks_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Vec<RuntimeCheck> {
+    let cfg = read_folded_config(root);
+    let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
+    let specs: [(&'static str, &str, &str); 5] = [
+        ("claude", "claude", "npm install -g @anthropic-ai/claude-code"),
+        ("codex", "codex", "npm install -g @openai/codex"),
+        ("opencode", "opencode", "npm install -g opencode-ai"),
+        ("pi", "pi", "npm install -g @mariozechner/pi-coding-agent"),
+        ("paseo", paseo_cmd.as_str(), "npm install -g @getpaseo/cli"),
+    ];
+    specs
+        .into_iter()
+        .map(|(name, tool, install)| {
+            let found = locate_on_path(tool, env);
+            let mut parts = vec![match &found {
+                Some(p) => format!("{tool} found at {}", p.display()),
+                None => format!("{tool} not found on PATH"),
+            }];
+            let mut fixes: Vec<String> = Vec::new();
+            if found.is_none() {
+                fixes.push(format!("install {tool}: {install}"));
+            }
+            let onboard = || Some(ONBOARD_FIX.to_string());
+            let (wiring_detail, wiring_fix, belt) = match name {
+                "opencode" => {
+                    let plugin = root.join(".opencode/plugins/bee-guard.ts");
+                    if plugin.is_file() {
+                        let belt = belt_contract_check(root, belt_contract_version(std::slice::from_ref(&plugin)));
+                        (".opencode/plugins/bee-guard.ts present".to_string(), None, Some(belt))
+                    } else {
+                        (".opencode/plugins/bee-guard.ts is missing".to_string(), onboard(), None)
+                    }
+                }
+                "paseo" => {
+                    let paseo_agents = ["/agents", "/herding/agents"]
+                        .iter()
+                        .filter_map(|p| cfg.pointer(p).and_then(Value::as_object))
+                        .flat_map(|m| m.values())
+                        .filter(|a| a.get("paseo").is_some_and(Value::is_object))
+                        .count();
+                    if paseo_agents > 0 || cfg.pointer("/herding/paseo").is_some_and(|v| !v.is_null()) {
+                        (format!("herding config names {paseo_agents} paseo agent(s)"), None, None)
+                    } else {
+                        (
+                            "no paseo agent configured".to_string(),
+                            Some("add an agent with a paseo block under herding.agents in .bee/config.json".to_string()),
+                            None,
+                        )
+                    }
+                }
+                _ => {
+                    let runtime = Runtime::parse(name).expect("claude, codex and pi parse");
+                    let bytes = std::fs::read(root.join(runtime.hooks_rel())).ok();
+                    let row = wiring_row(root, runtime, bytes.as_deref());
+                    let belt = (runtime == Runtime::Pi).then(|| {
+                        belt_contract_check(root, belt_contract_version(&belt_sources(&root.join(".pi/extensions/bee-guard"))))
+                    });
+                    let fix = if row.ok == Some(true) { None } else { onboard() };
+                    (format!("wiring: {}", row.detail), fix, belt)
+                }
+            };
+            parts.push(wiring_detail);
+            fixes.extend(wiring_fix);
+            if let Some((detail, fix)) = belt {
+                parts.push(detail);
+                fixes.extend(fix.filter(|f| !fixes.contains(f)));
+            }
+            RuntimeCheck {
+                name,
+                detail: parts.join("; "),
+                fix: (!fixes.is_empty()).then(|| fixes.join(", then ")),
+            }
+        })
+        .collect()
 }
 
 fn paseo_ready_row_with_env(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Option<Row> {
@@ -1254,11 +1405,17 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
         return ExitCode::from(1);
     };
 
-    let rows = mechanical_rows(&root, runtime);
+    let (payload, lines) = doctor_report(&root, runtime, &|k| std::env::var(k).ok());
+    emit(&payload, as_json, &lines);
+    if payload["overall_status"] == "blocked" { ExitCode::from(1) } else { ExitCode::SUCCESS }
+}
+
+fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<String>) -> (Value, Vec<String>) {
+    let rows = mechanical_rows_with_env(root, runtime, env);
     let mechanical_ok = rows.iter().all(|r| r.ok == Some(true));
 
     let mut all: Vec<Value> = rows.iter().map(Row::value).collect();
-    let attest = read_attestation(&root, runtime);
+    let attest = read_attestation(root, runtime);
     if runtime == Runtime::Codex {
         for (key, what) in CODEX_TRUST_ROWS {
             let detail = if attest.valid {
@@ -1277,14 +1434,16 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     // D3's advisory rides ALONGSIDE the ladder, never inside it: it is
     // appended after every row that votes, and `status` below is computed from
     // `mechanical_ok` and the attestation exactly as it was.
-    let advisory = hat_description_advisory(&root, runtime);
+    let advisory = hat_description_advisory(root, runtime);
     if let Some((row, _)) = &advisory {
         all.push(row.clone());
     }
-    let team_advisory = team_config_advisory(&root);
+    let team_advisory = team_config_advisory(root);
     if let Some((row, _)) = &team_advisory {
         all.push(row.clone());
     }
+    let runtime_checks = runtime_checks_with_env(root, env);
+    all.extend(runtime_checks.iter().map(RuntimeCheck::value));
 
     // Never ready from presence alone: the ladder is evaluated, not assumed.
     let status = if !mechanical_ok {
@@ -1328,13 +1487,15 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
     if let Some((_, detail)) = &team_advisory {
         lines.push(format!("  note {:<22} {}", "legacy_models_key", detail));
     }
+    for check in &runtime_checks {
+        lines.extend(check.lines());
+    }
     lines.push(match status {
         "blocked" => "next: fix the FAIL row(s) above — nothing else can be trusted until they are ok".to_string(),
         "degraded" => "next: the wiring is correct; what is unproven is whether Codex is letting it fire".to_string(),
         _ => "next: nothing — this runtime is ready".to_string(),
     });
-    emit(&payload, as_json, &lines);
-    if status == "blocked" { ExitCode::from(1) } else { ExitCode::SUCCESS }
+    (payload, lines)
 }
 
 fn run_attest(runtime: Runtime, session: Option<&str>, as_json: bool) -> ExitCode {

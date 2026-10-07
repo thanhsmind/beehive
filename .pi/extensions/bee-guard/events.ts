@@ -8,7 +8,6 @@ import {
   ensureHeartbeat,
   heartbeatText,
   isHeartbeatPrompt,
-  isPaseoLeader,
   parseTick,
   readPaseoSettings,
   setTickRunning,
@@ -21,8 +20,11 @@ import { runBlockingHook, runAdvisoryHook, block } from "./hooks.ts"
 import { refreshModelUsageStatus } from "./model-usage.ts"
 import {
   forcedContinuationSessions,
+  heldClaims,
+  holdClaim,
   inFlightClaims,
   promptDepths,
+  settleOutcomes,
   startResultDrain,
 } from "./result-inbox.ts"
 import {
@@ -34,7 +36,9 @@ import {
   revalidateDeferredIntent,
 } from "./transition.ts"
 import { drainWorkerSteer } from "./tool-steer.ts"
-import { state } from "./state.ts"
+import { beltEnv, state } from "./state.ts"
+
+export const BELT_CONTRACT_VERSION = 1
 
 let quietHeartbeatTurn = false
 let cachedWorkerGuardHelp: boolean | null = null
@@ -79,8 +83,8 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     const isHerdedPaseoWorker = Boolean(
       process.env.BEE_HERDING_WORKER &&
         process.env.BEE_HERDING_WORKER.trim().length > 0 &&
-        process.env.PASEO_AGENT_ID &&
-        process.env.PASEO_AGENT_ID.trim().length > 0,
+        state.paseoAgentId &&
+        state.paseoAgentId.trim().length > 0,
     )
     const isSupervisorGuarded = Boolean(
       process.env.BEE_SUPERVISOR_ALLOWED &&
@@ -162,19 +166,19 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       } catch (err: any) {
         console.error(`bee result-inbox (advisory) could not start: ${err?.message ?? err}`)
       }
-      if (isPaseoLeader()) {
+      if (state.paseoLeader) {
         const mainRoot = mainCheckoutRoot(directory)
         const settings = readPaseoSettings(mainRoot)
         ensureHeartbeat(
           mainRoot,
-          process.env.PASEO_AGENT_ID ?? "",
+          state.paseoAgentId ?? "",
           settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
                 command,
                 args,
-                { timeout: 30000, encoding: "utf8" },
+                { timeout: 30000, encoding: "utf8", env: beltEnv() },
                 (error, stdout) => {
                   if (error) {
                     reject(error)
@@ -203,9 +207,14 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         source: sessionSource(reason),
         cwd: directory,
         runtime: "pi",
+        belt_contract: { belt: "pi", version: BELT_CONTRACT_VERSION },
       })
       state.sessionInitRun = true
       if (text) state.cachedPreamble = text
+      const contractLine = text?.split("\n").find((line) => line.startsWith("bee belt contract:"))
+      if (contractLine && ctx?.hasUI !== false && typeof ctx?.ui?.notify === "function") {
+        ctx.ui.notify(contractLine, "warning")
+      }
     } catch (err: any) {
       console.error(`bee session-init (advisory): ${err?.message ?? err}`)
     }
@@ -326,6 +335,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
   }) as any)
 
   pi.on("input", (async (event: any, ctx: any) => {
+    if (event?.source !== "extension") heldClaims.clear()
     try {
       const text = typeof event?.text === "string" ? event.text : ""
       const behavior = typeof event?.streamingBehavior === "string" ? event.streamingBehavior : ""
@@ -343,7 +353,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           const child = cp.execFile(
             beeBinary,
             ["hook", "session-close"],
-            { cwd: directory, timeout: 5000 },
+            { cwd: directory, timeout: 5000, env: beltEnv() },
             () => {},
           )
           child.stdin?.on("error", () => {})
@@ -352,7 +362,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
     } catch {}
     const text = typeof event?.text === "string" ? event.text : ""
-    if (isPaseoLeader() && isHeartbeatPrompt(text)) {
+    if (state.paseoLeader && isHeartbeatPrompt(text)) {
       if (tickRunning) {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
@@ -369,7 +379,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           const child = cp.execFile(
             beeBinary,
             ["herding", "broker", "tick", "--json"],
-            { cwd: directory, timeout: 120000, encoding: "utf8" },
+            { cwd: directory, timeout: 120000, encoding: "utf8", env: beltEnv() },
             (error, stdout) => {
               if (error) {
                 reject(error)
@@ -449,6 +459,8 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
 
   pi.on("agent_before_settle", (async (event: any, ctx: any) => {
     try {
+      const activeSessionId = sessionIdOf(ctx) ?? ""
+      if (typeof event?.outcome === "string") settleOutcomes.set(activeSessionId, event.outcome)
       const directory = directoryOf(ctx)
       const raw = runAdvisoryHook(directory, "session-close", {
         hook_event_name: "Stop",
@@ -478,7 +490,6 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
           }
         }
       }
-      const activeSessionId = sessionIdOf(ctx) ?? ""
       if (activeSessionId) {
         forcedContinuationSessions.add(activeSessionId)
       }
@@ -519,13 +530,18 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     const activeSessionId = sessionIdOf(ctx) ?? ""
     const hadForcedContinuation = forcedContinuationSessions.has(activeSessionId)
     forcedContinuationSessions.delete(activeSessionId)
+    const outcome = settleOutcomes.get(activeSessionId)
+    settleOutcomes.delete(activeSessionId)
     const wasQuietHeartbeat = quietHeartbeatTurn
     quietHeartbeatTurn = false
     try {
       promptDepths.delete(activeSessionId)
       state.selfBusy = false
       state.turnStartPending = false
-      for (const processing of inFlightClaims) rmSync(processing, { force: true })
+      for (const processing of inFlightClaims) {
+        if (outcome === "aborted" || outcome === "error") holdClaim(processing)
+        else rmSync(processing, { force: true })
+      }
       inFlightClaims.clear()
     } catch (err: any) {
       console.error(`bee result-inbox (advisory): could not consume a claim: ${err?.message ?? err}`)
@@ -843,19 +859,19 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
       }
       if (reason === "reload") return undefined
       stopBrokerTimer()
-      if (isPaseoLeader()) {
+      if (state.paseoLeader) {
         const mainRoot = mainCheckoutRoot(directoryOf(ctx))
         const settings = readPaseoSettings(mainRoot)
         await deleteHeartbeat(
           mainRoot,
-          process.env.PASEO_AGENT_ID ?? "",
+          state.paseoAgentId ?? "",
           settings,
           (command, args) =>
             new Promise((resolve, reject) => {
               const child = cp.execFile(
                 command,
                 args,
-                { timeout: 30000, encoding: "utf8" },
+                { timeout: 30000, encoding: "utf8", env: beltEnv() },
                 (error, stdout) => {
                   if (error) {
                     reject(error)
