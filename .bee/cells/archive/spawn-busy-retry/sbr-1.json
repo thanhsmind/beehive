@@ -1,0 +1,124 @@
+{
+  "id": "sbr-1",
+  "feature": "spawn-busy-retry",
+  "title": "Retry ExecutableFileBusy on bee's external spawns through one helper",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "5d55579f-1c3a-4c82-abea-5de3c0d86ad5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Move the ETXTBSY retry loop in doctor.rs installed_binary_bee_version (doctor.rs:1243-1263, PROBE_ETXTBSY_ATTEMPTS/PROBE_ETXTBSY_DELAY_MS) into one pub(crate) helper in fsutil.rs that takes a closure returning io::Result<T> and retries only std::io::ErrorKind::ExecutableFileBusy (10 tries, 20 ms apart), returning the last result. Use it in doctor.rs (same behavior), in feedback.rs ingest_issues for the gh issue list .output() (feedback.rs:1856), and in report.rs gh() for the Command spawn (report.rs:552). The helper retries nothing else. Unit-test the helper: a closure that fails with ExecutableFileBusy twice then succeeds returns Ok after 3 calls; a NotFound error is returned at once after 1 call. No new code comments. Proof: the cell verify, plus the leader's stress loop over verbs::feedback and verbs::report (6 parallel loops x 20 runs), which failed 8/120 before.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fsutil doctor verbs::feedback verbs::report",
+  "must_haves": {
+    "truths": [
+      "One helper owns the ExecutableFileBusy retry and doctor uses it",
+      "The feedback gh issue list and the report gh calls retry ExecutableFileBusy",
+      "No other spawn error is retried"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "substantive": "retry helper for ExecutableFileBusy"
+      }
+    ],
+    "key_links": [
+      "verbs::feedback and verbs::report stable under parallel stress"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No retry of any error other than ExecutableFileBusy"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-sbr-1",
+    "outcome": "fsutil::retry_executable_busy owns the ExecutableFileBusy retry; doctor installed_binary_bee_version, feedback ingest_issues and report gh() use it; stress 0/120 failures (was 8/120)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/fsutil.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "packages/bee-rs/crates/bee/src/verbs/report.rs"
+    ],
+    "deviations": [
+      "followed the plan; also removed doctor's PROBE_ETXTBSY constants and their doc comments since the helper now owns the values — less code, no new comments",
+      "ran cargo build --release --bin bee before verify because report_verb_reads_bee_gh_bin_end_to_end needs the built binary in the shared target dir and it was missing — hit an unforeseen obstacle",
+      "sync-ack: internal spawn retry on ExecutableFileBusy; no user-facing feedback behavior or skill text changes"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T11:25:05.647Z",
+    "behavior_change": true,
+    "verification_evidence": "touched fsutil, doctor, feedback, report: 126 passed, 0 failed; plus stress 6 parallel loops x 20 runs of the test binary on verbs::feedback verbs::report: 0/120 failures; whole suite not run, CI covers it",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fsutil doctor verbs::feedback verbs::report",
+    "claimed_at": "2026-10-07T11:21:26.869Z",
+    "sync_ack": "internal spawn retry on ExecutableFileBusy; no user-facing feedback behavior or skill text changes",
+    "mistakes": [
+      {
+        "wrong": "python rewrite of verbs/feedback.rs dropped its CRLF line endings, giving a 6338-line diff",
+        "better": "read and write CRLF files in binary mode (or check file line endings before a scripted edit)",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "fsutil::retry_executable_busy owns the ExecutableFileBusy retry (10 tries, 20 ms); doctor installed_binary_bee_version, feedback ingest_issues gh issue list and report gh() spawn use it; unit test fsutil::tests::retry_executable_busy_retries_only_busy covers busy-busy-ok (3 calls) and NotFound (1 call); stress 6x20 of verbs::feedback verbs::report: 0/120 failures (was 8/120)",
+      "commit": "32139c839",
+      "files": [
+        "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+        "packages/bee-rs/crates/bee/src/verbs/report.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fsutil doctor verbs::feedback verbs::report — green:unit — touched fsutil, doctor, feedback, report: 126 passed, 0 failed; plus stress 6 parallel loops x 20 runs of the test binary on verbs::feedback verbs::report: 0/120 failures; whole suite not run, CI covers it",
+      "deviations": [
+        "followed the plan; also removed doctor's PROBE_ETXTBSY constants and their doc comments since the helper now owns the values — less code, no new comments",
+        "ran cargo build --release --bin bee before verify because report_verb_reads_bee_gh_bin_end_to_end needs the built binary in the shared target dir and it was missing — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "python rewrite of verbs/feedback.rs dropped its CRLF line endings, giving a 6338-line diff — read and write CRLF files in binary mode (or check file line endings before a scripted edit) — none"
+      ],
+      "baseline": "leader measured 8/120 stress failures on the base commit"
+    },
+    "baseline": "leader measured 8/120 stress failures on the base commit",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "One helper owns the ExecutableFileBusy retry and doctor uses it",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          },
+          {
+            "requirement": "The feedback gh issue list and the report gh calls retry ExecutableFileBusy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/feedback.rs"
+          },
+          {
+            "requirement": "No other spawn error is retried",
+            "artifact": "packages/bee-rs/crates/bee/src/fsutil.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T11:25:34.566Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
