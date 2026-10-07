@@ -276,50 +276,117 @@ pub(crate) fn interrupt_with_backends(
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn cancel_with_transport(
-    main_root: &Path,
-    job_id: &str,
-    json: bool,
-    transport: &dyn PaneTransport,
-) -> Result<(), JobVerbError> {
-    cancel_with_backends_and_timeout(
-        main_root,
-        job_id,
-        json,
-        Some(transport),
-        None,
-        DEFAULT_POLL_TIMEOUT,
-        DEFAULT_POLL_INTERVAL,
-    )
+const TREE_KILL_GRACE: Duration = Duration::from_millis(2000);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TreeSignal {
+    Term,
+    Kill,
 }
 
-#[allow(dead_code)]
-pub(crate) fn cancel_with_transport_and_timeout(
-    main_root: &Path,
-    job_id: &str,
-    json: bool,
-    transport: &dyn PaneTransport,
-    poll_timeout: Duration,
-    poll_interval: Duration,
-) -> Result<(), JobVerbError> {
-    cancel_with_backends_and_timeout(
-        main_root,
-        job_id,
-        json,
-        Some(transport),
-        None,
-        poll_timeout,
-        poll_interval,
-    )
+pub(crate) trait ProcessTree {
+    fn read(&self) -> Option<Vec<(u32, u32, u32)>>;
+    fn signal(&self, pid: u32, sig: TreeSignal);
 }
 
+pub(crate) struct RealProcessTree;
+
+impl ProcessTree for RealProcessTree {
+    #[cfg(unix)]
+    fn read(&self) -> Option<Vec<(u32, u32, u32)>> {
+        let out = std::process::Command::new("ps")
+            .args(["-A", "-o", "pid=,ppid=,pgid="])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let rows = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|line| {
+                let mut cols = line.split_whitespace().map(|c| c.parse::<u32>().ok());
+                Some((cols.next()??, cols.next()??, cols.next()??))
+            })
+            .collect();
+        Some(rows)
+    }
+
+    #[cfg(not(unix))]
+    fn read(&self) -> Option<Vec<(u32, u32, u32)>> {
+        None
+    }
+
+    #[cfg(unix)]
+    fn signal(&self, pid: u32, sig: TreeSignal) {
+        let signo = match sig {
+            TreeSignal::Term => libc::SIGTERM,
+            TreeSignal::Kill => libc::SIGKILL,
+        };
+        unsafe { libc::kill(pid as i32, signo) };
+    }
+
+    #[cfg(not(unix))]
+    fn signal(&self, _pid: u32, _sig: TreeSignal) {}
+}
+
+fn tree_members(rows: &[(u32, u32, u32)], root: u32) -> Vec<u32> {
+    let own = std::process::id();
+    let mut members = vec![root];
+    loop {
+        let before = members.len();
+        for &(pid, ppid, pgid) in rows {
+            if pid <= 1 || pid == own || members.contains(&pid) {
+                continue;
+            }
+            if members.contains(&ppid) || (pgid != pid && members.contains(&pgid)) {
+                members.push(pid);
+            }
+        }
+        if members.len() == before {
+            return members;
+        }
+    }
+}
+
+pub(crate) fn kill_tree(tree: &dyn ProcessTree, root: u32, grace: Duration) {
+    let Some(rows) = tree.read() else { return };
+    let members = tree_members(&rows, root);
+    for &pid in &members {
+        tree.signal(pid, TreeSignal::Term);
+    }
+    let deadline = std::time::Instant::now() + grace;
+    loop {
+        let alive: Vec<u32> = match tree.read() {
+            Some(now) => members
+                .iter()
+                .copied()
+                .filter(|m| now.iter().any(|&(pid, _, _)| pid == *m))
+                .collect(),
+            None => members.clone(),
+        };
+        if alive.is_empty() {
+            return;
+        }
+        if std::time::Instant::now() >= deadline {
+            for pid in alive {
+                tree.signal(pid, TreeSignal::Kill);
+            }
+            return;
+        }
+        std::thread::sleep(DEFAULT_POLL_INTERVAL);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn cancel_with_backends_and_timeout(
     main_root: &Path,
     job_id: &str,
     json: bool,
     transport: Option<&dyn PaneTransport>,
     paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>,
+    tree: &dyn ProcessTree,
     poll_timeout: Duration,
     poll_interval: Duration,
 ) -> Result<(), JobVerbError> {
@@ -512,6 +579,7 @@ pub(crate) fn cancel_with_backends_and_timeout(
                         map.insert("cancel_pid".to_string(), Value::Number(pid.into()));
                         let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
                     }
+                    kill_tree(tree, pid, TREE_KILL_GRACE);
                     let _ = trans.pane_close(&pane_id);
                     Some(pid)
                 }
@@ -639,6 +707,7 @@ pub(super) fn cancel(args: &[&str]) -> ExitCode {
         parsed.json,
         None,
         None,
+        &RealProcessTree,
         DEFAULT_POLL_TIMEOUT,
         DEFAULT_POLL_INTERVAL,
     ) {
@@ -1162,6 +1231,112 @@ mod tests {
     use std::cell::RefCell;
     use super::run::PaneGeom;
 
+    struct NoopTree;
+
+    impl ProcessTree for NoopTree {
+        fn read(&self) -> Option<Vec<(u32, u32, u32)>> {
+            None
+        }
+        fn signal(&self, _pid: u32, _sig: TreeSignal) {}
+    }
+
+    fn cancel_with_transport(
+        main_root: &Path,
+        job_id: &str,
+        json: bool,
+        transport: &dyn PaneTransport,
+    ) -> Result<(), JobVerbError> {
+        cancel_with_transport_and_timeout(
+            main_root,
+            job_id,
+            json,
+            transport,
+            DEFAULT_POLL_TIMEOUT,
+            DEFAULT_POLL_INTERVAL,
+        )
+    }
+
+    fn cancel_with_transport_and_timeout(
+        main_root: &Path,
+        job_id: &str,
+        json: bool,
+        transport: &dyn PaneTransport,
+        poll_timeout: Duration,
+        poll_interval: Duration,
+    ) -> Result<(), JobVerbError> {
+        cancel_with_backends_and_timeout(
+            main_root,
+            job_id,
+            json,
+            Some(transport),
+            None,
+            &NoopTree,
+            poll_timeout,
+            poll_interval,
+        )
+    }
+
+    struct FakeTree {
+        rows: Vec<(u32, u32, u32)>,
+        signals: RefCell<Vec<(u32, TreeSignal)>>,
+    }
+
+    impl ProcessTree for FakeTree {
+        fn read(&self) -> Option<Vec<(u32, u32, u32)>> {
+            Some(self.rows.clone())
+        }
+        fn signal(&self, pid: u32, sig: TreeSignal) {
+            self.signals.borrow_mut().push((pid, sig));
+        }
+    }
+
+    #[test]
+    fn kill_tree_terms_then_kills_descendants_and_group_members_only() {
+        let tree = FakeTree {
+            rows: vec![(100, 1, 100), (101, 100, 100), (102, 101, 102), (103, 1, 101), (200, 1, 200)],
+            signals: RefCell::new(Vec::new()),
+        };
+        kill_tree(&tree, 100, Duration::from_millis(0));
+        let signals = tree.signals.borrow();
+        let termed: Vec<u32> = signals.iter().filter(|s| s.1 == TreeSignal::Term).map(|s| s.0).collect();
+        let killed: Vec<u32> = signals.iter().filter(|s| s.1 == TreeSignal::Kill).map(|s| s.0).collect();
+        assert_eq!(termed, vec![100, 101, 102, 103]);
+        assert_eq!(killed, vec![100, 101, 102, 103]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn kill_tree_stops_a_detached_setsid_child() {
+        use std::io::BufRead;
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "setsid sleep 60 & echo $!; wait"])
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let sh_pid = child.id();
+        let mut line = String::new();
+        std::io::BufReader::new(child.stdout.take().unwrap()).read_line(&mut line).unwrap();
+        let sleep_pid: u32 = line.trim().parse().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while RealProcessTree
+            .read()
+            .is_none_or(|rows| !rows.iter().any(|&(pid, ppid, _)| pid == sleep_pid && ppid == sh_pid))
+        {
+            assert!(std::time::Instant::now() < deadline, "sleep never showed up under sh");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        kill_tree(&RealProcessTree, sh_pid, TREE_KILL_GRACE);
+
+        child.wait().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while crate::lock::is_pid_alive(Some(sleep_pid as f64)) {
+            assert!(std::time::Instant::now() < deadline, "detached sleep {sleep_pid} survived the tree kill");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!crate::lock::is_pid_alive(Some(sh_pid as f64)));
+    }
+
     struct TestTransport {
         name: &'static str,
         sent_keys: RefCell<Vec<(String, String)>>,
@@ -1678,6 +1853,7 @@ mod tests {
             false,
             None,
             Some(&cli),
+            &NoopTree,
             DEFAULT_POLL_TIMEOUT,
             DEFAULT_POLL_INTERVAL,
         );
@@ -1707,6 +1883,7 @@ mod tests {
             false,
             None,
             Some(&cli),
+            &NoopTree,
             DEFAULT_POLL_TIMEOUT,
             DEFAULT_POLL_INTERVAL,
         );
@@ -1790,6 +1967,7 @@ mod tests {
             false,
             None,
             Some(&cli),
+            &NoopTree,
             DEFAULT_POLL_TIMEOUT,
             DEFAULT_POLL_INTERVAL,
         );
