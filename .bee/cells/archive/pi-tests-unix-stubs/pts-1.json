@@ -1,0 +1,108 @@
+{
+  "id": "pts-1",
+  "feature": "pi-tests-unix-stubs",
+  "title": "Compile the sh-stub pi contract tests only on unix",
+  "lane": "small",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "9875b230-997a-479f-b007-8c568d7fc85a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add #[cfg(unix)] to the eight tests whose assertions need a POSIX sh stub bee or paseo to run, following the precedent at pi_plugin_contracts.rs:1564 (write_stub_bee is #[cfg(unix)]): in pi_paseo_heartbeat_contracts.rs test_leader_session_start_calls_stub_paseo_once, test_heartbeat_input_with_news_returns_transform_news, test_quiet_heartbeat_settle_with_block_verdict_injects_no_nudge, test_leader_shutdown_deletes_heartbeat_and_restart_creates_one, test_leader_children_lose_the_agent_id_while_belt_spawns_keep_it, test_worker_keeps_its_id_guard_and_hidden_leader_tools; in pi_worker_guard_contracts.rs test_belt_blocks_paseo_worker_shell_call_when_stub_denies, test_belt_allows_paseo_worker_shell_call_when_stub_allows. If a helper becomes unused on Windows after this, gate it the same way so the Windows build has no dead-code warning turned error. Do not change what any test asserts. Check every other test in the two files: one that also needs a sh stub to execute (not just to exist) gets the same gate; one that passed on Windows CI stays as it is. No new code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts",
+  "must_haves": {
+    "truths": [
+      "The eight sh-stub tests are compiled only on unix",
+      "Every test in the two files still runs on Linux and passes",
+      "No test assertion changes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "substantive": "#[cfg(unix)] on six tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+        "substantive": "#[cfg(unix)] on two tests"
+      }
+    ],
+    "key_links": [
+      "Windows CI verify-windows no longer runs these eight tests"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No assertion changes"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-pts-1",
+    "outcome": "Gated the eight sh-stub pi contract tests and their two helpers with cfg(unix)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+    ],
+    "deviations": [
+      "Also gated belt_dir and IDENTITY_STUBS_JS in pi_paseo_heartbeat_contracts.rs — only the gated tests use them, so Windows would see dead code — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T07:07:43.856Z",
+    "behavior_change": false,
+    "verification_evidence": "the two touched test files, 26 + 7 passed on Linux, none filtered; Windows not run locally, CI verify-windows is the check",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts",
+    "claimed_at": "2026-10-07T07:05:40.295Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Gated the eight sh-stub tests (6 in pi_paseo_heartbeat_contracts.rs, 2 in pi_worker_guard_contracts.rs) plus the helpers belt_dir and IDENTITY_STUBS_JS with #[cfg(unix)]; no assertion changed",
+      "commit": "d7da97ce2",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_paseo_heartbeat_contracts --test pi_worker_guard_contracts — green:unit — the two touched test files, 26 + 7 passed on Linux, none filtered; Windows not run locally, CI verify-windows is the check",
+      "deviations": [
+        "Also gated belt_dir and IDENTITY_STUBS_JS in pi_paseo_heartbeat_contracts.rs — only the gated tests use them, so Windows would see dead code — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The eight sh-stub tests are compiled only on unix",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+          },
+          {
+            "requirement": "Every test in the two files still runs on Linux and passes",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+          },
+          {
+            "requirement": "No test assertion changes",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T07:08:09.138Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
