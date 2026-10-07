@@ -50,7 +50,7 @@ mod plugin_distribution;
 mod prompts;
 mod release_manifest;
 mod skill_trees;
-mod statusline;
+pub(crate) mod statusline;
 
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
