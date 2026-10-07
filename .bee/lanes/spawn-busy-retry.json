@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "spawn-busy-retry",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"spawn-busy-retry\" started at phase \"planning\" (lane).",
-  "next_action": "bee close --feature spawn-busy-retry",
+  "next_action": "bee close finished \"spawn-busy-retry\" — feature is closed.",
   "created_at": "2026-10-07T11:20:59.414Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
