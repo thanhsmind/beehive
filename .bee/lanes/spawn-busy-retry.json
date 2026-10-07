@@ -1,0 +1,142 @@
+{
+  "schema_version": "1.0",
+  "feature": "spawn-busy-retry",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"spawn-busy-retry\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-07T11:20:59.414Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "one shared retry helper replaces doctor's inline ETXTBSY loop and wraps the two gh spawns in feedback and report; four files, but three call sites of one small helper (named deviation from the 3-file small cap)",
+    "updated_at": "2026-10-07T11:20:59.447Z",
+    "feature": "spawn-busy-retry"
+  },
+  "gate_preview": {
+    "feature": "spawn-busy-retry",
+    "plan_sha256": "6ad60c64b57aa5bb1e9e6d5d1d5156f3a633480975cb681015635602a695a4e7",
+    "previewed_at": "2026-10-07T11:21:26.442Z",
+    "cells": [
+      {
+        "id": "sbr-1",
+        "feature": "spawn-busy-retry",
+        "title": "Retry ExecutableFileBusy on bee's external spawns through one helper",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "5d55579f-1c3a-4c82-abea-5de3c0d86ad5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/fsutil.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Move the ETXTBSY retry loop in doctor.rs installed_binary_bee_version (doctor.rs:1243-1263, PROBE_ETXTBSY_ATTEMPTS/PROBE_ETXTBSY_DELAY_MS) into one pub(crate) helper in fsutil.rs that takes a closure returning io::Result<T> and retries only std::io::ErrorKind::ExecutableFileBusy (10 tries, 20 ms apart), returning the last result. Use it in doctor.rs (same behavior), in feedback.rs ingest_issues for the gh issue list .output() (feedback.rs:1856), and in report.rs gh() for the Command spawn (report.rs:552). The helper retries nothing else. Unit-test the helper: a closure that fails with ExecutableFileBusy twice then succeeds returns Ok after 3 calls; a NotFound error is returned at once after 1 call. No new code comments. Proof: the cell verify, plus the leader's stress loop over verbs::feedback and verbs::report (6 parallel loops x 20 runs), which failed 8/120 before.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fsutil doctor verbs::feedback verbs::report",
+        "must_haves": {
+          "truths": [
+            "One helper owns the ExecutableFileBusy retry and doctor uses it",
+            "The feedback gh issue list and the report gh calls retry ExecutableFileBusy",
+            "No other spawn error is retried"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+              "substantive": "retry helper for ExecutableFileBusy"
+            }
+          ],
+          "key_links": [
+            "verbs::feedback and verbs::report stable under parallel stress"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No retry of any error other than ExecutableFileBusy"
+          ]
+        },
+        "behavior_change": true
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "spawn-busy-retry",
+    "plan_sha256": "6ad60c64b57aa5bb1e9e6d5d1d5156f3a633480975cb681015635602a695a4e7",
+    "previewed_at": "2026-10-07T11:21:26.442Z",
+    "cells": [
+      {
+        "id": "sbr-1",
+        "feature": "spawn-busy-retry",
+        "title": "Retry ExecutableFileBusy on bee's external spawns through one helper",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "5d55579f-1c3a-4c82-abea-5de3c0d86ad5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/fsutil.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "packages/bee-rs/crates/bee/src/verbs/report.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Move the ETXTBSY retry loop in doctor.rs installed_binary_bee_version (doctor.rs:1243-1263, PROBE_ETXTBSY_ATTEMPTS/PROBE_ETXTBSY_DELAY_MS) into one pub(crate) helper in fsutil.rs that takes a closure returning io::Result<T> and retries only std::io::ErrorKind::ExecutableFileBusy (10 tries, 20 ms apart), returning the last result. Use it in doctor.rs (same behavior), in feedback.rs ingest_issues for the gh issue list .output() (feedback.rs:1856), and in report.rs gh() for the Command spawn (report.rs:552). The helper retries nothing else. Unit-test the helper: a closure that fails with ExecutableFileBusy twice then succeeds returns Ok after 3 calls; a NotFound error is returned at once after 1 call. No new code comments. Proof: the cell verify, plus the leader's stress loop over verbs::feedback and verbs::report (6 parallel loops x 20 runs), which failed 8/120 before.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- fsutil doctor verbs::feedback verbs::report",
+        "must_haves": {
+          "truths": [
+            "One helper owns the ExecutableFileBusy retry and doctor uses it",
+            "The feedback gh issue list and the report gh calls retry ExecutableFileBusy",
+            "No other spawn error is retried"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+              "substantive": "retry helper for ExecutableFileBusy"
+            }
+          ],
+          "key_links": [
+            "verbs::feedback and verbs::report stable under parallel stress"
+          ],
+          "prohibitions": [
+            "No new code comments",
+            "No retry of any error other than ExecutableFileBusy"
+          ]
+        },
+        "behavior_change": true
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-07T11:25:05.654Z",
+    "branch": "wt/spawn-busy-retry",
+    "worktree_id": "beehive--wt--spawn-busy-retry",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

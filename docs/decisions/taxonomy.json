@@ -693,6 +693,8 @@
     "contract:set-gate-windows-json",
     "contract:set-gate-windows-longpath",
     "contract:pi-tests-unix-stubs",
-    "contract:worker-guard-stub-stdin"
+    "contract:worker-guard-stub-stdin",
+    "contract:spawn-busy-retry",
+    "spawn"
   ]
 }
