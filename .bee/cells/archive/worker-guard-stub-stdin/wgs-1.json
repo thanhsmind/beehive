@@ -1,0 +1,95 @@
+{
+  "id": "wgs-1",
+  "feature": "worker-guard-stub-stdin",
+  "title": "Drain stdin in the worker-guard test stubs",
+  "lane": "tiny",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "49c907f8-e331-4099-a1d0-afc0709d3ff2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "In pi_worker_guard_contracts.rs, make every sh stub bee that the belt calls with JSON on stdin read all of stdin first (cat > /dev/null) before it answers, as write_stub_bee in pi_plugin_contracts.rs does (cat > last_stdin.json). This covers the allow stub and the deny stub at least. Do not change what any test asserts. No new code comments. Proof: the cell verify, plus the stress loop (8 parallel loops x 15 runs of each worker-guard stub test) with zero failures.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_worker_guard_contracts",
+  "must_haves": {
+    "truths": [
+      "Every worker-guard stub bee drains stdin before it answers",
+      "The allow test passes 120 of 120 runs under 8 parallel loops"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs",
+        "substantive": "cat > /dev/null in the stub hook branches"
+      }
+    ],
+    "key_links": [
+      "Linux CI green for test_belt_allows_paseo_worker_shell_call_when_stub_allows"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No assertion changes"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "worker-guard stubs drain stdin; the Linux EPIPE flake is gone under stress",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+    ],
+    "deviations": [
+      "drained stdin in all four stubs of the file, not only the allow and deny stubs — the noenv stub also receives write-guard JSON and could hit the same EPIPE — found a better route",
+      "sync-ack: test-only change"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T07:48:53.398Z",
+    "behavior_change": false,
+    "verification_evidence": "7 passed; stress 8 parallel loops x 15 runs: allow test 0/360 failures after the fix (1/120 before), deny test 0/120",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_worker_guard_contracts",
+    "claimed_at": "2026-10-07T07:47:23.917Z",
+    "sync_ack": "test-only change",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "all four worker-guard stubs drain stdin before they answer",
+      "commit": "028005530",
+      "files": [
+        "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_worker_guard_contracts — green:unit — 7 passed; stress 8 parallel loops x 15 runs: allow test 0/360 failures after the fix (1/120 before), deny test 0/120",
+      "deviations": [
+        "drained stdin in all four stubs of the file, not only the allow and deny stubs — the noenv stub also receives write-guard JSON and could hit the same EPIPE — found a better route"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "Every worker-guard stub bee drains stdin before it answers",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+          },
+          {
+            "requirement": "The allow test passes 120 of 120 runs under 8 parallel loops",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_worker_guard_contracts.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T07:48:53.480Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

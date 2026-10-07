@@ -1578,5 +1578,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-07T07:08:13.738Z"
+  },
+  "worker-guard-stub-stdin": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T07:49:08.155Z"
   }
 }
