@@ -1233,34 +1233,11 @@ enum ProbedBeeVersion {
     Failed(String),
 }
 
-/// How long the spawn keeps retrying `ETXTBSY`, and the gap between tries.
-/// A binary written moments ago is not runnable while ANY process still holds
-/// a write descriptor to it, and a multi-threaded caller (cargo's test harness
-/// is one) can fork a child that inherits exactly that descriptor. The window
-/// closes as soon as the writer's fd does, so a handful of short retries turns
-/// a spurious "freshness unknown" into the real verdict; nothing else retries,
-/// because nothing else is transient.
-const PROBE_ETXTBSY_ATTEMPTS: u32 = 10;
-const PROBE_ETXTBSY_DELAY_MS: u64 = 20;
-
 /// The installed binary's answer to what release version it was built from —
 /// `bee rs-info`'s `bee_version` field. A probe, never a mutation: this only
 /// spawns and reads stdout.
 fn installed_binary_bee_version(bin: &Path) -> ProbedBeeVersion {
-    let mut spawned = Err(std::io::ErrorKind::Other.into());
-    for attempt in 0..PROBE_ETXTBSY_ATTEMPTS {
-        spawned = std::process::Command::new(bin).arg("rs-info").output();
-        // `ExecutableFileBusy` is the ONE retryable spawn failure: it means
-        // the file exists and is ours, just not runnable yet. A missing file,
-        // a permission denial or anything else is a real answer already.
-        match &spawned {
-            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {}
-            _ => break,
-        }
-        if attempt + 1 < PROBE_ETXTBSY_ATTEMPTS {
-            std::thread::sleep(std::time::Duration::from_millis(PROBE_ETXTBSY_DELAY_MS));
-        }
-    }
+    let spawned = crate::fsutil::retry_executable_busy(|| std::process::Command::new(bin).arg("rs-info").output());
     let out = match spawned {
         Ok(out) => out,
         Err(e) => return ProbedBeeVersion::Failed(format!("could not spawn it ({e})")),

@@ -549,12 +549,14 @@ enum Gh {
 }
 
 fn gh(program: &OsStr, args: &[&str], stdin: Option<&str>) -> Gh {
-    let child = Command::new(program)
-        .args(args)
-        .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn();
+    let child = crate::fsutil::retry_executable_busy(|| {
+        Command::new(program)
+            .args(args)
+            .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+    });
     let Ok(mut child) = child else {
         return Gh::Failed;
     };
