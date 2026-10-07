@@ -2372,6 +2372,13 @@ pub(crate) fn prepare_dispatch_wire(
         )));
     }
 
+    if matches!(resolved, Resolved::Herding { .. }) {
+        if let Some(Value::Object(mut refusal)) = crate::herding::wave::check_limits(root, &cfg) {
+            refusal.insert("type".into(), Value::String("refused".into()));
+            return Ok(Prepared::Value(Value::Object(refusal)));
+        }
+    }
+
     let advisor = if kind == "cell" {
         let cell_id = cell
             .as_ref()
@@ -3489,6 +3496,71 @@ fn emit_prompt_skew(
     ExitCode::FAILURE
 }
 
+fn explain_check(check: &str, pass: bool, detail: String) -> Value {
+    serde_json::json!({ "check": check, "result": if pass { "pass" } else { "refuse" }, "detail": detail })
+}
+
+fn explain_claim(root: &Path, kind: &str, cell_id: Option<&str>, worker: Option<&str>, claim: bool, force_ownership: bool) -> Value {
+    if kind != "cell" {
+        return explain_check("claim", true, format!("--kind {kind} owns no cell"));
+    }
+    let Some(cell) = cell_id.and_then(|id| read_cell(root, id).ok().flatten()) else {
+        return explain_check("claim", false, format!("cell \"{}\" not found", cell_id.unwrap_or("")));
+    };
+    let status = recorded_str(Some(&cell), "status").unwrap_or("");
+    if claim {
+        return explain_check("claim", status == "open", format!("cell is \"{status}\"; --claim needs an open cell"));
+    }
+    let worker = js_trim(worker.unwrap_or(""));
+    let ownership = check_cell_claim_ownership(&cell, worker);
+    match (ownership.ok, force_ownership) {
+        (true, _) => explain_check("claim", true, format!("claimed by \"{worker}\"")),
+        (false, true) => explain_check("claim", true, format!("--force-ownership overrides: {}", ownership.reason)),
+        (false, false) => explain_check("claim", false, ownership.reason),
+    }
+}
+
+pub(crate) fn explain_checks(
+    root: &Path,
+    kind: &str,
+    cell_id: Option<&str>,
+    worker: Option<&str>,
+    claim: bool,
+    force_ownership: bool,
+    prepared: &Prepared,
+) -> Vec<Value> {
+    let claim_check = explain_claim(root, kind, cell_id, worker, claim, force_ownership);
+    let (role, limits) = match prepared {
+        Prepared::Thrown(msg) => (explain_check("role", false, msg.clone()), None),
+        Prepared::Value(v) if v["ok"] == Value::Bool(false) => {
+            let reason = v["reason"].as_str().unwrap_or("");
+            let detail = format!("{reason}: {}", v["fix"].as_str().unwrap_or(""));
+            if reason.starts_with("limits.") {
+                (explain_check("role", true, "resolves to a herding agent".to_string()), Some(explain_check("limits", false, detail)))
+            } else {
+                (explain_check("role", false, detail), None)
+            }
+        }
+        Prepared::Value(v) => {
+            let economics = &v["economics"];
+            let channel = economics["channel"].as_str().unwrap_or("");
+            let role = explain_check("role", true, format!("{} via {channel}", economics["logical_tier"].as_str().unwrap_or("")));
+            let detail = if channel == "herding-exec" { "within herding.limits" } else { "not a herding dispatch" };
+            (role, Some(explain_check("limits", true, detail.to_string())))
+        }
+    };
+    let limits = limits.unwrap_or_else(|| serde_json::json!({ "check": "limits", "result": "skip", "detail": "role did not resolve" }));
+    vec![role, claim_check, limits]
+}
+
+fn explain_text(checks: &[Value]) -> String {
+    checks
+        .iter()
+        .map(|c| format!("{}: {} — {}", c["check"].as_str().unwrap_or(""), c["result"].as_str().unwrap_or(""), c["detail"].as_str().unwrap_or("")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
@@ -3507,6 +3579,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             "feature",
             "stage",
             "release-version",
+            "explain",
         ],
     ) {
         return None;
@@ -3542,6 +3615,13 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Some(FlagV::S(s)) if s == "true" || s == "false" => {}
         Some(FlagV::S(_)) => return None,
     }
+    let explain = match flags.get("explain") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
+    };
     let feature_flag = flags.truthy_str("feature").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     let stage_flag = flags.truthy_str("stage").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
     let release_version_flag = flags.truthy_str("release-version").map(|s| js_trim(s).to_string()).filter(|s| !s.is_empty());
@@ -3711,7 +3791,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             role.as_deref(),
             cell_id.as_deref(),
             worker.as_deref(),
-            force_ownership,
+            force_ownership || claim || explain,
             classification,
             purpose.as_deref(),
             false,
@@ -3724,6 +3804,23 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         )
         .ok()?
     };
+    if explain {
+        if let Some(message) = arg_error.or_else(|| brief_arg_refusal.map(|r| jsjson::stringify(&r))) {
+            if use_json {
+                println!("{}", jsjson::stringify(&serde_json::json!({ "error": message })));
+            } else {
+                eprintln!("{message}");
+            }
+            return Some(ExitCode::FAILURE);
+        }
+        let checks = explain_checks(&root, &kind, cell_id.as_deref(), worker.as_deref(), claim, force_ownership, &prepared);
+        if use_json {
+            println!("{}", jsjson::stringify_pretty(&serde_json::json!({ "ok": true, "explain": checks })));
+        } else {
+            println!("{}", explain_text(&checks));
+        }
+        return Some(ExitCode::SUCCESS);
+    }
     // The cross-worktree hold topology reservePathAtomic resolves for itself.
     // `prelude` above already narrowed this to an ORDINARY checkout, so this
     // is always `(workRoot, "main")` — a linked worktree delegated earlier.
@@ -3749,6 +3846,13 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     if let Some(refusal) = brief_arg_refusal {
         let text = jsjson::stringify_pretty(&refusal);
         return finish(&ctx, Ok(Out::Emit(refusal, text, 0)));
+    }
+
+    if let Prepared::Value(refusal) = &prepared {
+        if refusal["reason"].as_str().is_some_and(|r| r.starts_with("limits.")) {
+            let text = jsjson::stringify_pretty(refusal);
+            return finish(&ctx, Ok(Out::Emit(refusal.clone(), text, 0)));
+        }
     }
 
     // ── the claim + reserve gesture, before the payload build (Node's order).
@@ -5637,6 +5741,141 @@ mod role_flag_tests {
             v.get("economics").and_then(|e| e.get("tier_source")),
             Some(&json!("default"))
         );
+    }
+
+    const HERDING_READ: &str = r#"{"read":{"kind":"herding","agent":"x"},"generation":"sonnet","review":"opus"}"#;
+
+    fn herding_cfg(herding: &str) -> String {
+        format!(r#"{{{herding}"models":{{"claude":{HERDING_READ}}}}}"#)
+    }
+
+    fn tree(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    out.push((path.clone(), std::fs::read(&path).unwrap()));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn a_herding_role_at_the_depth_limit_is_refused_at_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &herding_cfg(r#""herding":{"limits":{"depth":0}},"#));
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v["ok"], json!(false), "{v}");
+        assert_eq!(v["type"], json!("refused"));
+        assert_eq!(v["reason"], json!("limits.depth"));
+        assert_eq!(v["retryable"], json!(false));
+        assert_eq!(v["limit"], json!(0));
+    }
+
+    #[test]
+    fn limits_never_touch_a_role_that_is_not_herding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"limits":{"depth":0,"concurrency":0}},"models":{"claude":{"extraction":"haiku","generation":"sonnet","review":"opus"}}}"#,
+        );
+        let v = envelope(&root, "gather", None);
+        assert_eq!(v.get("tool"), Some(&json!("Agent")), "{v}");
+    }
+
+    #[test]
+    fn a_config_without_limits_gives_a_byte_identical_herding_payload() {
+        let bare = tempfile::tempdir().unwrap();
+        let bare_root = repo(&bare, &herding_cfg(""));
+        let empty = tempfile::tempdir().unwrap();
+        let empty_root = repo(&empty, &herding_cfg(r#""herding":{"limits":{}},"#));
+        let a = envelope(&bare_root, "gather", None);
+        let b = envelope(&empty_root, "gather", None);
+        assert_eq!(a["tool"], json!("Bash"));
+        assert_eq!(a["payload"], b["payload"]);
+        assert_eq!(a["economics"], b["economics"]);
+    }
+
+    #[test]
+    fn explain_names_each_check_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, &herding_cfg(r#""herding":{"limits":{"depth":0}},"#));
+        let before = tree(&root);
+        let prepared =
+            prepare_dispatch_with_role(&root, "claude", "gather", None, None, None, true, None, None, false, None)
+                .unwrap();
+        let checks = explain_checks(&root, "gather", None, None, false, false, &prepared);
+        assert_eq!(before, tree(&root), "explain wrote to the store");
+        let names: Vec<_> = checks.iter().map(|c| (c["check"].clone(), c["result"].clone())).collect();
+        assert_eq!(
+            names,
+            vec![
+                (json!("role"), json!("pass")),
+                (json!("claim"), json!("pass")),
+                (json!("limits"), json!("refuse")),
+            ]
+        );
+        assert!(checks[2]["detail"].as_str().unwrap().starts_with("limits.depth: "), "{checks:?}");
+        let text = explain_text(&checks);
+        assert_eq!(text.lines().count(), 3, "{text}");
+        assert!(text.lines().nth(2).unwrap().starts_with("limits: refuse — limits.depth: "), "{text}");
+    }
+
+    const EXPLAIN_CHILD: &str = "verbs::drivers::prepare::role_flag_tests::explain_through_the_cli_child";
+
+    #[test]
+    #[ignore = "spawned by explain_through_the_cli_takes_no_claim_and_writes_nothing"]
+    fn explain_through_the_cli_child() {
+        let (flags, use_json) = crate::verbs::reservations::parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-1", "--worker", "w-1", "--claim", "--explain", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        assert_eq!(run_dispatch_prepare(flags, use_json, Instant::now()), Some(ExitCode::SUCCESS));
+    }
+
+    #[test]
+    fn explain_through_the_cli_takes_no_claim_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"herding":{"limits":{"depth":0}},"models":{"claude":{"generation":{"kind":"herding","agent":"x"},"review":"opus"}}}"#,
+        );
+        let cell = root.join(".bee/cells/c-1.json");
+        std::fs::create_dir_all(cell.parent().unwrap()).unwrap();
+        std::fs::write(
+            &cell,
+            r#"{"id":"c-1","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"generation","files":["a.rs"]}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee/lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee/lanes/f.json"),
+            r#"{"feature":"f","approved_gates":{"execution":true},"route":true}"#,
+        )
+        .unwrap();
+        let before = tree(&root);
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args(["--exact", EXPLAIN_CHILD, "--ignored", "--test-threads", "1", "--nocapture"])
+            .env_remove("PI_SESSION_ID")
+            .env_remove("BEE_HERDING_DEPTH")
+            .current_dir(&root)
+            .output()
+            .expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "child failed:\n{stdout}\n{}", String::from_utf8_lossy(&out.stderr));
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap();
+        let v: Value = serde_json::from_str(&stdout[start..end]).unwrap();
+        let results: Vec<_> = v["explain"].as_array().unwrap().iter().map(|c| c["result"].clone()).collect();
+        assert_eq!(results, vec![json!("pass"), json!("pass"), json!("refuse")], "{v}");
+        assert_eq!(before, tree(&root), "explain claimed, reserved or recorded something");
     }
 }
 

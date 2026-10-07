@@ -1023,25 +1023,7 @@ pub(super) fn occupancy_with_panes_and_paseo(
         return (ExitCode::FAILURE, wave_ledger::Occupancy::Fallback(0), Vec::new());
     };
 
-    let paseo_box: Option<Box<dyn crate::herding::paseo::PaseoCli>> = if paseo_override.is_none() {
-        let cfg = match crate::fsutil::read_json(&main_root.join(".bee").join("config.json")) {
-            crate::fsutil::ReadJson::Parsed(v) => v,
-            _ => Value::Null,
-        };
-        if !crate::herding::repo_uses_paseo(&cfg, &main_root.join(".bee"))
-            || !crate::herding::paseo::daemon_reachable()
-        {
-            None
-        } else {
-            let cmd = crate::herding::paseo::paseo_command(&cfg);
-            let real = crate::herding::paseo::RealPaseoCli::new(cmd)
-                .with_timeout(Duration::from_secs(5));
-            Some(Box::new(crate::herding::paseo::FailFastPaseoCli::new(Box::new(real)))
-                as Box<dyn crate::herding::paseo::PaseoCli>)
-        }
-    } else {
-        None
-    };
+    let paseo_box = if paseo_override.is_none() { paseo_cli_for(&main_root) } else { None };
     let p_ref = paseo_override.or(paseo_box.as_deref());
 
     let mut live_panes = match live_panes_override {
@@ -1050,16 +1032,8 @@ pub(super) fn occupancy_with_panes_and_paseo(
     };
 
     if let (Some(cli), Some(set)) = (p_ref, live_panes.as_mut()) {
-        if let Some(agents) = cli
-            .call(&crate::herding::paseo::ls_label_argv("bee_job"))
-            .ok()
-            .and_then(|stdout| crate::herding::paseo::parse_ls_agents_checked(&stdout))
-        {
-            for (id, _bee_job, archived) in agents {
-                if !archived {
-                    set.insert(id);
-                }
-            }
+        if let Some(ids) = paseo_live_ids(cli) {
+            set.extend(ids);
         }
     }
 
@@ -1078,6 +1052,104 @@ pub(super) fn occupancy_with_panes_and_paseo(
         wave_ledger::live_worker_count(&main_root, live_panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS);
     emit_occupancy(&occ, json);
     (ExitCode::SUCCESS, occ, sweep_lines)
+}
+
+fn paseo_cli_for(main_root: &Path) -> Option<Box<dyn crate::herding::paseo::PaseoCli>> {
+    let cfg = crate::herding::run::read_main_config(main_root);
+    if !crate::herding::repo_uses_paseo(&cfg, &main_root.join(".bee")) || !crate::herding::paseo::daemon_reachable() {
+        return None;
+    }
+    let cmd = crate::herding::paseo::paseo_command(&cfg);
+    let real = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+    Some(Box::new(crate::herding::paseo::FailFastPaseoCli::new(Box::new(real))))
+}
+
+fn paseo_live_ids(cli: &dyn crate::herding::paseo::PaseoCli) -> Option<Vec<String>> {
+    let stdout = cli.call(&crate::herding::paseo::ls_label_argv("bee_job")).ok()?;
+    let agents = crate::herding::paseo::parse_ls_agents_checked(&stdout)?;
+    Some(agents.into_iter().filter(|(_, _, archived)| !archived).map(|(id, _, _)| id).collect())
+}
+
+fn quiet_occupancy_from(
+    main_root: &Path,
+    live_panes: Option<HashSet<String>>,
+    paseo_ids: Option<Vec<String>>,
+    now_ms: i64,
+) -> wave_ledger::Occupancy {
+    let panes = match (live_panes, paseo_ids) {
+        (Some(mut set), Some(ids)) => {
+            set.extend(ids);
+            Some(set)
+        }
+        (None, Some(ids)) => Some(ids.into_iter().collect()),
+        (set, None) => set,
+    };
+    wave_ledger::live_worker_count(main_root, panes.as_ref(), now_ms, wave_ledger::DEFAULT_STALE_AFTER_MS)
+}
+
+fn quiet_occupancy(main_root: &Path) -> wave_ledger::Occupancy {
+    let paseo_ids = paseo_cli_for(main_root).and_then(|cli| paseo_live_ids(cli.as_ref()));
+    quiet_occupancy_from(main_root, live_pane_ids(main_root), paseo_ids, chrono::Utc::now().timestamp_millis())
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct HerdingLimits {
+    pub(crate) concurrency: Option<u64>,
+    pub(crate) depth: Option<u64>,
+}
+
+pub(crate) fn herding_limits(cfg: &Value) -> HerdingLimits {
+    let limits = &cfg["herding"]["limits"];
+    HerdingLimits { concurrency: limits["concurrency"].as_u64(), depth: limits["depth"].as_u64() }
+}
+
+pub(crate) fn herding_depth_from(raw: Option<&str>) -> u64 {
+    raw.and_then(|v| v.trim().parse().ok()).unwrap_or(0)
+}
+
+pub(crate) fn herding_depth() -> u64 {
+    herding_depth_from(std::env::var("BEE_HERDING_DEPTH").ok().as_deref())
+}
+
+pub(crate) fn limits_refusal(
+    limits: HerdingLimits,
+    depth: u64,
+    occupancy: impl FnOnce() -> wave_ledger::Occupancy,
+) -> Option<Value> {
+    if let Some(limit) = limits.depth.filter(|limit| depth >= *limit) {
+        return Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.depth",
+            "depth": depth,
+            "limit": limit,
+            "retryable": false,
+            "fix": format!("this herding worker runs at depth {depth} and herding.limits.depth is {limit}; hand the work back to the leader or raise herding.limits.depth"),
+        }));
+    }
+    let limit = limits.concurrency?;
+    match occupancy() {
+        wave_ledger::Occupancy::Fallback(live) => Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.unverifiable",
+            "live": live,
+            "limit": limit,
+            "retryable": true,
+            "fix": "no live pane list could be read, so the live worker count cannot be verified; start the herding transport (herdr or tmux) or remove herding.limits.concurrency",
+        })),
+        wave_ledger::Occupancy::Live(live) if live as u64 >= limit => Some(serde_json::json!({
+            "ok": false,
+            "reason": "limits.concurrency",
+            "live": live,
+            "limit": limit,
+            "retryable": true,
+            "fix": "wait for a worker to finish (bee herding status) or raise herding.limits.concurrency",
+        })),
+        wave_ledger::Occupancy::Live(_) => None,
+    }
+}
+
+pub(crate) fn check_limits(main_root: &Path, cfg: &Value) -> Option<Value> {
+    limits_refusal(herding_limits(cfg), herding_depth(), || quiet_occupancy(main_root))
 }
 
 /// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
@@ -2634,5 +2706,100 @@ mod tests {
         );
         assert_eq!(exit_fb, ExitCode::SUCCESS);
         assert_eq!(occ_fb, wave_ledger::Occupancy::Fallback(1));
+    }
+
+    fn unresolved_worker_row(root: &Path, name: &str, pane_id: &str) {
+        let row = wave_ledger::WaveRow {
+            wave_id: name.to_string(),
+            started_at: "2020-01-01T00:00:00Z".to_string(),
+            workers: vec![wave_ledger::WorkerRow {
+                name: name.to_string(),
+                pane_id: pane_id.to_string(),
+                worktree: "/w".to_string(),
+                task: "t".to_string(),
+                outcome: None,
+                evidence: None,
+                retryable: None,
+            }],
+        };
+        wave_ledger::append_wave(root, &row).unwrap();
+    }
+
+    fn untouched() -> wave_ledger::Occupancy {
+        panic!("occupancy must not be read")
+    }
+
+    #[test]
+    fn herding_limits_read_both_keys_and_absent_means_no_limit() {
+        let both = serde_json::json!({"herding": {"limits": {"concurrency": 4, "depth": 2}}});
+        assert_eq!(herding_limits(&both), HerdingLimits { concurrency: Some(4), depth: Some(2) });
+        assert_eq!(herding_limits(&Value::Null), HerdingLimits::default());
+        let bogus = serde_json::json!({"herding": {"limits": {"concurrency": "4", "depth": -1}}});
+        assert_eq!(herding_limits(&bogus), HerdingLimits::default());
+    }
+
+    #[test]
+    fn herding_depth_reads_absent_or_garbage_as_zero() {
+        assert_eq!(herding_depth_from(None), 0);
+        assert_eq!(herding_depth_from(Some("2")), 2);
+        assert_eq!(herding_depth_from(Some("x")), 0);
+    }
+
+    #[test]
+    fn no_limits_never_reads_occupancy_and_never_refuses() {
+        assert_eq!(limits_refusal(HerdingLimits::default(), 9, untouched), None);
+    }
+
+    #[test]
+    fn a_run_at_the_concurrency_limit_is_refused_and_retryable() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: None };
+        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(4)).expect("at the limit refuses");
+        assert_eq!(
+            v,
+            serde_json::json!({
+                "ok": false,
+                "reason": "limits.concurrency",
+                "live": 4,
+                "limit": 4,
+                "retryable": true,
+                "fix": "wait for a worker to finish (bee herding status) or raise herding.limits.concurrency",
+            })
+        );
+        assert_eq!(limits_refusal(limits, 0, || wave_ledger::Occupancy::Live(3)), None);
+    }
+
+    #[test]
+    fn a_fallback_count_with_a_concurrency_limit_is_unverifiable() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: None };
+        let v = limits_refusal(limits, 0, || wave_ledger::Occupancy::Fallback(0)).expect("fallback refuses");
+        assert_eq!(v["reason"], "limits.unverifiable");
+        assert_eq!(v["retryable"], true);
+        assert_eq!(v["limit"], 4);
+    }
+
+    #[test]
+    fn a_run_at_the_depth_limit_is_refused_before_occupancy_is_read() {
+        let limits = HerdingLimits { concurrency: Some(4), depth: Some(1) };
+        let v = limits_refusal(limits, 1, untouched).expect("depth 1 at limit 1 refuses");
+        assert_eq!(v["reason"], "limits.depth");
+        assert_eq!(v["depth"], 1);
+        assert_eq!(v["limit"], 1);
+        let shallow = HerdingLimits { concurrency: None, depth: Some(1) };
+        assert_eq!(limits_refusal(shallow, 0, untouched), None);
+    }
+
+    #[test]
+    fn paseo_agents_count_live_even_without_a_pane_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        unresolved_worker_row(root, "job-a", "paseo-agent-1");
+        unresolved_worker_row(root, "job-b", "paseo-agent-gone");
+        let now = chrono::Utc::now().timestamp_millis();
+        let occ = quiet_occupancy_from(root, None, Some(vec!["paseo-agent-1".to_string()]), now);
+        assert_eq!(occ, wave_ledger::Occupancy::Live(1));
+        let panes: HashSet<String> = ["%1".to_string()].into_iter().collect();
+        let merged = quiet_occupancy_from(root, Some(panes), Some(vec!["paseo-agent-1".to_string()]), now);
+        assert_eq!(merged, wave_ledger::Occupancy::Live(1));
+        assert!(quiet_occupancy_from(root, None, None, now).is_fallback());
     }
 }

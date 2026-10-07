@@ -1327,6 +1327,12 @@ pub(crate) const PASSTHROUGH_ENV_VARS: [&str; 3] = [
     "BEE_SESSION_ID",
 ];
 
+fn export_depth(passthrough: &mut BTreeMap<String, String>, limits: super::wave::HerdingLimits, depth: u64) {
+    if limits.depth.is_some() {
+        passthrough.insert("BEE_HERDING_DEPTH".to_string(), (depth + 1).to_string());
+    }
+}
+
 pub(crate) fn resolve_pane_env_passthrough_from<F>(lookup: F) -> BTreeMap<String, String>
 where
     F: Fn(&str) -> Option<String>,
@@ -5317,7 +5323,7 @@ fn postflight_cap_check(
 }
 
 pub(super) fn run(flags: &[&str]) -> ExitCode {
-    let opts = match parse_options(flags) {
+    let mut opts = match parse_options(flags) {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("bee herding run: {msg}");
@@ -5361,6 +5367,21 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
     // job file written and no pane split. When running in --no-pane mode (D11),
     // no pane multiplexer is needed.
     let main_cfg = read_main_config(&opts.main_root);
+    if !opts.is_continue {
+        if let Some(refusal) = super::wave::check_limits(&opts.main_root, &main_cfg) {
+            if opts.json || opts.inbox_session.is_some() {
+                println!("{refusal}");
+            } else {
+                eprintln!(
+                    "bee herding run: refused {} FIX: {}",
+                    refusal["reason"].as_str().unwrap_or(""),
+                    refusal["fix"].as_str().unwrap_or("")
+                );
+            }
+            return ExitCode::FAILURE;
+        }
+        export_depth(&mut opts.pane_env_passthrough, super::wave::herding_limits(&main_cfg), super::wave::herding_depth());
+    }
     let paseo_spec = if !opts.no_pane {
         if let Some(agent_name) = opts.agent.as_deref() {
             match PaseoSpec::from_config(&main_cfg, agent_name) {
@@ -5466,6 +5487,16 @@ pub(super) fn run(flags: &[&str]) -> ExitCode {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    #[test]
+    fn depth_is_exported_only_when_a_depth_limit_is_set() {
+        let mut env = BTreeMap::new();
+        export_depth(&mut env, super::super::wave::HerdingLimits { concurrency: Some(4), depth: None }, 3);
+        assert!(env.is_empty(), "no depth limit leaves the export byte-identical: {env:?}");
+        export_depth(&mut env, super::super::wave::HerdingLimits { concurrency: None, depth: Some(2) }, 1);
+        env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
+        assert_eq!(build_export_line(&env), "export BEE_HERDING_DEPTH='2' BEE_HERDING_WORKER='1'");
+    }
 
     // ─── pure decisions ─────────────────────────────────────────────────
 
