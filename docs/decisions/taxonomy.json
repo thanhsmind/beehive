@@ -689,6 +689,7 @@
     "piggery-borrow",
     "piggery",
     "contract:windows-path-tests",
-    "piggery-followup"
+    "piggery-followup",
+    "contract:set-gate-windows-json"
   ]
 }
