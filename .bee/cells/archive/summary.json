@@ -1558,5 +1558,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-10-07T06:26:06.710Z"
+  },
+  "windows-path-tests": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-07T06:37:29.396Z"
   }
 }

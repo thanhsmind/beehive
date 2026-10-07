@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-path-tests",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"windows-path-tests\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 57dad6e; capture what settled, then bee close --feature windows-path-tests.",
+  "next_action": "bee close --feature windows-path-tests",
   "created_at": "2026-10-07T06:29:53.626Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -139,5 +139,14 @@
         "behavior_change": true
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "windows-path-tests",
+    "date": "2026-10-07",
+    "at": "2026-10-07T06:37:28.440Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "bee close --feature windows-path-tests"
   }
 }

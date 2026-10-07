@@ -1,0 +1,133 @@
+{
+  "id": "wpt-1",
+  "feature": "windows-path-tests",
+  "title": "Make the four Windows-only path tests pass",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "efa057d6-fbc5-4d56-aee4-1924c9959a92"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/roots.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Fix the four tests red on Windows CI run 37502285776 (all green on Linux). (1) Product: in close.rs docs_root_for_feature (close.rs:822-836) compare main_root with root and here with the granted worktree root using roots::same_path (roots.rs:312, it resolves a Windows 8.3 short name and the long name git reports to one path) instead of ==; this fixes contract_control_plane_from_worktree_e32f3a66_close_dry_run, whose cwd is the short temp path while git reports the long one. (2) status_full/tests.rs:796 unmerged_granted_worktree_distinguishes_fresh_from_merged_branch: compare the worktree id exactly and the path with roots::same_path rather than byte equality. (3) prepare.rs paseo_probe_tests::paseo_agent_ready_when_command_resolves_on_path (around prepare.rs:6336) formats a Windows path with backslashes into JSON unescaped; build the JSON string value with serde_json (e.g. serde_json::to_string of the path) so it is escaped. (4) set_gate.rs:3039 contract_control_plane_from_worktree_e32f3a66_state_verbs failed only with PoisonError because the close test panicked while holding TEST_CWD_LOCK; make every CwdGuard that takes TEST_CWD_LOCK (close.rs:6086, set_gate.rs:3039, cells/handlers_meta.rs:1260, cells/handlers_write.rs:3054) recover a poisoned lock with unwrap_or_else(|e| e.into_inner()) so one red test no longer cascades. No new code comments. Windows cannot be run here: prove on Linux that the touched tests stay green and the suite builds; Windows CI is the real proof after merge.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::close verbs::status_full verbs::drivers::prepare verbs::state_group::set_gate verbs::cells",
+  "must_haves": {
+    "truths": [
+      "docs_root_for_feature matches the granted worktree through roots::same_path",
+      "The status_full worktree test compares the path with same_path",
+      "The paseo probe test writes a JSON-escaped path",
+      "A poisoned TEST_CWD_LOCK no longer cascades into other cwd tests"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "same_path in docs_root_for_feature"
+      }
+    ],
+    "key_links": [
+      "Windows CI verify-windows job green for the four tests"
+    ],
+    "prohibitions": [
+      "No new code comments",
+      "No change outside these four tests and the one compare"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-wpt-1",
+    "outcome": "docs_root_for_feature uses roots::same_path; status_full test compares path via same_path; paseo test JSON-escapes path; all four CwdGuards recover a poisoned TEST_CWD_LOCK",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+    ],
+    "deviations": [
+      "added docs_root_for_feature_matches_an_aliased_main_root and changed the paseo test dir to bin\\dir so Linux exercises both fixes — leader note asked for tests that fail without the fix — found a better route",
+      "sync-ack: path-compare and test-only fixes for Windows; no workflow behavior that a skill describes changed"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-07T06:36:30.222Z",
+    "behavior_change": true,
+    "verification_evidence": "cell verify run on Linux: 680 passed, 0 failed, 12 ignored; the alias and paseo tests were also seen red with the two fixes reverted; Windows not run here, Windows CI is the real proof after merge",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::close verbs::status_full verbs::drivers::prepare verbs::state_group::set_gate verbs::cells",
+    "claimed_at": "2026-10-07T06:30:30.244Z",
+    "sync_ack": "path-compare and test-only fixes for Windows; no workflow behavior that a skill describes changed",
+    "mistakes": [
+      {
+        "wrong": "first edit ran a cd and relative paths in one Bash call and the write guard refused it",
+        "better": "write with absolute paths in a separate call from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "close.rs docs_root_for_feature compares main_root vs root and here vs worktree_root with roots::same_path (new test docs_root_for_feature_matches_an_aliased_main_root, symlinked root); status_full/tests.rs unmerged_granted_worktree_distinguishes_fresh_from_merged_branch checks id exactly and path via same_path; prepare.rs paseo_agent_ready_when_command_resolves_on_path builds the command value with serde_json::to_string and uses a bin\\dir path so Linux exercises the escape; CwdGuard::enter in close.rs, set_gate.rs, handlers_meta.rs, handlers_write.rs recovers a poisoned TEST_CWD_LOCK with unwrap_or_else(|e| e.into_inner())",
+      "commit": "8fd937e1da791e99533e6259b6995e66c62f378e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- verbs::drivers::close verbs::status_full verbs::drivers::prepare verbs::state_group::set_gate verbs::cells — green:unit — cell verify run on Linux: 680 passed, 0 failed, 12 ignored; the alias and paseo tests were also seen red with the two fixes reverted; Windows not run here, Windows CI is the real proof after merge",
+      "deviations": [
+        "added docs_root_for_feature_matches_an_aliased_main_root and changed the paseo test dir to bin\\dir so Linux exercises both fixes — leader note asked for tests that fail without the fix — found a better route"
+      ],
+      "mistakes": [
+        "first edit ran a cd and relative paths in one Bash call and the write guard refused it — write with absolute paths in a separate call from the start — none"
+      ],
+      "baseline": "not run on base; with the two fixes reverted the alias and paseo tests failed (2 failed)"
+    },
+    "baseline": "not run on base; with the two fixes reverted the alias and paseo tests failed (2 failed)",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "docs_root_for_feature matches the granted worktree through roots::same_path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+          },
+          {
+            "requirement": "The status_full worktree test compares the path with same_path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+          },
+          {
+            "requirement": "The paseo probe test writes a JSON-escaped path",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "A poisoned TEST_CWD_LOCK no longer cascades into other cwd tests",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+          }
+        ],
+        "recorded_at": "2026-10-07T06:37:24.021Z",
+        "recorded_by": "cf5b2d35-87b1-4a82-918d-150b82523d2b",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
