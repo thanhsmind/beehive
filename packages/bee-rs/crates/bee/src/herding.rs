@@ -901,10 +901,38 @@ fn fmt_ctx(n: u64) -> String {
     }
 }
 
-fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>) -> String {
+fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>, job_obj: &Map<String, Value>) -> String {
     job_map.insert("ctx_tokens".into(), usage.map_or(Value::Null, |(c, _)| c.into()));
     job_map.insert("turns".into(), usage.map_or(Value::Null, |(_, t)| t.into()));
-    usage.map_or(String::new(), |(c, t)| format!(" ctx={} turns={t}", fmt_ctx(c)))
+    let mut disp = usage.map_or(String::new(), |(c, t)| format!(" ctx={} turns={t}", fmt_ctx(c)));
+    if let Some(mode) = job_obj.get("paseo_mode_observed") {
+        job_map.insert("paseo_mode_observed".into(), mode.clone());
+    }
+    if let Some(Value::Object(u)) = job_obj.get("usage") {
+        let tokens = u.get("total_tokens").cloned().unwrap_or(Value::Null);
+        let cost = u.get("cost_usd").cloned().unwrap_or(Value::Null);
+        if let Some(t) = tokens.as_u64() {
+            disp.push_str(&format!(" tokens={}", fmt_ctx(t)));
+        }
+        if let Some(c) = cost.as_f64() {
+            disp.push_str(&format!(" cost=${c:.4}"));
+        }
+        job_map.insert("tokens".into(), tokens);
+        job_map.insert("cost_usd".into(), cost);
+    }
+    disp
+}
+
+fn parked_reason(job_id: &str, mode: Option<&str>, permissions: &[(String, String)]) -> String {
+    let tools: Vec<&str> = permissions
+        .iter()
+        .map(|(id, tool)| if tool.is_empty() { id.as_str() } else { tool.as_str() })
+        .collect();
+    let tool = if tools.is_empty() { "unknown".to_string() } else { tools.join(",") };
+    format!(
+        "waiting on permission for {tool} in mode {} — unblock: bee herding permit {job_id} allow|deny",
+        mode.unwrap_or("unknown")
+    )
 }
 
 fn collect_jobs(
@@ -1074,6 +1102,27 @@ fn collect_jobs(
                     .collect();
                 job_map.insert("permissions".into(), Value::Array(perms_val));
             }
+            let parked = paseo_state == "blocked"
+                && inspect_opt
+                    .as_ref()
+                    .and_then(|i| i.updated_at.as_deref())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .is_some_and(|dt| {
+                        now_ms.saturating_sub(dt.timestamp_millis())
+                            > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+                    });
+            let parked_disp = if parked {
+                let mode = inspect_opt
+                    .as_ref()
+                    .and_then(|i| i.mode.as_deref())
+                    .or_else(|| job_obj.get("paseo_mode_observed").and_then(Value::as_str));
+                let reason = parked_reason(&job_id, mode, &permissions);
+                job_map.insert("parked".into(), Value::Bool(true));
+                job_map.insert("parked_reason".into(), Value::String(reason.clone()));
+                format!(" parked=true parked_reason=\"{reason}\"")
+            } else {
+                String::new()
+            };
 
             let model_mismatch = job_obj
                 .get("paseo_model_mismatch")
@@ -1086,7 +1135,7 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
+            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj);
 
             jobs_json.push(Value::Object(job_map));
 
@@ -1108,7 +1157,7 @@ fn collect_jobs(
                 ""
             };
             plain_lines.push(format!(
-                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{mismatch_disp}{usage_disp}"
+                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{parked_disp}{mismatch_disp}{usage_disp}"
             ));
             continue;
         }
@@ -1172,7 +1221,7 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
+        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj);
 
         jobs_json.push(Value::Object(job_map));
 
@@ -2295,6 +2344,79 @@ mod tests {
         assert!(blk_line.contains("paseo_agent_id=agent-blocked"));
         assert!(blk_line.contains("paseo_state=blocked"));
         assert!(blk_line.contains("permissions=req-1:terminal.exec"));
+    }
+
+    #[test]
+    fn status_parks_a_long_blocked_paseo_job_and_carries_usage_and_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let now = chrono::Utc::now();
+        let mut inspect_map = std::collections::HashMap::new();
+        for (job, agent, age) in [("job-park-old", "agent-old", 121), ("job-park-new", "agent-new", 119)] {
+            let dir = bee_dir.join("mailbox").join(job);
+            std::fs::create_dir_all(&dir).unwrap();
+            let spec = serde_json::json!({
+                "job_id": job,
+                "transport": "paseo",
+                "paseo_agent_id": agent,
+                "round": 1,
+                "paseo_mode_observed": "default",
+                "usage": {"input": 100, "output": 20, "cache_read": null, "cache_write": null, "total_tokens": 1500, "cost_usd": 0.125, "source": "pi-session"}
+            });
+            std::fs::write(dir.join("job.json"), spec.to_string()).unwrap();
+            let updated = (now - chrono::Duration::seconds(age)).to_rfc3339();
+            inspect_map.insert(
+                agent.to_string(),
+                Ok(serde_json::json!({
+                    "Status": "running",
+                    "UpdatedAt": updated,
+                    "Mode": "ask",
+                    "PendingPermissions": [{ "id": "req-9", "tool": "terminal.exec" }]
+                })
+                .to_string()),
+            );
+        }
+        let ls = serde_json::json!([
+            {"id": "agent-old", "labels": {"bee_job": "job-park-old"}, "archived": false},
+            {"id": "agent-new", "labels": {"bee_job": "job-park-new"}, "archived": false}
+        ]);
+        let fake = FakeHerdingPaseoCli { ls_out: Ok(ls.to_string()), inspect_map };
+
+        let (exit, val, _) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+        let job = |id: &str| jobs.iter().find(|j| j["job_id"] == id).unwrap().clone();
+
+        let old = job("job-park-old");
+        assert_eq!(old["parked"], Value::Bool(true), "{old}");
+        let reason = old["parked_reason"].as_str().unwrap();
+        assert!(reason.contains("terminal.exec"), "{reason}");
+        assert!(reason.contains("mode ask"), "{reason}");
+        assert!(reason.contains("bee herding permit job-park-old allow|deny"), "{reason}");
+        assert_eq!(old["paseo_mode_observed"], "default");
+        assert_eq!(old["tokens"], 1500);
+        assert_eq!(old["cost_usd"], 0.125);
+
+        let fresh = job("job-park-new");
+        assert_eq!(fresh["paseo_state"], "blocked");
+        assert!(fresh.get("parked").is_none(), "{fresh}");
+        assert!(fresh.get("parked_reason").is_none(), "{fresh}");
+
+        let (_, _, lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        let line = lines.iter().find(|l| l.starts_with("job-park-old:")).unwrap();
+        assert!(line.contains("parked=true") && line.contains("tokens=1.5k") && line.contains("cost=$0.1250"), "{line}");
     }
 
     #[test]

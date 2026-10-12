@@ -180,12 +180,14 @@ pub enum WaitStatus {
     Timeout,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PaseoInspect {
     pub state: Option<PaseoState>,
     pub updated_at: Option<String>,
     pub model: Option<String>,
     pub thinking: Option<String>,
+    pub mode: Option<String>,
+    pub last_usage: Option<Value>,
 }
 
 pub fn parse_inspect_full(stdout: &str) -> Option<PaseoInspect> {
@@ -242,11 +244,27 @@ pub fn parse_inspect_full(stdout: &str) -> Option<PaseoInspect> {
                     .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("auto"))
                     .map(String::from);
 
+                let mode = map
+                    .get("Mode")
+                    .or_else(|| map.get("mode"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty() && *s != "-")
+                    .map(String::from);
+
+                let last_usage = map
+                    .get("LastUsage")
+                    .or_else(|| map.get("lastUsage"))
+                    .filter(|v| v.is_object())
+                    .cloned();
+
                 return Some(PaseoInspect {
                     state,
                     updated_at,
                     model,
                     thinking,
+                    mode,
+                    last_usage,
                 });
             }
         }
@@ -1027,7 +1045,9 @@ mod tests {
             "Status": "running",
             "UpdatedAt": "2026-10-06T12:00:00Z",
             "Model": "claude-3-5-sonnet",
-            "Thinking": "high"
+            "Thinking": "high",
+            "Mode": "bypassPermissions",
+            "LastUsage": {"inputTokens": 120, "outputTokens": 45, "totalCostUsd": 0.02}
         })
         .to_string();
         assert_eq!(
@@ -1037,6 +1057,8 @@ mod tests {
                 updated_at: Some("2026-10-06T12:00:00Z".to_string()),
                 model: Some("claude-3-5-sonnet".to_string()),
                 thinking: Some("high".to_string()),
+                mode: Some("bypassPermissions".to_string()),
+                last_usage: Some(json!({"inputTokens": 120, "outputTokens": 45, "totalCostUsd": 0.02})),
             })
         );
 
@@ -1044,7 +1066,9 @@ mod tests {
             "Status": "idle",
             "UpdatedAt": "2026-10-06T12:00:00Z",
             "Model": "-",
-            "Thinking": "auto"
+            "Thinking": "auto",
+            "Mode": "-",
+            "LastUsage": null
         })
         .to_string();
         assert_eq!(
@@ -1054,6 +1078,8 @@ mod tests {
                 updated_at: Some("2026-10-06T12:00:00Z".to_string()),
                 model: None,
                 thinking: None,
+                mode: None,
+                last_usage: None,
             })
         );
 
@@ -1070,6 +1096,8 @@ mod tests {
                 updated_at: Some("2026-10-06T12:00:00Z".to_string()),
                 model: Some("gpt-4o".to_string()),
                 thinking: None,
+                mode: None,
+                last_usage: None,
             })
         );
 
@@ -1081,6 +1109,8 @@ mod tests {
                 updated_at: None,
                 model: Some("claude-3".to_string()),
                 thinking: None,
+                mode: None,
+                last_usage: None,
             })
         );
 
