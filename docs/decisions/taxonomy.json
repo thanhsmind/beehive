@@ -696,6 +696,7 @@
     "contract:worker-guard-stub-stdin",
     "contract:spawn-busy-retry",
     "spawn",
+    "team-config",
     "paseo-leverage",
     "contract:read-only-worker-guard",
     "contract:paseo-live-schema",
