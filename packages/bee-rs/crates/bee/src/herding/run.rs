@@ -3081,8 +3081,8 @@ fn round_usage(
     home: Option<&Path>,
 ) -> Result<Map<String, Value>, String> {
     let inspect = cli.call(&paseo::inspect_argv(agent_id)).ok().and_then(|out| paseo::parse_inspect_full(&out));
-    if let Some(lu) = inspect.and_then(|i| i.last_usage) {
-        let mut m = inspect_usage(&lu);
+    let mapped = inspect.and_then(|i| i.last_usage).map(|lu| inspect_usage(&lu));
+    if let Some(mut m) = mapped.filter(|m| m.values().any(|v| !v.is_null())) {
         m.insert("source".into(), Value::from("inspect"));
         return Ok(m);
     }
@@ -3090,13 +3090,13 @@ fn round_usage(
     let provider = provider.or(record.as_ref().and_then(|r| r.provider.as_deref()));
     if provider != Some("pi") {
         return Err(format!(
-            "paseo inspect LastUsage is null and provider {} has no session usage source",
+            "paseo inspect LastUsage has no usage numbers and provider {} has no session usage source",
             provider.unwrap_or("unknown")
         ));
     }
     let handle = record
         .and_then(|r| r.native_handle)
-        .ok_or_else(|| "paseo inspect LastUsage is null and the pi session file is not known (no paseo agent state with persistence.nativeHandle)".to_string())?;
+        .ok_or_else(|| "paseo inspect LastUsage has no usage numbers and the pi session file is not known (no paseo agent state with persistence.nativeHandle)".to_string())?;
     let text = std::fs::read_to_string(&handle).map_err(|e| format!("pi session file {handle} is not readable: {e}"))?;
     let mut m = pi_session_usage(&text).ok_or_else(|| format!("pi session file {handle} has no usage entries"))?;
     m.insert("source".into(), Value::from("pi-session"));
@@ -13082,6 +13082,15 @@ mod tests {
 
     #[test]
     fn round_usage_sums_the_pi_session_file_when_last_usage_is_null() {
+        assert_pi_session_usage(r#"{"Status":"idle","LastUsage":null}"#);
+    }
+
+    #[test]
+    fn round_usage_sums_the_pi_session_file_when_last_usage_has_no_known_numbers() {
+        assert_pi_session_usage(r#"{"Status":"idle","LastUsage":{}}"#);
+    }
+
+    fn assert_pi_session_usage(inspect: &str) {
         let tmp = tempfile::tempdir().unwrap();
         let bee_dir = tmp.path().join(".bee");
         let job_file = usage_job(&bee_dir, "job-u-pi");
@@ -13105,7 +13114,7 @@ mod tests {
             serde_json::json!({"id":"agent-pi","provider":"pi","persistence":{"nativeHandle":session.display().to_string()}}).to_string(),
         )
         .unwrap();
-        let fake = inspect_fake(r#"{"Status":"idle","LastUsage":null}"#);
+        let fake = inspect_fake(inspect);
         record_round_usage(&bee_dir, "job-u-pi", "agent-pi", &fake, None, Some(&home));
         let job = read_job(&job_file);
         assert_eq!(
