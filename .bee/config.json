@@ -200,22 +200,22 @@
     "codex": {
       "code": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "author or repair tests, red-first"
       },
       "docs": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "doc edits and parity sweeps"
       },
       "plan": {
@@ -224,12 +224,12 @@
       },
       "extraction": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -242,7 +242,7 @@
       },
       "supervisor": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
@@ -255,7 +255,7 @@
       },
       "lane-3": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "hat-facts-gaps": {
@@ -268,7 +268,7 @@
       },
       "hat-value": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
@@ -277,7 +277,7 @@
       },
       "hat-user-impact": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     }
@@ -297,6 +297,7 @@
       "{ALLOWED_TOOLS}"
     ],
     "agents": {
+      "paseo-pi-agy-flash": {"paseo": {"provider": "pi", "model": "antigravity/gemini-3.8-flash", "thinking": "high"}},
       "paseo-pi-flash": {"paseo": {"provider": "pi", "model": "openrouter/~deepseek/deepseek-flash-latest", "thinking": "low"}},
       "paseo-claude": {"paseo": {"provider": "claude", "mode": "bypassPermissions"}},
       "paseo-gpt-luna": {"paseo": {"provider": "pi", "model": "openai-codex/gpt-5.6-luna", "thinking": "high"}},
