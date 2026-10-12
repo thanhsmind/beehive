@@ -119,6 +119,7 @@ mod split_lock;
 // closes the pane, and confirms exit within 5 s. See job_verbs.rs.
 pub(crate) mod job_verbs;
 pub(crate) mod fork;
+pub(crate) mod notify;
 pub(crate) mod broker;
 pub(crate) mod paseo;
 pub(crate) mod paseo_state;
@@ -153,6 +154,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "cancel" => Some(job_verbs::cancel(rest)),
         "steer" => Some(job_verbs::steer(rest)),
         "fork" => Some(fork::fork(rest)),
+        "notify" => Some(notify::notify(rest)),
         "permit" => Some(job_verbs::permit(rest)),
         "broker" => broker::route_broker(rest),
         "answer" => Some(broker::answer(rest)),
@@ -1135,7 +1137,8 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj);
+            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+                + &notify::insert_messages(&mut job_map, &job_dir);
 
             jobs_json.push(Value::Object(job_map));
 
@@ -1221,7 +1224,8 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj);
+        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+            + &notify::insert_messages(&mut job_map, &job_dir);
 
         jobs_json.push(Value::Object(job_map));
 
@@ -1997,6 +2001,32 @@ mod tests {
             lines[0],
             "job-normal: pane_id=w4:p1 round=1 mark=null mark_reason=null status=working"
         );
+    }
+
+    #[test]
+    fn status_counts_notify_messages_with_and_without_a_cursor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root_str = tmp.path().to_str().unwrap();
+        let job_dir = tmp.path().join(".bee/mailbox/job-msg");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        std::fs::write(job_dir.join("job.json"), r#"{"job_id":"job-msg","pane_id":"w4:p1","round":1}"#).unwrap();
+        let first = "{\"kind\":\"progress\",\"text\":\"one\"}\n";
+        std::fs::write(job_dir.join("messages.jsonl"), format!("{first}{{\"kind\":\"blocked\",\"text\":\"two\"}}\n")).unwrap();
+        let job = |cursor: Option<usize>| {
+            if let Some(c) = cursor {
+                std::fs::write(job_dir.join("messages.cursor"), c.to_string()).unwrap();
+            }
+            let live: HashSet<String> = ["w4:p1".to_string()].into_iter().collect();
+            let (_, val, _) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+            val["jobs"][0].clone()
+        };
+        let no_cursor = job(None);
+        assert_eq!(no_cursor["messages"], 2);
+        assert_eq!(no_cursor["unread_messages"], 2);
+        assert_eq!(no_cursor["last_message"], serde_json::json!({"kind": "blocked", "text": "two"}));
+        let with_cursor = job(Some(first.len()));
+        assert_eq!(with_cursor["messages"], 2);
+        assert_eq!(with_cursor["unread_messages"], 1);
     }
 
     #[test]

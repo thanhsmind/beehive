@@ -953,6 +953,15 @@ mod tests {
     }
 
     #[test]
+    fn herding_notify_resolves_and_declares_kind_and_text_required() {
+        let (entry, rest) = resolve(&["herding", "notify"]).expect("herding.notify is in the registry");
+        assert_eq!(entry.invoke, "bee herding notify");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert_eq!(missing_required(entry, &[]), vec!["kind".to_string(), "text".to_string()]);
+    }
+
+    #[test]
     fn herding_permit_resolves_and_is_built_into_this_binary() {
         let (entry, rest) = resolve(&["herding", "permit"]).expect("herding.permit is in the registry");
         assert_eq!(entry.invoke, "bee herding permit");
