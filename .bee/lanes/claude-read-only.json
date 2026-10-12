@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"claude-read-only\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 628500e; reload the product and test \"claude-read-only\", then either approve uat (\"bee gate --name uat --approved true --lane claude-read-only\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-12T10:20:18.325Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: claude-read-only",
-    "asked_at": "2026-10-12T10:44:56.689Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
@@ -431,5 +426,12 @@
         }
       ]
     }
+  },
+  "merge_ready": {
+    "since": "2026-10-12T10:57:15.521Z",
+    "branch": "wt/claude-read-only",
+    "worktree_id": "beehive--wt--claude-read-only",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

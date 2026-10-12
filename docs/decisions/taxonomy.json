@@ -702,6 +702,7 @@
     "contract:paseo-live-schema",
     "contract:herding-notify",
     "claude-read-only",
-    "contract:claude-read-only-guard"
+    "contract:claude-read-only-guard",
+    "worker-guard"
   ]
 }
