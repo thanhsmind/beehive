@@ -36,7 +36,7 @@
 
 use super::{bee_source_root, rel_platform};
 use crate::jsjson;
-use crate::onboard::hooks_wiring::{codex_hook_command, codex_hook_command_windows};
+use crate::onboard::hooks_wiring::{codex_hook_command, codex_hook_command_windows, WORKER_GUARD_MATCHER};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -148,6 +148,11 @@ const CATALOG: &[Event] = &[
                 BOTH,
                 Some("Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec"),
                 [("bee-write-guard.mjs", "bee: write guard")]
+            ),
+            group!(
+                CLAUDE_ONLY,
+                Some(WORKER_GUARD_MATCHER),
+                [("bee-worker-guard.mjs", "")]
             ),
             // Claude dispatches subagents as Agent|Task…
             group!(
@@ -330,7 +335,9 @@ pub fn render_projection(runtime: Runtime, target: Target) -> Value {
                             json!(codex_hook_command_windows(h.script)),
                         );
                     }
-                    e.insert("statusMessage".into(), json!(h.status_message));
+                    if !h.status_message.is_empty() {
+                        e.insert("statusMessage".into(), json!(h.status_message));
+                    }
                     Value::Object(e)
                 })
                 .collect();
@@ -608,6 +615,7 @@ mod tests {
         let codex = triples(Runtime::Codex);
         let approved: &[(&str, &str, &str)] = &[
             ("PreToolUse", "Agent|Task", "model-guard"),
+            ("PreToolUse", WORKER_GUARD_MATCHER, "worker-guard"),
             ("PreToolUse", "spawn_agent|collaborationspawn_agent", "model-guard"),
             ("SubagentStart", "*", "codex-subagent-audit"),
             ("SubagentStop", "*", "codex-subagent-audit"),
@@ -698,6 +706,32 @@ mod tests {
             crate::onboard::hooks_wiring::repo_hook_command("bee-activity.mjs", None);
         for command in [&from_catalog, &from_onboard] {
             assert!(command.contains("exec \"$b\" hook activity;"), "{command}");
+        }
+    }
+
+    #[test]
+    fn the_worker_guard_group_is_claude_only_and_silent() {
+        let groups = |runtime: Runtime, target: Target| -> Vec<Value> {
+            render_projection(runtime, target)["hooks"]["PreToolUse"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|g| {
+                    g["hooks"].as_array().unwrap().iter().any(|h| {
+                        h["command"].as_str().unwrap().contains(" hook worker-guard")
+                    })
+                })
+                .cloned()
+                .collect()
+        };
+        for target in [Target::Plugin, Target::Repo] {
+            let claude = groups(Runtime::Claude, target);
+            assert_eq!(claude.len(), 1, "{claude:?}");
+            assert_eq!(claude[0]["matcher"], json!(WORKER_GUARD_MATCHER));
+            let hooks = claude[0]["hooks"].as_array().unwrap();
+            assert_eq!(hooks.len(), 1);
+            assert!(hooks[0].get("statusMessage").is_none(), "{hooks:?}");
+            assert!(groups(Runtime::Codex, target).is_empty());
         }
     }
 

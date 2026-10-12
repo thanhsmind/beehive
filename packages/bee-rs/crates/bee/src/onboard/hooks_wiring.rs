@@ -68,6 +68,9 @@ echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"
     )
 }
 
+pub(crate) const WORKER_GUARD_MATCHER: &str =
+    "Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*";
+
 fn repo_entry(file_name: &str, repo_root: Option<&Path>) -> Value {
     json!({"type": "command", "command": repo_hook_command(file_name, repo_root)})
 }
@@ -99,6 +102,7 @@ pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> 
             json!([
                 { "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion", "hooks": [repo_entry("bee-write-guard.mjs", r)] },
                 { "matcher": "Agent|Task", "hooks": [repo_entry("bee-model-guard.mjs", r)] },
+                { "matcher": WORKER_GUARD_MATCHER, "hooks": [repo_entry("bee-worker-guard.mjs", r)] },
                 { "hooks": [repo_entry("bee-activity.mjs", r)] }
             ]),
         ),
@@ -778,9 +782,7 @@ mod tests {
         // Foreign hook entries survive, bee entries are appended after them.
         let pre = &v["hooks"]["PreToolUse"];
         assert_eq!(pre[0]["hooks"][0]["command"], "node ./my-own.mjs");
-        // 1 foreign + bee's three PreToolUse rows (write guard, model guard,
-        // activity).
-        assert_eq!(pre.as_array().unwrap().len(), 4);
+        assert_eq!(pre.as_array().unwrap().len(), 5);
         // A foreign entry on an event bee ALSO wires keeps its place and its
         // command; the bee entry joins behind it (agent-activity-hook D1 put
         // the activity probe on Notification).
@@ -865,6 +867,26 @@ mod tests {
     /// the key order of a fresh settings.json) and the activity probe's exact
     /// event set. SubagentStop is the load-bearing absence: a subagent
     /// stopping is not the session changing state.
+    #[test]
+    fn repo_settings_carry_the_silent_worker_guard_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let rendered = render_repo_hook_entries(dir.path());
+        let pre = &rendered.iter().find(|(e, _)| *e == "PreToolUse").unwrap().1;
+        let guard: Vec<&Value> = pre
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|g| entry_hook_commands(g).iter().any(|c| c.contains(" hook worker-guard;")))
+            .collect();
+        assert_eq!(guard.len(), 1);
+        assert_eq!(guard[0]["matcher"], json!(WORKER_GUARD_MATCHER));
+        assert!(guard[0]["hooks"][0].get("statusMessage").is_none());
+        assert_eq!(
+            guard[0]["hooks"][0]["command"],
+            json!(repo_hook_command("bee-worker-guard.mjs", None))
+        );
+    }
+
     #[test]
     fn repo_settings_carry_the_activity_hook_on_the_decided_events() {
         let dir = tempfile::tempdir().unwrap();

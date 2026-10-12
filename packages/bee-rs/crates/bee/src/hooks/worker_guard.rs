@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-const READ_ONLY_ALLOWED: &str = "Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
+const READ_ONLY_ALLOWED: &str = "Bash(cd:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(ls:*),Bash(rg:*),Bash(fd:*),Bash(jq:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git blame:*),Bash(.bee/bin/bee status:*),Bash(.bee/bin/bee orient:*),Bash(.bee/bin/bee herding status:*),Bash(.bee/bin/bee herding notify:*),Bash(mv:*)";
 
 const WRITE_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
@@ -291,13 +291,17 @@ fn settle(path: &Path) -> PathBuf {
     out
 }
 
-fn in_mailbox(target: &str, cwd: &Path, mailbox: Option<&Path>) -> bool {
+fn in_mailbox(target: &str, cwd: Option<&Path>, mailbox: Option<&Path>) -> bool {
     let Some(mailbox) = mailbox else { return false };
     if target.is_empty() || target.contains(['$', '~', '*', '?', '[']) {
         return false;
     }
     let raw = Path::new(target);
-    let absolute = if raw.is_absolute() { raw.to_path_buf() } else { cwd.join(raw) };
+    let absolute = match (raw.is_absolute(), cwd) {
+        (true, _) => raw.to_path_buf(),
+        (false, Some(cwd)) => cwd.join(raw),
+        (false, None) => return false,
+    };
     let target = settle(&absolute);
     let zone = settle(mailbox);
     target != zone && target.starts_with(&zone)
@@ -317,12 +321,15 @@ pub(crate) fn evaluate_read_only(
     };
     if WRITE_TOOLS.contains(&tool_name) {
         let target = field(&["file_path", "notebook_path", "path"]);
-        if in_mailbox(&target, cwd, mailbox) {
+        if in_mailbox(&target, Some(cwd), mailbox) {
             return None;
         }
         return Some(read_only_denial(&format!("`{tool_name}` on `{target}`"), mailbox));
     }
-    if tool_name == "Bash" {
+    if matches!(tool_name, "EnterWorktree" | "ExitWorktree") || tool_name.starts_with("mcp__") {
+        return Some(read_only_denial(&format!("`{tool_name}`"), mailbox));
+    }
+    if matches!(tool_name, "Bash" | "Monitor") {
         return read_only_bash_blocked(&field(&["command", "cmd"]), cwd, mailbox)
             .map(|blocked| read_only_denial(&blocked, mailbox));
     }
@@ -330,6 +337,10 @@ pub(crate) fn evaluate_read_only(
 }
 
 fn read_only_bash_blocked(command: &str, cwd: &Path, mailbox: Option<&Path>) -> Option<String> {
+    let moves_cwd = tokenize(command)
+        .split(|t| is_separator(t))
+        .any(|segment| segment.first().is_some_and(|head| command_basename(head) == "cd"));
+    let cwd = (!moves_cwd).then_some(cwd);
     if ["$(", "`", "<(", ">("].iter().any(|s| command.contains(s)) {
         return Some("command substitution".to_string());
     }
@@ -352,7 +363,7 @@ fn read_only_bash_blocked(command: &str, cwd: &Path, mailbox: Option<&Path>) -> 
     mode_b_blocked(&stripped, READ_ONLY_ALLOWED).map(|blocked| format!("`{blocked}`"))
 }
 
-fn strip_redirects(command: &str, cwd: &Path, mailbox: Option<&Path>) -> Result<String, String> {
+fn strip_redirects(command: &str, cwd: Option<&Path>, mailbox: Option<&Path>) -> Result<String, String> {
     let chars: Vec<char> = command.chars().collect();
     let n = chars.len();
     let mut out = String::with_capacity(command.len());
@@ -413,7 +424,7 @@ fn strip_redirects(command: &str, cwd: &Path, mailbox: Option<&Path>) -> Result<
     Ok(out)
 }
 
-fn read_only_segment_blocked(segment: &[String], cwd: &Path, mailbox: Option<&Path>) -> Option<String> {
+fn read_only_segment_blocked(segment: &[String], cwd: Option<&Path>, mailbox: Option<&Path>) -> Option<String> {
     let (head, args) = segment.split_first()?;
     match command_basename(head).as_str() {
         "rg" if args.iter().any(|a| a == "--pre" || a.starts_with("--pre=")) => Some("`rg --pre`".to_string()),
@@ -527,6 +538,8 @@ mod tests {
             format!("mv {mb}/result-1.json.tmp {mb}/result-1.json"),
             format!("cat src/a.rs > {mb}/report.md"),
             format!("cat > {mb}/ack-1.json <<'EOF'\n{{\"ok\": true}}\nEOF"),
+            "cd x && rg y".to_string(),
+            format!("cd src && cat a.rs > {mb}/report.md"),
         ] {
             assert!(bash(&allowed).is_none(), "expected allow: {allowed} -> {:?}", bash(&allowed));
         }
@@ -534,6 +547,18 @@ mod tests {
         assert!(write("Write", ".bee/mailbox/job-1/result-1.json").is_none());
         assert!(write("MultiEdit", &format!("{mb}/report.md")).is_none());
         assert!(evaluate_read_only("Read", None, cwd, Some(&mailbox)).is_none());
+        let monitor = |command: &str| {
+            let input = serde_json::json!({ "command": command, "description": "watch" });
+            evaluate_read_only("Monitor", input.as_object(), cwd, Some(&mailbox))
+        };
+        assert!(monitor("rg -n foo src").is_none());
+        assert!(monitor("echo x > src/a.rs").is_some());
+        for tool in ["EnterWorktree", "ExitWorktree", "mcp__fs__write_file"] {
+            let input = serde_json::json!({ "path": format!("{mb}/r"), "content": "x" });
+            let reason = evaluate_read_only(tool, input.as_object(), cwd, Some(&mailbox))
+                .unwrap_or_else(|| panic!("expected deny: {tool}"));
+            assert!(reason.contains(&format!("`{tool}`")) && reason.contains("read-only"), "{reason}");
+        }
 
         for denied in [
             "cat $(echo src/a.rs)".to_string(),
@@ -562,6 +587,8 @@ mod tests {
             "rm a.rs".to_string(),
             format!("mv {mb}/a src/a.rs"),
             format!("mv --target-directory=src {mb}/a"),
+            "cd src && cat a.rs > .bee/mailbox/job-1/x".to_string(),
+            "cd src && mv .bee/mailbox/job-1/a .bee/mailbox/job-1/b".to_string(),
         ] {
             let reason = bash(&denied).unwrap_or_else(|| panic!("expected deny: {denied}"));
             assert!(reason.contains("read-only") && reason.contains("bee herding notify"), "{reason}");
@@ -667,16 +694,24 @@ mod tests {
             std::env::remove_var("BEE_SUPERVISOR_ALLOWED");
         }
 
-        let payload = serde_json::json!({
+        let claude_payload = serde_json::json!({
+            "session_id": "s-1",
+            "hook_event_name": "PreToolUse",
+            "cwd": "/tmp",
+            "tool_name": "Bash",
+            "tool_input": { "command": "git push origin main", "description": "push" }
+        });
+        let bare_payload = serde_json::json!({
             "tool_name": "Bash",
             "tool_input": {
                 "command": "git push"
             }
         });
-        let outcome = run(&[], &payload.to_string());
-        match outcome {
-            Outcome::Done(code) => assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::from(2))),
-            Outcome::Delegate => panic!("expected ExitCode 2"),
+        for payload in [bare_payload, claude_payload] {
+            match run(&[], &payload.to_string()) {
+                Outcome::Done(code) => assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::from(2)), "{payload}"),
+                Outcome::Delegate => panic!("expected ExitCode 2"),
+            }
         }
 
         match prior_worker {

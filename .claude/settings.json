@@ -56,6 +56,15 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook worker-guard; done; g=\"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; [ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook worker-guard; done; echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0"
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",

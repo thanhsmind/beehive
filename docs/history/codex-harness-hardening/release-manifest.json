@@ -2043,7 +2043,7 @@
     },
     {
       "path": "packages/bee/hooks/claude-hooks.json",
-      "sha256": "9ebf1c417a98d168375167cd6322195ea7556b0b9ec379d417ec9dd030ac7ade",
+      "sha256": "90b974327297a29043a530e807f4ccc35c0ac69d46c9e6b9e9dbe5d639f94651",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/claude-hooks.json"

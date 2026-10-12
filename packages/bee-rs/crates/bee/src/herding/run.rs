@@ -3385,17 +3385,55 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     }
 }
 
+fn claude_worker_guard_missing(main_root: &Path) -> Option<String> {
+    let bee = main_root.join(".bee").join("bin").join("bee");
+    let help = Command::new(&bee)
+        .args(["hook", "--help"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    if !help.lines().any(|line| line.trim() == "worker-guard") {
+        return Some(format!(
+            "read-only run refused: {} does not carry the worker-guard hook, so a claude worker would run unguarded — FIX: refresh .bee/bin/bee with `bee onboard --apply`",
+            bee.display()
+        ));
+    }
+    let settings = main_root.join(".claude").join("settings.json");
+    let wired = std::fs::read_to_string(&settings)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|v| v.get("hooks")?.get("PreToolUse")?.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|group| group.get("hooks").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|hook| hook.get("command").and_then(Value::as_str))
+        .any(|command| command.contains("hook worker-guard"));
+    (!wired).then(|| {
+        format!(
+            "read-only run refused: {} has no PreToolUse hook running `hook worker-guard`, so a claude worker would run unguarded — FIX: run `bee onboard --apply`",
+            settings.display()
+        )
+    })
+}
+
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
     let provider_is_pi = spec.provider.trim().eq_ignore_ascii_case("pi");
-    if opts.read_only && !provider_is_pi {
+    let provider_is_claude = spec.provider.trim().eq_ignore_ascii_case("claude");
+    if opts.read_only && !provider_is_pi && !provider_is_claude {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!(
-                "read-only run refused: Paseo provider \"{}\" has no bee guard to keep the worker read-only — FIX: route this gather or advisor to a Paseo agent on provider pi, the supported read-only Paseo provider",
+                "read-only run refused: Paseo provider \"{}\" has no bee guard to keep the worker read-only — FIX: route this gather or advisor to a Paseo agent on provider pi or claude, the supported read-only Paseo providers",
                 spec.provider
             )),
             pane_id: None,
             closed_pane: false,
         };
+    }
+    if opts.read_only && provider_is_claude {
+        if let Some(refusal) = claude_worker_guard_missing(&opts.main_root) {
+            return ExecResult { outcome: RunOutcome::SpawnFailed(refusal), pane_id: None, closed_pane: false };
+        }
     }
     let bee_dir = opts.main_root.join(".bee");
     if !opts.dry_run {
@@ -11957,11 +11995,90 @@ mod tests {
 
         let res = execute_paseo(&opts, &spec, &fake);
         match res.outcome {
-            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("FIX:") && msg.contains("provider pi"), "{msg}"),
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("FIX:") && msg.contains("provider pi or claude"), "{msg}"),
             _ => panic!("expected a refusal"),
         }
         assert!(fake.calls.lock().unwrap().is_empty());
         assert!(!mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id).exists());
+    }
+
+    fn seed_claude_guard(main_root: &Path, help: &str, settings_command: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = main_root.join(".bee").join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let bee = bin.join("bee");
+        std::fs::write(&bee, format!("#!/bin/sh\nprintf '%s\\n' 'usage: bee hook <name>' '  write-guard' '  {help}'\n")).unwrap();
+        std::fs::set_permissions(&bee, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let claude = main_root.join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        let settings = serde_json::json!({ "hooks": { "PreToolUse": [
+            { "matcher": "Agent|Task", "hooks": [{ "type": "command", "command": "bee hook model-guard" }] },
+            { "matcher": "Edit|Bash", "hooks": [{ "type": "command", "command": settings_command }] }
+        ] } });
+        std::fs::write(claude.join("settings.json"), settings.to_string()).unwrap();
+    }
+
+    fn run_read_only_claude(main_root: &Path) -> (ExecResult, Vec<Vec<String>>) {
+        let mut opts = test_options(main_root, false);
+        opts.read_only = true;
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let spec = PaseoSpec {
+            provider: "claude".to_string(),
+            model: Some("claude-sonnet-5-5".to_string()),
+            thinking: None,
+            mode: Some("bypassPermissions".to_string()),
+            isolated_config: false,
+        };
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-claude\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let res = execute_paseo(&opts, &spec, &fake);
+        let calls = fake.calls.lock().unwrap().clone();
+        (res, calls)
+    }
+
+    #[test]
+    fn execute_paseo_read_only_claude_spawns_with_the_env_and_configured_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "worker-guard", "x/.bee/bin/bee hook worker-guard; exit 0");
+        let (res, calls) = run_read_only_claude(tmp.path());
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        let run = calls.iter().find(|c| c.first().map(String::as_str) == Some("run")).expect("run call");
+        assert!(run.iter().any(|a| a == "BEE_HERDING_READ_ONLY=1"), "{run:?}");
+        assert!(run.windows(2).any(|w| w[0] == "--mode" && w[1] == "bypassPermissions"), "{run:?}");
+    }
+
+    #[test]
+    fn execute_paseo_read_only_claude_refuses_a_binary_without_worker_guard() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "stage-tools", "x/.bee/bin/bee hook worker-guard; exit 0");
+        let (res, calls) = run_read_only_claude(tmp.path());
+        match res.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("worker-guard") && msg.contains("FIX:") && msg.contains("onboard --apply"), "{msg}"),
+            _ => panic!("expected a refusal"),
+        }
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn execute_paseo_read_only_claude_refuses_settings_without_the_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_claude_guard(tmp.path(), "worker-guard", "x/.bee/bin/bee hook write-guard; exit 0");
+        let (res, calls) = run_read_only_claude(tmp.path());
+        match res.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("settings.json") && msg.contains("FIX:") && msg.contains("onboard --apply"), "{msg}"),
+            _ => panic!("expected a refusal"),
+        }
+        assert!(calls.is_empty());
     }
 
     #[test]

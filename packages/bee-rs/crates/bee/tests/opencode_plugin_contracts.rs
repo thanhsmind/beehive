@@ -225,6 +225,16 @@ const ASK_SHAPE: &str = "exit-0 permissionDecision ask";
 const WRITE_GUARD_MAIN_SOURCE: &str = include_str!("../src/hooks/write_guard/main.rs");
 const MODEL_GUARD_SOURCE: &str = include_str!("../src/hooks/model_guard.rs");
 const WRITE_GUARD_TESTS_SOURCE: &str = include_str!("../src/hooks/write_guard/tests.rs");
+const WORKER_GUARD_SOURCE: &str = include_str!("../src/hooks/worker_guard.rs");
+
+const CLAUDE_AND_PI_ONLY: &[(&str, &str)] = &[(
+    "worker-guard",
+    "claude-read-only D2 (store 63bd6725): Paseo workers run on Claude and Pi only, so Codex and OpenCode carry no worker-guard",
+)];
+
+fn claude_and_pi_only(hook: &str) -> Option<&'static str> {
+    CLAUDE_AND_PI_ONLY.iter().find(|(h, _)| *h == hook).map(|(_, why)| *why)
+}
 
 /// The verdict shapes rule `hook`'s own emit-path source can actually put
 /// on the wire, derived by scanning that source for the literal markers
@@ -241,13 +251,14 @@ fn emittable_shapes(hook: &str) -> Vec<&'static str> {
     let source = match hook {
         "write-guard" => WRITE_GUARD_MAIN_SOURCE,
         "model-guard" => MODEL_GUARD_SOURCE,
+        "worker-guard" => WORKER_GUARD_SOURCE,
         other => panic!(
             "no known emit-path source for BLOCKING rule \"{other}\" — add one to \
              `emittable_shapes` before trusting verdict-shape derivation for it"
         ),
     };
     let mut shapes = Vec::new();
-    if source.contains("emit.code = 2") || source.contains("Ok((2,") {
+    if source.contains("emit.code = 2") || source.contains("Ok((2,") || source.contains("ExitCode::from(2)") {
         shapes.push(DENY_SHAPE);
     }
     if source.contains("\"updatedInput\".into()") {
@@ -483,6 +494,20 @@ fn opencode_advisory_hooks() -> BTreeSet<String> {
 /// Pi docs the list was read from, not the version the belt supports: the
 /// supported floor is 0.84.4 (see the belt header). The same eight names were
 /// re-verified unchanged in Pi 0.85.1 on 2026-09-18.
+fn pi_direct_blocking_hooks() -> BTreeSet<String> {
+    let mut set = BTreeSet::new();
+    for seg in pi_plugin_source().split("runBlockingHook(").skip(1) {
+        let rest = seg.trim_start();
+        let Some(rest) = rest.strip_prefix("directory") else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix(',') else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix('"') else { continue };
+        if let Some(end) = rest.find('"') {
+            set.insert(rest[..end].to_string());
+        }
+    }
+    set
+}
+
 fn pi_tool_hook_pairs() -> Vec<(String, String)> {
     let fn_start = pi_plugin_source()
         .find("function mapToolCall")
@@ -1303,12 +1328,29 @@ fn helper_fixture() -> HelperFixture {
     HelperFixture { _dir: dir, root }
 }
 
+fn helper_env(hook: &str) -> &'static [(&'static str, &'static str)] {
+    match hook {
+        "worker-guard" => &[
+            ("BEE_HERDING_WORKER", "1"),
+            ("PASEO_AGENT_ID", "agent-parity"),
+            ("BEE_HERDING_READ_ONLY", "1"),
+            ("BEE_HERDING_JOB_ID", "job-parity"),
+        ],
+        _ => &[],
+    }
+}
+
 fn run_helper_hook(hook: &str, stdin: &[u8], cwd: &Path) -> Output {
     let mut child = Command::new(bee_bin())
         .args(["hook", hook])
         .current_dir(cwd)
         .env("BEE_HOOK_NO_DELEGATE", "1")
         .env_remove("BEE_HERDING_WORKER")
+        .env_remove("PASEO_AGENT_ID")
+        .env_remove("BEE_HERDING_READ_ONLY")
+        .env_remove("BEE_HERDING_JOB_ID")
+        .env_remove("BEE_SUPERVISOR_ALLOWED")
+        .envs(helper_env(hook).iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1334,6 +1376,11 @@ fn helper_deny_payload(hook: &str, claude_tool_name: &str, root: &Path) -> Value
         "model-guard" => json!({
             "tool_name": claude_tool_name,
             "tool_input": { "prompt": "implement the widget", "description": "some description" },
+            "cwd": root.to_string_lossy(),
+        }),
+        "worker-guard" => json!({
+            "tool_name": claude_tool_name,
+            "tool_input": { "file_path": "src/a.rs" },
             "cwd": root.to_string_lossy(),
         }),
         other => panic!("no known deny-payload shape for BLOCKING rule \"{other}\" — add one before trusting this parity check"),
@@ -1390,6 +1437,9 @@ fn claude_belt_test_block_has(source: &str, tool_names: &[String], markers: &[&s
 /// rule's fixtures live in is not itself derivable from the emit path.
 fn claude_belt_shape_fixture_exists(hook: &str, shape: &str, tool_names: &[String]) -> bool {
     if shape == DENY_SHAPE {
+        if hook == "worker-guard" {
+            return claude_belt_test_block_has(WORKER_GUARD_SOURCE, tool_names, &["ExitCode::from(2)"]);
+        }
         return claude_belt_deny_fixture_exists(tool_names);
     }
     let source = match hook {
@@ -1537,7 +1587,17 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
     // The FOURTH belt (pi-support pis-3), derived from its own source exactly
     // like the third one above.
     let pi_pairs = pi_tool_hook_pairs();
-    let pi_hooks: BTreeSet<&str> = pi_pairs.iter().map(|(_, h)| h.as_str()).collect();
+    let pi_direct = pi_direct_blocking_hooks();
+    let pi_hooks: BTreeSet<&str> =
+        pi_pairs.iter().map(|(_, h)| h.as_str()).chain(pi_direct.iter().map(String::as_str)).collect();
+
+    for (hook, why) in CLAUDE_AND_PI_ONLY {
+        assert!(
+            catalog.get(*hook).is_some_and(|r| r.blocking && !r.claude_pretooluse_matchers.is_empty()),
+            "\"{hook}\" is exempt from the Codex and OpenCode belts ({why}) but is no longer a BLOCKING \
+             Claude rule in the derived catalog, so the exemption is vacuous; remove it"
+        );
+    }
 
     let mut gaps: Vec<String> = Vec::new();
 
@@ -1583,7 +1643,14 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
             // its PreToolUse command execs `bee hook <rule>` directly, byte
             // for byte the same call the HELPER check above already
             // exercised for this exact shape.
-            if row.codex_pretooluse_matchers.is_empty() {
+            if let Some(why) = claude_and_pi_only(hook) {
+                if !row.codex_pretooluse_matchers.is_empty() {
+                    gaps.push(format!(
+                        "{hook} / {shape} / codex belt: wired under PreToolUse in \
+                         packages/bee/hooks/hooks.json, but {why}"
+                    ));
+                }
+            } else if row.codex_pretooluse_matchers.is_empty() {
                 gaps.push(format!(
                     "{hook} / {shape} / codex belt: not wired under PreToolUse in \
                      packages/bee/hooks/hooks.json"
@@ -1598,7 +1665,11 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
             // this is the routing+implementation cross-check that keeps
             // that proof from silently going vacuous if the shape's own
             // handling were ever deleted from the plugin.
-            if !opencode_hooks.contains(hook) {
+            if let Some(why) = claude_and_pi_only(hook) {
+                if opencode_hooks.contains(hook) {
+                    gaps.push(format!("{hook} / {shape} / opencode belt: bee-guard.ts routes a tool to this hook, but {why}"));
+                }
+            } else if !opencode_hooks.contains(hook) {
                 gaps.push(format!(
                     "{hook} / {shape} / opencode belt: bee-guard.ts's mapToolCall routes no tool \
                      to this hook (derived pairs: {opencode_pairs:?})"
