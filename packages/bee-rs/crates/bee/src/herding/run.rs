@@ -207,6 +207,7 @@ struct Options {
     pub(crate) question_of: Option<String>,
     pub(crate) question_round: u32,
     pub(crate) allow_question: bool,
+    pub(crate) read_only: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -310,6 +311,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut question_of: Option<&str> = None;
     let mut question_round: u32 = 0;
     let mut allow_question = true;
+    let mut read_only = false;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -411,6 +413,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 allow_question = false;
                 i += 1;
             }
+            "--read-only" => {
+                read_only = true;
+                i += 1;
+            }
             _ => i += 1,
         }
     }
@@ -465,6 +471,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         question_of: question_of.map(str::to_string),
         question_round,
         allow_question,
+        read_only,
     })
 }
 
@@ -2593,6 +2600,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3046,6 +3054,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3265,6 +3274,17 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
 }
 
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
+    let provider_is_pi = spec.provider.trim().eq_ignore_ascii_case("pi");
+    if opts.read_only && !provider_is_pi {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!(
+                "read-only run refused: Paseo provider \"{}\" has no bee guard to keep the worker read-only — FIX: route this gather or advisor to a Paseo agent on provider pi, the supported read-only Paseo provider",
+                spec.provider
+            )),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
     let bee_dir = opts.main_root.join(".bee");
     if !opts.dry_run {
         write_inbox_marker(&bee_dir, opts);
@@ -3302,6 +3322,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
         "transport": "paseo",
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
@@ -3357,8 +3378,11 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         &opts.pane_env_passthrough,
         &opts.job_id,
     );
+    if opts.read_only {
+        child_env.insert("BEE_HERDING_READ_ONLY".to_string(), "1".to_string());
+    }
 
-    if spec.isolated_config && spec.provider.trim().eq_ignore_ascii_case("pi") {
+    if spec.isolated_config && provider_is_pi {
         let home_buf = pi_home_dir();
         let home = home_buf.as_path();
         let agent_name = opts.agent.as_deref().unwrap_or("paseo");
@@ -6860,6 +6884,7 @@ mod tests {
             question_of: None,
             question_round: 0,
             allow_question: true,
+            read_only: false,
         }
     }
 
@@ -6943,6 +6968,7 @@ mod tests {
             question_of: None,
             question_round: 0,
             allow_question: true,
+            read_only: false,
         }
     }
 
@@ -11764,6 +11790,59 @@ mod tests {
 
         let calls = fake.calls.lock().unwrap();
         assert!(calls.iter().any(|c| c == &["archive", "--force", "paseo-agent-happy"]));
+    }
+
+    #[test]
+    fn execute_paseo_read_only_pi_sets_the_env_and_no_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.read_only = true;
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let spec = PaseoSpec { provider: "pi".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-ro\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        let calls = fake.calls.lock().unwrap();
+        let run = calls.iter().find(|c| c.first().map(String::as_str) == Some("run")).expect("run call");
+        assert!(run.iter().any(|a| a == "BEE_HERDING_READ_ONLY=1"), "{run:?}");
+        assert!(!run.iter().any(|a| a == "--mode"), "{run:?}");
+        let job: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("job.json")).unwrap()).unwrap();
+        assert_eq!(job["read_only"], Value::Bool(true));
+    }
+
+    #[test]
+    fn execute_paseo_read_only_refuses_a_non_pi_provider_before_spawn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.read_only = true;
+        let spec = PaseoSpec { provider: "codex".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"x\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("FIX:") && msg.contains("provider pi"), "{msg}"),
+            _ => panic!("expected a refusal"),
+        }
+        assert!(fake.calls.lock().unwrap().is_empty());
+        assert!(!mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id).exists());
     }
 
     #[test]

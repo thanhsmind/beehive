@@ -114,6 +114,8 @@ const fire = async (event, eventArg, ctx) => {{
     cmd.env_remove("BEE_HERDING_WORKER");
     cmd.env_remove("PASEO_AGENT_ID");
     cmd.env_remove("BEE_SUPERVISOR_ALLOWED");
+    cmd.env_remove("BEE_HERDING_READ_ONLY");
+    cmd.env_remove("BEE_HERDING_JOB_ID");
     for (k, v) in env_vars {
         cmd.env(k, v);
     }
@@ -307,4 +309,72 @@ await fire("tool_call", { toolName: "bash", input: { command: "cargo test" } }, 
 assert.equal(fs.existsSync(callsLog), false);
 "#,
     );
+}
+
+#[cfg(unix)]
+fn read_only_write_case(name: &str, env_vars: &[(&str, &str)], target: &str, expect_block: bool) {
+    let code = format!(
+        r#"
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pwg-ro-"));
+const beeBinDir = path.join(tmpDir, ".bee", "bin");
+fs.mkdirSync(beeBinDir, {{ recursive: true }});
+fs.writeFileSync(path.join(tmpDir, ".bee", "onboarding.json"), "{{}}");
+const stubBee = path.join(beeBinDir, "bee");
+fs.writeFileSync(stubBee, `#!/bin/sh
+if [ "$1" = "hook" ] && [ "$2" = "worker-guard" ]; then
+  exec {bee:?} hook worker-guard
+fi
+cat > /dev/null
+if [ "$1" = "hook" ] && [ "$2" = "--help" ]; then
+  echo "hooks:"
+  echo "  worker-guard"
+fi
+exit 0
+`);
+fs.chmodSync(stubBee, 0o755);
+
+const ctx = {{ cwd: tmpDir, sessionId: "sess-1" }};
+const res = await fire("tool_call", {{ toolName: "write", input: {{ path: {target:?}, content: "x" }} }}, ctx);
+if ({expect_block}) {{
+  assert.ok(res, "expected a block");
+  assert.equal(res.block, true);
+  assert.ok(res.reason.includes("read-only"), res.reason);
+}} else {{
+  assert.equal(res, undefined);
+}}
+"#,
+        bee = env!("CARGO_BIN_EXE_bee"),
+    );
+    run_extension_test(name, env_vars, &code);
+}
+
+#[cfg(unix)]
+const READ_ONLY_ENV: [(&str, &str); 4] = [
+    ("BEE_HERDING_WORKER", "1"),
+    ("PASEO_AGENT_ID", "agent-1"),
+    ("BEE_HERDING_JOB_ID", "job-1"),
+    ("BEE_HERDING_READ_ONLY", "1"),
+];
+
+#[cfg(unix)]
+#[test]
+fn test_read_only_worker_write_outside_mailbox_is_blocked() {
+    read_only_write_case("test_read_only_worker_write_outside_mailbox_is_blocked", &READ_ONLY_ENV, "src/a.rs", true);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_read_only_worker_write_inside_mailbox_is_allowed() {
+    read_only_write_case(
+        "test_read_only_worker_write_inside_mailbox_is_allowed",
+        &READ_ONLY_ENV,
+        ".bee/mailbox/job-1/result-1.json",
+        false,
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_write_without_read_only_env_is_allowed() {
+    read_only_write_case("test_write_without_read_only_env_is_allowed", &READ_ONLY_ENV[..3], "src/a.rs", false);
 }

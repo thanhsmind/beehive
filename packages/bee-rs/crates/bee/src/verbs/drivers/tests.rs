@@ -1558,7 +1558,12 @@ use std::time::Instant;
             };
             let cmd = v["payload"]["command"].as_str().unwrap();
             assert!(!cmd.contains("--cell-id"), "{kind} command must not contain --cell-id: {cmd}");
-            assert_eq!(cmd, ".bee/bin/bee herding run --task-file - --json");
+            let expected = if kind == "reviewer" {
+                ".bee/bin/bee herding run --task-file - --json"
+            } else {
+                ".bee/bin/bee herding run --task-file - --json --read-only"
+            };
+            assert_eq!(cmd, expected);
         }
     }
 
@@ -2478,7 +2483,7 @@ use std::time::Instant;
         assert_eq!(
             v.get("payload").unwrap().get("command"),
             Some(&json!(
-                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\""
+                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\" --read-only"
             ))
         );
         assert_eq!(
@@ -2505,7 +2510,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Bash")));
         assert_eq!(
             v.get("payload").unwrap().get("command"),
-            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+            Some(&json!(".bee/bin/bee herding run --task-file - --json --read-only"))
         );
         assert_eq!(
             v.get("economics").unwrap().get("channel"),
