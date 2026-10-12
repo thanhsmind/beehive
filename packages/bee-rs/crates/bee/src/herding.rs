@@ -120,6 +120,7 @@ mod split_lock;
 pub(crate) mod job_verbs;
 pub(crate) mod broker;
 pub(crate) mod paseo;
+pub(crate) mod paseo_state;
 pub(crate) mod paseo_steer;
 pub(crate) mod pi_agent_dir;
 
@@ -1328,10 +1329,25 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
                 }
             }
         }
-        let listed = cli
-            .call(&paseo::ls_label_argv("bee_job"))
-            .ok()
-            .and_then(|out| paseo::parse_ls_agents_checked(&out));
+        let cfg = match crate::fsutil::read_json(&bee_dir.join("config.json")) {
+            crate::fsutil::ReadJson::Parsed(v) => v,
+            _ => Value::Null,
+        };
+        let listed = paseo_state::resolve_home(&paseo::paseo_command(&cfg))
+            .map(|home| {
+                paseo_state::list_labeled(&home, "bee_job")
+                    .into_iter()
+                    .map(|r| {
+                        let job = r.labels.get("bee_job").cloned().unwrap_or_default();
+                        (r.id, job, r.archived_at.is_some())
+                    })
+                    .collect()
+            })
+            .or_else(|| {
+                cli.call(&paseo::ls_label_argv("bee_job"))
+                    .ok()
+                    .and_then(|out| paseo::parse_ls_agents_checked(&out))
+            });
         if let Some(agents) = listed {
             for (agent_id, labelled_job, archived) in agents {
                 if archived {
@@ -2315,6 +2331,51 @@ mod tests {
             .filter_map(Value::as_str)
             .collect();
         assert_eq!(untracked, vec!["agent-real"]);
+    }
+
+    #[test]
+    fn status_untracked_reads_paseo_state_from_disk_before_paseo_ls() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let done = bee_dir.join("mailbox").join("job-done");
+        std::fs::create_dir_all(&done).unwrap();
+        std::fs::write(done.join("result-1.json"), "{}").unwrap();
+        let home = tmp.path().join("paseo-home");
+        let proj = home.join("agents").join("proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("agent-disk.json"), r#"{"id":"agent-disk","labels":{"bee_job":"job-done"},"archivedAt":null}"#).unwrap();
+        std::fs::write(proj.join("agent-gone.json"), r#"{"id":"agent-gone","labels":{"bee_job":"job-done"},"archivedAt":"2026-10-12T00:00:00Z"}"#).unwrap();
+        let ls_json = serde_json::json!([{"id": "agent-cli", "labels": {"bee_job": "job-done"}}]).to_string();
+        let fake = FakeHerdingPaseoCli { ls_out: Ok(ls_json), inspect_map: std::collections::HashMap::new() };
+        let untracked = |val: &Value| -> Vec<String> {
+            val.get("untracked_paseo_agents")
+                .and_then(Value::as_array)
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        };
+
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = Some(home.clone()));
+        let (_e, disk_val, _l) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = Some(tmp.path().join("no-home")));
+        let (_e, cli_val, _l) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = None);
+
+        assert_eq!(untracked(&disk_val), vec!["agent-disk"]);
+        assert_eq!(untracked(&cli_val), vec!["agent-cli"]);
     }
 
     #[test]
