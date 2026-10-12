@@ -2,16 +2,16 @@
 type: bee.area
 title: "Bee Herding — the Paseo channel, worker execution, and lifecycle"
 description: "The herding transport that executes bee workers as Paseo agents, polls the file mailbox, tracks daemon liveness states, and archives completed agents."
-timestamp: 2026-10-06
+timestamp: 2026-10-12
 bee:
   id: bee-herding-the-paseo-channel
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730"]
-  sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md]
+  decisions: ["paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730", "paseo-leverage D1 a7071d2b", "paseo-leverage D2 168b8037", "paseo-leverage D3 a7067517", "paseo-leverage D4 33df9d0d", "paseo-leverage D5 89d24cf0", "paseo-leverage D6 1742a721", "paseo-leverage D7 12211a7d", "paseo-leverage D8 28b0b5c2", "paseo-leverage hat-wave refinements 6fc537f6"]
+  sources: [docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
-  owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs]
+  owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs, packages/bee-rs/crates/bee/src/herding/paseo_state.rs, packages/bee-rs/crates/bee/src/herding/fork.rs, packages/bee-rs/crates/bee/src/herding/notify.rs]
 ---
 
 # Bee Herding — the Paseo channel, worker execution, and lifecycle
@@ -132,6 +132,37 @@ A failed send call counts as sent.
 A second `Idle` inspection read at least 3 seconds after the nudge ends the round as an idle timeout.
 The runner reports the silent-idle message and keeps the agent intact for inspection.
 
+### Observed mode and parked workers
+
+After agent spawn, the runner records the inspect `Mode` as `paseo_mode_observed` in `job.json` (paseo-leverage D3, store `a7067517`).
+`bee herding status` marks a Paseo worker `parked` when it is `Blocked` on a pending permission for longer than the shared 120-second freshness constant.
+The status line then shows `parked=true` and a `parked_reason` that names the mode and the pending tool.
+bee reports a parked worker only. bee never runs `paseo agent mode` on its own.
+
+### Usage in job.json
+
+When a Paseo round ends, the runner writes `usage` into `job.json` (paseo-leverage D5, store `89d24cf0`).
+The object has these keys: `input`, `output`, `cache_read`, `cache_write`, `total_tokens`, `cost_usd`, and `source`.
+
+The runner reads usage from two sources, in this order:
+1. The inspect `LastUsage` field, when it is not null (`source: "inspect"`).
+2. For provider `pi`, the sum of the `usage` entries in the session file that the on-disk `persistence.nativeHandle` names.
+
+When neither source has usage, `usage` is `null` and `usage_unavailable` names the reason. bee never writes zero for unknown usage.
+`bee herding status` shows `tokens` and `cost_usd` for each job.
+
+### Read-only runs
+
+`bee herding run --read-only` starts a read-only worker (paseo-leverage D2, store `168b8037`).
+`bee dispatch prepare` passes the flag for kinds `gather` and `advisor` only. Reviewers run tests, so they do not get the flag.
+`job.json` records `read_only: true`. No Paseo mode is set.
+
+A Paseo `pi` worker gets `BEE_HERDING_READ_ONLY=1`. The pi belt then sends every tool call to `worker-guard`.
+The write zone is the worker's own job mailbox directory. The guard refuses a write to any other path.
+Shell commands must match a read-only allowlist. The allowlist fails closed on truncation, command substitution, a redirect outside the mailbox, and per-tool exec or output flags.
+
+Any other Paseo provider refuses a read-only run before spawn with a `FIX:` line. Herdr and tmux runs record `read_only` in `job.json`, but nothing enforces it.
+
 ### Observed model verification
 
 After agent spawn, the runner reads inspect `Model` and `Thinking` fields (paseo-pi-hardening D4, store `4cb9c644`).
@@ -152,6 +183,7 @@ The runner parses the `Status` field and the `PendingPermissions` array:
 - Any other value or an invalid JSON response maps to `Unknown`.
 
 `Unknown` never counts as alive. When inspection fails, the runner treats the state as unavailable and fails closed.
+A failed or unparseable inspect is `Unknown`: it resets the died debounce and never counts toward `died` (paseo-leverage D4, store `33df9d0d`).
 
 The inspect `UpdatedAt` timestamp is observe-only (paseo-pi-hardening D3, store `c2a5af66`).
 The run loop keeps a `Working` agent fresh.
@@ -254,6 +286,26 @@ The extension awaits `paseo heartbeat delete <id>`.
 On success, the extension removes the marker file.
 On failure, the extension keeps the marker file and writes `delete_failed: <reason>` into it.
 
+## Mid-flight messages
+
+A running herded worker can send its leader a typed note with `bee herding notify` (paseo-leverage D1, store `a7071d2b`):
+
+```text
+bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text> [--correlation-id <id>]
+```
+
+The verb works only inside a herded worker (`BEE_HERDING_JOB_ID` set). It refuses an unknown kind.
+It appends one JSON line to `.bee/mailbox/<job>/messages.jsonl`. The line carries the job id, cell id, kind, text, correlation id, and time.
+The worker brief names `notify` as the one bee command a worker may run.
+
+A message never ends the worker's turn. It never replaces the `question` outcome: an answer still reaches the worker as the next round.
+
+Delivery never uses `paseo send`, because a send to a busy leader replaces its turn. Delivery has two paths, with these limits (hat-wave refinement, store `6fc537f6`):
+- Unread means the lines past the per-job `messages.cursor` file.
+- `bee herding status` shows `messages`, `unread_messages`, and `last_message` for every leader.
+- The Pi leader's result-inbox drain injects new lines only for jobs run with `--inbox-session`. It fences worker text as data inside a `bee-message` fence. It steers a busy leader and opens a turn for an idle one.
+- The drain advances the cursor only when the send reports steer or turn. A failed send leaves the lines unread.
+
 ## Answers and steering
 
 A Paseo worker that asks a question keeps its Paseo agent intact (paseo-answers D1, store `240f3db5`). The runner does not archive the agent on a question outcome.
@@ -298,6 +350,47 @@ The command `bee herding pane read` shows the recent log tail of a Paseo worker 
 
 The field `untracked_paseo_agents` reports labeled Paseo agents that have no active mailbox or job. The system reports these untracked agents only. The system never archives untracked agents.
 
+## Forking a Paseo agent
+
+`bee herding fork --job <id> | --agent <paseo-id> [--force]` makes a successor Paseo agent that keeps the source agent's history (paseo-leverage D6, store `1742a721`; hat-wave refinement, store `6fc537f6`).
+
+For provider `pi`, the verb does these steps:
+1. It reads the session file that the on-disk `persistence.nativeHandle` names.
+2. It writes a copy whose first line is a new session header: a new UUIDv7 id, a new timestamp, and `parentSession` set to the source path. It writes a temp file and renames it.
+3. It runs `paseo import <new id> --provider pi --cwd <source cwd> --label bee_fork_of=<source id>`. When the import fails, it removes the copy.
+
+The verb refuses these sources with a `FIX:` line:
+- A provider other than `pi`.
+- A missing session file, or a session file outside the default pi sessions root `~/.pi/agent/sessions/`.
+- A `Working` source, unless you pass `--force`.
+
+The verb prints the new agent id, the source, the undo command, and that the model is the provider default.
+The undo command is `paseo archive <new id>; rm <session file>`.
+
+The verb never stops, archives, or sends to the source. Only a human or the leader runs it.
+When the supervisor's `dead-lead` observation names a Paseo lead, its resume line names the fork command.
+
+## The on-disk agent reader
+
+bee reads Paseo's on-disk agent state at `<paseo home>/agents/<project>/<id>.json` (paseo-leverage D7, store `12211a7d`; hat-wave refinement, store `6fc537f6`).
+The Paseo home comes from `--home` in `herding.paseo.command`, else `PASEO_HOME`, else `~/.paseo`.
+
+The reader serves views that need many agents or data that the CLI does not give: the untracked-agent report in `bee herding status`, round usage, and fork.
+A missing or unreadable home or file falls back to the CLI: the untracked-agent report then runs `paseo ls`.
+The run loop keeps the CLI (`inspect`, `wait`) as the liveness authority.
+
+## The live contract test
+
+A live contract test checks the installed Paseo against the keys that bee parses (paseo-leverage D8, store `28b0b5c2`).
+It checks the `inspect --json` keys, the `ls --json` shape, and the on-disk agent file keys that bee reads.
+The tests are `#[ignore]` by default. They skip with a message when Paseo is not installed or the daemon does not answer.
+
+Run them with this command:
+
+```text
+cargo test -- --ignored paseo_live
+```
+
 ## Pointers
 
 - Paseo configuration and command builder: `packages/bee-rs/crates/bee/src/herding/paseo.rs`.
@@ -316,3 +409,9 @@ The field `untracked_paseo_agents` reports labeled Paseo agents that have no act
 - Isolated Pi configuration directory: `packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs`.
 - Herding leader toil feature context: `docs/history/herding-leader-toil/CONTEXT.md`.
 - Herding leader toil implementation plan: `docs/history/herding-leader-toil/plan.md`.
+- On-disk Paseo agent reader: `packages/bee-rs/crates/bee/src/herding/paseo_state.rs`.
+- Fork verb: `packages/bee-rs/crates/bee/src/herding/fork.rs`.
+- Mid-flight message verb: `packages/bee-rs/crates/bee/src/herding/notify.rs`.
+- Live contract test: `packages/bee-rs/crates/bee/tests/paseo_live_contract.rs`.
+- Paseo leverage feature context: `docs/history/paseo-leverage/CONTEXT.md`.
+- Paseo leverage implementation plan: `docs/history/paseo-leverage/plan.md`.
