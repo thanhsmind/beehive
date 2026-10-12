@@ -903,6 +903,15 @@ fn fmt_ctx(n: u64) -> String {
     }
 }
 
+fn insert_read_only(job_map: &mut Map<String, Value>, job_obj: &Map<String, Value>, is_paseo: bool) -> String {
+    if job_obj.get("read_only").and_then(Value::as_bool) != Some(true) {
+        return String::new();
+    }
+    let state = if is_paseo { "enforced" } else { "not-enforced" };
+    job_map.insert("read_only".into(), Value::String(state.into()));
+    format!(" read_only={state}")
+}
+
 fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>, job_obj: &Map<String, Value>) -> String {
     job_map.insert("ctx_tokens".into(), usage.map_or(Value::Null, |(c, _)| c.into()));
     job_map.insert("turns".into(), usage.map_or(Value::Null, |(_, t)| t.into()));
@@ -1137,7 +1146,8 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+            let usage_disp = insert_read_only(&mut job_map, &job_obj, true)
+                + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
                 + &notify::insert_messages(&mut job_map, &job_dir);
 
             jobs_json.push(Value::Object(job_map));
@@ -1224,7 +1234,8 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+        let usage_disp = insert_read_only(&mut job_map, &job_obj, false)
+            + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
             + &notify::insert_messages(&mut job_map, &job_dir);
 
         jobs_json.push(Value::Object(job_map));
@@ -2027,6 +2038,31 @@ mod tests {
         let with_cursor = job(Some(first.len()));
         assert_eq!(with_cursor["messages"], 2);
         assert_eq!(with_cursor["unread_messages"], 1);
+    }
+
+    #[test]
+    fn status_shows_read_only_enforced_on_paseo_not_enforced_on_panes_and_absent_otherwise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root_str = tmp.path().to_str().unwrap();
+        let mailbox = tmp.path().join(".bee/mailbox");
+        let jobs = [
+            ("job-a", serde_json::json!({"job_id": "job-a", "transport": "paseo", "read_only": true})),
+            ("job-b", serde_json::json!({"job_id": "job-b", "pane_id": "w4:p1", "round": 1, "read_only": true})),
+            ("job-c", serde_json::json!({"job_id": "job-c", "pane_id": "w4:p2", "round": 1})),
+        ];
+        for (id, job) in &jobs {
+            std::fs::create_dir_all(mailbox.join(id)).unwrap();
+            std::fs::write(mailbox.join(id).join("job.json"), job.to_string()).unwrap();
+        }
+        let live: HashSet<String> = ["w4:p1".to_string(), "w4:p2".to_string()].into_iter().collect();
+        let (_, val, lines) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+        assert_eq!(val["jobs"][0]["read_only"], "enforced");
+        assert_eq!(val["jobs"][1]["read_only"], "not-enforced");
+        assert!(val["jobs"][2].get("read_only").is_none(), "{}", val["jobs"][2]);
+        let line = |id: &str| lines.iter().find(|l| l.starts_with(&format!("{id}:"))).unwrap().clone();
+        assert!(line("job-a").contains(" read_only=enforced"), "{}", line("job-a"));
+        assert!(line("job-b").contains(" read_only=not-enforced"), "{}", line("job-b"));
+        assert!(!line("job-c").contains("read_only"), "{}", line("job-c"));
     }
 
     #[test]
