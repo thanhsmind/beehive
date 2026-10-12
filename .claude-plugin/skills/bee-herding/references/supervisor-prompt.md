@@ -91,7 +91,10 @@ decision-log entry.
 lists it under `recovery.candidates` and its lane is not in a terminal phase.
 Say so plainly, and put a resume line in the note the human can paste on
 return — the lane, how long it has been quiet, and the command that reopens
-it, which is a pane at that lane's directory followed by `bee orient`.
+it, which is a pane at that lane's directory followed by `bee orient`. When
+the dead lead is a Paseo agent, the resume line also names
+`bee herding fork --agent <id>` for the human to run: it makes a new agent
+that keeps the lead's history and leaves the old lead as it is.
 
 You never start that session yourself. You have no tool that could, and the
 note is the whole job: the human reads it and decides. Two cases look like

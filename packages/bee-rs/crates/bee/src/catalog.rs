@@ -944,6 +944,15 @@ mod tests {
     }
 
     #[test]
+    fn herding_fork_resolves_and_is_built_into_this_binary() {
+        let (entry, rest) = resolve(&["herding", "fork"]).expect("herding.fork is in the registry");
+        assert_eq!(entry.invoke, "bee herding fork");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+    }
+
+    #[test]
     fn herding_permit_resolves_and_is_built_into_this_binary() {
         let (entry, rest) = resolve(&["herding", "permit"]).expect("herding.permit is in the registry");
         assert_eq!(entry.invoke, "bee herding permit");
