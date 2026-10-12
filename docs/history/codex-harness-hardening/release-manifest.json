@@ -1830,7 +1830,7 @@
     },
     {
       "path": ".pi/extensions/bee-guard/result-inbox.ts",
-      "sha256": "7f012b720992f11e340bca47fe954cf9ff78fd1dcbf2a0dc825c3b79be330d27",
+      "sha256": "5b6e0ae83c6230cfd9827fb36b11a41193e41cbed90154ac9ac6497bcc20e04d",
       "mode": "644",
       "role": "pi_extension",
       "packagePath": ".pi/extensions/bee-guard/result-inbox.ts"
