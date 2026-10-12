@@ -416,7 +416,7 @@ fn strip_redirects(command: &str, cwd: Option<&Path>, mailbox: Option<&Path>) ->
             i += 1;
         }
         let fd_copy = duplicate && (target == "-" || (!target.is_empty() && target.chars().all(|c| c.is_ascii_digit())));
-        if !fd_copy && !in_mailbox(&target, cwd, mailbox) {
+        if !fd_copy && target != "/dev/null" && !in_mailbox(&target, cwd, mailbox) {
             return Err(format!("`{target}`"));
         }
         out.push(' ');
@@ -540,6 +540,9 @@ mod tests {
             format!("cat > {mb}/ack-1.json <<'EOF'\n{{\"ok\": true}}\nEOF"),
             "cd x && rg y".to_string(),
             format!("cd src && cat a.rs > {mb}/report.md"),
+            "rg foo 2>/dev/null".to_string(),
+            "rg foo >/dev/null 2>&1".to_string(),
+            "rg foo 2> '/dev/null'".to_string(),
         ] {
             assert!(bash(&allowed).is_none(), "expected allow: {allowed} -> {:?}", bash(&allowed));
         }
@@ -589,6 +592,10 @@ mod tests {
             format!("mv --target-directory=src {mb}/a"),
             "cd src && cat a.rs > .bee/mailbox/job-1/x".to_string(),
             "cd src && mv .bee/mailbox/job-1/a .bee/mailbox/job-1/b".to_string(),
+            "rg foo > /dev/sda".to_string(),
+            "rg foo 2>/dev/null2".to_string(),
+            "rg foo > ./dev/null".to_string(),
+            "rg foo > /dev/../dev/null".to_string(),
         ] {
             let reason = bash(&denied).unwrap_or_else(|| panic!("expected deny: {denied}"));
             assert!(reason.contains("read-only") && reason.contains("bee herding notify"), "{reason}");
