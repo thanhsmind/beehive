@@ -1,0 +1,437 @@
+{
+  "schema_version": "1.0",
+  "feature": "claude-read-only",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"claude-read-only\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-12T10:20:18.325Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "high-risk",
+    "flags": [
+      "audit-security",
+      "public-contracts"
+    ],
+    "product_files": 5,
+    "rationale": null,
+    "updated_at": "2026-10-12T10:27:47.105Z",
+    "feature": "claude-read-only"
+  },
+  "gate_preview": {
+    "feature": "claude-read-only",
+    "plan_sha256": "4b5c6ac482cae4e20358fe76821b17dc4409124e10d980f00c8a5148a5f546b9",
+    "previewed_at": "2026-10-12T10:27:47.304Z",
+    "cells": [
+      {
+        "id": "cro-1",
+        "feature": "claude-read-only",
+        "title": "Enforce read-only on Paseo Claude workers through a Claude hook",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "906e0b1f",
+          "63bd6725",
+          "f84f697c",
+          "8ea1fa19-fc2a-49c0-8e84-0c1ee1b3bc0f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee/hooks/claude-hooks.json",
+          ".claude/settings.json"
+        ],
+        "read_first": [
+          "docs/history/claude-read-only/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ],
+        "action": "Per D1-D5 (store 906e0b1f, 63bd6725, f84f697c, 8ea1fa19). (1) devtools/hook_manifests.rs: in the PreToolUse event add a CLAUDE_ONLY group, matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*`, script `bee-worker-guard.mjs` (the name-to-verb mapping strips `bee-` and `.mjs`, giving `hook worker-guard`), with no status message, beside the shared write-guard group at `Some(\"Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec\")`. (2) onboard/hooks_wiring.rs: add the same entry with the same matcher to its Claude PreToolUse table beside `{ \"matcher\": \"Agent|Task\", \"hooks\": [repo_entry(\"bee-model-guard.mjs\", r)] }`. (3) Run `bee dev render-hook-manifests` (claude-hooks.json gains the group; hooks.json for Codex must not change) and `bee onboard --repo-root . --apply` so this repo's .claude/settings.json carries the entry; commit only the files listed. (4) hooks/worker_guard.rs, read-only path only: judge `Monitor` by its `command` input exactly as Bash; deny `EnterWorktree`, `ExitWorktree` and any tool name starting `mcp__` by name with the read-only denial text; add `cd` to READ_ONLY_ALLOWED. Mode A and mode B results for other inputs do not change. (5) herding/run.rs `execute_paseo`: replace the pi-only gate `if opts.read_only && !provider_is_pi {` with pi-or-claude; other providers refuse with a FIX line naming pi and claude. For claude + read_only, before spawn: run `<main root>/.bee/bin/bee hook --help` and require `worker-guard` in its output, and read `<main root>/.claude/settings.json` and require a PreToolUse hook command containing `hook worker-guard`; on either miss refuse with a FIX line (`bee onboard --apply` / refresh .bee/bin/bee). Keep `--mode` as configured. Tests: manifest test that the Claude projection has the group (matcher, script, no status message) and Codex has none; onboard table test for the entry; guard rows for Monitor (allowed rg, denied redirect), EnterWorktree, an mcp__ write tool, `cd x && rg y` allowed, and mode A denying `git push` for a claude Paseo worker payload; run.rs rows: claude read-only spawns with BEE_HERDING_READ_ONLY=1 and the configured mode when both checks pass, refuses when the binary help lacks worker-guard, refuses when settings lack the entry, and codex still refuses naming pi and claude.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hooks_wiring && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee execute_paseo_read_only",
+        "must_haves": {
+          "truths": [
+            "The Claude hook projection has a PreToolUse group with the D5 matcher running hook worker-guard and no status message",
+            "The Codex projection has no worker-guard group",
+            "Onboard writes the same Claude entry and this repo's .claude/settings.json carries it",
+            "A read-only claude Paseo spawn sets BEE_HERDING_READ_ONLY=1 and keeps the configured mode when the binary and settings checks pass",
+            "A read-only claude spawn refuses before spawn when the binary help lacks worker-guard or settings lack the entry",
+            "A read-only spawn on a provider other than pi or claude refuses naming both",
+            "In read-only mode Monitor is judged like Bash, EnterWorktree, ExitWorktree and mcp__ tools are denied, and cd is allowed",
+            "Mode A denies git push for a claude Paseo worker"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/hooks/claude-hooks.json",
+              "substantive": "rendered manifest with the worker-guard group"
+            }
+          ],
+          "key_links": [
+            "hook_manifests.rs and hooks_wiring.rs carry the same Claude entry",
+            "run.rs pre-spawn check reads the same settings entry the renderers write"
+          ],
+          "prohibitions": [
+            "No worker-guard group in the Codex manifest",
+            "No change to mode A or mode B results outside the listed tools",
+            "No status message on the worker-guard group"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cro-1 changes the hook tables, the guard and the run gate."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "The code cell writes its own tests; the leader drives the live proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader updates the concept line at capture."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk plan check."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-12T10:27:50.063Z",
+    "feature": "claude-read-only",
+    "newest_decision_id": "8ea1fa19-fc2a-49c0-8e84-0c1ee1b3bc0f",
+    "plan_sha256": "4b5c6ac482cae4e20358fe76821b17dc4409124e10d980f00c8a5148a5f546b9",
+    "advisor": "hat wave: hat-facts-gaps opus, hat-risks fable, hat-value opus, hat-alternatives opus, hat-user-impact opus",
+    "digest_head": "# Hat wave synthesis — claude-read-only\n\nFive seats ran once on the first draft (2026-10-12): hat-facts-gaps (opus),\nhat-risks (fable), hat-value (opus), hat-alternatives (opus), hat-user-impact\n(opus). Findings are folded into `CONTEXT.md` (D3 note, D4, D5) and `plan.md`.\n\n## PLAN CHECK\n\nWork: current slice (cro-1)\n\n### STRUCTURE\n\nBLOCKERS (fixed):\n- hat-risks: the Claude guard fails open when no binary resolves or an old binary short-circuits the verb. Fixed by D4 (store f84f697c): a read-only"
+  },
+  "approved_cell_packet": {
+    "feature": "claude-read-only",
+    "plan_sha256": "4b5c6ac482cae4e20358fe76821b17dc4409124e10d980f00c8a5148a5f546b9",
+    "previewed_at": "2026-10-12T10:27:47.304Z",
+    "cells": [
+      {
+        "id": "cro-1",
+        "feature": "claude-read-only",
+        "title": "Enforce read-only on Paseo Claude workers through a Claude hook",
+        "lane": "high-risk",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "906e0b1f",
+          "63bd6725",
+          "f84f697c",
+          "8ea1fa19-fc2a-49c0-8e84-0c1ee1b3bc0f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee/hooks/claude-hooks.json",
+          ".claude/settings.json"
+        ],
+        "read_first": [
+          "docs/history/claude-read-only/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/worker_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+          "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+          "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/hook-runtime/hook-runtime-the-worker-outward-guard.md"
+        ],
+        "action": "Per D1-D5 (store 906e0b1f, 63bd6725, f84f697c, 8ea1fa19). (1) devtools/hook_manifests.rs: in the PreToolUse event add a CLAUDE_ONLY group, matcher `Edit|Write|MultiEdit|NotebookEdit|Bash|Monitor|EnterWorktree|ExitWorktree|mcp__.*`, script `bee-worker-guard.mjs` (the name-to-verb mapping strips `bee-` and `.mjs`, giving `hook worker-guard`), with no status message, beside the shared write-guard group at `Some(\"Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion|apply_patch|exec\")`. (2) onboard/hooks_wiring.rs: add the same entry with the same matcher to its Claude PreToolUse table beside `{ \"matcher\": \"Agent|Task\", \"hooks\": [repo_entry(\"bee-model-guard.mjs\", r)] }`. (3) Run `bee dev render-hook-manifests` (claude-hooks.json gains the group; hooks.json for Codex must not change) and `bee onboard --repo-root . --apply` so this repo's .claude/settings.json carries the entry; commit only the files listed. (4) hooks/worker_guard.rs, read-only path only: judge `Monitor` by its `command` input exactly as Bash; deny `EnterWorktree`, `ExitWorktree` and any tool name starting `mcp__` by name with the read-only denial text; add `cd` to READ_ONLY_ALLOWED. Mode A and mode B results for other inputs do not change. (5) herding/run.rs `execute_paseo`: replace the pi-only gate `if opts.read_only && !provider_is_pi {` with pi-or-claude; other providers refuse with a FIX line naming pi and claude. For claude + read_only, before spawn: run `<main root>/.bee/bin/bee hook --help` and require `worker-guard` in its output, and read `<main root>/.claude/settings.json` and require a PreToolUse hook command containing `hook worker-guard`; on either miss refuse with a FIX line (`bee onboard --apply` / refresh .bee/bin/bee). Keep `--mode` as configured. Tests: manifest test that the Claude projection has the group (matcher, script, no status message) and Codex has none; onboard table test for the entry; guard rows for Monitor (allowed rg, denied redirect), EnterWorktree, an mcp__ write tool, `cd x && rg y` allowed, and mode A denying `git push` for a claude Paseo worker payload; run.rs rows: claude read-only spawns with BEE_HERDING_READ_ONLY=1 and the configured mode when both checks pass, refuses when the binary help lacks worker-guard, refuses when settings lack the entry, and codex still refuses naming pi and claude.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hook_manifests && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee hooks_wiring && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worker_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee execute_paseo_read_only",
+        "must_haves": {
+          "truths": [
+            "The Claude hook projection has a PreToolUse group with the D5 matcher running hook worker-guard and no status message",
+            "The Codex projection has no worker-guard group",
+            "Onboard writes the same Claude entry and this repo's .claude/settings.json carries it",
+            "A read-only claude Paseo spawn sets BEE_HERDING_READ_ONLY=1 and keeps the configured mode when the binary and settings checks pass",
+            "A read-only claude spawn refuses before spawn when the binary help lacks worker-guard or settings lack the entry",
+            "A read-only spawn on a provider other than pi or claude refuses naming both",
+            "In read-only mode Monitor is judged like Bash, EnterWorktree, ExitWorktree and mcp__ tools are denied, and cd is allowed",
+            "Mode A denies git push for a claude Paseo worker"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee/hooks/claude-hooks.json",
+              "substantive": "rendered manifest with the worker-guard group"
+            }
+          ],
+          "key_links": [
+            "hook_manifests.rs and hooks_wiring.rs carry the same Claude entry",
+            "run.rs pre-spawn check reads the same settings entry the renderers write"
+          ],
+          "prohibitions": [
+            "No worker-guard group in the Codex manifest",
+            "No change to mode A or mode B results outside the listed tools",
+            "No status message on the worker-guard group"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "cro-1 changes the hook tables, the guard and the run gate."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "The code cell writes its own tests; the leader drives the live proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader updates the concept line at capture."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "High-risk plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "High-risk plan check."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-12T10:43:29.646Z",
+    "branch": "wt/claude-read-only",
+    "worktree_id": "beehive--wt--claude-read-only",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

@@ -700,6 +700,8 @@
     "paseo-leverage",
     "contract:read-only-worker-guard",
     "contract:paseo-live-schema",
-    "contract:herding-notify"
+    "contract:herding-notify",
+    "claude-read-only",
+    "contract:claude-read-only-guard"
   ]
 }

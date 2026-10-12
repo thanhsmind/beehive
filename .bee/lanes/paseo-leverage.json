@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"paseo-leverage\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at a394feb; reload the product and test \"paseo-leverage\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-leverage\") or fix it in the worktree and merge again.",
+  "next_action": "Merged into main at 5068a0f; reload the product and test \"paseo-leverage\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-leverage\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-12T08:16:39.733Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: paseo-leverage",
-    "asked_at": "2026-10-12T09:26:43.821Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "AskUserQuestion",
+    "asked_at": "2026-10-12T10:18:29.558Z",
+    "session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f"
   },
   "route": {
     "class": "feature",
