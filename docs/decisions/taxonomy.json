@@ -695,6 +695,10 @@
     "contract:pi-tests-unix-stubs",
     "contract:worker-guard-stub-stdin",
     "contract:spawn-busy-retry",
-    "spawn"
+    "spawn",
+    "paseo-leverage",
+    "contract:read-only-worker-guard",
+    "contract:paseo-live-schema",
+    "contract:herding-notify"
   ]
 }
