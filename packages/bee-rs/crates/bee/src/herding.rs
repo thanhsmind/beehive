@@ -118,8 +118,11 @@ mod split_lock;
 // interrupt sends Escape and keeps the pane; cancel captures foreground pid,
 // closes the pane, and confirms exit within 5 s. See job_verbs.rs.
 pub(crate) mod job_verbs;
+pub(crate) mod fork;
+pub(crate) mod notify;
 pub(crate) mod broker;
 pub(crate) mod paseo;
+pub(crate) mod paseo_state;
 pub(crate) mod paseo_steer;
 pub(crate) mod pi_agent_dir;
 
@@ -150,6 +153,8 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "interrupt" => Some(job_verbs::interrupt(rest)),
         "cancel" => Some(job_verbs::cancel(rest)),
         "steer" => Some(job_verbs::steer(rest)),
+        "fork" => Some(fork::fork(rest)),
+        "notify" => Some(notify::notify(rest)),
         "permit" => Some(job_verbs::permit(rest)),
         "broker" => broker::route_broker(rest),
         "answer" => Some(broker::answer(rest)),
@@ -898,10 +903,47 @@ fn fmt_ctx(n: u64) -> String {
     }
 }
 
-fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>) -> String {
+fn insert_read_only(job_map: &mut Map<String, Value>, job_obj: &Map<String, Value>, is_paseo: bool) -> String {
+    if job_obj.get("read_only").and_then(Value::as_bool) != Some(true) {
+        return String::new();
+    }
+    let state = if is_paseo { "enforced" } else { "not-enforced" };
+    job_map.insert("read_only".into(), Value::String(state.into()));
+    format!(" read_only={state}")
+}
+
+fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>, job_obj: &Map<String, Value>) -> String {
     job_map.insert("ctx_tokens".into(), usage.map_or(Value::Null, |(c, _)| c.into()));
     job_map.insert("turns".into(), usage.map_or(Value::Null, |(_, t)| t.into()));
-    usage.map_or(String::new(), |(c, t)| format!(" ctx={} turns={t}", fmt_ctx(c)))
+    let mut disp = usage.map_or(String::new(), |(c, t)| format!(" ctx={} turns={t}", fmt_ctx(c)));
+    if let Some(mode) = job_obj.get("paseo_mode_observed") {
+        job_map.insert("paseo_mode_observed".into(), mode.clone());
+    }
+    if let Some(Value::Object(u)) = job_obj.get("usage") {
+        let tokens = u.get("total_tokens").cloned().unwrap_or(Value::Null);
+        let cost = u.get("cost_usd").cloned().unwrap_or(Value::Null);
+        if let Some(t) = tokens.as_u64() {
+            disp.push_str(&format!(" tokens={}", fmt_ctx(t)));
+        }
+        if let Some(c) = cost.as_f64() {
+            disp.push_str(&format!(" cost=${c:.4}"));
+        }
+        job_map.insert("tokens".into(), tokens);
+        job_map.insert("cost_usd".into(), cost);
+    }
+    disp
+}
+
+fn parked_reason(job_id: &str, mode: Option<&str>, permissions: &[(String, String)]) -> String {
+    let tools: Vec<&str> = permissions
+        .iter()
+        .map(|(id, tool)| if tool.is_empty() { id.as_str() } else { tool.as_str() })
+        .collect();
+    let tool = if tools.is_empty() { "unknown".to_string() } else { tools.join(",") };
+    format!(
+        "waiting on permission for {tool} in mode {} — unblock: bee herding permit {job_id} allow|deny",
+        mode.unwrap_or("unknown")
+    )
 }
 
 fn collect_jobs(
@@ -1071,6 +1113,27 @@ fn collect_jobs(
                     .collect();
                 job_map.insert("permissions".into(), Value::Array(perms_val));
             }
+            let parked = paseo_state == "blocked"
+                && inspect_opt
+                    .as_ref()
+                    .and_then(|i| i.updated_at.as_deref())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .is_some_and(|dt| {
+                        now_ms.saturating_sub(dt.timestamp_millis())
+                            > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
+                    });
+            let parked_disp = if parked {
+                let mode = inspect_opt
+                    .as_ref()
+                    .and_then(|i| i.mode.as_deref())
+                    .or_else(|| job_obj.get("paseo_mode_observed").and_then(Value::as_str));
+                let reason = parked_reason(&job_id, mode, &permissions);
+                job_map.insert("parked".into(), Value::Bool(true));
+                job_map.insert("parked_reason".into(), Value::String(reason.clone()));
+                format!(" parked=true parked_reason=\"{reason}\"")
+            } else {
+                String::new()
+            };
 
             let model_mismatch = job_obj
                 .get("paseo_model_mismatch")
@@ -1083,7 +1146,9 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
+            let usage_disp = insert_read_only(&mut job_map, &job_obj, true)
+                + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+                + &notify::insert_messages(&mut job_map, &job_dir);
 
             jobs_json.push(Value::Object(job_map));
 
@@ -1105,7 +1170,7 @@ fn collect_jobs(
                 ""
             };
             plain_lines.push(format!(
-                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{mismatch_disp}{usage_disp}"
+                "{job_id}: transport=paseo paseo_agent_id={agent_disp} round={round} mark={mark_disp} mark_reason={reason_disp} status={status} paseo_state={paseo_state}{perm_disp}{parked_disp}{mismatch_disp}{usage_disp}"
             ));
             continue;
         }
@@ -1169,7 +1234,9 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_usage(&mut job_map, job_usage(bee_dir, &job_id));
+        let usage_disp = insert_read_only(&mut job_map, &job_obj, false)
+            + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+            + &notify::insert_messages(&mut job_map, &job_dir);
 
         jobs_json.push(Value::Object(job_map));
 
@@ -1328,10 +1395,25 @@ pub(crate) fn status_with_panes_and_transport_and_paseo(
                 }
             }
         }
-        let listed = cli
-            .call(&paseo::ls_label_argv("bee_job"))
-            .ok()
-            .and_then(|out| paseo::parse_ls_agents_checked(&out));
+        let cfg = match crate::fsutil::read_json(&bee_dir.join("config.json")) {
+            crate::fsutil::ReadJson::Parsed(v) => v,
+            _ => Value::Null,
+        };
+        let listed = paseo_state::resolve_home(&paseo::paseo_command(&cfg))
+            .map(|home| {
+                paseo_state::list_labeled(&home, "bee_job")
+                    .into_iter()
+                    .map(|r| {
+                        let job = r.labels.get("bee_job").cloned().unwrap_or_default();
+                        (r.id, job, r.archived_at.is_some())
+                    })
+                    .collect()
+            })
+            .or_else(|| {
+                cli.call(&paseo::ls_label_argv("bee_job"))
+                    .ok()
+                    .and_then(|out| paseo::parse_ls_agents_checked(&out))
+            });
         if let Some(agents) = listed {
             for (agent_id, labelled_job, archived) in agents {
                 if archived {
@@ -1933,6 +2015,57 @@ mod tests {
     }
 
     #[test]
+    fn status_counts_notify_messages_with_and_without_a_cursor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root_str = tmp.path().to_str().unwrap();
+        let job_dir = tmp.path().join(".bee/mailbox/job-msg");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        std::fs::write(job_dir.join("job.json"), r#"{"job_id":"job-msg","pane_id":"w4:p1","round":1}"#).unwrap();
+        let first = "{\"kind\":\"progress\",\"text\":\"one\"}\n";
+        std::fs::write(job_dir.join("messages.jsonl"), format!("{first}{{\"kind\":\"blocked\",\"text\":\"two\"}}\n")).unwrap();
+        let job = |cursor: Option<usize>| {
+            if let Some(c) = cursor {
+                std::fs::write(job_dir.join("messages.cursor"), c.to_string()).unwrap();
+            }
+            let live: HashSet<String> = ["w4:p1".to_string()].into_iter().collect();
+            let (_, val, _) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+            val["jobs"][0].clone()
+        };
+        let no_cursor = job(None);
+        assert_eq!(no_cursor["messages"], 2);
+        assert_eq!(no_cursor["unread_messages"], 2);
+        assert_eq!(no_cursor["last_message"], serde_json::json!({"kind": "blocked", "text": "two"}));
+        let with_cursor = job(Some(first.len()));
+        assert_eq!(with_cursor["messages"], 2);
+        assert_eq!(with_cursor["unread_messages"], 1);
+    }
+
+    #[test]
+    fn status_shows_read_only_enforced_on_paseo_not_enforced_on_panes_and_absent_otherwise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root_str = tmp.path().to_str().unwrap();
+        let mailbox = tmp.path().join(".bee/mailbox");
+        let jobs = [
+            ("job-a", serde_json::json!({"job_id": "job-a", "transport": "paseo", "read_only": true})),
+            ("job-b", serde_json::json!({"job_id": "job-b", "pane_id": "w4:p1", "round": 1, "read_only": true})),
+            ("job-c", serde_json::json!({"job_id": "job-c", "pane_id": "w4:p2", "round": 1})),
+        ];
+        for (id, job) in &jobs {
+            std::fs::create_dir_all(mailbox.join(id)).unwrap();
+            std::fs::write(mailbox.join(id).join("job.json"), job.to_string()).unwrap();
+        }
+        let live: HashSet<String> = ["w4:p1".to_string(), "w4:p2".to_string()].into_iter().collect();
+        let (_, val, lines) = status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+        assert_eq!(val["jobs"][0]["read_only"], "enforced");
+        assert_eq!(val["jobs"][1]["read_only"], "not-enforced");
+        assert!(val["jobs"][2].get("read_only").is_none(), "{}", val["jobs"][2]);
+        let line = |id: &str| lines.iter().find(|l| l.starts_with(&format!("{id}:"))).unwrap().clone();
+        assert!(line("job-a").contains(" read_only=enforced"), "{}", line("job-a"));
+        assert!(line("job-b").contains(" read_only=not-enforced"), "{}", line("job-b"));
+        assert!(!line("job-c").contains("read_only"), "{}", line("job-c"));
+    }
+
+    #[test]
     fn status_reports_context_and_turns_from_the_recorded_transcript() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -2280,6 +2413,79 @@ mod tests {
     }
 
     #[test]
+    fn status_parks_a_long_blocked_paseo_job_and_carries_usage_and_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let now = chrono::Utc::now();
+        let mut inspect_map = std::collections::HashMap::new();
+        for (job, agent, age) in [("job-park-old", "agent-old", 121), ("job-park-new", "agent-new", 119)] {
+            let dir = bee_dir.join("mailbox").join(job);
+            std::fs::create_dir_all(&dir).unwrap();
+            let spec = serde_json::json!({
+                "job_id": job,
+                "transport": "paseo",
+                "paseo_agent_id": agent,
+                "round": 1,
+                "paseo_mode_observed": "default",
+                "usage": {"input": 100, "output": 20, "cache_read": null, "cache_write": null, "total_tokens": 1500, "cost_usd": 0.125, "source": "pi-session"}
+            });
+            std::fs::write(dir.join("job.json"), spec.to_string()).unwrap();
+            let updated = (now - chrono::Duration::seconds(age)).to_rfc3339();
+            inspect_map.insert(
+                agent.to_string(),
+                Ok(serde_json::json!({
+                    "Status": "running",
+                    "UpdatedAt": updated,
+                    "Mode": "ask",
+                    "PendingPermissions": [{ "id": "req-9", "tool": "terminal.exec" }]
+                })
+                .to_string()),
+            );
+        }
+        let ls = serde_json::json!([
+            {"id": "agent-old", "labels": {"bee_job": "job-park-old"}, "archived": false},
+            {"id": "agent-new", "labels": {"bee_job": "job-park-new"}, "archived": false}
+        ]);
+        let fake = FakeHerdingPaseoCli { ls_out: Ok(ls.to_string()), inspect_map };
+
+        let (exit, val, _) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        let jobs = val.get("jobs").and_then(Value::as_array).unwrap();
+        let job = |id: &str| jobs.iter().find(|j| j["job_id"] == id).unwrap().clone();
+
+        let old = job("job-park-old");
+        assert_eq!(old["parked"], Value::Bool(true), "{old}");
+        let reason = old["parked_reason"].as_str().unwrap();
+        assert!(reason.contains("terminal.exec"), "{reason}");
+        assert!(reason.contains("mode ask"), "{reason}");
+        assert!(reason.contains("bee herding permit job-park-old allow|deny"), "{reason}");
+        assert_eq!(old["paseo_mode_observed"], "default");
+        assert_eq!(old["tokens"], 1500);
+        assert_eq!(old["cost_usd"], 0.125);
+
+        let fresh = job("job-park-new");
+        assert_eq!(fresh["paseo_state"], "blocked");
+        assert!(fresh.get("parked").is_none(), "{fresh}");
+        assert!(fresh.get("parked_reason").is_none(), "{fresh}");
+
+        let (_, _, lines) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        let line = lines.iter().find(|l| l.starts_with("job-park-old:")).unwrap();
+        assert!(line.contains("parked=true") && line.contains("tokens=1.5k") && line.contains("cost=$0.1250"), "{line}");
+    }
+
+    #[test]
     fn status_finds_untracked_agents_by_job_agent_id_when_ls_has_no_labels() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -2315,6 +2521,51 @@ mod tests {
             .filter_map(Value::as_str)
             .collect();
         assert_eq!(untracked, vec!["agent-real"]);
+    }
+
+    #[test]
+    fn status_untracked_reads_paseo_state_from_disk_before_paseo_ls() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let done = bee_dir.join("mailbox").join("job-done");
+        std::fs::create_dir_all(&done).unwrap();
+        std::fs::write(done.join("result-1.json"), "{}").unwrap();
+        let home = tmp.path().join("paseo-home");
+        let proj = home.join("agents").join("proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("agent-disk.json"), r#"{"id":"agent-disk","labels":{"bee_job":"job-done"},"archivedAt":null}"#).unwrap();
+        std::fs::write(proj.join("agent-gone.json"), r#"{"id":"agent-gone","labels":{"bee_job":"job-done"},"archivedAt":"2026-10-12T00:00:00Z"}"#).unwrap();
+        let ls_json = serde_json::json!([{"id": "agent-cli", "labels": {"bee_job": "job-done"}}]).to_string();
+        let fake = FakeHerdingPaseoCli { ls_out: Ok(ls_json), inspect_map: std::collections::HashMap::new() };
+        let untracked = |val: &Value| -> Vec<String> {
+            val.get("untracked_paseo_agents")
+                .and_then(Value::as_array)
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        };
+
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = Some(home.clone()));
+        let (_e, disk_val, _l) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = Some(tmp.path().join("no-home")));
+        let (_e, cli_val, _l) = status_with_panes_and_transport_and_paseo(
+            &["--main-root", root_str, "--json"],
+            None,
+            Some(Some(HashSet::new())),
+            Some(&fake),
+        );
+        paseo_state::TEST_PASEO_HOME.with(|h| *h.borrow_mut() = None);
+
+        assert_eq!(untracked(&disk_val), vec!["agent-disk"]);
+        assert_eq!(untracked(&cli_val), vec!["agent-cli"]);
     }
 
     #[test]

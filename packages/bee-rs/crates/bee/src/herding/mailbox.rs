@@ -384,9 +384,13 @@ timestamp:\n\n\
 Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
 instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
 may have loaded into your context — you are not part of that workflow{expertise_clause}. \
-Never run any `bee` command. Never claim, cap, or write workflow state under .bee/ - \
+Never run any `bee` command except `bee herding notify`. Never claim, cap, or write workflow state under .bee/ - \
 writing your mailbox report and result files (described below) is the ONE \
-exception. Those two files are your only contract.\n\n\
+exception. Those two files are your only contract.\n\
+While you work you may send your leader a short note with \
+`bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text>`.\n\
+A note never ends your turn: keep working after you send it.\n\
+A question you must stop for still goes in your result file, not in a note.\n\n\
 # Task\n\n\
 {task}\n\n\
 {expertise_block}\
@@ -1240,19 +1244,22 @@ mod tests {
         assert!(standalone_pos < task_pos, "standalone-executor block must come before # Task:\n{text}");
         assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
         assert!(!text.contains("files listed under the Expertise section are yours to read"), "zero-expertise must omit expertise-reading wording:\n{text}");
-        assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
-        // slp-followup-gaps D6: the brief must still never name a bee
-        // COMMAND — that half of the old pin is unchanged, and the general
-        // scan below makes it stronger than the one literal it used to be.
-        // The other half banned the bare substring "dissent", which pinned
-        // 6a6b9975's OLD boundary (herding-lane dissent was out of scope).
-        // This feature IS that boundary moving, so the FIELD NAME is now
-        // expected in the result schema, and only the command form is banned.
+        assert!(
+            text.contains("Never run any `bee` command except `bee herding notify`."),
+            "missing never-run-bee wording with its one exception:\n{text}"
+        );
+        assert!(text.contains("A note never ends your turn"), "missing the notify turn rule:\n{text}");
+        assert!(text.contains("still goes in your result file"), "missing the question-in-result rule:\n{text}");
         assert!(!text.contains("bee cells"), "the brief names a bee verb:\n{text}");
+        let mentions = bee_command_mentions(&text);
+        assert!(
+            !mentions.is_empty() && mentions.iter().all(|w| w == "herding"),
+            "the brief names a bee command other than bee herding notify: {mentions:?}\n{text}"
+        );
         assert_eq!(
-            bee_command_mentions(&text),
-            Vec::<String>::new(),
-            "the brief names a bee command:\n{text}"
+            text.matches("bee herding ").count(),
+            text.matches("bee herding notify").count(),
+            "the brief names a herding verb other than notify:\n{text}"
         );
         assert!(
             text.contains("\"dissent\""),

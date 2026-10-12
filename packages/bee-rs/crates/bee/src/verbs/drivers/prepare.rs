@@ -2609,6 +2609,9 @@ pub(crate) fn prepare_dispatch_wire(
                         command.push('"');
                     }
                 }
+                if kind == "gather" || kind == "advisor" {
+                    command.push_str(" --read-only");
+                }
                 // pi-native-stage-driver D1, D3, D11: on runtime pi, when the configured
                 // agent is a pi binary, choose the no-pane runner. The flag is appended
                 // here inside the herding arm so --seat, the 600 s hat clamp and
@@ -6249,10 +6252,10 @@ mod pi_native_door_tests {
                 let Prepared::Value(v) = out else { panic!("expected prepared value on {runtime} {kind}") };
                 let command = v["payload"]["command"].as_str().expect("command");
                 assert!(!command.contains("--no-pane"), "{runtime} {kind} herding command must not contain --no-pane: {command}");
-                let expected = if kind == "cell" {
-                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\""
-                } else {
-                    ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\""
+                let expected = match kind {
+                    "cell" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --cell-id \"c-1\"",
+                    "gather" | "advisor" => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\" --read-only",
+                    _ => ".bee/bin/bee herding run --task-file - --json --agent \"pi-agent\"",
                 };
                 assert_eq!(
                     command,

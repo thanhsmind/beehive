@@ -91,7 +91,10 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         process.env.BEE_SUPERVISOR_ALLOWED.trim().length > 0,
     )
 
-    if ((isHerdedPaseoWorker || isSupervisorGuarded) && mapped.tool_name === "Bash") {
+    const isReadOnlyWorker =
+      isHerdedPaseoWorker && Boolean(process.env.BEE_HERDING_READ_ONLY?.trim())
+
+    if ((isHerdedPaseoWorker || isSupervisorGuarded) && (mapped.tool_name === "Bash" || isReadOnlyWorker)) {
       const beeBinary = resolveBeeBinary(directory)
       if (!beeBinary) {
         return block(

@@ -207,6 +207,7 @@ struct Options {
     pub(crate) question_of: Option<String>,
     pub(crate) question_round: u32,
     pub(crate) allow_question: bool,
+    pub(crate) read_only: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -310,6 +311,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut question_of: Option<&str> = None;
     let mut question_round: u32 = 0;
     let mut allow_question = true;
+    let mut read_only = false;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -411,6 +413,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 allow_question = false;
                 i += 1;
             }
+            "--read-only" => {
+                read_only = true;
+                i += 1;
+            }
             _ => i += 1,
         }
     }
@@ -465,6 +471,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         question_of: question_of.map(str::to_string),
         question_round,
         allow_question,
+        read_only,
     })
 }
 
@@ -2593,6 +2600,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3007,6 +3015,119 @@ pub(crate) fn parse_child_jsonl(stdout: &str) -> ChildOutput {
     }
 }
 
+fn pi_usage(u: &Value) -> Map<String, Value> {
+    let num = |v: Option<&Value>| v.filter(|v| v.is_number()).cloned().unwrap_or(Value::Null);
+    let mut m = Map::new();
+    m.insert("input".into(), num(u.get("input")));
+    m.insert("output".into(), num(u.get("output")));
+    m.insert("cache_read".into(), num(u.get("cacheRead")));
+    m.insert("cache_write".into(), num(u.get("cacheWrite")));
+    m.insert("total_tokens".into(), num(u.get("totalTokens")));
+    m.insert("cost_usd".into(), num(u.get("cost").and_then(|c| c.get("total"))));
+    m
+}
+
+fn inspect_usage(u: &Value) -> Map<String, Value> {
+    let num = |k: &str| u.get(k).filter(|v| v.is_number()).cloned().unwrap_or(Value::Null);
+    let (input, output) = (num("inputTokens"), num("outputTokens"));
+    let total = match (input.as_u64(), output.as_u64()) {
+        (Some(i), Some(o)) => Value::from(i + o),
+        _ => Value::Null,
+    };
+    let mut m = Map::new();
+    m.insert("input".into(), input);
+    m.insert("output".into(), output);
+    m.insert("cache_read".into(), num("cachedInputTokens"));
+    m.insert("cache_write".into(), Value::Null);
+    m.insert("total_tokens".into(), total);
+    m.insert("cost_usd".into(), num("totalCostUsd"));
+    m
+}
+
+fn add_usage(acc: &mut Map<String, Value>, add: Map<String, Value>) {
+    for (k, v) in add {
+        let sum = match (acc.get(&k), &v) {
+            (_, Value::Null) => continue,
+            (Some(a), b) if a.is_u64() && b.is_u64() => Value::from(a.as_u64().unwrap_or(0) + b.as_u64().unwrap_or(0)),
+            (Some(a), b) if a.is_number() => Value::from(a.as_f64().unwrap_or(0.0) + b.as_f64().unwrap_or(0.0)),
+            _ => v,
+        };
+        acc.insert(k, sum);
+    }
+}
+
+fn pi_session_usage(text: &str) -> Option<Map<String, Value>> {
+    let mut total: Option<Map<String, Value>> = None;
+    for line in text.lines() {
+        let Ok(v) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        let usage = v
+            .get("usage")
+            .or_else(|| v.get("message").and_then(|m| m.get("usage")))
+            .filter(|u| u.is_object());
+        if let Some(u) = usage {
+            let acc = total.get_or_insert_with(|| pi_usage(&Value::Null));
+            add_usage(acc, pi_usage(u));
+        }
+    }
+    total
+}
+
+fn round_usage(
+    agent_id: &str,
+    cli: &dyn PaseoCli,
+    provider: Option<&str>,
+    home: Option<&Path>,
+) -> Result<Map<String, Value>, String> {
+    let inspect = cli.call(&paseo::inspect_argv(agent_id)).ok().and_then(|out| paseo::parse_inspect_full(&out));
+    if let Some(lu) = inspect.and_then(|i| i.last_usage) {
+        let mut m = inspect_usage(&lu);
+        m.insert("source".into(), Value::from("inspect"));
+        return Ok(m);
+    }
+    let record = home.and_then(|h| super::paseo_state::find_agent(h, agent_id));
+    let provider = provider.or(record.as_ref().and_then(|r| r.provider.as_deref()));
+    if provider != Some("pi") {
+        return Err(format!(
+            "paseo inspect LastUsage is null and provider {} has no session usage source",
+            provider.unwrap_or("unknown")
+        ));
+    }
+    let handle = record
+        .and_then(|r| r.native_handle)
+        .ok_or_else(|| "paseo inspect LastUsage is null and the pi session file is not known (no paseo agent state with persistence.nativeHandle)".to_string())?;
+    let text = std::fs::read_to_string(&handle).map_err(|e| format!("pi session file {handle} is not readable: {e}"))?;
+    let mut m = pi_session_usage(&text).ok_or_else(|| format!("pi session file {handle} has no usage entries"))?;
+    m.insert("source".into(), Value::from("pi-session"));
+    Ok(m)
+}
+
+fn record_round_usage(
+    bee_dir: &Path,
+    job_id: &str,
+    agent_id: &str,
+    cli: &dyn PaseoCli,
+    provider: Option<&str>,
+    home: Option<&Path>,
+) {
+    let usage = round_usage(agent_id, cli, provider, home);
+    let job_path = mailbox::job_path(bee_dir, job_id);
+    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut map)) = crate::fsutil::read_json(&job_path) {
+        match usage {
+            Ok(u) => {
+                map.insert("usage".into(), Value::Object(u));
+                map.remove("usage_unavailable");
+            }
+            Err(reason) => {
+                map.insert("usage".into(), Value::Null);
+                map.insert("usage_unavailable".into(), Value::String(reason));
+            }
+        }
+        let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
+    }
+}
+
 /// Executes a worker as a direct child process without creating a tmux pane (pnsd-2, D11).
 pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
     let bee_dir = opts.main_root.join(".bee");
@@ -3046,6 +3167,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -3215,11 +3337,10 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         .trim()
         .to_string();
 
-    let proof = if let Some(u) = &output.usage {
-        let tokens = u.get("totalTokens").and_then(Value::as_u64).unwrap_or(0);
+    let proof = if let Some(u) = output.usage.as_ref().map(pi_usage) {
+        let tokens = u.get("total_tokens").and_then(Value::as_u64).unwrap_or(0);
         let cost_str = u
-            .get("cost")
-            .and_then(|c| c.get("total"))
+            .get("cost_usd")
             .and_then(Value::as_f64)
             .map(|c| format!(", cost: ${c:.6}"))
             .unwrap_or_default();
@@ -3265,6 +3386,17 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
 }
 
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
+    let provider_is_pi = spec.provider.trim().eq_ignore_ascii_case("pi");
+    if opts.read_only && !provider_is_pi {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!(
+                "read-only run refused: Paseo provider \"{}\" has no bee guard to keep the worker read-only — FIX: route this gather or advisor to a Paseo agent on provider pi, the supported read-only Paseo provider",
+                spec.provider
+            )),
+            pane_id: None,
+            closed_pane: false,
+        };
+    }
     let bee_dir = opts.main_root.join(".bee");
     if !opts.dry_run {
         write_inbox_marker(&bee_dir, opts);
@@ -3302,6 +3434,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         "leader_session": resolve_leader_session(),
         "question_of": opts.question_of,
         "question_round": opts.question_round,
+        "read_only": opts.read_only,
         "transport": "paseo",
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
@@ -3357,8 +3490,11 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         &opts.pane_env_passthrough,
         &opts.job_id,
     );
+    if opts.read_only {
+        child_env.insert("BEE_HERDING_READ_ONLY".to_string(), "1".to_string());
+    }
 
-    if spec.isolated_config && spec.provider.trim().eq_ignore_ascii_case("pi") {
+    if spec.isolated_config && provider_is_pi {
         let home_buf = pi_home_dir();
         let home = home_buf.as_path();
         let agent_name = opts.agent.as_deref().unwrap_or("paseo");
@@ -3879,6 +4015,7 @@ fn record_observed_model(
         if !map.contains_key("paseo_model_observed") {
             map.insert("paseo_model_observed".into(), Value::String(obs_model_str));
             map.insert("paseo_thinking_observed".into(), Value::String(obs_thinking_str));
+            map.insert("paseo_mode_observed".into(), info.mode.clone().map_or(Value::Null, Value::String));
             if is_mismatch {
                 map.insert("paseo_model_mismatch".into(), Value::Bool(true));
             }
@@ -4003,7 +4140,7 @@ fn wait_for_round_paseo(
     cmd: &str,
 ) -> PollDecision {
     let mut wait_source = RealWaitSource::new(cmd, agent_id);
-    wait_for_round_paseo_driven(
+    let decision = wait_for_round_paseo_driven(
         bee_dir,
         job_id,
         agent_id,
@@ -4018,7 +4155,10 @@ fn wait_for_round_paseo(
         POLL_INTERVAL,
         |d| std::thread::sleep(d),
         now_ms,
-    )
+    );
+    let home = super::paseo_state::resolve_home(cmd);
+    record_round_usage(bee_dir, job_id, agent_id, cli, spec.map(|s| s.provider.as_str()), home.as_deref());
+    decision
 }
 
 fn wait_for_round_paseo_driven(
@@ -6860,6 +7000,7 @@ mod tests {
             question_of: None,
             question_round: 0,
             allow_question: true,
+            read_only: false,
         }
     }
 
@@ -6943,6 +7084,7 @@ mod tests {
             question_of: None,
             question_round: 0,
             allow_question: true,
+            read_only: false,
         }
     }
 
@@ -11764,6 +11906,62 @@ mod tests {
 
         let calls = fake.calls.lock().unwrap();
         assert!(calls.iter().any(|c| c == &["archive", "--force", "paseo-agent-happy"]));
+        let job = read_job(&mailbox::job_path(&bee_dir, &opts.job_id));
+        assert_eq!(job["usage"], Value::Null);
+        assert!(job["usage_unavailable"].is_string(), "{job}");
+    }
+
+    #[test]
+    fn execute_paseo_read_only_pi_sets_the_env_and_no_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.read_only = true;
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let spec = PaseoSpec { provider: "pi".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-ro\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::Result(_)));
+        let calls = fake.calls.lock().unwrap();
+        let run = calls.iter().find(|c| c.first().map(String::as_str) == Some("run")).expect("run call");
+        assert!(run.iter().any(|a| a == "BEE_HERDING_READ_ONLY=1"), "{run:?}");
+        assert!(!run.iter().any(|a| a == "--mode"), "{run:?}");
+        let job: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("job.json")).unwrap()).unwrap();
+        assert_eq!(job["read_only"], Value::Bool(true));
+    }
+
+    #[test]
+    fn execute_paseo_read_only_refuses_a_non_pi_provider_before_spawn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.read_only = true;
+        let spec = PaseoSpec { provider: "codex".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"x\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("FIX:") && msg.contains("provider pi"), "{msg}"),
+            _ => panic!("expected a refusal"),
+        }
+        assert!(fake.calls.lock().unwrap().is_empty());
+        assert!(!mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id).exists());
     }
 
     #[test]
@@ -12805,7 +13003,7 @@ mod tests {
         let fake = FakePaseoCli::new(
             Ok("0.10.3\n".to_string()),
             Ok("{\"agentId\":\"agent-psm\"}\n".to_string()),
-            Ok("{\"Status\":\"running\",\"Model\":\"claude-3-5-sonnet\",\"Thinking\":\"high\"}\n".to_string()),
+            Ok("{\"Status\":\"running\",\"Model\":\"claude-3-5-sonnet\",\"Thinking\":\"high\",\"Mode\":\"default\"}\n".to_string()),
             Ok("archived\n".to_string()),
         );
 
@@ -12843,6 +13041,112 @@ mod tests {
         let parsed: Value = serde_json::from_str(&content).unwrap();
         assert_eq!(parsed["paseo_model_observed"], "claude-3-5-sonnet");
         assert_eq!(parsed["paseo_thinking_observed"], "high");
+        assert_eq!(parsed["paseo_mode_observed"], "default");
+
+        let later = paseo::PaseoInspect { model: Some("other".into()), mode: Some("plan".into()), ..Default::default() };
+        record_observed_model(&bee_dir, job_id, "agent-psm", &later, Some(&spec));
+        let again: Value = serde_json::from_str(&std::fs::read_to_string(&job_file).unwrap()).unwrap();
+        assert_eq!(again["paseo_mode_observed"], "default");
+        assert_eq!(again["paseo_model_observed"], "claude-3-5-sonnet");
+    }
+
+    fn usage_job(bee_dir: &Path, job_id: &str) -> PathBuf {
+        std::fs::create_dir_all(mailbox::mailbox_dir(bee_dir, job_id)).unwrap();
+        let job_file = mailbox::job_path(bee_dir, job_id);
+        std::fs::write(&job_file, r#"{"job_id":"j","round":1}"#).unwrap();
+        job_file
+    }
+
+    fn inspect_fake(inspect: &str) -> FakePaseoCli {
+        FakePaseoCli::new(Ok("0.11.2\n".into()), Ok(String::new()), Ok(inspect.to_string()), Ok("archived\n".into()))
+    }
+
+    fn read_job(path: &Path) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn round_usage_takes_inspect_last_usage_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_file = usage_job(&bee_dir, "job-u-inspect");
+        let fake = inspect_fake(r#"{"Status":"idle","LastUsage":{"inputTokens":120,"outputTokens":45,"cachedInputTokens":10,"totalCostUsd":0.02}}"#);
+        record_round_usage(&bee_dir, "job-u-inspect", "agent-u", &fake, Some("claude"), None);
+        let job = read_job(&job_file);
+        assert_eq!(
+            job["usage"],
+            serde_json::json!({"input":120,"output":45,"cache_read":10,"cache_write":null,"total_tokens":165,"cost_usd":0.02,"source":"inspect"})
+        );
+        assert!(job.get("usage_unavailable").is_none());
+    }
+
+    #[test]
+    fn round_usage_sums_the_pi_session_file_when_last_usage_is_null() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let job_file = usage_job(&bee_dir, "job-u-pi");
+        let session = tmp.path().join("session.jsonl");
+        std::fs::write(
+            &session,
+            [
+                r#"{"type":"session","id":"s1"}"#,
+                r#"{"type":"message","message":{"role":"assistant","usage":{"input":100,"output":20,"cacheRead":5,"cacheWrite":1,"totalTokens":126,"cost":{"total":0.5}}}}"#,
+                "not json",
+                r#"{"type":"message","message":{"role":"user"}}"#,
+                r#"{"type":"message","usage":{"input":10,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":12,"cost":{"total":0.25}}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+        let home = tmp.path().join("paseo");
+        std::fs::create_dir_all(home.join("agents/proj")).unwrap();
+        std::fs::write(
+            home.join("agents/proj/agent-pi.json"),
+            serde_json::json!({"id":"agent-pi","provider":"pi","persistence":{"nativeHandle":session.display().to_string()}}).to_string(),
+        )
+        .unwrap();
+        let fake = inspect_fake(r#"{"Status":"idle","LastUsage":null}"#);
+        record_round_usage(&bee_dir, "job-u-pi", "agent-pi", &fake, None, Some(&home));
+        let job = read_job(&job_file);
+        assert_eq!(
+            job["usage"],
+            serde_json::json!({"input":110,"output":22,"cache_read":5,"cache_write":1,"total_tokens":138,"cost_usd":0.75,"source":"pi-session"})
+        );
+        assert!(job.get("usage_unavailable").is_none());
+    }
+
+    #[test]
+    fn round_usage_is_null_with_a_reason_when_no_source_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let fake = inspect_fake(r#"{"Status":"idle","LastUsage":null}"#);
+
+        let pi_job = usage_job(&bee_dir, "job-u-none");
+        record_round_usage(&bee_dir, "job-u-none", "agent-none", &fake, Some("pi"), None);
+        let job = read_job(&pi_job);
+        assert_eq!(job["usage"], Value::Null);
+        assert!(job["usage_unavailable"].as_str().unwrap().contains("nativeHandle"), "{job}");
+
+        let codex_job = usage_job(&bee_dir, "job-u-codex");
+        record_round_usage(&bee_dir, "job-u-codex", "agent-codex", &fake, Some("codex"), None);
+        let job = read_job(&codex_job);
+        assert_eq!(job["usage"], Value::Null);
+        assert!(job["usage_unavailable"].as_str().unwrap().contains("provider codex"), "{job}");
+
+        let empty = tmp.path().join("empty.jsonl");
+        std::fs::write(&empty, "{\"type\":\"session\"}\n").unwrap();
+        let home = tmp.path().join("paseo");
+        std::fs::create_dir_all(home.join("agents/p")).unwrap();
+        std::fs::write(
+            home.join("agents/p/agent-empty.json"),
+            serde_json::json!({"id":"agent-empty","provider":"pi","persistence":{"nativeHandle":empty.display().to_string()}}).to_string(),
+        )
+        .unwrap();
+        let empty_job = usage_job(&bee_dir, "job-u-empty");
+        record_round_usage(&bee_dir, "job-u-empty", "agent-empty", &fake, None, Some(&home));
+        let job = read_job(&empty_job);
+        assert_eq!(job["usage"], Value::Null);
+        assert!(job["usage_unavailable"].as_str().unwrap().contains("no usage entries"), "{job}");
     }
 
     #[test]
