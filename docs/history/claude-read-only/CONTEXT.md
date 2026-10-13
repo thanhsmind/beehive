@@ -32,5 +32,5 @@ those roles can run there. The pi path and herdr/tmux runs do not change.
 
 ## Out of scope
 
-- Usage and cost for claude workers (inspect `LastUsage` has no numbers; the Claude transcript is a later source).
+- Usage and cost for claude workers (inspect `LastUsage` has no numbers; the Claude transcript is a later source; trigger `a-feature-picks-up-the-backlog-row-recor__ce30c059`).
 - Changing the team role mapping (the user edits `.bee/config.json`; the config guard refuses the agent).
