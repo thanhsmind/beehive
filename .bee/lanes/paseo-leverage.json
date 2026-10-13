@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"paseo-leverage\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at 5068a0f; reload the product and test \"paseo-leverage\", then either approve uat (\"bee gate --name uat --approved true --lane paseo-leverage\") or fix it in the worktree and merge again.",

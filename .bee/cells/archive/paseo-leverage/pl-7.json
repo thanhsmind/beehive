@@ -1,0 +1,115 @@
+{
+  "id": "pl-7",
+  "feature": "paseo-leverage",
+  "title": "Document the Paseo leverage features",
+  "lane": "high-risk",
+  "role": "docs",
+  "deps": [
+    "pl-1",
+    "pl-2",
+    "pl-3",
+    "pl-4",
+    "pl-5",
+    "pl-6"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "D8"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Update the Paseo channel concept for D1-D8 in its existing style (ASD-STE100, short sentences, decision citations by store id: a7071d2b, 168b8037, 33df9d0d, 89d24cf0, 1742a721, 12211a7d, 28b0b5c2, 6fc537f6): mid-flight messages and their delivery limits, read-only runs and their write zone, observed mode and parked, the Unknown-never-died rule (one line), usage in job.json and status, the fork verb and its undo, the on-disk reader and its fallback, and the live contract test command. Add the new code files to Pointers and the new decisions to the frontmatter decisions list.",
+  "verify": "rg -n 'herding notify|herding fork|read-only|parked|usage_unavailable|paseo_live' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+  "must_haves": {
+    "truths": [
+      "The concept names notify, fork, read-only, parked, usage and the live test",
+      "Pointers list paseo_state.rs, fork.rs and notify.rs"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "sections for each new behavior"
+      }
+    ],
+    "key_links": [
+      "each section cites its decision"
+    ],
+    "prohibitions": [
+      "No code comments added anywhere"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-7",
+    "outcome": "Paseo channel concept documents notify, read-only, parked, usage, fork, on-disk reader and live test",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "Cited D3=a7067517, D4=33df9d0d, D5=89d24cf0, D6=1742a721, D7=12211a7d, D8=28b0b5c2, and 6fc537f6 as the hat-wave refinements — the cell listed the ids off by one from D3 on, and .bee/decisions.jsonl maps them this way — the plan was wrong about a fact",
+      "Wrote that herdr and tmux runs record read_only but nothing enforces it, instead of saying status shows not enforced — herding.rs has no read_only or not-enforced status field, so I did not claim one — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T09:11:18.940Z",
+    "behavior_change": false,
+    "verification_evidence": "docs change; cell verify matched 13 lines, every new Pointer path exists (test -f), and each store id matches .bee/decisions.jsonl",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "rg -n 'herding notify|herding fork|read-only|parked|usage_unavailable|paseo_live' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "claimed_at": "2026-10-12T09:09:01.984Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "the-paseo-channel.md now documents D1-D8: Mid-flight messages, Read-only runs, Observed mode and parked workers, Usage in job.json, Unknown line under Liveness states, Forking a Paseo agent, The on-disk agent reader, The live contract test; Pointers add paseo_state.rs, fork.rs, notify.rs, paseo_live_contract.rs; frontmatter decisions and owns.code updated",
+      "commit": "9a716bf9e",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "rg -n 'herding notify|herding fork|read-only|parked|usage_unavailable|paseo_live' docs/knowledge/areas/bee-herding/the-paseo-channel.md — green:static — docs change; cell verify matched 13 lines, every new Pointer path exists (test -f), and each store id matches .bee/decisions.jsonl",
+      "deviations": [
+        "Cited D3=a7067517, D4=33df9d0d, D5=89d24cf0, D6=1742a721, D7=12211a7d, D8=28b0b5c2, and 6fc537f6 as the hat-wave refinements — the cell listed the ids off by one from D3 on, and .bee/decisions.jsonl maps them this way — the plan was wrong about a fact",
+        "Wrote that herdr and tmux runs record read_only but nothing enforces it, instead of saying status shows not enforced — herding.rs has no read_only or not-enforced status field, so I did not claim one — the plan was wrong about a fact"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The concept names notify, fork, read-only, parked, usage and the live test",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "Pointers list paseo_state.rs, fork.rs and notify.rs",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "each section cites its decision",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-12T09:11:45.270Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

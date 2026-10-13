@@ -1,0 +1,158 @@
+{
+  "id": "pl-5",
+  "feature": "paseo-leverage",
+  "title": "Add bee herding notify mid-flight messages",
+  "lane": "high-risk",
+  "role": "code",
+  "deps": [
+    "pl-2",
+    "pl-4"
+  ],
+  "decisions": [
+    "D1",
+    "a7071d2b",
+    "6fc537f6",
+    "657bbe71-47c9-42a0-8b2c-a52dca546f8e",
+    "3804d15f-38fa-4069-81ff-facdb6569d13"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/notify.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/paseo-leverage/CONTEXT.md",
+    ".pi/extensions/bee-guard/result-inbox.ts",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Per D1 and its refinement. (1) New verb `bee herding notify --kind <question|blocked|dependency|progress|reopen> --text <text> [--correlation-id <id>] [--json]` in herding/notify.rs, registered in the herding.rs match table, in generated/registry_payload.json (same shape as `bee herding steer`), and asserted in the catalog.rs test. It refuses unless BEE_HERDING_JOB_ID is set, and appends one newline-terminated JSON line {job_id, cell_id (from job.json), kind, text, correlation_id, at} to `.bee/mailbox/<that job>/messages.jsonl`, resolving the main root as other herding verbs do. It never calls paseo. (2) herding.rs status: each job gains `messages` (total lines), `unread_messages` (lines past the byte offset stored in the job's `messages.cursor`, counting only newline-terminated lines; absent cursor = 0) and `last_message` (kind and text). (3) mailbox.rs `render_brief`: change `Never run any \\`bee\\` command.` to name `bee herding notify` as the one exception, and add at most three lines saying the worker may run it while it works, that it never ends the turn, and that a question it must stop for still goes in the result; update the existing test that asserts the never-run wording. (4) result-inbox.ts: add `sendLeaderMessageOutcome` returning \"steer\" | \"turn\" | \"skipped\", and make `sendLeaderMessage` wrap it with its current boolean meaning unchanged. In `drainResultInbox`, for each tracked job (inbox-session jobs only), read messages.jsonl past messages.cursor (newline-terminated lines only), render each through `headerValue` inside a fixed `bee-message` fence carrying job, cell, kind, correlation id, the same data-not-instructions note results carry, and the action line `the worker keeps working; its answer comes in its result; redirect with bee herding steer --job <id>`, send with `sendLeaderMessageOutcome`, and advance messages.cursor only on steer or turn. The message pass runs even when the job has no result yet, and does not change the result-claim rename or the one-result-per-tick return. Tests: verb refusal without the env, append shape, unknown kind refusal, status counts with and without a cursor, brief exception present; a node-run drain test in pi_plugin_contracts.rs that a new line is delivered once, a skipped send is retried on the next tick, and the injected text sits inside the fence.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee notify && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee render_brief && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "must_haves": {
+    "truths": [
+      "notify without BEE_HERDING_JOB_ID refuses",
+      "notify appends one line with the given kind to the job's messages.jsonl",
+      "an unknown kind refuses",
+      "status shows messages, unread_messages and last_message",
+      "the brief names bee herding notify as the one allowed bee command",
+      "the Pi drain delivers a new message once, retries a skipped send, and fences the text as data",
+      "sendLeaderMessage keeps its boolean result"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/notify.rs",
+        "substantive": "notify verb with tests"
+      }
+    ],
+    "key_links": [
+      "the brief tells the worker about notify",
+      "the drain reads messages.jsonl and messages.cursor",
+      "registry_payload.json lists bee herding notify"
+    ],
+    "prohibitions": [
+      "No paseo send for messages",
+      "No change to the question outcome or result schema",
+      "No change to the result-claim flow"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-pl-5",
+    "outcome": "Pinned flag count bumped to 224 for the notify --correlation-id flag",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "followed the plan"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-12T09:19:05.869Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify chain (notify 8, render_brief 19, pi_plugin_contracts 122, heartbeat 26, registry 12) plus the reopen fix test cargo test -p bee distinct_flag_vocabulary_is_pinned (1 passed); the full suite was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee notify && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee render_brief && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-10-12T09:16:37.143Z",
+    "sync_ack": "the cell names no bee-herding skill file (affects_skills is empty); pl-7 carries the paseo-leverage docs, and skill text is a scope question for the orchestrator",
+    "mistakes": [
+      {
+        "wrong": "Ran cargo test --lib on the bin-only bee crate and got zero tests with exit 0",
+        "better": "run the cell verify shape (-p bee <filter>) and read the test names in the output",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Pinned flag count bumped 223 to 224 in catalog.rs test distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision for the --correlation-id flag of bee herding notify (decision 0b4545c4); prior notify/status/brief/drain work from 0f3bd2637 unchanged",
+      "commit": "696b2b82e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee notify && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee render_brief && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — the cell verify chain (notify 8, render_brief 19, pi_plugin_contracts 122, heartbeat 26, registry 12) plus the reopen fix test cargo test -p bee distinct_flag_vocabulary_is_pinned (1 passed); the full suite was not run",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [],
+      "baseline": "on 91ac750e6 distinct_flag_vocabulary_is_pinned failed: count changed from 223 to 224 (per the reopen reason)"
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "notify without BEE_HERDING_JOB_ID refuses",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          },
+          {
+            "requirement": "notify appends one line with the given kind to the job's messages.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          },
+          {
+            "requirement": "an unknown kind refuses",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/notify.rs"
+          },
+          {
+            "requirement": "status shows messages, unread_messages and last_message",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "the brief names bee herding notify as the one allowed bee command",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+          },
+          {
+            "requirement": "the Pi drain delivers a new message once, retries a skipped send, and fences the text as data",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "sendLeaderMessage keeps its boolean result",
+            "artifact": ".pi/extensions/bee-guard/result-inbox.ts"
+          },
+          {
+            "requirement": "registry_payload.json lists bee herding notify",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-12T09:08:50.685Z",
+        "recorded_by": "c1c2e89c-1e38-4710-ab2f-4916863fd63f",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": "on 91ac750e6 distinct_flag_vocabulary_is_pinned failed: count changed from 223 to 224 (per the reopen reason)",
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-12T09:13:20.728Z",
+    "reopened_reason": "Full suite red: catalog::tests::distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision fails 'distinct flag-name count changed from 223 to 224'. The new name is correlation-id from bee herding notify. Decision 0b4545c4 records why no existing flag means the same thing. Fix: set const PINNED_FLAG_COUNT: usize = 223 to 224 in catalog.rs (a file this cell owns), no code comment; prove with cargo test -p bee distinct_flag_vocabulary_is_pinned plus the cell verify.",
+    "no_mistakes": true
+  }
+}

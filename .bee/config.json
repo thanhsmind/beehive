@@ -200,84 +200,92 @@
     "codex": {
       "code": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "author or repair tests, red-first"
       },
       "docs": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "doc edits and parity sweeps"
       },
       "plan": {
-        "kind": "herding", "agent": "paseo-claude-sonnet",
+        "kind": "herding",
+        "agent": "paseo-claude-sonnet",
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
-        "kind": "herding", "agent": "paseo-claude-sonnet",
+        "kind": "herding",
+        "agent": "paseo-claude-sonnet",
         "description": "independent read-only check of a claim or diff"
       },
       "advisor": {
-        "kind": "herding", "agent": "paseo-claude-opus",
+        "kind": "herding",
+        "agent": "paseo-claude-opus",
         "description": "session-class consult for high-risk gates"
       },
       "supervisor": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
-        "kind": "herding", "agent": "paseo-claude-opus",
+        "kind": "herding",
+        "agent": "paseo-claude-opus",
         "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-2": {
-        "kind": "herding", "agent": "paseo-claude-sonnet",
+        "kind": "herding",
+        "agent": "paseo-claude-sonnet",
         "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "lane-3": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "hat-facts-gaps": {
-        "kind": "herding", "agent": "paseo-claude-sonnet",
+        "kind": "herding",
+        "agent": "paseo-claude-sonnet",
         "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
       },
       "hat-risks": {
-        "kind": "herding", "agent": "paseo-claude-opus",
+        "kind": "herding",
+        "agent": "paseo-claude-opus",
         "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
       },
       "hat-value": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "hat: is this worth its cost — materiality test"
       },
       "hat-alternatives": {
-        "kind": "herding", "agent": "paseo-claude-sonnet",
+        "kind": "herding",
+        "agent": "paseo-claude-sonnet",
         "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
       },
       "hat-user-impact": {
         "kind": "herding",
-        "agent": "paseo-claude-sonnet",
+        "agent": "paseo-pi-agy-flash",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
       }
     }
@@ -297,14 +305,63 @@
       "{ALLOWED_TOOLS}"
     ],
     "agents": {
-      "paseo-pi-agy-flash": {"paseo": {"provider": "pi", "model": "antigravity/gemini-3.8-flash", "thinking": "high"}},
-      "paseo-pi-flash": {"paseo": {"provider": "pi", "model": "openrouter/~deepseek/deepseek-flash-latest", "thinking": "low"}},
-      "paseo-claude": {"paseo": {"provider": "claude", "mode": "bypassPermissions"}},
-      "paseo-gpt-luna": {"paseo": {"provider": "pi", "model": "openai-codex/gpt-5.6-luna", "thinking": "high"}},
-      "paseo-gpt-sol": {"paseo": {"provider": "pi", "model": "openai-codex/gpt-5.6-sol", "thinking": "high"}},
-      "paseo-claude-opus": {"paseo": {"provider": "claude", "model": "claude-opus-5-5", "thinking": "high", "mode": "bypassPermissions"}},
-      "paseo-claude-sonnet": {"paseo": {"provider": "claude", "model": "claude-sonnet-5-5", "thinking": "high", "mode": "bypassPermissions"}},
-      "paseo-gpt-astra": {"paseo": {"provider": "pi", "model": "openai-codex/gpt-6-astra", "thinking": "medium"}},
+      "paseo-pi-agy-flash": {
+        "paseo": {
+          "provider": "pi",
+          "model": "antigravity/gemini-3.8-flash",
+          "thinking": "high"
+        }
+      },
+      "paseo-pi-flash": {
+        "paseo": {
+          "provider": "pi",
+          "model": "openrouter/~deepseek/deepseek-flash-latest",
+          "thinking": "low"
+        }
+      },
+      "paseo-claude": {
+        "paseo": {
+          "provider": "claude",
+          "mode": "bypassPermissions"
+        }
+      },
+      "paseo-gpt-luna": {
+        "paseo": {
+          "provider": "pi",
+          "model": "openai-codex/gpt-5.6-luna",
+          "thinking": "high"
+        }
+      },
+      "paseo-gpt-sol": {
+        "paseo": {
+          "provider": "pi",
+          "model": "openai-codex/gpt-5.6-sol",
+          "thinking": "high"
+        }
+      },
+      "paseo-claude-opus": {
+        "paseo": {
+          "provider": "claude",
+          "model": "claude-opus-5-5",
+          "thinking": "high",
+          "mode": "bypassPermissions"
+        }
+      },
+      "paseo-claude-sonnet": {
+        "paseo": {
+          "provider": "claude",
+          "model": "claude-sonnet-5-5",
+          "thinking": "high",
+          "mode": "bypassPermissions"
+        }
+      },
+      "paseo-gpt-astra": {
+        "paseo": {
+          "provider": "pi",
+          "model": "openai-codex/gpt-6-astra",
+          "thinking": "medium"
+        }
+      },
       "claude-sonnet": [
         "claude",
         "--model",
@@ -318,7 +375,6 @@
         "--model",
         "opencode/x-preview-f-free:high"
       ],
-
       "pi-gpt-5.6-luna": [
         "pi",
         "-a",

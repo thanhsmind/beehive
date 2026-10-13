@@ -1,0 +1,11 @@
+{
+  "id": "a-feature-picks-up-the-backlog-row-recor__ce30c059",
+  "decision": "ce30c059",
+  "condition": "A feature picks up the backlog row 'Record usage and cost for Paseo claude workers'",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-10-13T02:34:43.560Z",
+  "updated_at": "2026-10-13T02:34:43.560Z",
+  "outcome": null
+}

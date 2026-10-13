@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"claude-read-only\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 8f05084; reload the product and test \"claude-read-only\", then either approve uat (\"bee gate --name uat --approved true --lane claude-read-only\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-12T10:20:18.325Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: claude-read-only",
-    "asked_at": "2026-10-12T10:59:39.519Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "high-risk",
