@@ -703,6 +703,7 @@
     "contract:herding-notify",
     "claude-read-only",
     "contract:claude-read-only-guard",
-    "worker-guard"
+    "worker-guard",
+    "deferral"
   ]
 }
