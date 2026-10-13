@@ -14,7 +14,12 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-13T03:23:07.916Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Bản phát hành vẫn đang chạy. Khi xong, tôi sẽ cập nhật bee cho `anphabe-goglbe`.",
+    "asked_at": "2026-10-13T03:24:31.939Z",
+    "session": "c1c2e89c-1e38-4710-ab2f-4916863fd63f"
+  },
   "gate_preview": {
     "feature": "release-2-52-0",
     "plan_sha256": "7d9f33c0ef54840c248f41e075510b1cc1e4c864613e56a4897cd86805c9be24",
