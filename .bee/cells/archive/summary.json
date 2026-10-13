@@ -1593,5 +1593,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-10-13T02:35:18.387Z"
+  },
+  "claude-read-only": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-13T02:35:21.111Z"
   }
 }
