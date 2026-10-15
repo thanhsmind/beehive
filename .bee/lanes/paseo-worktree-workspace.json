@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-worktree-workspace",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-worktree-workspace\" started at phase \"exploring\".",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-15T03:15:25.803Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-15T04:54:37.802Z",
+    "session": "044d1be3-eaab-465f-9d39-51b17cae4eb9"
+  }
+}

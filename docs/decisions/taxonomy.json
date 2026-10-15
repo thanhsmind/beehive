@@ -704,6 +704,7 @@
     "claude-read-only",
     "contract:claude-read-only-guard",
     "worker-guard",
-    "deferral"
+    "deferral",
+    "waiting-on"
   ]
 }

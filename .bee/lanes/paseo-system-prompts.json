@@ -1,0 +1,122 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-system-prompts",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-system-prompts\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-15T04:59:43.272Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "Test harness strips Paseo agent env; prompt hook keeps wait marks on paseo-system prompts",
+    "updated_at": "2026-10-15T04:59:43.308Z",
+    "feature": "paseo-system-prompts"
+  },
+  "gate_preview": {
+    "feature": "paseo-system-prompts",
+    "plan_sha256": "70a794103054135dbcda0b70778d189eef0299d25fadc88657a0bfd2d3f8dc54",
+    "previewed_at": "2026-10-15T05:00:30.898Z",
+    "cells": [
+      {
+        "id": "psp-1",
+        "feature": "paseo-system-prompts",
+        "lane": "small",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Keep wait marks on Paseo system prompts and keep tests off the real daemon",
+        "deps": [],
+        "decisions": [
+          "f247ae6c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "judge_obligation_ack": "the leader, a different model from the worker, reads the prompt_context diff and runs the tests before cap",
+        "action": "Per decision f247ae6c. (1) In packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, in execute() (about line 371), call the clear part of clear_and_reap_waiting_on_best_effort only when the prompt is a human prompt: a prompt is NOT human when ctx.payload's \"prompt\" string, after trim_start, starts with \"<paseo-system>\". On a non-human prompt still run crate::verbs::workflow_store::reap_stale_waiting_on (split the function so the reap always runs and the two clears are skipped). A missing or non-string prompt counts as human, so today's behavior holds. Test red first beside run_clears_a_live_default_waiting_on_mark_through_the_real_hook_entry_point (about line 2755): the same fixture with payload {cwd, prompt: \"<paseo-system>\\nSchedule \\\"bee-leader\\\" fired (id=x, run=y).\\nbee heartbeat\\n</paseo-system>\"} keeps the live mark; and a plain prompt {cwd, prompt: \"ok\"} still clears it. (2) In packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, in run_harness_spec_with_env (about line 1162), also env_remove PASEO_AGENT_ID, PASEO_AGENT_CWD and PASEO_CLI before the env_vars loop, so a test that needs one passes it through env_vars. Check every test that relies on an inherited PASEO_* value still passes; any Command::new of the bee binary in that file that loads the extension gets the same three env_remove calls. Write no code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_context && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "a <paseo-system> prompt keeps a live waiting_on mark",
+            "a human prompt still clears a live waiting_on mark",
+            "the stale-mark reap still runs on every prompt",
+            "pi_plugin_contracts never passes the caller's PASEO_AGENT_ID, PASEO_AGENT_CWD or PASEO_CLI to the extension"
+          ],
+          "prohibitions": [
+            "no change to the Stop hook turn-end logic",
+            "no text heuristic beyond the <paseo-system> prefix"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "paseo-system-prompts",
+    "plan_sha256": "70a794103054135dbcda0b70778d189eef0299d25fadc88657a0bfd2d3f8dc54",
+    "previewed_at": "2026-10-15T05:00:30.898Z",
+    "cells": [
+      {
+        "id": "psp-1",
+        "feature": "paseo-system-prompts",
+        "lane": "small",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Keep wait marks on Paseo system prompts and keep tests off the real daemon",
+        "deps": [],
+        "decisions": [
+          "f247ae6c"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "judge_obligation_ack": "the leader, a different model from the worker, reads the prompt_context diff and runs the tests before cap",
+        "action": "Per decision f247ae6c. (1) In packages/bee-rs/crates/bee/src/hooks/prompt_context.rs, in execute() (about line 371), call the clear part of clear_and_reap_waiting_on_best_effort only when the prompt is a human prompt: a prompt is NOT human when ctx.payload's \"prompt\" string, after trim_start, starts with \"<paseo-system>\". On a non-human prompt still run crate::verbs::workflow_store::reap_stale_waiting_on (split the function so the reap always runs and the two clears are skipped). A missing or non-string prompt counts as human, so today's behavior holds. Test red first beside run_clears_a_live_default_waiting_on_mark_through_the_real_hook_entry_point (about line 2755): the same fixture with payload {cwd, prompt: \"<paseo-system>\\nSchedule \\\"bee-leader\\\" fired (id=x, run=y).\\nbee heartbeat\\n</paseo-system>\"} keeps the live mark; and a plain prompt {cwd, prompt: \"ok\"} still clears it. (2) In packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs, in run_harness_spec_with_env (about line 1162), also env_remove PASEO_AGENT_ID, PASEO_AGENT_CWD and PASEO_CLI before the env_vars loop, so a test that needs one passes it through env_vars. Check every test that relies on an inherited PASEO_* value still passes; any Command::new of the bee binary in that file that loads the extension gets the same three env_remove calls. Write no code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee prompt_context && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "a <paseo-system> prompt keeps a live waiting_on mark",
+            "a human prompt still clears a live waiting_on mark",
+            "the stale-mark reap still runs on every prompt",
+            "pi_plugin_contracts never passes the caller's PASEO_AGENT_ID, PASEO_AGENT_CWD or PASEO_CLI to the extension"
+          ],
+          "prohibitions": [
+            "no change to the Stop hook turn-end logic",
+            "no text heuristic beyond the <paseo-system> prefix"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-15T05:32:01.386Z",
+    "branch": "wt/paseo-system-prompts",
+    "worktree_id": "beehive--wt--paseo-system-prompts",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
