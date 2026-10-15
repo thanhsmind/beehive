@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-cli-autodetect",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-cli-autodetect\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-15T02:44:45.815Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 1,
+    "rationale": "One resolver home gains env and daemon-pid discovery; config still wins",
+    "updated_at": "2026-10-15T02:45:04.399Z",
+    "feature": "paseo-cli-autodetect"
+  },
+  "gate_preview": {
+    "feature": "paseo-cli-autodetect",
+    "plan_sha256": "0263ff94b0b85789e6e6ae6881aeb6332572beddb4cc9ef9a5b934257d3d12d2",
+    "previewed_at": "2026-10-15T02:48:29.035Z",
+    "cells": [
+      {
+        "id": "pcad-1",
+        "feature": "paseo-cli-autodetect",
+        "lane": "small",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Find the paseo CLI of the running daemon without config",
+        "deps": [],
+        "decisions": [
+          "03ff4564"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Per decision 03ff4564, in packages/bee-rs/crates/bee/src/herding/paseo.rs change paseo_command(cfg) (line 76): return herding.paseo.command (or the legacy top-level paseo.command) when set and non-blank; else the PASEO_CLI env value when it names an existing file; else the running daemon's CLI: read <paseo home>/paseo.pid (JSON, key pid; home from crate::herding::paseo_state::home_from with an empty command, PASEO_HOME, HOME), then the PASEO_CLI entry of /proc/<pid>/environ when it names an existing file, else <parent of /proc/<pid>/exe>/resources/bin/paseo when that file exists; else \"paseo\". Put the discovery in a pure helper that takes the env value, the paseo home and a proc root path, so tests drive it with a tempdir. Under cfg(test), paseo_command must not read the real process env or the real /proc (follow the TEST_PASEO_HOME thread_local pattern in paseo_state.rs), so paseo_command_reads_config_and_defaults_to_paseo still passes inside a Paseo agent. Tests red first: config wins over env; env wins over daemon; daemon environ PASEO_CLI; daemon exe-dir fallback; a missing or garbage pid file falls through to paseo; an env value naming a missing file is skipped. In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace 'The key `herding.paseo.command` sets the CLI executable name. The default command is `paseo`.' with the new order, citing decision 03ff4564. Write no code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+        "must_haves": {
+          "truths": [
+            "with no config, bee uses PASEO_CLI when it names an existing file",
+            "with no config and no PASEO_CLI, bee uses the CLI of the daemon named in paseo.pid",
+            "a set herding.paseo.command always wins",
+            "with nothing found, the command is plain paseo"
+          ],
+          "prohibitions": [
+            "no new config key",
+            "no change to any paseo_command call site",
+            "tests never read the real /proc or the real PASEO_CLI env"
+          ]
+        }
+      }
+    ]
+  },
+  "approved_cell_packet": {
+    "feature": "paseo-cli-autodetect",
+    "plan_sha256": "0263ff94b0b85789e6e6ae6881aeb6332572beddb4cc9ef9a5b934257d3d12d2",
+    "previewed_at": "2026-10-15T02:48:29.035Z",
+    "cells": [
+      {
+        "id": "pcad-1",
+        "feature": "paseo-cli-autodetect",
+        "lane": "small",
+        "role": "code",
+        "change_class": "bugfix",
+        "title": "Find the paseo CLI of the running daemon without config",
+        "deps": [],
+        "decisions": [
+          "03ff4564"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_state.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Per decision 03ff4564, in packages/bee-rs/crates/bee/src/herding/paseo.rs change paseo_command(cfg) (line 76): return herding.paseo.command (or the legacy top-level paseo.command) when set and non-blank; else the PASEO_CLI env value when it names an existing file; else the running daemon's CLI: read <paseo home>/paseo.pid (JSON, key pid; home from crate::herding::paseo_state::home_from with an empty command, PASEO_HOME, HOME), then the PASEO_CLI entry of /proc/<pid>/environ when it names an existing file, else <parent of /proc/<pid>/exe>/resources/bin/paseo when that file exists; else \"paseo\". Put the discovery in a pure helper that takes the env value, the paseo home and a proc root path, so tests drive it with a tempdir. Under cfg(test), paseo_command must not read the real process env or the real /proc (follow the TEST_PASEO_HOME thread_local pattern in paseo_state.rs), so paseo_command_reads_config_and_defaults_to_paseo still passes inside a Paseo agent. Tests red first: config wins over env; env wins over daemon; daemon environ PASEO_CLI; daemon exe-dir fallback; a missing or garbage pid file falls through to paseo; an env value naming a missing file is skipped. In docs/knowledge/areas/bee-herding/the-paseo-channel.md replace 'The key `herding.paseo.command` sets the CLI executable name. The default command is `paseo`.' with the new order, citing decision 03ff4564. Write no code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::paseo",
+        "must_haves": {
+          "truths": [
+            "with no config, bee uses PASEO_CLI when it names an existing file",
+            "with no config and no PASEO_CLI, bee uses the CLI of the daemon named in paseo.pid",
+            "a set herding.paseo.command always wins",
+            "with nothing found, the command is plain paseo"
+          ],
+          "prohibitions": [
+            "no new config key",
+            "no change to any paseo_command call site",
+            "tests never read the real /proc or the real PASEO_CLI env"
+          ]
+        }
+      }
+    ]
+  },
+  "merge_ready": {
+    "since": "2026-10-15T02:58:12.485Z",
+    "branch": "wt/paseo-cli-autodetect",
+    "worktree_id": "beehive--wt--paseo-cli-autodetect",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

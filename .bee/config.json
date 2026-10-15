@@ -121,11 +121,13 @@
     },
     "claude": {
       "code": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
@@ -137,7 +139,8 @@
         "description": "doc edits and parity sweeps"
       },
       "deploy": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
@@ -145,11 +148,13 @@
         "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
       },
       "extraction": {
-        "model": "sonnet",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
-        "model": "opus",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -161,7 +166,8 @@
         "description": "session-class consult for high-risk gates"
       },
       "supervisor": {
-        "model": "haiku",
+        "kind": "herding",
+        "agent": "paseo-pi-flash",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
@@ -292,6 +298,9 @@
   },
   "herding": {
     "ceiling_seconds": 1800,
+    "paseo": {
+      "command": "/home/thanhsmind/.local/share/mise/installs/node/24.19.0/bin/paseo"
+    },
     "agent_command": "claude-sonnet",
     "control_command": [
       "claude",
@@ -315,8 +324,8 @@
       "paseo-pi-flash": {
         "paseo": {
           "provider": "pi",
-          "model": "openrouter/~deepseek/deepseek-flash-latest",
-          "thinking": "low"
+          "model": "hive/deepseek-ai/deepseek-v4.1-flash",
+          "thinking": "medium"
         }
       },
       "paseo-claude": {
