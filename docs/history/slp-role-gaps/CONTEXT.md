@@ -71,12 +71,14 @@ where each doctrine line lands, as long as each fact keeps one home.
 
 ## Outstanding Questions
 
+<!-- bee:not-a-deferral: planning answered both questions (plan.md "Settled before the gate"), and both ideas are filed as backlog rows, not promises in this file -->
 ### Deferred To Planning
 
-- [ ] D7: where the run loop can read the worker's worktree path for a fingerprint, and the cheapest diff hash.
-- [ ] D6: whether the head check is a reviewer prompt step or a `bee reviews` verb check.
+- [x] D7: where the run loop can read the worker's worktree path for a fingerprint, and the cheapest diff hash.
+- [x] D6: whether the head check is a reviewer prompt step or a `bee reviews` verb check.
 
 ## Deferred Ideas
 
 - Per-role stall windows (piggery `silent_for` per role) — one value first.
 - Fingerprint liveness of the installed binary (doctrine K) — backlog.
+<!-- /bee:not-a-deferral -->

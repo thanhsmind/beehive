@@ -9,7 +9,7 @@ STRUCTURE
 BLOCKERS: none. All 11 claim rows matched their anchors verbatim.
 WARNINGS:
 - Decision coverage (D8): leader-side home missing → fixed: rig-6 owns `skills/bee-swarming/SKILL.md` as a pointer to the one Result Formats home.
-- Cell completeness (D7): no inbox writer, no baseline field, deferred cwd question unanswered → fixed: the notice uses `append_message` (kind `progress`); baseline `diff_fingerprint` / `diff_fingerprint_since` on the job record; `cwd` and `read_only` read from the job record (claims 12-14).
+- Cell completeness (D7): no inbox writer, no baseline field, the open cwd question unanswered → fixed: the notice uses `append_message` (kind `progress`); baseline `diff_fingerprint` / `diff_fingerprint_since` on the job record; `cwd` and `read_only` read from the job record (claims 12-14).
 - Cell completeness (D1/D2 docs): the envelope concept had no owner → fixed: rig-3 owns `the-run-verb-and-worker-outcomes.md`; rig-5 moved to `overview.md`.
 - Truth table (D9): post-loop observation would discard a finished result; stop vs archive unsaid → fixed: refuse only while polling, stop never archive (claim 15).
 - Truth table (D7): both stall sites, reason field, recovery, read-time firing → fixed in the settled list and rig-5 action.
