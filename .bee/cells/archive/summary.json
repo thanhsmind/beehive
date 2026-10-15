@@ -1603,5 +1603,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-13T03:32:56.135Z"
+  },
+  "paseo-cli-autodetect": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T02:59:26.970Z"
   }
 }
