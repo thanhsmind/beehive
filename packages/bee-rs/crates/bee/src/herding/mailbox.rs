@@ -447,6 +447,19 @@ is wrong with it, \"alternative\" says what you would do instead, and \
 \"severity\" is \"blocker\" when the work should stop until someone answers or \
 \"consider\" when it should not; leave \"dissent\" out entirely when you agree \
 with the task.\n\n\
+Handback fields (OPTIONAL — omit any key you have nothing for):\n\n\
+{{\n\
+  \"reaction\": \"confirm\" | \"partial\" | \"challenge\" | \"blocked\",\n\
+  \"skipped\": [\"<check you did not run> — <why>\", \"...\"],\n\
+  \"unknowns\": [\"<assumption you could not prove>\", \"...\"],\n\
+  \"found\": [\"<discovery outside your task>\", \"...\"],\n\
+  \"stopped\": \"<part you did not do> — <evidence that its premise is false>\"\n\
+}}\n\n\
+\"reaction\" is your stance toward the task as handed to you. When part of the \
+task rests on a false premise, finish the part that does not, set \"reaction\" \
+to \"partial\", and name the stopped part with its evidence in \"stopped\". A \
+dissent on a point that was already ruled on also carries \"new_evidence\" \
+inside \"dissent\": what is new since the ruling.\n\n\
 {question_section}\
 # How to write it — write to a temp file, then rename (do not skip this)\n\n\
 Write the JSON above to a temp file in the SAME directory as the result file,\n\
@@ -541,6 +554,7 @@ pub(crate) struct MailboxResult {
     /// same reason `options`/`leaning` are: a partial or wrong-typed object
     /// reads as absent and never costs the round its result.
     pub dissent: Option<MailboxDissent>,
+    pub handback: MailboxHandback,
     /// pi-result-mailbox D1: where the worker's full report lives. At parse
     /// time this is exactly what the worker DECLARED (absent when it declared
     /// nothing — a result with no report stays legal, never a parse error);
@@ -567,7 +581,19 @@ pub(crate) struct MailboxDissent {
     pub claim: String,
     pub alternative: String,
     pub severity: String,
+    pub new_evidence: Option<String>,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailboxHandback {
+    pub reaction: Option<String>,
+    pub skipped: Vec<String>,
+    pub unknowns: Vec<String>,
+    pub found: Vec<String>,
+    pub stopped: Option<String>,
+}
+
+const REACTIONS: [&str; 4] = ["confirm", "partial", "challenge", "blocked"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MailboxStatus {
@@ -667,7 +693,36 @@ fn parse_dissent(value: Option<&Value>) -> Option<MailboxDissent> {
         claim,
         alternative: field("alternative")?,
         severity: field("severity")?,
+        new_evidence: field("new_evidence").filter(|e| !e.trim().is_empty()),
     })
+}
+
+fn parse_handback(obj: &serde_json::Map<String, Value>) -> MailboxHandback {
+    let text = |k: &str| {
+        obj.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    };
+    let list = |k: &str| {
+        obj.get(k)
+            .and_then(Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    MailboxHandback {
+        reaction: text("reaction")
+            .map(|r| r.to_ascii_lowercase())
+            .filter(|r| REACTIONS.contains(&r.as_str())),
+        skipped: list("skipped"),
+        unknowns: list("unknowns"),
+        found: list("found"),
+        stopped: text("stopped"),
+    }
 }
 
 /// Parse and schema-validate one round's result text (already read by the
@@ -760,6 +815,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
     // as NO dissent — never a `Malformed` round. The severity string is
     // passed through unchecked (D4): `record_dissent` owns that closed set.
     let dissent = parse_dissent(obj.get("dissent"));
+    let handback = parse_handback(obj);
 
     // pi-result-mailbox D1: read exactly as leniently as the three above.
     // Absent, empty, or wrong-typed all read as NO declared report — a
@@ -781,6 +837,7 @@ pub(crate) fn parse_result_text(round: u32, text: &str) -> Result<MailboxResult,
         options,
         leaning,
         dissent,
+        handback,
         report_path,
         report_note: None,
         question,
@@ -1726,6 +1783,7 @@ the report file's exact final name"),
                 claim: "The paginator is not the bug.".to_string(),
                 alternative: "Fix the cursor encoder instead.".to_string(),
                 severity: "blocker".to_string(),
+                new_evidence: None,
             })
         );
     }
@@ -1735,6 +1793,48 @@ the report file's exact final name"),
         let text = r#"{"status":"done","summary":"did it","files_changed":["a.rs"],"proof":"cargo test"}"#;
         let result = parse_result_text(1, text).expect("a result with no dissent still parses");
         assert_eq!(result.dissent, None);
+    }
+
+    #[test]
+    fn parse_result_text_reads_the_handback_fields_and_the_dissent_evidence() {
+        let text = r#"{"status":"done","summary":"half","files_changed":[],"proof":"p","reaction":" Partial ","skipped":["e2e — no browser"],"unknowns":["the API is stable"],"found":["a dead flag"],"stopped":"the parser — it never ran","dissent":{"claim":"c","alternative":"a","severity":"consider","new_evidence":"the log shows it"}}"#;
+        let result = parse_result_text(1, text).expect("handback fields parse");
+        assert_eq!(
+            result.handback,
+            MailboxHandback {
+                reaction: Some("partial".to_string()),
+                skipped: vec!["e2e — no browser".to_string()],
+                unknowns: vec!["the API is stable".to_string()],
+                found: vec!["a dead flag".to_string()],
+                stopped: Some("the parser — it never ran".to_string()),
+            }
+        );
+        assert_eq!(result.dissent.unwrap().new_evidence.as_deref(), Some("the log shows it"));
+    }
+
+    #[test]
+    fn parse_result_text_reads_wrong_typed_handback_fields_as_absent() {
+        let text = r#"{"status":"done","summary":"s","files_changed":[],"proof":"p","reaction":"maybe","skipped":"no","unknowns":[7,"real"],"found":{},"stopped":3,"dissent":{"claim":"c","alternative":"a","severity":"consider","new_evidence":9}}"#;
+        let result = parse_result_text(1, text).expect("wrong-typed handback fields never refuse");
+        assert_eq!(
+            result.handback,
+            MailboxHandback { unknowns: vec!["real".to_string()], ..MailboxHandback::default() }
+        );
+        assert_eq!(result.dissent.unwrap().new_evidence, None);
+    }
+
+    #[test]
+    fn render_brief_names_the_handback_fields_as_optional_without_a_bee_command() {
+        let files = sample_files();
+        let spec = sample_spec(Path::new("/repo/work"), Path::new("/repo/.bee"), &files, 1);
+        let text = render_brief(&spec);
+        assert!(text.contains("Handback fields (OPTIONAL"), "{text}");
+        for key in ["\"reaction\"", "\"skipped\"", "\"unknowns\"", "\"found\"", "\"stopped\"", "\"new_evidence\""] {
+            assert!(text.contains(key), "missing {key}:\n{text}");
+        }
+        let start = text.find("Handback fields").unwrap();
+        let end = text.find("# How to write it").unwrap();
+        assert!(!text[start..end].contains("bee "), "the handback block names no bee command:\n{text}");
     }
 
     #[test]

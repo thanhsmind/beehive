@@ -187,6 +187,14 @@ fn configured_command(cfg: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+pub fn refuses_model_mismatch(cfg: &Value) -> bool {
+    cfg.get("herding")
+        .and_then(|h| h.get("paseo"))
+        .and_then(|p| p.get("on_model_mismatch"))
+        .and_then(Value::as_str)
+        .is_some_and(|mode| mode.trim().eq_ignore_ascii_case("refuse"))
+}
+
 pub fn paseo_command(cfg: &Value) -> String {
     if let Some(command) = configured_command(cfg) {
         return command;
@@ -1064,6 +1072,15 @@ mod tests {
         let res2 = PaseoSpec::from_config(&empty_cfg, "bad-worker-2").expect("some");
         let err2 = res2.expect_err("should fail with empty provider");
         assert!(err2.contains("bad-worker-2"));
+    }
+
+    #[test]
+    fn refuses_model_mismatch_only_on_an_explicit_refuse() {
+        assert!(!refuses_model_mismatch(&serde_json::json!({})));
+        assert!(!refuses_model_mismatch(&serde_json::json!({"herding": {"paseo": {"on_model_mismatch": "warn"}}})));
+        assert!(!refuses_model_mismatch(&serde_json::json!({"herding": {"paseo": {"on_model_mismatch": "stop"}}})));
+        assert!(!refuses_model_mismatch(&serde_json::json!({"herding": {"paseo": {"on_model_mismatch": true}}})));
+        assert!(refuses_model_mismatch(&serde_json::json!({"herding": {"paseo": {"on_model_mismatch": "refuse"}}})));
     }
 
     #[test]

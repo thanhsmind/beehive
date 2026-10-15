@@ -1189,6 +1189,7 @@ enum PollDecision {
     /// ahead of the idle timeout and the ceiling.
     Blocked,
     Marked(mailbox::Mark),
+    ModelMismatch,
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
@@ -2075,6 +2076,7 @@ enum RunOutcome {
     Interrupted,
     /// D4: Pane closed and process exit confirmed; job terminal.
     Cancelled,
+    ModelMismatch(String),
 }
 
 struct ExecResult {
@@ -2827,6 +2829,7 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
         PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
+        PollDecision::ModelMismatch => unreachable!("only the paseo loop refuses a model mismatch"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -3385,6 +3388,7 @@ pub(super) fn execute_no_pane(opts: &Options) -> ExecResult {
         options: Vec::new(),
         leaning: None,
         dissent: None,
+        handback: Default::default(),
         report_path: Some(report_path.display().to_string()),
         report_note: None,
         question: None,
@@ -3714,6 +3718,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
         PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
+        PollDecision::ModelMismatch => RunOutcome::ModelMismatch(model_mismatch_refusal(&bee_dir, &opts.job_id, &agent_id)),
     };
 
     let closed_pane = handle_paseo_archive(cli, &agent_id, &outcome, opts.close_always);
@@ -3752,7 +3757,9 @@ fn handle_paseo_archive(
         .map(|own| own.trim() == agent_id.trim())
         .unwrap_or(false);
 
-    let should_archive = should_close_pane(valid_result, close_always) && !is_own_agent && !is_question;
+    let refused = matches!(outcome, RunOutcome::ModelMismatch(_));
+    let should_archive =
+        should_close_pane(valid_result, close_always) && !is_own_agent && !is_question && !refused;
 
     if should_archive {
         let archive_args = paseo::archive_argv(agent_id);
@@ -4039,6 +4046,7 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
         PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
+        PollDecision::ModelMismatch => RunOutcome::ModelMismatch(model_mismatch_refusal(&bee_dir, job_id, &agent_id)),
     };
 
     let closed_pane = handle_paseo_archive(cli, &agent_id, &outcome, opts.close_always);
@@ -4056,7 +4064,7 @@ fn record_observed_model(
     agent_id: &str,
     info: &paseo::PaseoInspect,
     spec: Option<&PaseoSpec>,
-) {
+) -> bool {
     let obs_model_str = info.model.clone().unwrap_or_else(|| "unverified".to_string());
     let obs_thinking_str = info.thinking.clone().unwrap_or_else(|| "unverified".to_string());
 
@@ -4095,9 +4103,60 @@ fn record_observed_model(
             map.insert("paseo_mode_observed".into(), info.mode.clone().map_or(Value::Null, Value::String));
             if is_mismatch {
                 map.insert("paseo_model_mismatch".into(), Value::Bool(true));
+                map.insert("paseo_model_configured".into(), cfg_model.map_or(Value::Null, Value::from));
+                map.insert("paseo_thinking_configured".into(), cfg_thinking.map_or(Value::Null, Value::from));
             }
             let _ = crate::fsutil::write_json_atomic(&job_path, &Value::Object(map));
         }
+    }
+    is_mismatch
+}
+
+fn recorded_model_mismatch(bee_dir: &Path, job_id: &str) -> Option<Value> {
+    let crate::fsutil::ReadJson::Parsed(job) = crate::fsutil::read_json(&mailbox::job_path(bee_dir, job_id)) else {
+        return None;
+    };
+    if job.get("paseo_model_mismatch") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let pair = |model: &str, thinking: &str| {
+        serde_json::json!({
+            "model": job.get(model).cloned().unwrap_or(Value::Null),
+            "thinking": job.get(thinking).cloned().unwrap_or(Value::Null),
+        })
+    };
+    Some(serde_json::json!({
+        "configured": pair("paseo_model_configured", "paseo_thinking_configured"),
+        "observed": pair("paseo_model_observed", "paseo_thinking_observed"),
+    }))
+}
+
+fn model_mismatch_refusal(bee_dir: &Path, job_id: &str, agent_id: &str) -> String {
+    let mismatch = recorded_model_mismatch(bee_dir, job_id).unwrap_or(Value::Null);
+    let at = |side: &str, key: &str| {
+        mismatch.pointer(&format!("/{side}/{key}")).and_then(Value::as_str).unwrap_or("unverified").to_string()
+    };
+    format!(
+        "herding: paseo agent {agent_id} runs model {} (thinking {}), configured {} (thinking {}); herding.paseo.on_model_mismatch is refuse, so the agent was stopped and the run refused. FIX: point the agent's paseo block at the model that runs, or set herding.paseo.on_model_mismatch to warn",
+        at("observed", "model"),
+        at("observed", "thinking"),
+        at("configured", "model"),
+        at("configured", "thinking"),
+    )
+}
+
+fn stop_for_model_mismatch(cli: &dyn PaseoCli, agent_id: &str) -> PollTick {
+    if let Err(e) = cli.call(&paseo::stop_argv(agent_id)) {
+        eprintln!("herding: could not stop paseo agent {agent_id} after a model mismatch: {e}");
+    }
+    PollTick {
+        result_ready: false,
+        heartbeat_fresh: false,
+        pane_text: None,
+        liveness: None,
+        blocked: true,
+        mark: None,
+        silent_idle: false,
     }
 }
 
@@ -4272,6 +4331,9 @@ fn wait_for_round_paseo_driven(
     let mut nudge_sent = false;
     let mut nudge_sent_at_ms: Option<i64> = None;
     let mut model_recorded = false;
+    let mut model_refused = false;
+    let refuse_mismatch =
+        paseo::refuses_model_mismatch(&read_main_config(bee_dir.parent().unwrap_or(bee_dir)));
     let mut last_inspect_full: Option<paseo::PaseoInspect> = None;
 
     let mut wait_active = false;
@@ -4346,7 +4408,13 @@ fn wait_for_round_paseo_driven(
                     if let Some(ref info) = inspect_full {
                         if info.model.is_some() || info.thinking.is_some() {
                             model_recorded = true;
-                            record_observed_model(bee_dir, job_id, agent_id, info, spec);
+                            if record_observed_model(bee_dir, job_id, agent_id, info, spec)
+                                && refuse_mismatch
+                                && !result_ready
+                            {
+                                model_refused = true;
+                                return stop_for_model_mismatch(cli, agent_id);
+                            }
                         }
                     }
                 }
@@ -4405,7 +4473,13 @@ fn wait_for_round_paseo_driven(
                         if let Some(ref info) = inspect_full {
                             if info.model.is_some() || info.thinking.is_some() {
                                 model_recorded = true;
-                                record_observed_model(bee_dir, job_id, agent_id, info, spec);
+                                if record_observed_model(bee_dir, job_id, agent_id, info, spec)
+                                    && refuse_mismatch
+                                    && !result_ready
+                                {
+                                    model_refused = true;
+                                    return stop_for_model_mismatch(cli, agent_id);
+                                }
                             }
                         }
                     }
@@ -4549,6 +4623,9 @@ fn wait_for_round_paseo_driven(
         now_for_loop,
     );
 
+    if model_refused {
+        return PollDecision::ModelMismatch;
+    }
     if !model_recorded {
         if let Some(ref info) = last_inspect_full {
             record_observed_model(bee_dir, job_id, agent_id, info, spec);
@@ -4704,6 +4781,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
             PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
             PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
             PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
+            PollDecision::ModelMismatch => unreachable!("only the paseo loop refuses a model mismatch"),
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
@@ -4895,6 +4973,7 @@ fn execute_continue(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
         PollDecision::Marked(mailbox::Mark::Interrupted) => RunOutcome::Interrupted,
         PollDecision::Marked(mailbox::Mark::Cancelled) => RunOutcome::Cancelled,
         PollDecision::Marked(mailbox::Mark::CancelPending) => unreachable!("cancel_pending never ends wait_for_round"),
+        PollDecision::ModelMismatch => unreachable!("only the paseo loop refuses a model mismatch"),
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -4938,6 +5017,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::PaneBlocked(_) => "pane_blocked",
         RunOutcome::Interrupted => "interrupted",
         RunOutcome::Cancelled => "cancelled",
+        RunOutcome::ModelMismatch(_) => "model_mismatch",
     }
 }
 
@@ -5011,12 +5091,13 @@ fn transcribe_dissent(root: &Path, cell_id: Option<&str>, dissent: &MailboxDisse
             ),
         };
     };
-    match crate::verbs::cells::record_dissent(
+    match crate::verbs::cells::record_dissent_with_evidence(
         root,
         cell_id,
         &dissent.claim,
         &dissent.alternative,
         &dissent.severity,
+        dissent.new_evidence.as_deref(),
         None,
         false,
     ) {
@@ -5213,6 +5294,20 @@ fn result_envelope(
             if let Some(leaning) = &r.leaning {
                 m.insert("leaning".into(), Value::String(leaning.clone()));
             }
+            let h = &r.handback;
+            if let Some(reaction) = &h.reaction {
+                m.insert("reaction".into(), Value::String(reaction.clone()));
+            }
+            for (key, list) in [("skipped", &h.skipped), ("unknowns", &h.unknowns), ("found", &h.found)] {
+                if !list.is_empty() {
+                    m.insert(key.into(), Value::Array(list.iter().cloned().map(Value::String).collect()));
+                }
+            }
+            if let Some(stopped) = &h.stopped {
+                m.insert("stopped".into(), Value::String(stopped.clone()));
+            } else if h.reaction.as_deref() == Some("partial") {
+                m.insert("stopped_missing".into(), Value::Bool(true));
+            }
             if let Some(q) = &r.question {
                 let mut qm = Map::new();
                 qm.insert("text".into(), Value::String(q.text.clone()));
@@ -5237,6 +5332,9 @@ fn result_envelope(
                 dm.insert("claim".into(), Value::String(d.claim.clone()));
                 dm.insert("alternative".into(), Value::String(d.alternative.clone()));
                 dm.insert("severity".into(), Value::String(d.severity.clone()));
+                if let Some(evidence) = &d.new_evidence {
+                    dm.insert("new_evidence".into(), Value::String(evidence.clone()));
+                }
                 m.insert("dissent".into(), Value::Object(dm));
                 if let Some(t) = dissent {
                     m.insert("dissent_recorded".into(), Value::Bool(t.recorded));
@@ -5257,7 +5355,7 @@ fn result_envelope(
                 )),
             );
         }
-        RunOutcome::PaneBlocked(msg) => {
+        RunOutcome::PaneBlocked(msg) | RunOutcome::ModelMismatch(msg) => {
             m.insert("error".into(), Value::String(msg.clone()));
         }
         // pi-result-mailbox D1: the error and the report ride back together —
@@ -5297,6 +5395,9 @@ fn result_envelope(
         | RunOutcome::PausedLimit
         | RunOutcome::Interrupted
         | RunOutcome::Cancelled => {}
+    }
+    if let Some(mismatch) = recorded_model_mismatch(&opts.main_root.join(".bee"), &opts.job_id) {
+        m.insert("model_mismatch".into(), mismatch);
     }
     Value::Object(m)
 }
@@ -8579,6 +8680,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 report_path: None,
                 report_note: None,
                 question: None,
@@ -8617,6 +8719,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 report_path: None,
                 report_note: None,
                 question: None,
@@ -10801,6 +10904,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 question: None,
             }),
             pane_id: Some("p1".to_string()),
@@ -10825,6 +10929,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 question: None,
             }),
             pane_id: Some("p1".to_string()),
@@ -10858,6 +10963,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 question: None,
             }),
             pane_id: None,
@@ -11497,6 +11603,7 @@ mod tests {
             options: vec![],
             leaning: None,
             dissent: None,
+            handback: Default::default(),
             report_path: None,
             report_note: None,
             question: None,
@@ -11545,6 +11652,7 @@ mod tests {
             options: vec![],
             leaning: None,
             dissent: None,
+            handback: Default::default(),
             report_path: None,
             report_note: None,
             question: None,
@@ -11721,6 +11829,7 @@ mod tests {
                 options: vec![],
                 leaning: None,
                 dissent: None,
+                handback: Default::default(),
                 report_path: None,
                 report_note: None,
                 question: Some(mailbox::MailboxQuestion {
@@ -13375,6 +13484,243 @@ mod tests {
         let again: Value = serde_json::from_str(&std::fs::read_to_string(&job_file).unwrap()).unwrap();
         assert_eq!(again["paseo_mode_observed"], "default");
         assert_eq!(again["paseo_model_observed"], "claude-3-5-sonnet");
+    }
+
+    fn flash_spec() -> PaseoSpec {
+        PaseoSpec {
+            provider: "pi".to_string(),
+            model: Some("deepseek-flash".to_string()),
+            thinking: Some("medium".to_string()),
+            mode: None,
+            isolated_config: false,
+        }
+    }
+
+    fn mismatch_job(main_root: &Path, job_id: &str, refuse: bool, result_ready: bool) -> PathBuf {
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), r#"{"round":1}"#).unwrap();
+        if refuse {
+            std::fs::write(
+                bee_dir.join("config.json"),
+                r#"{"herding":{"paseo":{"on_model_mismatch":"refuse"}}}"#,
+            )
+            .unwrap();
+        }
+        if result_ready {
+            std::fs::write(
+                dir.join("result-1.json"),
+                r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+            )
+            .unwrap();
+        }
+        bee_dir
+    }
+
+    fn drive_mismatch(bee_dir: &Path, job_id: &str, inspect: &str) -> (PollDecision, Vec<Vec<String>>) {
+        let fake = inspect_fake(inspect);
+        let mut wait_src = FakeWaitSource::new(vec![]);
+        let silent = std::cell::Cell::new(false);
+        let mut clock = 0i64;
+        let decision = wait_for_round_paseo_driven(
+            bee_dir,
+            job_id,
+            "agent-mm",
+            1,
+            0,
+            5,
+            3600,
+            &fake,
+            Some(&flash_spec()),
+            &silent,
+            &mut wait_src,
+            Duration::from_millis(0),
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        let calls = fake.calls.lock().unwrap().clone();
+        (decision, calls)
+    }
+
+    const FLASH_OFF: &str = r#"{"Status":"running","Model":"deepseek-flash","Thinking":"off"}"#;
+
+    fn stopped(calls: &[Vec<String>]) -> bool {
+        calls.iter().any(|c| c == &["stop", "agent-mm"])
+    }
+
+    #[test]
+    fn a_mismatch_without_the_refuse_config_only_warns_and_keeps_polling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = mismatch_job(tmp.path(), "job-mm-warn", false, false);
+        let (decision, calls) = drive_mismatch(&bee_dir, "job-mm-warn", FLASH_OFF);
+        assert_eq!(decision, PollDecision::TimedOutIdle);
+        assert!(!stopped(&calls), "{calls:?}");
+        let job = read_job(&mailbox::job_path(&bee_dir, "job-mm-warn"));
+        assert_eq!(job["paseo_model_mismatch"], Value::Bool(true));
+    }
+
+    #[test]
+    fn refuse_stops_the_agent_when_the_mismatch_is_seen_while_polling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = mismatch_job(tmp.path(), "job-mm-refuse", true, false);
+        let (decision, calls) = drive_mismatch(&bee_dir, "job-mm-refuse", FLASH_OFF);
+        assert_eq!(decision, PollDecision::ModelMismatch);
+        assert!(stopped(&calls), "{calls:?}");
+        assert!(!calls.iter().any(|c| c.first().map(String::as_str) == Some("archive")), "{calls:?}");
+    }
+
+    #[test]
+    fn refuse_never_fires_once_the_worker_has_finished() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = mismatch_job(tmp.path(), "job-mm-done", true, true);
+        let (decision, calls) = drive_mismatch(&bee_dir, "job-mm-done", FLASH_OFF);
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert!(!stopped(&calls), "{calls:?}");
+    }
+
+    #[test]
+    fn refuse_never_fires_on_the_sentinel_model_and_thinking() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = mismatch_job(tmp.path(), "job-mm-sentinel", true, false);
+        let (decision, calls) =
+            drive_mismatch(&bee_dir, "job-mm-sentinel", r#"{"Status":"running","Model":"-","Thinking":"auto"}"#);
+        assert_eq!(decision, PollDecision::TimedOutIdle);
+        assert!(!stopped(&calls), "{calls:?}");
+    }
+
+    fn paseo_mismatch_run(refuse: bool, result_ready: bool) -> (tempfile::TempDir, Options, ExecResult, Vec<Vec<String>>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.close_always = true;
+        mismatch_job(tmp.path(), &opts.job_id, refuse, result_ready);
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"agent-mm\"}\n".to_string()),
+            Ok(FLASH_OFF.to_string()),
+            Ok("archived\n".to_string()),
+        );
+        let res = execute_paseo(&opts, &flash_spec(), &fake);
+        let calls = fake.calls.lock().unwrap().clone();
+        (tmp, opts, res, calls)
+    }
+
+    #[test]
+    fn a_refused_run_ends_with_reason_model_mismatch_naming_both_sides_and_two_fixes() {
+        let (_tmp, opts, res, calls) = paseo_mismatch_run(true, false);
+        let RunOutcome::ModelMismatch(msg) = &res.outcome else {
+            panic!("expected a model_mismatch refusal, got {:?}", res.outcome);
+        };
+        for needle in ["deepseek-flash", "thinking off", "thinking medium", "paseo block", "on_model_mismatch to warn"] {
+            assert!(msg.contains(needle), "missing {needle}: {msg}");
+        }
+        assert!(stopped(&calls), "{calls:?}");
+        assert!(!calls.iter().any(|c| c.first().map(String::as_str) == Some("archive")), "no archive on refuse: {calls:?}");
+        assert!(!res.closed_pane);
+        assert_eq!(exit_code_for(&res.outcome), ExitCode::FAILURE);
+
+        let env = result_envelope(&opts, &res, "paseo", None);
+        assert_eq!(env["outcome"], "model_mismatch");
+        assert_eq!(env["error"].as_str(), Some(msg.as_str()));
+        assert_eq!(env["model_mismatch"]["observed"]["thinking"], "off");
+    }
+
+    #[test]
+    fn a_warned_run_keeps_its_result_and_the_envelope_carries_model_mismatch() {
+        let (_tmp, opts, res, calls) = paseo_mismatch_run(false, true);
+        assert_eq!(outcome_label(&res.outcome), "done");
+        assert!(!stopped(&calls), "{calls:?}");
+        let env = result_envelope(&opts, &res, "paseo", None);
+        assert_eq!(
+            env["model_mismatch"],
+            serde_json::json!({
+                "configured": {"model": "deepseek-flash", "thinking": "medium"},
+                "observed": {"model": "deepseek-flash", "thinking": "off"}
+            })
+        );
+    }
+
+    #[test]
+    fn handback_fields_round_trip_into_the_run_envelope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let dir = mailbox::mailbox_dir(&tmp.path().join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"half","files_changed":[],"proof":"p","reaction":"partial","skipped":["e2e — no browser"],"unknowns":["the API is stable"],"found":["a dead flag"]}"#,
+        )
+        .unwrap();
+        let result = execute(&opts, &FakeHerdr::new());
+        let env = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(env["reaction"], "partial");
+        assert_eq!(env["skipped"], serde_json::json!(["e2e — no browser"]));
+        assert_eq!(env["unknowns"], serde_json::json!(["the API is stable"]));
+        assert_eq!(env["found"], serde_json::json!(["a dead flag"]));
+        assert_eq!(env["stopped_missing"], Value::Bool(true));
+        assert!(env.get("stopped").is_none());
+        assert!(env.get("model_mismatch").is_none());
+
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"half","files_changed":[],"proof":"p","reaction":"partial","stopped":"the parser — it never ran","skipped":"wrong"}"#,
+        )
+        .unwrap();
+        let result = execute(&opts, &FakeHerdr::new());
+        let env = result_envelope(&opts, &result, "herdr", None);
+        assert_eq!(env["stopped"], "the parser — it never ran");
+        for key in ["stopped_missing", "skipped", "unknowns", "found"] {
+            assert!(env.get(key).is_none(), "unexpected {key}: {env}");
+        }
+    }
+
+    fn dissent_run_with(main_root: &Path, dissent: &str) -> (Options, ExecResult) {
+        let mut opts = test_options(main_root, false);
+        opts.cell_id = Some("demo-1".to_string());
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            format!(r#"{{"status":"blocked","summary":"again","files_changed":[],"proof":"n/a","dissent":{dissent}}}"#),
+        )
+        .unwrap();
+        let result = execute(&opts, &FakeHerdr::new());
+        (opts, result)
+    }
+
+    #[test]
+    fn a_dissent_after_a_verdict_is_recorded_only_with_new_evidence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        seed_cell(main_root, "demo-1");
+        crate::verbs::cells::record_dissent(main_root, "demo-1", "first", "alt", "consider", None, false).unwrap();
+        crate::verbs::cells::record_dissent_verdict(main_root, "demo-1", "reject", "the cell stands").unwrap();
+
+        let (opts, result) =
+            dissent_run_with(main_root, r#"{"claim":"still wrong","alternative":"alt","severity":"consider"}"#);
+        let refused = transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), carried_dissent(&result));
+        assert!(!refused.recorded);
+        assert!(refused.error.as_deref().unwrap().contains("reject"), "{refused:?}");
+        let env = result_envelope(&opts, &result, "herdr", Some(&refused));
+        assert_eq!(env["dissent_recorded"], Value::Bool(false));
+        assert!(env["dissent_error"].is_string());
+
+        let (opts, result) = dissent_run_with(
+            main_root,
+            r#"{"claim":"still wrong","alternative":"alt","severity":"consider","new_evidence":"the log shows the cursor reset"}"#,
+        );
+        let transcript = transcribe_dissent(&opts.main_root, opts.cell_id.as_deref(), carried_dissent(&result));
+        assert_eq!(transcript, DissentTranscript { recorded: true, error: None });
+        let cell: Value = serde_json::from_str(
+            &std::fs::read_to_string(main_root.join(".bee/cells/demo-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(cell.pointer("/trace/dissent/1/new_evidence"), Some(&serde_json::json!("the log shows the cursor reset")));
+        let env = result_envelope(&opts, &result, "herdr", Some(&transcript));
+        assert_eq!(env["dissent"]["new_evidence"], "the log shows the cursor reset");
     }
 
     fn usage_job(bee_dir: &Path, job_id: &str) -> PathBuf {
