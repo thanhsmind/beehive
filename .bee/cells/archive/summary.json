@@ -1608,5 +1608,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-15T02:59:26.970Z"
+  },
+  "paseo-system-prompts": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T05:32:14.917Z"
   }
 }
