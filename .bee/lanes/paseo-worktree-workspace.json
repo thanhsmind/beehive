@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-15T06:22:56.091Z",
+    "subject": "Tôi đang gộp bản sửa vào main.",
+    "asked_at": "2026-10-15T06:49:37.459Z",
     "session": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91"
   }
 }
