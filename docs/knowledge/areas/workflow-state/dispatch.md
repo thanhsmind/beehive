@@ -67,9 +67,19 @@ folding into `reservation_conflict`.
 **Worker Result form (workflow-lessons wfl-1, 2026-08-11).** The rendered
 worker prompt requires a fenced JSON Result form `{outcome, commit, files,
 tests, deviations}` beside the final status token, and `cells finish --report`
-validates exactly those five keys (unknown key refused, missing keys named)
+validates those five required keys (unknown key refused, missing keys named)
 into append-only `trace.report`; the flag absent keeps old finish behavior
-unchanged. Tending reads the form, never parses worker prose.
+unchanged. Tending reads the form, never parses worker prose. Optional keys
+ride beside them: `mistakes` and `baseline`, and the worker's handback
+(slp-role-gaps D1 `15f6804c`, D2 `6e81d8db`, contract `7db254ba`) — `reaction`
+(its stance toward the brief: confirm, partial, challenge or blocked, matched
+in any case and stored lowercase), `skipped`, `unknowns` and `found` (lists of
+non-empty lines, where an empty list means none and an absent key means no
+answer), and `stopped` (the part not done and its evidence, required when the
+reaction is partial). Each present key is stored on the cell trace and cleared
+when the cell is released. A herding worker carries the same handback on its
+result file, read leniently and re-emitted on the run envelope
+(`areas/bee-herding/the-run-verb-and-worker-outcomes.md`).
 
 **Codex spawn payloads follow the live tool schema.** Every Codex native
 dispatch uses one payload constructor. It emits `task_name`, `message`, and

@@ -329,6 +329,43 @@ in the result schema. See `areas/workflow-state/dissent-and-the-verdict-duty.md`
 for the record itself, its severities, the obligated verdict, and the two doors
 that refuse while a dissent is unanswered.
 
+A dissent object can also carry `new_evidence` (slp-role-gaps D3, store
+`b2baf5e0`). The verb passes it to the evidence-taking dissent writer
+(`record_dissent_with_evidence`). After a verdict on the cell, a dissent with no
+`new_evidence` is refused by that writer: the envelope shows
+`dissent_recorded: false` and the refusal, which quotes the verdict, in
+`dissent_error`. With `new_evidence`, the new entry stores it, and the envelope's
+raw `dissent` object carries it too.
+
+## A worker hands back its stance, skips, unknowns and finds
+
+Locked in slp-role-gaps D1/D2 (stores `15f6804c`, `6e81d8db`). The result file
+can carry five more optional fields. The brief names them in one short
+"Handback fields" block and names no bee command there:
+
+- `reaction` — the worker's stance toward the task: `confirm`, `partial`,
+  `challenge` or `blocked`. The parser lowercases it and drops any other value.
+- `skipped` — checks the worker did not run, each a string with its reason.
+- `unknowns` — assumptions the worker could not prove.
+- `found` — discoveries outside the task.
+- `stopped` — with `partial`: the part the worker did not do and the evidence
+  that its premise is false.
+
+All five read leniently, like `options` and `leaning`: absent or wrong-typed
+reads as absent, a non-string list entry is dropped, and none of them makes a
+round `Malformed`. The envelope re-emits each one only when present. When
+`reaction` is `partial` and `stopped` is absent, the envelope adds
+`stopped_missing: true`, so the leader sees the gap.
+
+## A model mismatch rides every Paseo envelope
+
+When `job.json` records `paseo_model_mismatch: true`, every envelope for that
+job carries `model_mismatch: {configured, observed}`, each a `{model, thinking}`
+object. With `herding.paseo.on_model_mismatch` set to `refuse`, a mismatch seen
+while the run still polls ends the run with outcome `model_mismatch`, exit
+non-zero, and the message in `error`. See `the-paseo-channel.md` ("Observed
+model verification") for the two modes.
+
 ## The worker's report rides the mailbox as a PATH, under the same additive law
 
 Locked in pi-result-mailbox D1/D2/D6 (2026-08-30). The gap it closes was
@@ -482,7 +519,7 @@ Two CLI verbs provide deterministic control over running workers (herding-cockpi
 ### Cancel stops the whole process tree on unix (piggery-borrow D2, 2026-10-07)
 
 Before `bee herding cancel` closes the pane, it reads the process tree below the captured foreground pid with one `ps -A -o pid=,ppid=,pgid=` call, sends SIGTERM to every member, waits up to 2 seconds, reads again, and sends SIGKILL to the members still alive (decision `7a25e4ed`).
-It reads the tree first because a child whose parent died is moved under init and cannot be found later.
+It reads the tree first because a child whose parent died is moved under init and can no longer be found.
 The 5-second fail-closed confirm and `cancel_termination_failed` are unchanged.
 The tree reader and the signal sender sit behind the `ProcessTree` seam, so tests never signal the test runner.
 Windows keeps the old path, and Paseo workers keep `paseo stop`.

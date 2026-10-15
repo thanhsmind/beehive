@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)", "tmux-herding-cockpit D1 (one herding.transport key selects the transport for the WHOLE cockpit)", "tmux-herding-cockpit D2 (the roles and bootstrap act on panes only through transport-neutral bee pane verbs)", "tmux-herding-cockpit D3 (the tmux mapping: session = workspace, window = tab, pane title = label, the bootstrap pane = chat)", "tmux-herding-cockpit D5 (the pane-verb pre-send guard fails open on an unreadable screen and always refuses a blocked one)", "herding-route-role D1 a685d557 (route is the fourth control-loop role; its finish signal is a finished worktree, read from role-merge.md's four conditions)", "herding-route-role D2 8388df3e (the named, scoped carve-out to agents-review-user-invoked: cockpit only, enable marker AND gate_bypass full/total, reviewer on a different herding.agents entry)", "herding-route-role D3 4a395ea7 (CHANGES becomes a cell in the finished feature's lane; a blocked reviewer stops routing cold; unclassifiable is reported and left)", "herding-route-role D4 (route may hand a CHANGES brief into the producing coder's still-open pane; it never starts a coder or creates a pane)"]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)", "tmux-herding-cockpit D1 (one herding.transport key selects the transport for the WHOLE cockpit)", "tmux-herding-cockpit D2 (the roles and bootstrap act on panes only through transport-neutral bee pane verbs)", "tmux-herding-cockpit D3 (the tmux mapping: session = workspace, window = tab, pane title = label, the bootstrap pane = chat)", "tmux-herding-cockpit D5 (the pane-verb pre-send guard fails open on an unreadable screen and always refuses a blocked one)", "herding-route-role D1 a685d557 (route is the fourth control-loop role; its finish signal is a finished worktree, read from role-merge.md's four conditions)", "herding-route-role D2 8388df3e (the named, scoped carve-out to agents-review-user-invoked: cockpit only, enable marker AND gate_bypass full/total, reviewer on a different herding.agents entry)", "herding-route-role D3 4a395ea7 (CHANGES becomes a cell in the finished feature's lane; a blocked reviewer stops routing cold; unclassifiable is reported and left)", "herding-route-role D4 (route may hand a CHANGES brief into the producing coder's still-open pane; it never starts a coder or creates a pane)", "slp-role-gaps D7 8a826f2f (a write worker with a frozen worktree fingerprint past herding.stall_after_secs reads stalled/no_diff_progress, one notice per stretch, observe-only)"]
   sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md, docs/history/tmux-herding-cockpit/CONTEXT.md, docs/history/herding-route-role/CONTEXT.md, "docs/history/herding-route-role/plan.md (revision 2, rebuilt on a five-seat hat wave)", "herding-route-role cells hrr-1..hrr-8 (capped traces, 2026-09-08/09)"]
   authoritative_for: "bee-herding: the four-role cockpit, its safety boundaries, and adoption"
   owns.code: [packages/bee-rs/crates/bee/src/herding.rs, "packages/bee-rs/crates/bee/src/herding/*", packages/bee-rs/crates/bee/src/herding/tmux.rs, packages/bee-rs/crates/fleet/src/backend/tmux.rs, packages/bee-rs/crates/fleet/src/screen.rs]
@@ -177,6 +177,25 @@ the source repo resolves exactly as it always did. When no candidate reads, the 
 path tried. The single hardcoded `skills/` join this replaced is why the whole cockpit ran only
 inside the bee repo and died with "prompt file not found" in every host project.
 
+**A write worker whose worktree stops changing reads `stalled`, once per stretch
+(slp-role-gaps D7, store `8a826f2f`).** A worker can keep its activity fresh — reading file after
+file — and still make no progress. So for a job whose record does not say `read_only: true`, and
+whose status would otherwise be `working`, `bee herding status` takes a fingerprint of the job
+record's `cwd`: `git rev-parse HEAD` plus a SHA-256 of `git diff HEAD`. The record keeps
+`diff_fingerprint` and `diff_fingerprint_since`, and resets both when the fingerprint moves. When
+the fingerprint stays the same for longer than `herding.stall_after_secs` (default 900, a positive
+integer; anything else reads as the default), the status is `stalled` with
+`stall_reason: no_diff_progress`. The older activity stall writes `stall_reason: activity`, and
+status shows the reason beside a `stalled` word. On the move into a `no_diff_progress` stretch, one
+`progress` message goes to the job's messages file — `bee: stalled — no_diff_progress for <N>s;
+observe only, nothing was stopped; check with bee herding status` — so the leader sees it as an
+unread message. A change of reason starts a new stretch; a repeat read does not. The signal is
+computed only when status is read: no timer runs, so the notice lands on the first read past the
+window. It is observe-only — nothing is stopped, retried or archived — and `recovered` follows when
+the fingerprint moves. A git failure in `cwd` (or no `cwd`) leaves the status as it was. Both stall
+sites — the pane job's `compute_job_status` and the Paseo branch of the status list — call the one
+helper `stall_word` in `herding.rs`.
+
 ## Actors & Access
 
 - **The owner** performs three acts and only three: bootstrap once, set the enable marker to arm
@@ -283,7 +302,10 @@ inside the bee repo and died with "prompt file not found" in every host project.
   gesture is their only live form (see Data Dictionary). `status` is live
   (`herding.rs`, the `"status"` arm): enable state plus transport
   `{ready, reason, pane_id, kind}`. Test coverage is inline:
-  the `#[cfg(test)] mod tests` block in `herding.rs`.
+  the `#[cfg(test)] mod tests` block in `herding.rs`. The stall reason and the worktree
+  fingerprint are `stall_word`, `diff_frozen_secs`, `worktree_fingerprint` and the
+  `stall_after_secs` knob reader in `herding.rs`; the notice goes through
+  `append_message` in `packages/bee-rs/crates/bee/src/herding/notify.rs`.
 - The transport-neutral pane verbs are
   `packages/bee-rs/crates/bee/src/herding/pane_verbs.rs`: a `CockpitTransport` trait on top of the
   run verb's `PaneTransport`, implemented for both `RealHerdr` and `RealTmux`, plus the envelope

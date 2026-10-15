@@ -1,0 +1,5 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"A first dissent on a cell records as before","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"},
+{"requirement":"A dissent on a cell whose dissent already has a verdict is refused unless --new-evidence is given, and the cell file is byte-identical after the refusal","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"},
+{"requirement":"A dissent with --new-evidence after a verdict appends an entry carrying new_evidence","artifact":"packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs"}
+]}

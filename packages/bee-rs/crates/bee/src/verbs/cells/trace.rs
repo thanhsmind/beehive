@@ -85,6 +85,11 @@ pub(crate) fn release_trace(mut trace: Map<String, Value>) -> Map<String, Value>
         // floor into its next claim, where it reads as a measurement of work
         // that has not happened yet.
         "baseline",
+        "reaction",
+        "skipped",
+        "unknowns",
+        "found",
+        "stopped",
     ] {
         trace.insert(key.into(), Value::Null);
     }

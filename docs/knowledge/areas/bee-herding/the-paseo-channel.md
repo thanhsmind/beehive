@@ -179,8 +179,19 @@ After agent spawn, the runner reads inspect `Model` and `Thinking` fields (paseo
 The runner writes `paseo_model_observed` and `paseo_thinking_observed` into `job.json`.
 The sentinel values `-` for model and `auto` for thinking record as unverified.
 The runner compares the observed model with the configured `paseo` model.
-On a confirmed mismatch, the runner prints a warning and records `paseo_model_mismatch: true` in `job.json`.
-The runner never archives, stops, or retries a worker on a model mismatch.
+On a confirmed mismatch, the runner prints a warning and records `paseo_model_mismatch: true` in `job.json`, with the configured values as `paseo_model_configured` and `paseo_thinking_configured`.
+A confirmed mismatch needs both sides known: a sentinel or an unset configured value never counts.
+
+The config key `herding.paseo.on_model_mismatch` sets what a mismatch does (slp-role-gaps D9, store `0ccaa387`):
+
+- `warn` — the default, also when the key is absent or holds any other value. The runner only warns. The run continues.
+- `refuse` — when the runner sees the mismatch while it still polls for the result, it stops the agent with `paseo stop` (the command `bee herding interrupt` uses) and ends the run with outcome `model_mismatch`. The run exits non-zero. Its `error` names the configured and observed model and thinking and two fixes: point the agent's `paseo` block at the model that runs, or set `herding.paseo.on_model_mismatch` to `warn`. The runner never archives a refused agent, also with `--close-always`.
+
+`refuse` never fires after the worker finished: a mismatch first seen with the result already on disk keeps the result and only warns, because the work is paid for and done.
+In both modes the run envelope carries `model_mismatch: {configured: {model, thinking}, observed: {model, thinking}}`, read from `job.json`.
+The runner never retries a worker on a model mismatch.
+
+Today's flash route reports `thinking off` against a configured `thinking medium`, so every flash worker would be refused under `refuse`. That is why `warn` stays the default.
 
 ## Liveness states
 

@@ -690,6 +690,124 @@ pub(crate) fn ceiling_seconds_at(main_root: &Path) -> Option<u64> {
     ceiling_seconds(&serde_json::from_str::<Value>(&raw).ok()?)
 }
 
+pub(crate) fn stall_after_secs(cfg: &Value) -> u64 {
+    cfg.get("herding")
+        .and_then(|h| h.get("stall_after_secs"))
+        .and_then(Value::as_u64)
+        .filter(|n| *n >= 1)
+        .unwrap_or(900)
+}
+
+fn stall_after_secs_at(main_root: &Path) -> u64 {
+    std::fs::read_to_string(main_root.join(".bee").join("config.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .map_or(stall_after_secs(&Value::Null), |cfg| stall_after_secs(&cfg))
+}
+
+fn worktree_fingerprint(cwd: &str) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let git = |args: &[&str]| -> Option<Vec<u8>> {
+        let out = Command::new("git").arg("-C").arg(cwd).args(args).output().ok()?;
+        out.status.success().then_some(out.stdout)
+    };
+    let head = git(&["rev-parse", "HEAD"])?;
+    let diff = git(&["diff", "HEAD"])?;
+    Some(format!("{}:{:x}", String::from_utf8_lossy(&head).trim(), Sha256::digest(&diff)))
+}
+
+fn update_job_record(bee_dir: &Path, job_id: &str, fields: Vec<(&str, Value)>) {
+    let path = mailbox::job_path(bee_dir, job_id);
+    if let crate::fsutil::ReadJson::Parsed(Value::Object(mut obj)) = crate::fsutil::read_json(&path) {
+        for (key, value) in fields {
+            obj.insert(key.into(), value);
+        }
+        let _ = crate::fsutil::write_json_atomic(&path, &Value::Object(obj));
+    }
+}
+
+fn ms_to_utc(ms: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::from_timestamp_millis(ms).unwrap_or_else(chrono::Utc::now)
+}
+
+fn diff_frozen_secs(bee_dir: &Path, job_id: &str, job_obj: &Map<String, Value>, now_ms: i64) -> Option<u64> {
+    if job_obj.get("read_only").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    let fingerprint = worktree_fingerprint(job_obj.get("cwd")?.as_str()?)?;
+    let since_ms = job_obj
+        .get("diff_fingerprint_since")
+        .and_then(Value::as_str)
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp_millis());
+    match since_ms {
+        Some(since) if job_obj.get("diff_fingerprint").and_then(Value::as_str) == Some(fingerprint.as_str()) => {
+            Some((now_ms.saturating_sub(since).max(0) / 1000) as u64)
+        }
+        _ => {
+            let since = ms_to_utc(now_ms).to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+            update_job_record(
+                bee_dir,
+                job_id,
+                vec![("diff_fingerprint", Value::String(fingerprint)), ("diff_fingerprint_since", Value::String(since))],
+            );
+            Some(0)
+        }
+    }
+}
+
+fn stall_word(
+    bee_dir: &Path,
+    job_id: &str,
+    job_obj: &Map<String, Value>,
+    activity_stale: bool,
+    working: bool,
+    now_ms: i64,
+) -> Option<&'static str> {
+    let main_root = bee_dir.parent().unwrap_or(bee_dir);
+    let reason = if activity_stale {
+        Some(("activity", 0))
+    } else if working {
+        diff_frozen_secs(bee_dir, job_id, job_obj, now_ms)
+            .filter(|secs| *secs > stall_after_secs_at(main_root))
+            .map(|secs| ("no_diff_progress", secs))
+    } else {
+        None
+    };
+    let last_status = job_obj.get("last_status").and_then(Value::as_str);
+    let Some((reason, secs)) = reason else {
+        if last_status != Some("stalled") {
+            return None;
+        }
+        mailbox::transition_status(bee_dir, job_id, "recovered");
+        return Some("recovered");
+    };
+    let new_stretch = last_status != Some("stalled") || job_obj.get("stall_reason").and_then(Value::as_str) != Some(reason);
+    update_job_record(bee_dir, job_id, vec![("stall_reason", Value::String(reason.into()))]);
+    mailbox::transition_status(bee_dir, job_id, "stalled");
+    if new_stretch && reason == "no_diff_progress" {
+        let text = format!(
+            "bee: stalled — no_diff_progress for {secs}s; observe only, nothing was stopped; check with bee herding status"
+        );
+        let _ = notify::append_message(main_root, Some(job_id), "progress", &text, None, ms_to_utc(now_ms));
+    }
+    Some("stalled")
+}
+
+fn insert_stall_reason(job_map: &mut Map<String, Value>, bee_dir: &Path, job_id: &str, status: &str) -> String {
+    if status != "stalled" {
+        return String::new();
+    }
+    let crate::fsutil::ReadJson::Parsed(job) = crate::fsutil::read_json(&mailbox::job_path(bee_dir, job_id)) else {
+        return String::new();
+    };
+    let Some(reason) = job.get("stall_reason").and_then(Value::as_str) else {
+        return String::new();
+    };
+    job_map.insert("stall_reason".into(), Value::String(reason.into()));
+    format!(" stall_reason={reason}")
+}
+
 /// The herdr-only spelling every pre-tmux caller and test uses: unchanged
 /// behavior, now one delegation deep. Production reaches the probe through
 /// `transport_state_for` with the configured kind, so this name survives for
@@ -852,18 +970,6 @@ fn compute_job_status(
         _ => false,
     };
 
-    if is_stale_activity && is_alive {
-        mailbox::transition_status(bee_dir, job_id, "stalled");
-        return "stalled".to_string();
-    }
-
-    // 3. transition_status gives recovered once; else the existing word
-    let last_status = job_obj.get("last_status").and_then(Value::as_str);
-    if last_status == Some("stalled") {
-        mailbox::transition_status(bee_dir, job_id, "recovered");
-        return "recovered".to_string();
-    }
-
     let existing_word = match std::fs::read_to_string(mailbox::activity_path(bee_dir, job_id))
         .ok()
         .and_then(|t| mailbox::parse_activity_text(&t, round, now_ms))
@@ -882,6 +988,16 @@ fn compute_job_status(
             }
         }
     };
+    if let Some(word) = stall_word(
+        bee_dir,
+        job_id,
+        job_obj,
+        is_stale_activity && is_alive,
+        existing_word == "working",
+        now_ms,
+    ) {
+        return word.to_string();
+    }
     mailbox::transition_status(bee_dir, job_id, &existing_word);
     existing_word
 }
@@ -1055,19 +1171,12 @@ fn collect_jobs(
                             > mailbox::ACTIVITY_FRESHNESS_SECS.saturating_mul(1000)
                     });
 
-                if is_stale {
-                    mailbox::transition_status(bee_dir, &job_id, "stalled");
-                    "stalled".to_string()
-                } else {
-                    let last_status = job_obj.get("last_status").and_then(Value::as_str);
-                    if last_status == Some("stalled") {
-                        mailbox::transition_status(bee_dir, &job_id, "recovered");
-                        "recovered".to_string()
-                    } else {
+                stall_word(bee_dir, &job_id, &job_obj, is_stale, true, now_ms)
+                    .unwrap_or_else(|| {
                         mailbox::transition_status(bee_dir, &job_id, "working");
-                        "working".to_string()
-                    }
-                }
+                        "working"
+                    })
+                    .to_string()
             } else {
                 paseo_state.clone()
             };
@@ -1146,7 +1255,8 @@ fn collect_jobs(
                 _ => Value::Null,
             };
             job_map.insert("paseo_model_observed".into(), paseo_model_observed);
-            let usage_disp = insert_read_only(&mut job_map, &job_obj, true)
+            let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
+                + &insert_read_only(&mut job_map, &job_obj, true)
                 + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
                 + &notify::insert_messages(&mut job_map, &job_dir);
 
@@ -1234,7 +1344,8 @@ fn collect_jobs(
                 .unwrap_or(Value::Null),
         );
         job_map.insert("status".into(), Value::String(status.clone()));
-        let usage_disp = insert_read_only(&mut job_map, &job_obj, false)
+        let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
+            + &insert_read_only(&mut job_map, &job_obj, false)
             + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
             + &notify::insert_messages(&mut job_map, &job_dir);
 
@@ -2940,5 +3051,162 @@ mod tests {
 
         let line_none = plain_lines.iter().find(|l| l.starts_with("job-none:")).unwrap();
         assert!(!line_none.contains("model_mismatch"));
+    }
+
+    fn git_worktree(root: &Path) -> PathBuf {
+        let wt = root.join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join("a.txt"), "one\n").unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["add", "a.txt"],
+            vec!["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"],
+        ] {
+            assert!(Command::new("git").arg("-C").arg(&wt).args(&args).status().unwrap().success());
+        }
+        wt
+    }
+
+    fn fingerprint_job(root: &Path, job_id: &str, extra: Value) -> PathBuf {
+        let wt = git_worktree(root);
+        let job_dir = root.join(".bee/mailbox").join(job_id);
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let mut spec = serde_json::json!({"job_id": job_id, "pane_id": "w4:alive", "round": 1, "cwd": wt.to_str().unwrap()});
+        for (k, v) in extra.as_object().unwrap() {
+            spec[k] = v.clone();
+        }
+        std::fs::write(job_dir.join("job.json"), spec.to_string()).unwrap();
+        job_dir
+    }
+
+    fn backdate_fingerprint(job_dir: &Path, secs: i64) {
+        let path = job_dir.join("job.json");
+        let mut job: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        job["diff_fingerprint_since"] = Value::String((chrono::Utc::now() - chrono::Duration::seconds(secs)).to_rfc3339());
+        std::fs::write(&path, job.to_string()).unwrap();
+    }
+
+    fn read_pane_job(root: &Path) -> Value {
+        let live: HashSet<String> = ["w4:alive".to_string()].into_iter().collect();
+        let (_, val, _) = status_with_panes_and_transport(
+            &["--main-root", root.to_str().unwrap(), "--json"],
+            Some(&MockTransport { alive_pid: Some(4242) }),
+            Some(Some(live)),
+        );
+        val["jobs"][0].clone()
+    }
+
+    fn message_lines(job_dir: &Path) -> Vec<Value> {
+        std::fs::read_to_string(job_dir.join("messages.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn stall_after_secs_reads_the_knob_and_defaults_to_900() {
+        assert_eq!(stall_after_secs(&serde_json::json!({"herding": {"stall_after_secs": 60}})), 60);
+        assert_eq!(stall_after_secs(&serde_json::json!({"herding": {"stall_after_secs": 0}})), 900);
+        assert_eq!(stall_after_secs(&serde_json::json!({})), 900);
+    }
+
+    #[test]
+    fn frozen_write_job_stalls_once_with_no_diff_progress_then_recovers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let job_dir = fingerprint_job(root, "job-frozen", serde_json::json!({}));
+
+        assert_eq!(read_pane_job(root)["status"], "working");
+        let job: Value = serde_json::from_str(&std::fs::read_to_string(job_dir.join("job.json")).unwrap()).unwrap();
+        assert!(job["diff_fingerprint"].is_string() && job["diff_fingerprint_since"].is_string(), "{job}");
+
+        backdate_fingerprint(&job_dir, 1000);
+        let stalled = read_pane_job(root);
+        assert_eq!(stalled["status"], "stalled");
+        assert_eq!(stalled["stall_reason"], "no_diff_progress");
+        assert_eq!(stalled["unread_messages"], 1);
+        let msgs = message_lines(&job_dir);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["kind"], "progress");
+        let text = msgs[0]["text"].as_str().unwrap();
+        assert!(text.starts_with("bee: stalled — no_diff_progress for 100"), "{text}");
+        assert!(text.ends_with("s; observe only, nothing was stopped; check with bee herding status"), "{text}");
+
+        assert_eq!(read_pane_job(root)["status"], "stalled");
+        assert_eq!(message_lines(&job_dir).len(), 1);
+
+        std::fs::write(root.join("wt/a.txt"), "two\n").unwrap();
+        assert_eq!(read_pane_job(root)["status"], "recovered");
+        assert_eq!(read_pane_job(root)["status"], "working");
+        assert_eq!(message_lines(&job_dir).len(), 1);
+    }
+
+    #[test]
+    fn moving_fingerprint_never_stalls() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let job_dir = fingerprint_job(root, "job-moving", serde_json::json!({}));
+        for n in 0..3 {
+            assert_eq!(read_pane_job(root)["status"], "working");
+            backdate_fingerprint(&job_dir, 1000);
+            std::fs::write(root.join("wt/a.txt"), format!("edit {n}\n")).unwrap();
+        }
+        assert_eq!(read_pane_job(root)["status"], "working");
+        assert!(message_lines(&job_dir).is_empty());
+    }
+
+    #[test]
+    fn read_only_job_and_non_git_cwd_never_stall_by_fingerprint() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let job_dir = fingerprint_job(root, "job-ro", serde_json::json!({"read_only": true}));
+        backdate_fingerprint(&job_dir, 1000);
+        assert_eq!(read_pane_job(root)["status"], "working");
+        assert_eq!(read_pane_job(root)["status"], "working");
+        assert!(message_lines(&job_dir).is_empty());
+
+        let other = tempfile::tempdir().unwrap();
+        let job_dir = fingerprint_job(other.path(), "job-nogit", serde_json::json!({"cwd": other.path().join("missing").to_str().unwrap()}));
+        backdate_fingerprint(&job_dir, 1000);
+        assert_eq!(read_pane_job(other.path())["status"], "working");
+        let job: Value = serde_json::from_str(&std::fs::read_to_string(job_dir.join("job.json")).unwrap()).unwrap();
+        assert!(job.get("diff_fingerprint").is_none(), "{job}");
+    }
+
+    #[test]
+    fn paseo_working_job_with_frozen_worktree_stalls_with_no_diff_progress() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let job_dir = fingerprint_job(
+            root,
+            "job-paseo-frozen",
+            serde_json::json!({"transport": "paseo", "paseo_agent_id": "agent-frozen", "pane_id": null}),
+        );
+        let read = || {
+            let mut inspect_map = std::collections::HashMap::new();
+            inspect_map.insert(
+                "agent-frozen".to_string(),
+                Ok(serde_json::json!({"Status": "running", "UpdatedAt": chrono::Utc::now().to_rfc3339()}).to_string()),
+            );
+            let fake = FakeHerdingPaseoCli {
+                ls_out: Ok(serde_json::json!([{"id": "agent-frozen", "labels": {"bee_job": "job-paseo-frozen"}, "archived": false}]).to_string()),
+                inspect_map,
+            };
+            let (_, val, _) = status_with_panes_and_transport_and_paseo(
+                &["--main-root", root.to_str().unwrap(), "--json"],
+                None,
+                Some(Some(HashSet::new())),
+                Some(&fake),
+            );
+            val["jobs"][0].clone()
+        };
+        assert_eq!(read()["status"], "working");
+        backdate_fingerprint(&job_dir, 1000);
+        let stalled = read();
+        assert_eq!(stalled["status"], "stalled");
+        assert_eq!(stalled["stall_reason"], "no_diff_progress");
+        assert_eq!(read()["status"], "stalled");
+        assert_eq!(message_lines(&job_dir).len(), 1);
     }
 }

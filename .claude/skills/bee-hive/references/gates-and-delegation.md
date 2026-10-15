@@ -170,11 +170,11 @@ Two or three isolated advisor consults design an answer to ONE hard question, cr
 
 **The four moves** — the shape `bee-reviewing`'s wave already uses, applied to generation instead of critique:
 
-1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --role lane-N --brief-file <path>` per lane, in parallel — lane one takes `--role lane-1`, lane two `--role lane-2`, lane three `--role lane-3`, so each lane can be pointed at a DIFFERENT model (lane-model-diversity D1). Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3).
+1. **Fan out.** One `bee dispatch prepare --runtime <rt> --kind advisor --role lane-N --brief-file <path>` per lane, in parallel — lane one takes `--role lane-1`, lane two `--role lane-2`, lane three `--role lane-3`, so each lane can be pointed at a DIFFERENT model (lane-model-diversity D1). Each lane gets the SAME brief bytes and the read diet that brief declares; it is denied every sibling proposal, the orchestrator's own leaning, session history, and `--expertise` beside a brief (a second, unlinted reading channel is refused at the door). A lane never runs as `--kind cell` — refused by type, before the file is read (D3). Each lane answer ends with the recommendation, confidence and falsifier the advisor prompt requires (`packages/bee/prompts/advisor.md`, the line after the digest contract).
 2. **Cross-critique.** Round two: fresh advisor dispatches, each handed the rival proposal VERBATIM inside a fence whose info string is the one tag `lane-proposal`. A brief over the 8192-byte cap does not paste the proposal: the round-2 brief names its PATH in the read diet and the lane reads it there.
    *Optional cross-judge.* When the leader wants a second reading before it picks, it sends one `--kind advisor --role advisor` dispatch with the rubric and the proposals by path. This is no new seat: `SEAT_ROLES` stays closed. The dossier records, inside `## Chosen`, the judge's pick, the leader's pick, and the reason for any disagreement. The leader still decides.
 3. **Converge.** One dossier at `docs/history/<feature>/blind/<run-id>.md`, holding every proposal verbatim, the critiques with their round-2 dispatch ids, the chosen answer, the rejected set with reasons, and the citations. Convergence has two steps and one rule:
-   - **Base.** Read every proposal whole, never as a pile of parts. Score each one criterion by criterion against the rubric, and pick the top score as the base. Break a tie first on the proposal that extends further without breaking an invariant, then on the smaller public surface.
+   - **Base.** Read every proposal whole, never as a pile of parts. Before scoring, relabel the proposals A, B, C in a shuffled order with lane and model names hidden; reveal the names only after every proposal is scored. With one proposal, score it alone. Score each one criterion by criterion against the rubric, and pick the top score as the base. Break a tie first on the proposal that extends further without breaking an invariant, then on the smaller public surface.
    - **Grafts.** Take one or two ideas from each rejected proposal, when it has any worth taking, and fold them into the base by hand. Record them as a bold **Grafts** block inside the dossier's `## Chosen` section, each graft with its source lane's `dispatch_id`.
    - **The rule.** Lanes that converge ship the consensus, with no graft. Lanes that diverge wildly mean the frame was loose: reframe the rubric and re-run the lanes, never average the proposals. A hat or Gate 2 finding that a lane had already caught is a missed graft: re-open the dossier.
 
@@ -315,7 +315,12 @@ perspective rides the PROMPT body — never
 `--brief-file`, whose neutrality lint exists for lane briefs and would fight
 a brief whose leaning IS its job. Hats never see each other. The
 orchestrator is the synthesizing BLUE hat — synthesis is decide-altitude and
-never delegates.
+never delegates. Each hat answer ends with the recommendation, confidence and
+falsifier the advisor prompt requires (`packages/bee/prompts/advisor.md`, the
+line after the digest contract). Before scoring, the synthesis relabels the
+hat answers A, B, C in a shuffled order with seat and model names hidden, and
+reveals the names only after every answer is scored; with one answer, score
+it alone.
 
 **Prompt framing — open questions, not validation.** A hat prompt presents
 the PROBLEM and CONSTRAINTS, never the leader's draft solution. Frame each

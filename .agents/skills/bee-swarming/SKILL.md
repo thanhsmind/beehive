@@ -66,7 +66,9 @@ From two cells up, state the one-line concurrency plan before dispatching.
    worker two cells.
 4. Tend: read each worker's Result form
    (`references/swarming-reference.md`, "Result Formats"), never its
-   prose. Silence is not failure — inspect `bee cells list` and
+   prose. A `partial` result's `stopped` part becomes a new cell or a
+   dissent verdict before close; your own final report states the four
+   layers (same section). Silence is not failure — inspect `bee cells list` and
    `bee reservations list` before assuming stuck. What stuck means, the
    pilot for a same-pattern wave, and the user's stop word:
    `references/swarming-reference.md` ("Operating Contract in full",

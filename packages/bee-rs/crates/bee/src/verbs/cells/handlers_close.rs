@@ -658,6 +658,17 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         if let Some(Value::String(b)) = report_value.get("baseline") {
             trace.insert("baseline".into(), Value::String(js_trim(b).to_string()));
         }
+        if let Some(reaction) = report_value.get("reaction") {
+            trace.insert("reaction".into(), reaction.clone());
+        }
+        for key in ["skipped", "unknowns", "found"] {
+            if let Some(items) = report_value.get(key) {
+                trace.insert(key.into(), items.clone());
+            }
+        }
+        if let Some(Value::String(stopped)) = report_value.get("stopped") {
+            trace.insert("stopped".into(), Value::String(js_trim(stopped).to_string()));
+        }
         // fa-1: diff-vs-test advisory — the ONLY producer for this slot
         // since the E1 impact-registry check retired. Scoped to `cells
         // finish` alone (D6's own "finish only" posture): `cells cap`

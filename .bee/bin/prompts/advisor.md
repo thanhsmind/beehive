@@ -14,6 +14,7 @@ Purpose:
 {{/if}}
 
 Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.
+End the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.
 {{#if expertise}}
 
 Expertise — dispatcher-picked; read/load before you start:

@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/cells-completion-judge-and-archive.md]
-  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — the herding half of 6a6b9975 is closed, and closed without a second writer: the dissent rides the herding mailbox result as data and the control loop transcribes it through the same record-dissent function; touches 6a6b9975)"]
-  sources: ["docs/history/slp-dissent-stop-and-ask/CONTEXT.md (locked decisions, terms, boundary)", "docs/history/slp-dissent-stop-and-ask/plan.md (the four phases)", "slp-dissent-stop-and-ask cell sd-1 (the dissent record, its closed severity set, the secret scan, the claim release, and the blocker tooth; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-1.json, commit 156b9566, 2026-08-28)", "slp-dissent-stop-and-ask cell sd-2 (the obligated verdict written to the decision log fail-closed, releasing the cell the blocker dissent parked; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-2.json, commit d7726926)", "slp-dissent-stop-and-ask cell sd-3 (the cells dispatch table folded into the served-but-undeclared law, proven red-first; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-3.json, commit 79f05db3)", "slp-dissent-stop-and-ask cell sd-4 (bee close refuses while any dissent lacks a verdict, in every lane; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-4.json, commit 6966d85c)", "slp-dissent-stop-and-ask cell sd-5 (bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT, reading the close door's own two helpers so one deferral clears both doors; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-5.json, commit 18aa0e09)", "slp-dissent-stop-and-ask cell sd-6 (options[] and leaning on the worker result across three code surfaces, plus the swarming worker contract; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-6.json, commit ecdb89ea)", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — the carried dissent on the herding mailbox result, and its transcription through the one record-dissent writer)"]
+  decisions: ["slp-dissent-stop-and-ask 4b7aa303 (dissent has FULL TEETH: a blocker-severity dissent pauses the RELATED part of the work while other parts continue, and the orchestrator is OBLIGATED to answer one of three — accept and log / reject with reasoning / escalate a rung — recorded in the decision log before the related work resumes)", "slp-role-gaps b2baf5e0 (dissent once per point: after a verdict on a cell's dissent, a further bee cells dissent on that cell is REFUSED unless it carries --new-evidence <text>; every dissent still appends and nothing is overwritten)", "slp-dissent-stop-and-ask a2affcba (mechanism: a cells-level dissent record {target, claim, alternative, severity} written through the CLI; bee close and bee worktree merge REFUSE while any dissent lacks a recorded verdict, the same enforcement shape as judge-debt; blocker severity rides the existing blocked-status machinery so the related work stays unclaimable; the SLP escalate verb NEVER reuses bee cells escalate, which means model tier)", "slp-dissent-stop-and-ask 787a9eb0 (dissent adds an obligation on the orchestrator, never a relaxation of a gate)", "slp-dissent-stop-and-ask a020319d (this is the SECOND of four slp clusters; blind lanes and contract/original-request are separate features and out of this boundary)", "slp-dissent-stop-and-ask e29918f7 (the merge half of the obligation is NEW code, not a copied arm — merge carried no judge-debt door, only proof debt, so the door had to be built rather than mirrored)", "slp-dissent-stop-and-ask 6a6b9975 (herding-lane dissent is OUT of this boundary: one writer owns the dissent record, and a herding worker is instructed never to run a bee command, so it cannot reach that writer; carried as backlog item p-05d2a4f4)", "slp-followup-gaps 7db30738 (2026-08-29 — the herding half of 6a6b9975 is closed, and closed without a second writer: the dissent rides the herding mailbox result as data and the control loop transcribes it through the same record-dissent function; touches 6a6b9975)"]
+  sources: ["docs/history/slp-dissent-stop-and-ask/CONTEXT.md (locked decisions, terms, boundary)", "docs/history/slp-role-gaps/CONTEXT.md (D3, store b2baf5e0)", "docs/history/slp-role-gaps/plan.md (cell rig-1)", "slp-role-gaps cell rig-1 (the evidence-taking sibling writer, the after-verdict refusal, and the --new-evidence flag; packages/bee-rs/crates/bee/src/verbs/cells/dissent.rs)", "docs/history/slp-dissent-stop-and-ask/plan.md (the four phases)", "slp-dissent-stop-and-ask cell sd-1 (the dissent record, its closed severity set, the secret scan, the claim release, and the blocker tooth; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-1.json, commit 156b9566, 2026-08-28)", "slp-dissent-stop-and-ask cell sd-2 (the obligated verdict written to the decision log fail-closed, releasing the cell the blocker dissent parked; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-2.json, commit d7726926)", "slp-dissent-stop-and-ask cell sd-3 (the cells dispatch table folded into the served-but-undeclared law, proven red-first; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-3.json, commit 79f05db3)", "slp-dissent-stop-and-ask cell sd-4 (bee close refuses while any dissent lacks a verdict, in every lane; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-4.json, commit 6966d85c)", "slp-dissent-stop-and-ask cell sd-5 (bee worktree merge refuses WORKTREE_MERGE_DISSENT_DEBT, reading the close door's own two helpers so one deferral clears both doors; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-5.json, commit 18aa0e09)", "slp-dissent-stop-and-ask cell sd-6 (options[] and leaning on the worker result across three code surfaces, plus the swarming worker contract; trace .bee/cells/archive/slp-dissent-stop-and-ask/sd-6.json, commit ecdb89ea)", "slp-followup-gaps cell sfg-2 (commit 29fd6fbe, 2026-08-29 — the carried dissent on the herding mailbox result, and its transcription through the one record-dissent writer)"]
   authoritative_for: "workflow-state: the dissent record, the obligated verdict, the close and merge dissent-debt doors, and the three boundary signals that oblige a worker to stop and ask"
 ---
 
@@ -69,7 +69,7 @@ Two verbs, two meanings, no overload.
 
 The verdict is written to the **decision log**, fail-closed: if the log write
 does not land, the verdict does not count. That is what makes the answer durable
-and citable later instead of a line in a transcript nobody can find. Recording
+and citable from then on, instead of a line in a transcript nobody can find. Recording
 the verdict is also what releases the cell a blocker dissent parked — the pause
 and the release are two ends of one mechanism, so there is no state where the
 answer exists and the work is still stuck.
@@ -78,6 +78,36 @@ The verdict payload is a **small closed form**, deliberately not the judge-verdi
 shape. A judge verdict carries per-check evidence because a judge checks many
 things; a dissent verdict answers one question, so it takes one answer and one
 reason.
+
+## Dissent once per point
+
+A point is dissented once. Once a verdict is recorded on a cell's dissent, the
+ordinary `bee cells dissent` on that same cell is **refused** — the ruling has
+been made, and following it is the worker's part of the bargain. The refusal
+quotes the newest answered verdict and its reason, so the reader sees exactly
+which ruling they are breaking, and it names the one fix that reopens the
+question:
+
+    bee cells dissent --id <cell> --reason "<claim>" --alternative "<plan>" \
+      --severity consider --new-evidence "<what is new>"
+
+`--new-evidence` is the difference measured against the ruling: what the verdict
+did not cover, or what has changed since it was made. It is free text, it takes
+the same ONE secret scan as the claim and the alternative, and it is stored on
+the new entry as `new_evidence`. With it the dissent appends as always; without
+it nothing at all is written, and the cell file is byte-identical after the
+refusal.
+
+The rule is **one dissent per ANSWERED point**, never one per cell. A first
+dissent on a cell with no verdict records as it always did, and several
+dissents may stand unanswered side by side — each of those still owes its own
+verdict, exactly as the oldest-unanswered rule above says.
+
+This is the piggery rule the feature copied: question the premise once, with
+evidence, then follow the ruling. Two consequences are deliberate. The refusal
+reads the cell *before* the store lock is taken, so a refused repeat dissent
+never disturbs the file or the claim. And the record stays append-only: the
+earlier entries, the verdict among them, are never overwritten by the new one.
 
 ## The two debt doors
 
@@ -167,7 +197,9 @@ and how a transcription that fails is reported rather than swallowed — is in
 
 ## Pointers (implementation)
 
-- Verbs: `bee cells dissent` (record) and `bee cells dissent-verdict` (answer).
+- Verbs: `bee cells dissent` (record, with `--new-evidence` as the one way
+  past an existing verdict on the same cell) and `bee cells dissent-verdict`
+  (answer).
   The claim is spelled `--reason`, not `--claim`: `claim` is a CLI-wide
   flag-alone boolean, so `--claim <text>` would swallow its own value token and
   the whole argument list would decline. The stored field is still `claim`.
