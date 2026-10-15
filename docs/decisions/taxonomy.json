@@ -706,6 +706,9 @@
     "worker-guard",
     "deferral",
     "waiting-on",
-    "contract:finish-report"
+    "contract:finish-report",
+    "contract:herding-stall",
+    "contract:dissent-once",
+    "contract:herding-result-envelope"
   ]
 }
