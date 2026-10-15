@@ -193,6 +193,7 @@ pub fn run_argv(
     prompt: &str,
     agent: &str,
     cell_id: Option<&str>,
+    workspace: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         "run".to_string(),
@@ -215,6 +216,11 @@ pub fn run_argv(
     if let Some(ref m) = spec.mode {
         argv.push("--mode".to_string());
         argv.push(m.clone());
+    }
+
+    if let Some(w) = workspace {
+        argv.push("--workspace".to_string());
+        argv.push(w.to_string());
     }
 
     argv.push("--cwd".to_string());
@@ -1184,7 +1190,7 @@ mod tests {
             ("BEE_HERDING_WORKER".to_string(), "1".to_string()),
             ("JOB_VAR".to_string(), "xyz".to_string()),
         ];
-        let argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", None);
+        let argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", None, None);
         assert_eq!(
             argv,
             vec![
@@ -1213,7 +1219,7 @@ mod tests {
             ]
         );
 
-        let cell_argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", Some("hlt-4"));
+        let cell_argv = run_argv(&spec, "job-42", "/path/to/cwd", &env, "do task", "w-worker", Some("hlt-4"), None);
         assert_eq!(
             cell_argv,
             vec![
@@ -1251,7 +1257,7 @@ mod tests {
             mode: None,
             isolated_config: false,
         };
-        let minimal_argv = run_argv(&minimal_spec, "job-1", "/cwd", &[], "task", "plain-agent", None);
+        let minimal_argv = run_argv(&minimal_spec, "job-1", "/cwd", &[], "task", "plain-agent", None, None);
         assert_eq!(
             minimal_argv,
             vec![
