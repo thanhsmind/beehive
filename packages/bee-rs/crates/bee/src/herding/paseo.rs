@@ -35,6 +35,17 @@ pub fn scrubbed_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::C
     command
 }
 
+fn scoped_command(
+    program: impl AsRef<std::ffi::OsStr>,
+    keep_scope: bool,
+) -> std::process::Command {
+    if keep_scope {
+        std::process::Command::new(program)
+    } else {
+        scrubbed_command(program)
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     static TEST_INSIDE_PASEO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -801,6 +812,10 @@ pub fn parse_pending_permissions(stdout: &str) -> Vec<(String, String)> {
 
 pub trait PaseoCli: Send + Sync {
     fn call(&self, args: &[String]) -> Result<String, String>;
+
+    fn call_as_caller(&self, args: &[String]) -> Result<String, String> {
+        self.call(args)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -820,6 +835,35 @@ impl RealPaseoCli {
     pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.timeout = Some(timeout);
         self
+    }
+
+    fn run_scoped(&self, args: &[String], keep_scope: bool) -> Result<String, String> {
+        let output = match self.timeout {
+            Some(t) => run_with_deadline(&self.command, args, t, keep_scope)?,
+            None => scoped_command(&self.command, keep_scope)
+                .args(args)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map_err(|e| format!("failed to spawn {}: {e}", self.command))?,
+        };
+
+        if output.status.success() {
+            String::from_utf8(output.stdout)
+                .map_err(|e| format!("invalid utf-8 in stdout from {}: {e}", self.command))
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let err_msg = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                if !stdout.trim().is_empty() {
+                    stdout
+                } else {
+                    format!("{} exited with status {}", self.command, output.status)
+                }
+            };
+            Err(err_msg)
+        }
     }
 }
 
@@ -859,9 +903,10 @@ fn run_with_deadline(
     command: &str,
     args: &[String],
     timeout: std::time::Duration,
+    keep_scope: bool,
 ) -> Result<std::process::Output, String> {
     use std::io::Read;
-    let mut child = scrubbed_command(command)
+    let mut child = scoped_command(command, keep_scope)
         .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -904,32 +949,11 @@ fn run_with_deadline(
 
 impl PaseoCli for RealPaseoCli {
     fn call(&self, args: &[String]) -> Result<String, String> {
-        let output = match self.timeout {
-            Some(t) => run_with_deadline(&self.command, args, t)?,
-            None => scrubbed_command(&self.command)
-                .args(args)
-                .stdin(std::process::Stdio::null())
-                .output()
-                .map_err(|e| format!("failed to spawn {}: {e}", self.command))?,
-        };
+        self.run_scoped(args, false)
+    }
 
-        if output.status.success() {
-            String::from_utf8(output.stdout)
-                .map_err(|e| format!("invalid utf-8 in stdout from {}: {e}", self.command))
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let err_msg = if !stderr.trim().is_empty() {
-                stderr
-            } else {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                if !stdout.trim().is_empty() {
-                    stdout
-                } else {
-                    format!("{} exited with status {}", self.command, output.status)
-                }
-            };
-            Err(err_msg)
-        }
+    fn call_as_caller(&self, args: &[String]) -> Result<String, String> {
+        self.run_scoped(args, true)
     }
 }
 
@@ -1803,5 +1827,34 @@ mod tests {
         }
         assert_eq!(plain.unwrap().trim(), "absent absent");
         assert_eq!(timed.unwrap().trim(), "absent absent");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn paseo_caller_scoped_children_keep_agent_scope_vars() {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior: Vec<_> = AGENT_SCOPE_VARS.iter().map(|k| (*k, std::env::var_os(k))).collect();
+        for k in AGENT_SCOPE_VARS {
+            unsafe { std::env::set_var(k, "visible") };
+        }
+        let script = "echo ${PASEO_AGENT_ID:-absent} ${PASEO_AGENT_CWD:-absent}".to_string();
+        let scrubbed_plain = RealPaseoCli::new("sh").call(&["-c".to_string(), script.clone()]);
+        let scrubbed_timed = RealPaseoCli::new("sh")
+            .with_timeout(std::time::Duration::from_secs(10))
+            .call(&["-c".to_string(), script.clone()]);
+        let caller_plain = RealPaseoCli::new("sh").call_as_caller(&["-c".to_string(), script.clone()]);
+        let caller_timed = RealPaseoCli::new("sh")
+            .with_timeout(std::time::Duration::from_secs(10))
+            .call_as_caller(&["-c".to_string(), script]);
+        for (k, v) in prior {
+            match v {
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
+            }
+        }
+        assert_eq!(scrubbed_plain.unwrap().trim(), "absent absent");
+        assert_eq!(scrubbed_timed.unwrap().trim(), "absent absent");
+        assert_eq!(caller_plain.unwrap().trim(), "visible visible");
+        assert_eq!(caller_timed.unwrap().trim(), "visible visible");
     }
 }
