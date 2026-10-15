@@ -621,12 +621,44 @@ place of it — goes one fenced JSON block, the same object
   result inspected), `green:unit` (automated tests passed) or
   `green:static` (a compile, lint or parity check, nothing executed); a
   bare `green` is refused.
+- The four layers — a final report for work that ships something
+  runnable states source (committed), artifact (built), installed
+  (copied or onboarded) and live (the running bytes observed), each with
+  its own verdict or `not checked`; when nothing runnable ships, omit
+  them. The proof-line tag set above is unchanged. Example: `source:
+  committed abc123 · artifact: built, cargo build green · installed: not
+  checked · live: not checked`.
 - `deviations` — one departure line each, or one line reading
   `followed the plan` (the departure line, below).
 - `mistakes` — one `<what went wrong> — <what would have been better>`
   entry each; the first part names a concrete file, command or
   observation. `[]` says the cell hit none; leaving the key out records
   no answer, and `bee close` refuses the feature naming that cell.
+
+Five keys are optional. Send them when they carry an answer:
+
+```json
+{"outcome": "<one line>", "commit": "<sha or none>", "files": ["<path>"], "tests": "<command> — <result> — <scope reason>", "deviations": ["<line>"], "mistakes": [], "reaction": "partial", "skipped": ["<check not run> — <reason>"], "unknowns": ["<assumption not proven>"], "found": ["<discovery outside the cell>"], "stopped": "<part not done> — <evidence the premise is false>"}
+```
+
+- `reaction` — your stance toward the brief, one of `confirm`,
+  `partial`, `challenge` or `blocked`.
+- `skipped` — each check you did not run, with its reason.
+- `unknowns` — each assumption you could not prove.
+- `found` — each incidental discovery outside the cell.
+- `stopped` — the part you did not do and the evidence that stopped it
+  (the partial stop, below).
+
+For each optional key, `[]` means none; an absent key means no answer.
+
+**Partial stop.** When a false premise touches only part of the cell,
+finish the part that does not depend on it, return `[DONE]` with
+`reaction` `partial`, and name the stopped part with its evidence in
+`stopped`. `[BLOCKED]` stays for a cell with no safe part.
+
+**Dissent once.** Dissent once per point, with evidence. After the
+verdict, follow it. A second dissent on the same point needs new
+evidence (`bee cells dissent --new-evidence <text>`).
 
 Native subagents also return these token-markdown reports as their final message. Cli executors deliver the **same four outcomes** as `.bee/workers/<cell-id>.result.json` (External Executors, step 2) — one contract, two transports.
 
