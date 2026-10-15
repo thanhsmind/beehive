@@ -1,0 +1,429 @@
+{
+  "schema_version": "1.0",
+  "feature": "prune-queue-copy",
+  "mode": null,
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"prune-queue-copy\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge prune-queue-copy, then show the prune dry-run.",
+  "created_at": "2026-10-15T13:47:52.594Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "relaxes a keep-condition that protects unflushed capture stubs from deletion (data-loss guard), so it takes the high-risk lane despite one product file",
+    "updated_at": "2026-10-15T13:48:34.593Z",
+    "feature": "prune-queue-copy"
+  },
+  "gate_preview": {
+    "feature": "prune-queue-copy",
+    "plan_sha256": "16f054e87da9cb0d594d9ccdb777f1b4c8c75abcf331fc10346413da6b747f8e",
+    "previewed_at": "2026-10-15T13:54:48.763Z",
+    "cells": [
+      {
+        "id": "pqc-1",
+        "feature": "prune-queue-copy",
+        "title": "Keep a worktree for its capture queue only when it holds a note main lacks",
+        "lane": "high-risk",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "ad9d30dc-b20f-49f7-8b14-57533e054852",
+          "f89d6cd6"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "read_first": [
+          "docs/history/prune-queue-copy/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "action": "Red first, per contract ad9d30dc. In worktree/tests.rs, beside `fn a_non_empty_capture_queue_keeps_even_though_the_tree_reads_clean() {`, add a test where the worktree queue holds the same stub and flush lines as the main checkout's `.bee/capture-queue.jsonl` (write both files in the fixture) and assert the verdict is dead; run it and watch it fail for the reported reason (kept for capture-queue.jsonl non-empty). Then change the queue half of `fn precious_state_present(worktree_root: &Path) -> Option<String> {` in prune.rs (pass the main root from the call `if let Some(reason) = precious_state_present(&worktree_root) {` in classify_worktree, which holds `check.main_root`): write a strict local reader in prune.rs (do not reuse the capture.rs or nudges readers: they skip bad lines, which breaks D2). Split on newlines, strip a trailing carriage return, and skip blank lines. In the worktree queue, a line that does not parse as a JSON object, or whose `kind` is neither `stub` nor `flush`, or a `stub` or `flush` whose `id` is not a non-empty string, keeps. Collect pending stub ids: stub ids with no `flush` line of the same id anywhere in that file (order does not matter). In main's queue, collect every string `id` on any line (no pending fold): a missing file counts as empty; a file that exists but cannot be read, or holds a line that does not parse, keeps. Compare ids as exact strings, never trimmed or case-folded. Keep only when a pending worktree stub id is absent from main's set, with a message naming the count of such stubs, one example id, and the remedy `run bee capture list and bee capture flush --id <id> --into <doc> inside <worktree path>`. Leave the HANDOFF.json half unchanged. More tests: a unique pending stub keeps and names its id; a stub pending in the worktree but flushed in main reads dead; main naming the id only in a flush line reads dead; a worktree flush of main's pending stub reads dead; a worktree flush of its own unique stub reads dead; a flush line before its stub counts as flushed; a trailing newline and a CRLF file do not keep; an unparseable line keeps; a numeric id keeps; a missing main queue with a pending worktree stub keeps; the existing two capture-queue tests still pass unchanged. Update row 4 of the concept table and the doc comment above the check to say what now counts as precious, and that this repo tracks the queue while host repos ignore it. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worktree::",
+        "must_haves": {
+          "truths": [
+            "A worktree whose queue is a copy of main's is not kept for its queue",
+            "A worktree whose queue holds a pending stub main never names is kept, and the reason names that stub",
+            "Every read or parse doubt keeps the worktree"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+              "substantive": "content-aware queue keep with fail-closed doubt arms"
+            }
+          ],
+          "key_links": [
+            "classify_worktree passes the main root to the precious-state check"
+          ],
+          "prohibitions": [
+            "No change to the HANDOFF.json keep",
+            "No change to any other prune condition",
+            "No existing test weakened",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first test plus the fix in prune.rs; the code role's route runs a cheap model with thinking off"
+        },
+        {
+          "stage": "code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "its route (paseo-pi-flash) runs thinking off; the one cell goes to role test"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride the cell"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "the concept row is updated inside the cell"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow lookups planned"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage"
+        },
+        {
+          "stage": "review",
+          "classification": "required",
+          "role": "review",
+          "reason": "high-risk slice judge over the behavior_change cell"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "high-risk five-seat wave"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "high-risk five-seat wave"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: one obvious shape"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-15T13:54:41.375Z",
+    "feature": "prune-queue-copy",
+    "newest_decision_id": "2158bd54-22bf-4fc3-957c-bb6a4763a482",
+    "plan_sha256": "16f054e87da9cb0d594d9ccdb777f1b4c8c75abcf331fc10346413da6b747f8e",
+    "advisor": "hat-wave: 5 seats (opus x4, fable x1)",
+    "digest_head": "# prune-queue-copy — plan check (hat wave synthesis)\n\nSeats: all five (high-risk). facts-gaps, alternatives, user-impact, value on opus; risks resolved to fable by the model guard. No seat dropped.\n\nPLAN CHECK\nWork: one cell, pqc-1\n\nSTRUCTURE\nBLOCKERS:\n- facts-gaps: the plan said the queue reaches a worktree by a bootstrap copy; the code copies only onboarding and config, and the queue is git-tracked in this repo → fixed: Discovery and CONTEXT boundary corrected, claims 6 and 7 added.\nWARNINGS:\n"
+  },
+  "approved_cell_packet": {
+    "feature": "prune-queue-copy",
+    "plan_sha256": "16f054e87da9cb0d594d9ccdb777f1b4c8c75abcf331fc10346413da6b747f8e",
+    "previewed_at": "2026-10-15T13:54:41.230Z",
+    "cells": [
+      {
+        "id": "pqc-1",
+        "feature": "prune-queue-copy",
+        "title": "Keep a worktree for its capture queue only when it holds a note main lacks",
+        "lane": "high-risk",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "ad9d30dc-b20f-49f7-8b14-57533e054852",
+          "f89d6cd6"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "read_first": [
+          "docs/history/prune-queue-copy/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+        ],
+        "action": "Red first, per contract ad9d30dc. In worktree/tests.rs, beside `fn a_non_empty_capture_queue_keeps_even_though_the_tree_reads_clean() {`, add a test where the worktree queue holds the same stub and flush lines as the main checkout's `.bee/capture-queue.jsonl` (write both files in the fixture) and assert the verdict is dead; run it and watch it fail for the reported reason (kept for capture-queue.jsonl non-empty). Then change the queue half of `fn precious_state_present(worktree_root: &Path) -> Option<String> {` in prune.rs (pass the main root from the call `if let Some(reason) = precious_state_present(&worktree_root) {` in classify_worktree, which holds `check.main_root`): write a strict local reader in prune.rs (do not reuse the capture.rs or nudges readers: they skip bad lines, which breaks D2). Split on newlines, strip a trailing carriage return, and skip blank lines. In the worktree queue, a line that does not parse as a JSON object, or whose `kind` is neither `stub` nor `flush`, or a `stub` or `flush` whose `id` is not a non-empty string, keeps. Collect pending stub ids: stub ids with no `flush` line of the same id anywhere in that file (order does not matter). In main's queue, collect every string `id` on any line (no pending fold): a missing file counts as empty; a file that exists but cannot be read, or holds a line that does not parse, keeps. Compare ids as exact strings, never trimmed or case-folded. Keep only when a pending worktree stub id is absent from main's set, with a message naming the count of such stubs, one example id, and the remedy `run bee capture list and bee capture flush --id <id> --into <doc> inside <worktree path>`. Leave the HANDOFF.json half unchanged. More tests: a unique pending stub keeps and names its id; a stub pending in the worktree but flushed in main reads dead; main naming the id only in a flush line reads dead; a worktree flush of main's pending stub reads dead; a worktree flush of its own unique stub reads dead; a flush line before its stub counts as flushed; a trailing newline and a CRLF file do not keep; an unparseable line keeps; a numeric id keeps; a missing main queue with a pending worktree stub keeps; the existing two capture-queue tests still pass unchanged. Update row 4 of the concept table and the doc comment above the check to say what now counts as precious, and that this repo tracks the queue while host repos ignore it. No new code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee worktree::",
+        "must_haves": {
+          "truths": [
+            "A worktree whose queue is a copy of main's is not kept for its queue",
+            "A worktree whose queue holds a pending stub main never names is kept, and the reason names that stub",
+            "Every read or parse doubt keeps the worktree"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+              "substantive": "content-aware queue keep with fail-closed doubt arms"
+            }
+          ],
+          "key_links": [
+            "classify_worktree passes the main root to the precious-state check"
+          ],
+          "prohibitions": [
+            "No change to the HANDOFF.json keep",
+            "No change to any other prune condition",
+            "No existing test weakened",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first test plus the fix in prune.rs; the code role's route runs a cheap model with thinking off"
+        },
+        {
+          "stage": "code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "its route (paseo-pi-flash) runs thinking off; the one cell goes to role test"
+        },
+        {
+          "stage": "tests",
+          "classification": "required",
+          "role": "test",
+          "reason": "red-first tests ride the cell"
+        },
+        {
+          "stage": "doctrine",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "the concept row is updated inside the cell"
+        },
+        {
+          "stage": "lookup",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker needs a digest of a file outside its cell",
+          "reason": "read-only gathers"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no narrow lookups planned"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "no free-form generation stage"
+        },
+        {
+          "stage": "review",
+          "classification": "required",
+          "role": "review",
+          "reason": "high-risk slice judge over the behavior_change cell"
+        },
+        {
+          "stage": "advisor",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "the plan-step hat wave synthesis is recorded as the advisor ref"
+        },
+        {
+          "stage": "plan-hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "plan-step wave seat"
+        },
+        {
+          "stage": "plan-hat-risks",
+          "classification": "required",
+          "role": "hat-risks",
+          "reason": "high-risk five-seat wave"
+        },
+        {
+          "stage": "plan-hat-value",
+          "classification": "required",
+          "role": "hat-value",
+          "reason": "high-risk five-seat wave"
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans in-session"
+        },
+        {
+          "stage": "supervise",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release"
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes: one obvious shape"
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-15T14:01:45.233Z",
+    "branch": "wt/prune-queue-copy",
+    "worktree_id": "beehive--wt--prune-queue-copy",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "prune-queue-copy",
+    "date": "2026-10-15",
+    "at": "2026-10-15T14:07:23.482Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "Merge prune-queue-copy, then show the prune dry-run."
+  }
+}

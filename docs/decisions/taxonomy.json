@@ -709,6 +709,7 @@
     "contract:finish-report",
     "contract:herding-stall",
     "contract:dissent-once",
-    "contract:herding-result-envelope"
+    "contract:herding-result-envelope",
+    "contract:prune-precious-queue"
   ]
 }
