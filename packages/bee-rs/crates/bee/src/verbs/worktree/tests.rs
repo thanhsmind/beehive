@@ -3880,6 +3880,114 @@ use std::time::Instant;
         assert!(verdict.is_dead(), "{}", verdict.reason());
     }
 
+    fn queue_verdict(main_queue: Option<&str>, worktree_queue: &str) -> Verdict {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        if let Some(text) = main_queue {
+            std::fs::write(main.join(".bee").join("capture-queue.jsonl"), text).unwrap();
+        }
+        std::fs::write(created.worktree_root.join(".bee").join("capture-queue.jsonl"), worktree_queue)
+            .unwrap();
+        classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        })
+    }
+
+    const MAIN_QUEUE: &str = "{\"kind\":\"stub\",\"id\":\"a\"}\n{\"kind\":\"stub\",\"id\":\"b\"}\n{\"kind\":\"flush\",\"id\":\"a\"}\n";
+
+    #[test]
+    fn a_capture_queue_copied_from_main_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), MAIN_QUEUE);
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_crlf_copy_of_the_main_queue_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &MAIN_QUEUE.replace('\n', "\r\n"));
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_pending_stub_main_never_names_keeps_and_names_it() {
+        let worktree = format!("{MAIN_QUEUE}{{\"kind\":\"stub\",\"id\":\"only-here\"}}\n");
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &worktree);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("1 pending"), "{}", verdict.reason());
+        assert!(verdict.reason().contains("only-here"), "{}", verdict.reason());
+        assert!(verdict.reason().contains("bee capture flush"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_stub_pending_in_the_worktree_but_flushed_in_main_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"stub\",\"id\":\"a\"}\n");
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_stub_main_names_only_in_a_flush_line_does_not_keep() {
+        let verdict = queue_verdict(
+            Some("{\"kind\":\"flush\",\"id\":\"c\"}\n"),
+            "{\"kind\":\"stub\",\"id\":\"c\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_worktree_flush_of_a_stub_main_holds_pending_does_not_keep() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"flush\",\"id\":\"b\"}\n");
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_unique_stub_flushed_in_the_worktree_does_not_keep() {
+        let verdict = queue_verdict(
+            Some(MAIN_QUEUE),
+            "{\"kind\":\"stub\",\"id\":\"u\"}\n{\"kind\":\"flush\",\"id\":\"u\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_flush_line_before_its_stub_counts_as_flushed() {
+        let verdict = queue_verdict(
+            Some(MAIN_QUEUE),
+            "{\"kind\":\"flush\",\"id\":\"u\"}\n{\"kind\":\"stub\",\"id\":\"u\"}\n",
+        );
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_unparseable_queue_line_keeps() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), &format!("{MAIN_QUEUE}not json\n"));
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("capture-queue.jsonl"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_numeric_stub_id_keeps() {
+        let verdict = queue_verdict(Some(MAIN_QUEUE), "{\"kind\":\"stub\",\"id\":7}\n");
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+    }
+
+    #[test]
+    fn an_unparseable_main_queue_line_keeps() {
+        let verdict = queue_verdict(Some("not json\n"), MAIN_QUEUE);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+    }
+
+    #[test]
+    fn a_missing_main_queue_with_a_pending_worktree_stub_keeps() {
+        let verdict = queue_verdict(None, MAIN_QUEUE);
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("1 pending"), "{}", verdict.reason());
+    }
+
     #[test]
     fn an_interrupted_rebase_keeps() {
         let tmp = tempfile::tempdir().unwrap();
