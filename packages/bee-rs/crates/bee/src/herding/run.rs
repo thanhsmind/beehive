@@ -3619,7 +3619,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         opts.cell_id.as_deref(),
         workspace.as_deref(),
     );
-    let run_res = cli.call(&argv);
+    let run_res = cli.call_as_caller(&argv);
     let stdout = match run_res {
         Ok(out) => out,
         Err(e) => {
@@ -11822,6 +11822,7 @@ mod tests {
 
     struct FakePaseoCli {
         calls: std::sync::Mutex<Vec<Vec<String>>>,
+        caller_calls: std::sync::Mutex<Vec<Vec<String>>>,
         version: Result<String, String>,
         run: Result<String, String>,
         inspect: Result<String, String>,
@@ -11844,6 +11845,7 @@ mod tests {
         ) -> Self {
             Self {
                 calls: std::sync::Mutex::new(Vec::new()),
+                caller_calls: std::sync::Mutex::new(Vec::new()),
                 version,
                 run,
                 inspect,
@@ -11892,6 +11894,17 @@ mod tests {
     impl PaseoCli for FakePaseoCli {
         fn call(&self, args: &[String]) -> Result<String, String> {
             self.calls.lock().unwrap().push(args.to_vec());
+            self.dispatch(args)
+        }
+
+        fn call_as_caller(&self, args: &[String]) -> Result<String, String> {
+            self.caller_calls.lock().unwrap().push(args.to_vec());
+            self.dispatch(args)
+        }
+    }
+
+    impl FakePaseoCli {
+        fn dispatch(&self, args: &[String]) -> Result<String, String> {
             if args.first().map(|s| s.as_str()) == Some("--version") {
                 self.version.clone()
             } else if args.first().map(|s| s.as_str()) == Some("run") {
@@ -12014,6 +12027,43 @@ mod tests {
     }
 
     #[test]
+    fn execute_paseo_starts_the_worker_through_call_as_caller_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let spec = pi_spec();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-caller\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let _ = execute_paseo(&opts, &spec, &fake);
+
+        let caller_calls = fake.caller_calls.lock().unwrap();
+        assert_eq!(caller_calls.len(), 1, "exactly the run argv goes through call_as_caller: {caller_calls:?}");
+        assert_eq!(caller_calls[0].first().map(String::as_str), Some("run"));
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(!calls.is_empty());
+        assert!(
+            !calls.iter().any(|c| c.first().map(String::as_str) == Some("run")),
+            "the run argv must not go through the scrubbed call: {calls:?}"
+        );
+    }
+
+    #[test]
     fn execute_paseo_read_only_pi_sets_the_env_and_no_mode() {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
@@ -12036,8 +12086,7 @@ mod tests {
 
         let res = execute_paseo(&opts, &spec, &fake);
         assert!(matches!(res.outcome, RunOutcome::Result(_)));
-        let calls = fake.calls.lock().unwrap();
-        let run = calls.iter().find(|c| c.first().map(String::as_str) == Some("run")).expect("run call");
+        let run = fake.caller_calls.lock().unwrap().iter().find(|c| c.first().map(String::as_str) == Some("run")).cloned().expect("run call");
         assert!(run.iter().any(|a| a == "BEE_HERDING_READ_ONLY=1"), "{run:?}");
         assert!(!run.iter().any(|a| a == "--mode"), "{run:?}");
         let job: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("job.json")).unwrap()).unwrap();
@@ -12106,7 +12155,7 @@ mod tests {
             Ok("archived\n".to_string()),
         );
         let res = execute_paseo(&opts, &spec, &fake);
-        let calls = fake.calls.lock().unwrap().clone();
+        let calls = fake.caller_calls.lock().unwrap().clone();
         (res, calls)
     }
 
@@ -12349,7 +12398,7 @@ mod tests {
     }
 
     fn run_call(fake: &FakePaseoCli) -> Option<Vec<String>> {
-        fake.calls.lock().unwrap().iter().find(|c| c.first().map(String::as_str) == Some("run")).cloned()
+        fake.caller_calls.lock().unwrap().iter().find(|c| c.first().map(String::as_str) == Some("run")).cloned()
     }
 
     fn workspace_flag(argv: &[String]) -> Option<String> {
@@ -13873,7 +13922,7 @@ mod tests {
         let res1 = execute_paseo(&opts, &pi_iso_spec, &fake1);
         assert!(matches!(res1.outcome, RunOutcome::Result(_)));
 
-        let calls1 = fake1.calls.lock().unwrap();
+        let calls1 = fake1.caller_calls.lock().unwrap();
         let run_call1 = calls1.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
         let expected_agent = opts.agent.as_deref().unwrap_or("paseo");
         let expected_dir = main_root.join(".bee").join("runtime").join("pi-agent").join(expected_agent);
@@ -13895,7 +13944,7 @@ mod tests {
         );
         let res2 = execute_paseo(&opts, &pi_non_iso_spec, &fake2);
         assert!(matches!(res2.outcome, RunOutcome::Result(_)));
-        let calls2 = fake2.calls.lock().unwrap();
+        let calls2 = fake2.caller_calls.lock().unwrap();
         let run_call2 = calls2.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
         assert!(!run_call2.iter().any(|arg| arg.contains("PI_CODING_AGENT_DIR")));
 
@@ -13914,7 +13963,7 @@ mod tests {
         );
         let res3 = execute_paseo(&opts, &claude_iso_spec, &fake3);
         assert!(matches!(res3.outcome, RunOutcome::Result(_)));
-        let calls3 = fake3.calls.lock().unwrap();
+        let calls3 = fake3.caller_calls.lock().unwrap();
         let run_call3 = calls3.iter().find(|c| c.first().map(|s| s.as_str()) == Some("run")).unwrap();
         assert!(!run_call3.iter().any(|arg| arg.contains("PI_CODING_AGENT_DIR")));
     }
