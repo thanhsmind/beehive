@@ -705,6 +705,10 @@
     "contract:claude-read-only-guard",
     "worker-guard",
     "deferral",
-    "waiting-on"
+    "waiting-on",
+    "contract:finish-report",
+    "contract:herding-stall",
+    "contract:dissent-once",
+    "contract:herding-result-envelope"
   ]
 }
