@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"paseo-worker-subagent\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at ce65f05; capture what settled, then bee close --feature paseo-worker-subagent.",
   "created_at": "2026-10-15T06:27:59.054Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -120,12 +120,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-15T06:28:25.043Z"
-  },
-  "merge_ready": {
-    "since": "2026-10-15T06:49:11.057Z",
-    "branch": "wt/paseo-worker-subagent",
-    "worktree_id": "beehive--wt--paseo-worker-subagent",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
