@@ -42,6 +42,7 @@ pub(crate) struct Created {
     /// `null`, or runCompanionStart's `{sessionId, worktreePath, mountPath}`.
     pub(crate) companion: Value,
     pub(crate) skills_sync: Value,
+    pub(crate) paseo_workspace: Option<Value>,
 }
 
 /// The `--with-companion` pair, both-or-neither. Node passes the two as
@@ -97,7 +98,10 @@ pub(crate) fn create_feature_worktree(
     };
     let out = create_feature_worktree_locked(main_root, feature, base_ref, companion);
     guard.release();
-    out
+    out.map(|mut created| {
+        created.paseo_workspace = super::paseo_ws::register(main_root, &created.worktree_root);
+        created
+    })
 }
 
 pub(crate) fn create_feature_worktree_locked(
@@ -341,6 +345,7 @@ pub(crate) fn post_add(
         bootstrap,
         companion,
         skills_sync,
+        paseo_workspace: None,
     })
 }
 

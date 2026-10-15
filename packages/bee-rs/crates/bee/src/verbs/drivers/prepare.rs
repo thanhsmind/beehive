@@ -3107,7 +3107,7 @@ fn run_probe_command_bounded(
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
-    let mut command = std::process::Command::new(cmd);
+    let mut command = crate::herding::paseo::scrubbed_command(cmd);
     command
         .args(args)
         .stdin(std::process::Stdio::null())

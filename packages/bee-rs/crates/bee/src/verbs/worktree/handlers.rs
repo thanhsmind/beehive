@@ -922,6 +922,9 @@ pub(crate) fn new_result_and_text(feature: &str, created: &Created, next_step: &
     if let Some(sync) = created.bootstrap.get("cellsSync") {
         result.insert("cellsSync".into(), sync.clone());
     }
+    if let Some(paseo) = &created.paseo_workspace {
+        result.insert("paseoWorkspace".into(), paseo.clone());
+    }
     result.insert("next_step".into(), json!(next_step));
 
     let skills_line = if created.skills_sync.get("applied") == Some(&Value::Bool(true)) {
@@ -993,6 +996,15 @@ pub(crate) fn new_result_and_text(feature: &str, created: &Created, next_step: &
             field("mountPath"),
             field("worktreePath")
         ));
+    }
+    if let Some(paseo) = &created.paseo_workspace {
+        match (paseo.get("id").and_then(Value::as_str), paseo.get("error")) {
+            (Some(id), _) => lines.push(format!("  paseo:       workspace {id}")),
+            (None, error) => lines.push(format!(
+                "  paseo:       workspace not registered — {}",
+                error.map(jsjson::js_to_string).unwrap_or_default()
+            )),
+        }
     }
     lines.push(next_step.to_string());
     let text = lines.join("\n");

@@ -2854,6 +2854,33 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
 
 /// Builds the child process environment, explicitly stripping leader session
 /// identity and injecting the herding worker markers (D11).
+pub(crate) fn resolve_paseo_workspace(
+    cli: &dyn PaseoCli,
+    main_root: &Path,
+    cwd: &Path,
+) -> Result<Option<String>, String> {
+    use crate::verbs::worktree::paseo_ws;
+    if let Some(id) = paseo_ws::recorded_for_dir(main_root, cwd) {
+        return Ok(Some(id));
+    }
+    if !paseo::inside_paseo() {
+        return Ok(None);
+    }
+    paseo_ws::ensure_and_record(cli, main_root, cwd).map(Some).map_err(|err| {
+        let dir = cwd.display();
+        format!(
+            "paseo workspace for {dir} could not be found or created: {err} — FIX: paseo workspace create --path {dir} --isolation local, then re-run"
+        )
+    })
+}
+
+pub(crate) fn paseo_env_pairs(child_env: BTreeMap<String, String>) -> Vec<(String, String)> {
+    child_env
+        .into_iter()
+        .filter(|(k, _)| !paseo::AGENT_SCOPE_VARS.contains(&k.as_str()))
+        .collect()
+}
+
 pub(crate) fn build_child_env(
     ambient: impl IntoIterator<Item = (String, String)>,
     agent_env: &BTreeMap<String, String>,
@@ -3553,7 +3580,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         }
     }
 
-    let env_pairs: Vec<(String, String)> = child_env.into_iter().collect();
+    let env_pairs = paseo_env_pairs(child_env);
 
     let version_output = cli.call(&["--version".to_string()]);
     let version_ok = match version_output {
@@ -3570,6 +3597,17 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         };
     }
 
+    let workspace = match resolve_paseo_workspace(cli, &opts.main_root, &opts.cwd) {
+        Ok(w) => w,
+        Err(e) => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(e),
+                pane_id: None,
+                closed_pane: false,
+            };
+        }
+    };
+
     let agent_name = opts.agent.as_deref().unwrap_or("paseo");
     let argv = paseo::run_argv(
         spec,
@@ -3579,6 +3617,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         &pointer,
         agent_name,
         opts.cell_id.as_deref(),
+        workspace.as_deref(),
     );
     let run_res = cli.call(&argv);
     let stdout = match run_res {
@@ -4090,7 +4129,7 @@ impl WaitSource for RealWaitSource {
     fn arm(&mut self, timeout_secs: u64) {
         self.cancel();
         let argv = paseo::wait_argv(&self.agent_id, timeout_secs);
-        match std::process::Command::new(&self.command)
+        match paseo::scrubbed_command(&self.command)
             .args(&argv)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
@@ -11769,6 +11808,18 @@ mod tests {
         assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
     }
 
+    #[test]
+    fn paseo_env_pairs_drop_agent_scope_vars() {
+        let mut env = BTreeMap::new();
+        env.insert("PASEO_AGENT_ID".to_string(), "caller".to_string());
+        env.insert("PASEO_AGENT_CWD".to_string(), "/caller".to_string());
+        env.insert("PASEO_CLI".to_string(), "/bin/paseo".to_string());
+        env.insert("BEE_HERDING_JOB_ID".to_string(), "job-1".to_string());
+        let pairs = paseo_env_pairs(env);
+        let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["BEE_HERDING_JOB_ID", "PASEO_CLI"]);
+    }
+
     struct FakePaseoCli {
         calls: std::sync::Mutex<Vec<Vec<String>>>,
         version: Result<String, String>,
@@ -11781,6 +11832,7 @@ mod tests {
         ls: Result<String, String>,
         on_send: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
         on_inspect: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
+        workspace_create: Result<String, String>,
     }
 
     impl FakePaseoCli {
@@ -11802,7 +11854,13 @@ mod tests {
                 ls: Ok("[]\n".to_string()),
                 on_send: None,
                 on_inspect: None,
+                workspace_create: Ok("{\"workspaceId\":\"wks_fake\"}".to_string()),
             }
+        }
+
+        fn with_workspace_create(mut self, reply: Result<String, String>) -> Self {
+            self.workspace_create = reply;
+            self
         }
 
         fn with_on_send(mut self, on_send: impl Fn() + Send + Sync + 'static) -> Self {
@@ -11858,6 +11916,12 @@ mod tests {
                 self.logs.clone()
             } else if args.first().map(|s| s.as_str()) == Some("ls") {
                 self.ls.clone()
+            } else if args.first().map(|s| s.as_str()) == Some("project")
+                || (args.first().map(|s| s.as_str()) == Some("workspace") && args.get(1).map(|s| s.as_str()) == Some("ls"))
+            {
+                Ok("[]".to_string())
+            } else if args.first().map(|s| s.as_str()) == Some("workspace") {
+                self.workspace_create.clone()
             } else {
                 Err(format!("unexpected command: {:?}", args))
             }
@@ -12263,6 +12327,103 @@ mod tests {
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
         assert!(!res.closed_pane);
+    }
+
+    fn pi_spec() -> PaseoSpec {
+        PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        }
+    }
+
+    fn failing_run_cli() -> FakePaseoCli {
+        FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("stop here".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+    }
+
+    fn run_call(fake: &FakePaseoCli) -> Option<Vec<String>> {
+        fake.calls.lock().unwrap().iter().find(|c| c.first().map(String::as_str) == Some("run")).cloned()
+    }
+
+    fn workspace_flag(argv: &[String]) -> Option<String> {
+        argv.iter().position(|a| a == "--workspace").map(|i| argv[i + 1].clone())
+    }
+
+    #[test]
+    fn execute_paseo_passes_the_recorded_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        std::fs::create_dir_all(&opts.cwd).unwrap();
+        crate::verbs::workspace_store::register_workspace(
+            main_root,
+            crate::verbs::workspace_store::RegisterSpec {
+                id: "wt-rec",
+                kind: "worktree",
+                root: &opts.cwd.to_string_lossy(),
+                branch: None,
+                base_sha: None,
+            },
+            "2026-10-15T00:00:00.000Z",
+        )
+        .unwrap();
+        crate::verbs::workspace_store::set_paseo_workspace_id(main_root, "wt-rec", "wks_rec").unwrap();
+        let fake = failing_run_cli();
+        let _ = execute_paseo(&opts, &pi_spec(), &fake);
+        let argv = run_call(&fake).expect("run called");
+        assert_eq!(workspace_flag(&argv).as_deref(), Some("wks_rec"));
+        assert!(!fake.calls.lock().unwrap().iter().any(|c| c[0] == "workspace" || c[0] == "project"));
+    }
+
+    #[test]
+    fn execute_paseo_inside_paseo_ensures_a_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        std::fs::create_dir_all(&opts.cwd).unwrap();
+        let fake = failing_run_cli();
+        paseo::set_inside_paseo_for_test(true);
+        let _ = execute_paseo(&opts, &pi_spec(), &fake);
+        paseo::set_inside_paseo_for_test(false);
+        let argv = run_call(&fake).expect("run called");
+        assert_eq!(workspace_flag(&argv).as_deref(), Some("wks_fake"));
+    }
+
+    #[test]
+    fn execute_paseo_inside_paseo_refuses_when_no_workspace_can_be_made() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        std::fs::create_dir_all(&opts.cwd).unwrap();
+        let fake = failing_run_cli()
+            .with_workspace_create(Err("{\"error\":{\"message\":\"daemon down\"}}".to_string()));
+        paseo::set_inside_paseo_for_test(true);
+        let res = execute_paseo(&opts, &pi_spec(), &fake);
+        paseo::set_inside_paseo_for_test(false);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("daemon down"), "{msg}");
+                assert!(msg.contains("FIX: paseo workspace create --path"), "{msg}");
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(run_call(&fake).is_none());
+    }
+
+    #[test]
+    fn execute_paseo_outside_paseo_keeps_the_argv_without_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = failing_run_cli();
+        let _ = execute_paseo(&opts, &pi_spec(), &fake);
+        let argv = run_call(&fake).expect("run called");
+        assert!(workspace_flag(&argv).is_none());
+        assert!(!fake.calls.lock().unwrap().iter().any(|c| c[0] == "workspace" || c[0] == "project"));
     }
 
     #[test]

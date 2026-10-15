@@ -695,6 +695,32 @@ use std::time::Instant;
     /// `create_feature_worktree` call needed) so a `Created` whose bootstrap
     /// map carries `cellsSync` is enough to prove it.
     #[test]
+    fn new_result_and_text_shows_the_paseo_workspace_only_when_registered() {
+        let base = |paseo: Option<Value>| Created {
+            id: "wt-demo".to_string(),
+            worktree_root: PathBuf::from("/tmp/wt-demo"),
+            branch: "wt/demo".to_string(),
+            base_ref: None,
+            base_ref_sha: None,
+            bootstrap: map_of(&[("created", json!(true)), ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee"))]),
+            companion: Value::Null,
+            skills_sync: json!({ "applied": true }),
+            paseo_workspace: paseo,
+        };
+        let (result, text) = new_result_and_text("demo", &base(None), "next");
+        assert!(result.get("paseoWorkspace").is_none());
+        assert!(!text.contains("paseo:"), "{text}");
+
+        let (result, text) = new_result_and_text("demo", &base(Some(json!({ "id": "wks_1" }))), "next");
+        assert_eq!(result["paseoWorkspace"], json!({ "id": "wks_1" }));
+        assert!(text.contains("  paseo:       workspace wks_1"), "{text}");
+
+        let (result, text) = new_result_and_text("demo", &base(Some(json!({ "error": "daemon down" }))), "next");
+        assert_eq!(result["paseoWorkspace"], json!({ "error": "daemon down" }));
+        assert!(text.contains("  paseo:       workspace not registered — daemon down"), "{text}");
+    }
+
+    #[test]
     fn new_result_and_text_carries_the_cells_sync_skip_note() {
         let created = Created {
             id: "wt-demo".to_string(),
@@ -716,6 +742,7 @@ use std::time::Instant;
             ]),
             companion: Value::Null,
             skills_sync: json!({ "applied": true }),
+            paseo_workspace: None,
         };
         let (result, text) = new_result_and_text("demo", &created, "next step text");
 
@@ -742,6 +769,7 @@ use std::time::Instant;
             bootstrap: map_of(&[("created", json!(true)), ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee"))]),
             companion: Value::Null,
             skills_sync: json!({ "applied": true }),
+            paseo_workspace: None,
         };
         let (result, text) = new_result_and_text("demo", &created, "next step text");
         assert!(result.get("cellsSync").is_none());

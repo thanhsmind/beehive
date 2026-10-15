@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee Herding — the Paseo channel, worker execution, and lifecycle"
 description: "The herding transport that executes bee workers as Paseo agents, polls the file mailbox, tracks daemon liveness states, and archives completed agents."
-timestamp: 2026-10-12
+timestamp: 2026-10-15
 bee:
   id: bee-herding-the-paseo-channel
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["claude-read-only D1-D5 (read-only Paseo claude workers: env marker, Claude PreToolUse worker-guard group, mode A/B, fail-closed pre-spawn check, extended matcher)", "paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730", "paseo-leverage D1 a7071d2b", "paseo-leverage D2 168b8037", "paseo-leverage D3 a7067517", "paseo-leverage D4 33df9d0d", "paseo-leverage D5 89d24cf0", "paseo-leverage D6 1742a721", "paseo-leverage D7 12211a7d", "paseo-leverage D8 28b0b5c2", "paseo-cli-autodetect 03ff4564 (bee resolves the paseo CLI without config: herding.paseo.command, else PASEO_CLI when it names an existing file, else the running daemon's CLI from paseo.pid and that pid's environ or exe directory, else plain paseo)", "paseo-leverage hat-wave refinements 6fc537f6"]
-  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md]
+  decisions: ["claude-read-only D1-D5 (read-only Paseo claude workers: env marker, Claude PreToolUse worker-guard group, mode A/B, fail-closed pre-spawn check, extended matcher)", "paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730", "paseo-leverage D1 a7071d2b", "paseo-leverage D2 168b8037", "paseo-leverage D3 a7067517", "paseo-leverage D4 33df9d0d", "paseo-leverage D5 89d24cf0", "paseo-leverage D6 1742a721", "paseo-leverage D7 12211a7d", "paseo-leverage D8 28b0b5c2", "paseo-cli-autodetect 03ff4564 (bee resolves the paseo CLI without config: herding.paseo.command, else PASEO_CLI when it names an existing file, else the running daemon's CLI from paseo.pid and that pid's environ or exe directory, else plain paseo)", "paseo-leverage hat-wave refinements 6fc537f6", "paseo-worktree-workspace D1-D6 57793b86 (worktree new registers a Paseo workspace inside Paseo; teardown archives it; herding runs pass --workspace; paseo children drop PASEO_AGENT_ID and PASEO_AGENT_CWD; JSON read past log lines)"]
+  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md, docs/history/paseo-worktree-workspace/CONTEXT.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
   owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs, packages/bee-rs/crates/bee/src/herding/paseo_state.rs, packages/bee-rs/crates/bee/src/herding/fork.rs, packages/bee-rs/crates/bee/src/herding/notify.rs]
 ---
@@ -85,6 +85,7 @@ The command `bee herding run` executes a worker through the Paseo CLI.
 The runner executes `paseo run -d --json` with the following arguments:
 - `--provider <provider>[/<model>]`
 - `--cwd <directory>`
+- `--workspace <id>` when the run has a Paseo workspace (see "Worktree workspaces")
 - `--title <cell-id> <agent>` when the run has a cell id, else `<agent> <job-id>` (herding-leader-toil D7, store `e1dcf730`)
 - `--label bee_job=<job_id>`
 - `--label bee_agent=<agent>`
@@ -92,8 +93,7 @@ The runner executes `paseo run -d --json` with the following arguments:
 - `--env` flags for child environment variables, including `BEE_HERDING_WORKER=1`, `BEE_HERDING_JOB_ID`, and `PI_CODING_AGENT_DIR` when `isolated_config` is true
 - The initial prompt string.
 
-Paseo records the leader as parent when `bee herding run` executes inside the leader agent (paseo-pi-hardening D10, store `0a0ef8e7`).
-bee passes no parent flag.
+bee passes no parent flag. Every paseo process that bee starts runs without `PASEO_AGENT_ID` and `PASEO_AGENT_CWD` (decision `57793b86`, D5). Thus a worker is not a child agent of the leader. This supersedes the parent rule of paseo-pi-hardening D10 (store `0a0ef8e7`).
 Every run applies the label `bee_job=<job_id>`. This label allows cleanup tools to identify orphan agents.
 
 The runner reads `agentId` from the process output. It writes `paseo_agent_id` and `transport: "paseo"` into `job.json` immediately.
@@ -204,7 +204,7 @@ A missing or unparseable `UpdatedAt` never marks an agent as `stalled`.
 The `status` field is bee's freshness view. The `paseo_state` field is the daemon's raw state.
 Therefore, status `stalled` with `paseo_state: "working"` is expected and normal when an agent runs a long tool call.
 
-## Agent archival and the parent cascade
+## Agent archival and parent links
 
 When a run completes, the runner evaluates whether to archive the Paseo agent.
 
@@ -214,8 +214,8 @@ If the worker fails, crashes, or times out, the runner does not archive the agen
 
 The runner enforces an own-ID guard. It never archives an agent whose ID matches `PASEO_AGENT_ID` from the environment. This guard prevents a leader agent from deleting itself.
 
-When a leader spawns a worker, `paseo run` records the leader agent ID in `ParentAgentId` (paseo-pi-hardening D10, store `0a0ef8e7`).
-Archiving the leader agent archives every active child worker agent automatically.
+A worker has no `ParentAgentId`, because bee removes `PASEO_AGENT_ID` from the `paseo run` environment (decision `57793b86`, D5).
+Thus archiving the leader agent does not archive its workers.
 
 ### Completing herded runs without capping
 
@@ -389,6 +389,63 @@ The reader serves views that need many agents or data that the CLI does not give
 A missing or unreadable home or file falls back to the CLI: the untracked-agent report then runs `paseo ls`.
 The run loop keeps the CLI (`inspect`, `wait`) as the liveness authority.
 
+## Worktree workspaces
+
+A Paseo workspace is a Paseo `wks_…` record that groups agents under one directory. bee shows each bee worktree in Paseo as a workspace (decision `57793b86`, paseo-worktree-workspace D1-D6).
+
+### When bee is inside Paseo
+
+bee is inside Paseo when `PASEO_AGENT_ID` or `PASEO_CLI` is set and not empty (D1). Outside Paseo, `bee worktree new` and `bee herding run` make no new Paseo call. Unit tests see "outside Paseo" unless a test sets a seam.
+
+A human `bee worktree new` in a Paseo terminal also counts as inside Paseo, because the terminal sets `PASEO_CLI`. That command also registers a workspace.
+
+### Create: `bee worktree new`
+
+Inside Paseo, `bee worktree new` makes sure that a workspace exists for the new worktree (D2):
+1. bee reads `paseo workspace ls --json`. It reuses a workspace whose `cwd` is the worktree directory. bee compares the paths after canonicalize.
+2. Else bee reads `paseo project ls --json`. It takes the `projectId` whose `path` is the main checkout.
+3. bee runs `paseo workspace create --path <worktree> --isolation local --project <projectId> --json`. When no project matches, bee omits `--project`.
+
+Do not use the `project` field of `workspace ls` as the id. It is a name, and `--project <name>` fails.
+
+bee records the id as `paseo_workspace_id` on the bee workspace record `.bee/runtime/workspaces/<id>.json`. The text output prints `paseo:       workspace <id>`. The JSON output carries the key `paseoWorkspace`: `{"id": "<id>"}`, or `{"error": "<reason>"}` on a failure.
+
+A Paseo failure prints one warning. It never fails the worktree and never rolls it back.
+
+### Teardown: merge cleanup, prune, and unregister
+
+`bee worktree merge` cleanup, `bee worktree prune`, and `bee worktree unregister` remove the bee workspace record. When the record carries `paseo_workspace_id`, bee first runs `paseo workspace archive <id> --json` (D3). This step does not check D1: the record decides.
+
+A failed archive prints one warning on stderr with its FIX command:
+
+```text
+paseo: could not archive workspace <id>: <error> — FIX: paseo workspace archive <id>
+```
+
+A failed archive never blocks the teardown.
+
+### The run workspace rule
+
+`bee herding run` on a Paseo agent passes `--workspace <id>` to `paseo run` (D4). The id is the `paseo_workspace_id` of the bee workspace record whose root holds the run cwd.
+
+When no record carries an id and bee is inside Paseo, the run makes sure of a workspace for the cwd as `bee worktree new` does. It records the id when a bee record matches. When that step fails, the run refuses before spawn:
+
+```text
+paseo workspace for <dir> could not be found or created: <error> — FIX: paseo workspace create --path <dir> --isolation local, then re-run
+```
+
+The run never falls back to the caller's workspace. Without `--workspace`, `paseo run` from inside an agent ignores `--cwd` and joins the caller's workspace. Outside Paseo with no recorded id, the argv does not change.
+
+### Paseo children and JSON output
+
+Every paseo process that bee starts runs with `PASEO_AGENT_ID` and `PASEO_AGENT_CWD` removed from its environment (D5). This includes the `PaseoCli` runner, the `wait` source, and the prepare probe. The `--env` pairs for a worker do not carry these two variables. Thus the worker is not a child agent of the caller.
+
+bee reads paseo JSON output as the first JSON document in stdout (D6). It skips the log lines before it, because the AppImage wrapper prints startup log lines first.
+
+### Out of scope
+
+`bee herding fork` still imports into the caller's workspace. Paseo-owned worktrees (`--isolation worktree`) and the herdr and tmux transports are also out of scope.
+
 ## The live contract test
 
 A live contract test checks the installed Paseo against the keys that bee parses (paseo-leverage D8, store `28b0b5c2`).
@@ -425,3 +482,5 @@ cargo test -- --ignored paseo_live
 - Live contract test: `packages/bee-rs/crates/bee/tests/paseo_live_contract.rs`.
 - Paseo leverage feature context: `docs/history/paseo-leverage/CONTEXT.md`.
 - Paseo leverage implementation plan: `docs/history/paseo-leverage/plan.md`.
+- Worktree workspace register and archive: `packages/bee-rs/crates/bee/src/verbs/worktree/paseo_ws.rs`.
+- Paseo worktree workspace feature context: `docs/history/paseo-worktree-workspace/CONTEXT.md`.
