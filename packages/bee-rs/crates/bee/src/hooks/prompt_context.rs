@@ -365,10 +365,14 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
     // fires on a real human action rather than on the agent remembering.
     // Own try/catch per clear, exactly like heartbeat_block above: a failure
     // here is crash-logged and must NEVER fail the hook or block the
-    // reminder that already printed. D4's stale-expiry reap rides the same
-    // best-effort pass, on the theory that any live session's prompt is as
-    // good an opportunity as any to sweep a mark left behind by a dead one.
-    clear_and_reap_waiting_on_best_effort(root, ctx, plan.feature.as_deref());
+    // reminder that already printed. D4's stale-expiry reap rides EVERY
+    // prompt — a Paseo system prompt is not the human, so it takes the reap
+    // alone, sweeping a mark left behind by a dead session.
+    if prompt_is_human(ctx) {
+        clear_and_reap_waiting_on_best_effort(root, ctx, plan.feature.as_deref());
+    } else {
+        crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
+    }
 
     let mut parts: Vec<String> = Vec::new();
     if plan.inject_reminder {
@@ -447,6 +451,13 @@ fn clear_and_reap_waiting_on_best_effort(
     // is its own best-effort function (never returns an error to log) —
     // every record it touches is individually locked/re-verified.
     crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
+}
+
+fn prompt_is_human(ctx: &crate::hooks::adapter::HookContext) -> bool {
+    match ctx.payload.get("prompt").and_then(Value::as_str) {
+        Some(prompt) => !prompt.trim_start().starts_with("<paseo-system>"),
+        None => true,
+    }
 }
 
 fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
@@ -2780,6 +2791,62 @@ mod tests {
             !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
             "the human's message must clear the live mark through the REAL hook entry \
              point, not merely through the inner clear function: {after:?}"
+        );
+    }
+
+    #[test]
+    fn run_keeps_a_live_default_waiting_on_mark_through_a_paseo_system_prompt() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "gate",
+            "approve the uat?",
+            "sess-asker",
+        ));
+        let heartbeat = "<paseo-system>\nSchedule \"bee-leader\" fired (id=x, run=y).\nbee heartbeat\n</paseo-system>";
+        let paseo_payload = json!({ "cwd": tmp.path().to_string_lossy(), "prompt": heartbeat }).to_string();
+
+        let outcome = run(&[], &paseo_payload);
+        assert!(
+            matches!(outcome, Outcome::Done(_)),
+            "a plain repo must decide natively, otherwise this proves nothing about the Rust clear path"
+        );
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "a Paseo schedule/heartbeat prompt is not a human action and must leave the live \
+             mark in place — otherwise the user never sees the uat ask: {after:?}"
+        );
+
+        let mut current = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        current.insert(
+            "waiting_on".into(),
+            json!({"kind": "gate", "subject": "approve the uat?", "session": "dead-sess", "asked_at": "2020-01-01T00:00:00.000Z"}),
+        );
+        ok(crate::verbs::state_group::write_state(tmp.path(), &current));
+        let outcome = run(&[], &paseo_payload);
+        assert!(matches!(outcome, Outcome::Done(_)), "the second prompt must still decide natively");
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "D4's stale-expiry reap must still run on a Paseo system prompt — a mark left by a \
+             dead session has no other sweeper: {after:?}"
+        );
+
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "should we ship the v3 index?",
+            "sess-asker",
+        ));
+        let human_payload = json!({ "cwd": tmp.path().to_string_lossy(), "prompt": "ok" }).to_string();
+        let outcome = run(&[], &human_payload);
+        assert!(matches!(outcome, Outcome::Done(_)), "a human prompt must still decide natively");
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "a live mark must still be cleared by a prompt that IS the human speaking: {after:?}"
         );
     }
 
