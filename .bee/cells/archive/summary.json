@@ -1613,5 +1613,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-15T05:32:14.917Z"
+  },
+  "paseo-worker-subagent": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-15T06:49:27.863Z"
   }
 }

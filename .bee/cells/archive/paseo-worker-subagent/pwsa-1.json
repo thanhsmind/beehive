@@ -1,0 +1,108 @@
+{
+  "id": "pwsa-1",
+  "feature": "paseo-worker-subagent",
+  "lane": "small",
+  "role": "code",
+  "change_class": "bugfix",
+  "title": "Start Paseo workers as subagents of the calling lead",
+  "deps": [],
+  "decisions": [
+    "c09228a8-2bef-4777-a33e-76a3a1698705"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Per decision c09228a8. In packages/bee-rs/crates/bee/src/herding/paseo.rs add a second method to trait PaseoCli (about line 802): fn call_as_caller(&self, args: &[String]) -> Result<String, String>, with a default body that returns self.call(args) so every fake keeps working. RealPaseoCli implements it like call but spawns WITHOUT removing AGENT_SCOPE_VARS (give run_with_deadline a keep_scope: bool, or an unscrubbed twin of scrubbed_command); call itself stays scrubbed. In packages/bee-rs/crates/bee/src/herding/run.rs execute_paseo (about line 3623) start the worker with cli.call_as_caller(&argv) instead of cli.call(&argv); keep resolve_paseo_workspace and --workspace exactly as they are, and keep every other paseo call (ls_label_argv fallback, inspect, wait, archive, send, workspace calls, prepare probe) on the scrubbed path. The --env pairs given to the worker still exclude AGENT_SCOPE_VARS. Tests red first: beside paseo_children_do_not_see_agent_scope_vars (paseo.rs about line 1786, same env lock and restore) add a test that RealPaseoCli call_as_caller, plain and with_timeout, DOES see PASEO_AGENT_ID and PASEO_AGENT_CWD, while call still does not; in run.rs, with the existing fake PaseoCli used by the execute_paseo tests, assert the run argv goes through call_as_caller and the other calls do not (record which method each argv used). In docs/knowledge/areas/bee-herding/the-paseo-channel.md rewrite the lines that say a worker has no ParentAgentId and that every paseo process runs without the two variables (about lines 96, 217, 441) to state: the worker-starting paseo run keeps them so the worker is the lead's subagent, other paseo processes run without them, citing c09228a8 and that it narrows 57793b86 D5; add c09228a8 to the frontmatter decisions list. Write no code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::",
+  "must_haves": {
+    "truths": [
+      "the paseo run that starts a worker keeps PASEO_AGENT_ID and PASEO_AGENT_CWD",
+      "every other paseo process bee starts runs without them",
+      "the worker run still carries --workspace inside Paseo",
+      "the worker --env pairs still exclude PASEO_AGENT_ID and PASEO_AGENT_CWD"
+    ],
+    "prohibitions": [
+      "no change to resolve_paseo_workspace or the refuse-before-spawn rule",
+      "no new config key"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "pwsa-worker-1",
+    "outcome": "Paseo worker start now runs through call_as_caller (keeps PASEO_AGENT_ID/PASEO_AGENT_CWD) so the worker is the lead's subagent; every other paseo call stays scrubbed and --workspace is unchanged; knowledge doc and tests updated; commit ad71d1147",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "sync-ack: herding/paseo.rs and run.rs change; the-paseo-channel.md concept carries it and no bee-herding skill names the paseo env scrub"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T06:49:11.032Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran herding:: 748/748; live run with the built binary: worker 329d1890 Cwd=/mnt/data/Projects/goglbe/beehive--wt--paseo-worker-subagent ParentAgentId=ed6469dc, evidence /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1792046866959-3898644-1/job.json; pre-existing pi_plugin_contracts exit_worktree_marker flake fails at base too",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding::",
+    "claimed_at": "2026-10-15T06:28:31.276Z",
+    "sync_ack": "herding/paseo.rs and run.rs change; the-paseo-channel.md concept carries it and no bee-herding skill names the paseo env scrub",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Paseo worker start now runs through call_as_caller (keeps PASEO_AGENT_ID/PASEO_AGENT_CWD) so the worker is the lead's subagent; every other paseo call stays scrubbed and --workspace is unchanged; knowledge doc and tests updated; commit ad71d1147",
+      "commit": "ad71d114720370f3b401e6d7450607bb61ec5754",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee herding:: — green:live — leader re-ran herding:: 748/748; live run with the built binary: worker 329d1890 Cwd=/mnt/data/Projects/goglbe/beehive--wt--paseo-worker-subagent ParentAgentId=ed6469dc, evidence /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1792046866959-3898644-1/job.json; pre-existing pi_plugin_contracts exit_worktree_marker flake fails at base too",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 179 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the paseo run that starts a worker keeps PASEO_AGENT_ID and PASEO_AGENT_CWD",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "every other paseo process bee starts runs without them",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "the worker run still carries --workspace inside Paseo",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "the worker --env pairs still exclude PASEO_AGENT_ID and PASEO_AGENT_CWD",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          },
+          {
+            "requirement": "knowledge concept states the worker is the lead's subagent",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-15T06:49:16.143Z",
+        "recorded_by": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
