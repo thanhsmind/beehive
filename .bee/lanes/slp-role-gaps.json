@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"slp-role-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge slp-role-gaps to main, then the user tests it (uat).",
+  "next_action": "Merged into main at 63a91cd; reload the product and test \"slp-role-gaps\", then either approve uat (\"bee gate --name uat --approved true --lane slp-role-gaps\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-15T11:42:37.112Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: slp-role-gaps",
-    "asked_at": "2026-10-15T12:54:55.025Z",
-    "session": "7842a05d-f159-4653-a18d-48ea6abf8cf1"
+    "asked_at": "2026-10-15T12:56:00.628Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
