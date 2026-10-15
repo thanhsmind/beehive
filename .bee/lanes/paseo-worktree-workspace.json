@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tôi đang gộp bản sửa vào main.",
-    "asked_at": "2026-10-15T06:49:37.459Z",
+    "subject": "Tôi kiểm tra lần cuối: khi không còn config, bee 2.53.0 có tự tìm đúng lệnh Paseo không.",
+    "asked_at": "2026-10-15T07:27:45.645Z",
     "session": "efc35d0c-9131-4bfb-b4f6-eb6ff6058d91"
   }
 }
