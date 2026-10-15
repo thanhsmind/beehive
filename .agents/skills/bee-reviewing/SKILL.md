@@ -48,6 +48,11 @@ Scope, Method — and the dispatch prompt shape:
 gets the cumulative diff, the in-scope features' `CONTEXT.md` and
 `plan.md`, and nothing else — never session history. Review-tier
 model, inline persona, never another plugin's agent type.
+The brief never carries the orchestrator's own verdict, leaning or
+expected findings. The reviewer first checks that `HEAD` equals the
+frozen review head and that the in-scope paths are clean; on a
+mismatch it stops and reports `REVIEW_HEAD_MISMATCH` with the fix line
+`re-freeze the review head, or commit or drop the stray paths`.
 
 What a finding is, how to calibrate severity, and why every finding is
 verified before filing: `.bee/expertise/review.md`. Severity here:
