@@ -1623,5 +1623,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-15T07:27:18.842Z"
+  },
+  "slp-role-gaps": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-10-15T13:18:57.821Z"
   }
 }

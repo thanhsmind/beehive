@@ -1,0 +1,175 @@
+{
+  "id": "rig-2",
+  "feature": "slp-role-gaps",
+  "title": "Accept reaction, skipped, unknowns, found and stopped on a native finish report",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "15f6804c-1faf-4273-875b-e3b2dfaf0d38",
+    "6e81d8db-8e72-48ef-aa69-c465336421d3",
+    "8943d004-2519-40ee-92dd-122c9d87ced1",
+    "7db254ba-3ab7-470d-98d0-c7d5e565b34c"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/slp-role-gaps/CONTEXT.md",
+    "docs/history/slp-role-gaps/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D1 (store 15f6804c) and D2 (store 6e81d8db): widen `pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 2] = [\"mistakes\", \"baseline\"];` in finish_support.rs with `reaction`, `skipped`, `unknowns`, `found`, `stopped`. Validate them where `baseline` is validated (`match map.get(\"baseline\")`): `reaction` is a string matched case-insensitively against confirm|partial|challenge|blocked and stored lowercase, else refuse quoting the allowed set; `skipped`, `unknowns`, `found` are arrays of non-empty strings (`[]` is legal and means none); `stopped` is a non-empty string; `reaction` partial without `stopped` is refused with the fix `add \"stopped\": \"<the part not done> — <evidence>\"`. In handlers_close.rs, store each present key on the cell trace beside the `baseline` insert (`if let Some(Value::String(b)) = report_value.get(\"baseline\")`); an absent key writes nothing, so an old report caps byte-identical. In trace.rs, add the five keys to the list reset on release beside `\"baseline\"`. Tests in cells/tests.rs: new keys stored; old report unchanged; bad reaction refused; partial without stopped refused; mixed-case reaction stored lowercase. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee cells::",
+  "must_haves": {
+    "truths": [
+      "A finish report with reaction and the list fields caps and the trace holds them",
+      "A report without the new keys caps exactly as before",
+      "reaction outside the closed set, and partial without stopped, are refused by name"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "five optional keys validated"
+      }
+    ],
+    "key_links": [
+      "handlers_close.rs stores the validated keys on the trace",
+      "trace.rs resets them on release"
+    ],
+    "prohibitions": [
+      "No new required report key",
+      "No change to the proof-line tag set",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "rig2-code",
+    "outcome": "Five optional finish-report keys validated, stored on the trace and cleared on release",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "followed the plan",
+      "sync-ack: the worker-facing doctrine for these keys landed in skills/bee-swarming/references/swarming-reference.md under rig-6 (commit 7b0357b54)"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-15T12:30:23.713Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-run after the herding worker: 388 passed, 0 failed, 10 ignored; covers the nine new D1/D2 tests",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee cells::",
+    "claimed_at": "2026-10-15T11:55:18.645Z",
+    "sync_ack": "the worker-facing doctrine for these keys landed in skills/bee-swarming/references/swarming-reference.md under rig-6 (commit 7b0357b54)",
+    "mistakes": [
+      {
+        "wrong": "the herding worker set its own changes aside with a stash in a worktree shared with live workers to measure a baseline",
+        "better": "measure a baseline in a separate checkout or skip it",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Five optional finish-report keys (reaction, skipped, unknowns, found, stopped) validated in finish_support.rs parse_report_flag, stored in handlers_close.rs, reset in trace.rs, nine tests in cells/tests.rs",
+      "commit": "e9d52d1d1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/trace.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee cells:: — green:unit — leader re-run after the herding worker: 388 passed, 0 failed, 10 ignored; covers the nine new D1/D2 tests",
+      "deviations": [
+        "followed the plan"
+      ],
+      "mistakes": [
+        "the herding worker set its own changes aside with a stash in a worktree shared with live workers to measure a baseline — measure a baseline in a separate checkout or skip it — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A finish report with reaction and the list fields caps and the trace holds them",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+          },
+          {
+            "requirement": "A report without the new keys caps exactly as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "reaction outside the closed set, and partial without stopped, are refused by name",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+          }
+        ],
+        "recorded_at": "2026-10-15T12:30:26.836Z",
+        "recorded_by": "7842a05d-f159-4653-a18d-48ea6abf8cf1",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-new-keys-stored",
+            "status": "PASS",
+            "evidence": "handlers_close.rs stores the five keys; test report_reaction_and_lists_are_stored_on_trace_and_readable_via_show"
+          },
+          {
+            "id": "truth-old-report-unchanged",
+            "status": "PASS",
+            "evidence": "test report_without_the_new_keys_stays_byte_identical"
+          },
+          {
+            "id": "truth-refusals-by-name",
+            "status": "PASS",
+            "evidence": "tests report_reaction_outside_the_closed_set_is_refused_by_name, report_partial_without_stopped_is_refused_with_the_fix"
+          },
+          {
+            "id": "link-trace-reset-on-release",
+            "status": "PASS",
+            "evidence": "trace.rs release list adds the 5 keys; test release_trace_clears_the_reaction_keys_with_the_other_verify_evidence"
+          },
+          {
+            "id": "prohib-no-new-required-key",
+            "status": "PASS",
+            "evidence": "REPORT_KEYS untouched"
+          },
+          {
+            "id": "prohib-no-comments",
+            "status": "PASS",
+            "evidence": "0 added comment lines"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "cargo test -p bee --bin bee cells::: 388 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-15T12:43:25.521Z"
+      }
+    ]
+  },
+  "status": "capped"
+}
