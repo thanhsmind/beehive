@@ -1,4 +1,65 @@
 use serde_json::Value;
+use std::path::{Path, PathBuf};
+
+#[cfg(test)]
+thread_local! {
+    static TEST_DISCOVERY: std::cell::RefCell<Option<(Option<String>, Option<PathBuf>, PathBuf)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn discovery_inputs() -> (Option<String>, Option<PathBuf>, PathBuf) {
+    TEST_DISCOVERY
+        .with(|d| d.borrow().clone())
+        .unwrap_or((None, None, PathBuf::from("/proc")))
+}
+
+#[cfg(not(test))]
+fn discovery_inputs() -> (Option<String>, Option<PathBuf>, PathBuf) {
+    let user_home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .filter(|h| !h.is_empty())
+        .map(PathBuf::from);
+    let home =
+        crate::herding::paseo_state::home_from("", std::env::var_os("PASEO_HOME"), user_home);
+    (std::env::var("PASEO_CLI").ok(), home, PathBuf::from("/proc"))
+}
+
+fn existing_file(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    Path::new(value).is_file().then(|| value.to_string())
+}
+
+fn daemon_pid(home: &Path) -> Option<u64> {
+    let raw = std::fs::read_to_string(home.join("paseo.pid")).ok()?;
+    serde_json::from_str::<Value>(&raw).ok()?.get("pid")?.as_u64()
+}
+
+fn daemon_env_cli(proc_root: &Path, pid: u64) -> Option<String> {
+    let raw = std::fs::read(proc_root.join(pid.to_string()).join("environ")).ok()?;
+    let entry = raw
+        .split(|b| *b == 0)
+        .find_map(|chunk| chunk.strip_prefix(b"PASEO_CLI="))?;
+    existing_file(&String::from_utf8_lossy(entry))
+}
+
+fn daemon_exe_cli(proc_root: &Path, pid: u64) -> Option<String> {
+    let exe = std::fs::read_link(proc_root.join(pid.to_string()).join("exe")).ok()?;
+    let candidate = exe.parent()?.join("resources").join("bin").join("paseo");
+    candidate.is_file().then(|| candidate.to_string_lossy().into_owned())
+}
+
+fn discover(command_env: Option<&str>, paseo_home: Option<&Path>, proc_root: &Path) -> Option<String> {
+    if let Some(cli) = command_env.and_then(existing_file) {
+        return Some(cli);
+    }
+    let home = paseo_home?;
+    let pid = daemon_pid(home)?;
+    daemon_env_cli(proc_root, pid).or_else(|| daemon_exe_cli(proc_root, pid))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaseoSpec {
@@ -73,15 +134,23 @@ impl PaseoSpec {
     }
 }
 
-pub fn paseo_command(cfg: &Value) -> String {
+fn configured_command(cfg: &Value) -> Option<String> {
     cfg.get("herding")
         .and_then(|h| h.get("paseo"))
         .or_else(|| cfg.get("paseo"))
         .and_then(|p| p.get("command"))
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or("paseo")
-        .to_string()
+        .map(str::to_string)
+}
+
+pub fn paseo_command(cfg: &Value) -> String {
+    if let Some(command) = configured_command(cfg) {
+        return command;
+    }
+    let (command_env, paseo_home, proc_root) = discovery_inputs();
+    discover(command_env.as_deref(), paseo_home.as_deref(), &proc_root)
+        .unwrap_or_else(|| "paseo".to_string())
 }
 
 pub fn run_argv(
@@ -859,6 +928,126 @@ mod tests {
             }
         });
         assert_eq!(paseo_command(&custom_cfg), "custom-paseo");
+    }
+
+    fn with_discovery<R>(
+        env: Option<&str>,
+        home: Option<&Path>,
+        proc_root: &Path,
+        f: impl FnOnce() -> R,
+    ) -> R {
+        TEST_DISCOVERY.with(|d| {
+            *d.borrow_mut() = Some((
+                env.map(str::to_string),
+                home.map(Path::to_path_buf),
+                proc_root.to_path_buf(),
+            ))
+        });
+        let out = f();
+        TEST_DISCOVERY.with(|d| *d.borrow_mut() = None);
+        out
+    }
+
+    fn touch(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "").unwrap();
+    }
+
+    fn fake_proc(root: &Path, pid: u64, environ: &[u8]) {
+        let dir = root.join(pid.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("environ"), environ).unwrap();
+    }
+
+    #[test]
+    fn paseo_command_config_wins_over_env_and_daemon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let env_cli = tmp.path().join("env-paseo");
+        touch(&env_cli);
+        let cfg = json!({"paseo": {"command": "configured-paseo"}});
+        let got = with_discovery(Some(env_cli.to_str().unwrap()), None, tmp.path(), || {
+            paseo_command(&cfg)
+        });
+        assert_eq!(got, "configured-paseo");
+    }
+
+    #[test]
+    fn paseo_command_env_file_wins_over_daemon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let env_cli = tmp.path().join("env-paseo");
+        touch(&env_cli);
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let daemon_cli = tmp.path().join("daemon-paseo");
+        touch(&daemon_cli);
+        std::fs::write(home.join("paseo.pid"), json!({"pid": 4242}).to_string()).unwrap();
+        let proc_root = tmp.path().join("proc");
+        fake_proc(
+            &proc_root,
+            4242,
+            format!("PASEO_CLI={}\0", daemon_cli.display()).as_bytes(),
+        );
+        let got = with_discovery(Some(env_cli.to_str().unwrap()), Some(&home), &proc_root, || {
+            paseo_command(&json!({}))
+        });
+        assert_eq!(got, env_cli.to_str().unwrap());
+    }
+
+    #[test]
+    fn paseo_command_env_naming_a_missing_file_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let daemon_cli = tmp.path().join("daemon-paseo");
+        touch(&daemon_cli);
+        std::fs::write(home.join("paseo.pid"), json!({"pid": 7}).to_string()).unwrap();
+        let proc_root = tmp.path().join("proc");
+        fake_proc(
+            &proc_root,
+            7,
+            format!("PASEO_CLI={}\0", daemon_cli.display()).as_bytes(),
+        );
+        let missing = tmp.path().join("not-there-paseo");
+        let got = with_discovery(Some(missing.to_str().unwrap()), Some(&home), &proc_root, || {
+            paseo_command(&json!({}))
+        });
+        assert_eq!(got, daemon_cli.to_str().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn paseo_command_falls_back_to_the_daemon_exe_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join("paseo.pid"), json!({"pid": 9}).to_string()).unwrap();
+        let app = tmp.path().join("app");
+        let bundled = app.join("resources").join("bin").join("paseo");
+        touch(&bundled);
+        let proc_root = tmp.path().join("proc");
+        fake_proc(&proc_root, 9, b"OTHER=1\0");
+        std::os::unix::fs::symlink(app.join("paseo-desktop"), proc_root.join("9").join("exe")).unwrap();
+        let got = with_discovery(None, Some(&home), &proc_root, || paseo_command(&json!({})));
+        assert_eq!(got, bundled.to_str().unwrap());
+    }
+
+    #[test]
+    fn paseo_command_missing_or_garbage_pid_file_gives_plain_paseo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let proc_root = tmp.path().join("proc");
+        std::fs::create_dir_all(&proc_root).unwrap();
+        let missing = with_discovery(None, Some(&home), &proc_root, || paseo_command(&json!({})));
+        assert_eq!(missing, "paseo");
+        std::fs::write(home.join("paseo.pid"), "{not json").unwrap();
+        let garbage = with_discovery(None, Some(&home), &proc_root, || paseo_command(&json!({})));
+        assert_eq!(garbage, "paseo");
+        std::fs::write(home.join("paseo.pid"), json!({"pid": "x"}).to_string()).unwrap();
+        let bad_pid = with_discovery(None, Some(&home), &proc_root, || paseo_command(&json!({})));
+        assert_eq!(bad_pid, "paseo");
+        let no_home = with_discovery(None, None, &proc_root, || paseo_command(&json!({})));
+        assert_eq!(no_home, "paseo");
     }
 
     #[test]
