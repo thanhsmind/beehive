@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-role-gaps",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-role-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge slp-role-gaps to main, then the user tests it (uat).",
+  "next_action": "bee close finished \"slp-role-gaps\" — feature is closed.",
   "created_at": "2026-10-15T11:42:37.112Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
