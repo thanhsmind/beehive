@@ -7530,8 +7530,8 @@ exit 0
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
         const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
         // pi-run-friction-fixes prf-6 re-cut the REVIEWER golden ONCE, on purpose: reviewer.md gained the lens line.
-        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"advisor (fable)","model":"fable"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -7909,7 +7909,8 @@ advance_on — falling to another model there hides the defect (D11)"
     const ADVISOR_BODY_WITHOUT_A_BRIEF: &str = concat!(
         "Advisor consult: produce an independent digest/opinion on the given question. Read-only.\n",
         "\n",
-        "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked."
+        "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\n",
+        "End the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run."
     );
 
     /// The rendered body a dispatch payload carries, whichever transport key
