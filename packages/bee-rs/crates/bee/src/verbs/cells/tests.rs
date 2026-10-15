@@ -6353,6 +6353,247 @@ use std::time::Instant;
         }
     }
 
+
+    #[test]
+    fn report_reaction_and_lists_are_stored_on_trace_and_readable_via_show() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-1", &cell("rg-1", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "did most of it",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "partial",
+            "skipped": ["the live run"],
+            "unknowns": ["whether the cache is warm"],
+            "found": ["a dead flag in the same file"],
+            "stopped": "the live run — the environment has no network"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-1", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["reaction"], json!("partial"));
+        assert_eq!(capped["trace"]["skipped"], json!(["the live run"]));
+        assert_eq!(capped["trace"]["unknowns"], json!(["whether the cache is warm"]));
+        assert_eq!(capped["trace"]["found"], json!(["a dead flag in the same file"]));
+        assert_eq!(
+            capped["trace"]["stopped"],
+            json!("the live run — the environment has no network")
+        );
+
+        let Handled::Emit { result, .. } = handle_show(root, "rg-1").unwrap() else { panic!() };
+        assert_eq!(result["trace"]["reaction"], json!("partial"));
+        assert_eq!(result["trace"]["unknowns"], json!(["whether the cache is warm"]));
+        assert_eq!(result["trace"]["stopped"], json!("the live run — the environment has no network"));
+    }
+
+    #[test]
+    fn report_mixed_case_reaction_is_stored_lowercase() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-2", &cell("rg-2", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "agreed",
+            "commit": "abc123",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "  ConFIRM  "
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-2", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["reaction"], json!("confirm"));
+        assert_eq!(capped["trace"]["report"]["reaction"], json!("confirm"));
+    }
+
+    #[test]
+    fn report_without_the_new_keys_stays_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-3", &cell("rg-3", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("rg-3", Some(VALID_REPORT));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        for key in ["reaction", "skipped", "unknowns", "found", "stopped"] {
+            assert!(
+                capped["trace"].get(key).is_none(),
+                "an absent {key} must write nothing"
+            );
+        }
+        assert_report_verbatim(&capped, VALID_REPORT);
+    }
+
+    #[test]
+    fn report_reaction_outside_the_closed_set_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-4", &cell("rg-4", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "maybe"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-4", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains("cells finish: --report key \"reaction\" must be one of confirm, partial, challenge, blocked"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "rg-4").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_blank_entry_or_wrong_type_in_a_list_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for (id, key, value) in [
+            ("rg-5a", "skipped", json!(["ok", "  "])),
+            ("rg-5b", "unknowns", json!("not an array")),
+            ("rg-5c", "found", json!([42])),
+        ] {
+            write_cell_fixture(root, id, &cell(id, "claimed", "f", json!([])));
+            let bad = json!({
+                "outcome": "o",
+                "commit": "c",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                key: value
+            })
+            .to_string();
+            let flags = cap_flags_report(id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains(&format!(
+                    "cells finish: --report key \"{key}\" must be an array of non-empty strings"
+                )),
+                "{id}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn report_empty_list_is_an_answer_meaning_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-6", &cell("rg-6", "claimed", "f", json!([])));
+
+        let report = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "confirm",
+            "skipped": [],
+            "unknowns": [],
+            "found": []
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-6", Some(&report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["skipped"], json!([]));
+        assert_eq!(capped["trace"]["unknowns"], json!([]));
+        assert_eq!(capped["trace"]["found"], json!([]));
+    }
+
+    #[test]
+    fn report_partial_without_stopped_is_refused_with_the_fix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "rg-7", &cell("rg-7", "claimed", "f", json!([])));
+
+        let bad = json!({
+            "outcome": "o",
+            "commit": "c",
+            "files": [],
+            "tests": "echo ok — green:unit — finish tests",
+            "deviations": [],
+            "reaction": "partial"
+        })
+        .to_string();
+        let flags = cap_flags_report("rg-7", Some(&bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(
+            refusal.contains(
+                "add \"stopped\": \"<the part not done> — <evidence>\""
+            ),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "rg-7").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_stopped_must_be_a_non_empty_string() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+
+        for (id, stopped) in [("rg-8a", json!("   ")), ("rg-8b", json!(["x"]))] {
+            write_cell_fixture(root, id, &cell(id, "claimed", "f", json!([])));
+            let bad = json!({
+                "outcome": "o",
+                "commit": "c",
+                "files": [],
+                "tests": "echo ok — green:unit — finish tests",
+                "deviations": [],
+                "reaction": "partial",
+                "stopped": stopped
+            })
+            .to_string();
+            let flags = cap_flags_report(id, Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains("cells finish: --report key \"stopped\" must be a non-empty string"),
+                "{id}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn release_trace_clears_the_reaction_keys_with_the_other_verify_evidence() {
+        let merged = merge_trace(Some(&json!({
+            "worker": "w1",
+            "reaction": "partial",
+            "skipped": ["the live run"],
+            "unknowns": ["cache warmth"],
+            "found": ["a dead flag"],
+            "stopped": "the live run — no network"
+        })))
+        .unwrap();
+        assert_eq!(merged.get("reaction"), Some(&json!("partial")));
+
+        let released = release_trace(merged);
+        for key in ["reaction", "skipped", "unknowns", "found", "stopped"] {
+            assert_eq!(
+                released.get(key),
+                Some(&Value::Null),
+                "a released cell must not carry the previous run's {key}"
+            );
+        }
+    }
+
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
     //
     // "`cells finish` verifies a commit whose trailer names the finishing

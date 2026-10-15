@@ -72,7 +72,17 @@ pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests"
 /// result is read against. Optional here so callers without a baseline keep
 /// capping cleanly; validated as a non-empty string when present and stored
 /// on the cell trace.
-pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 2] = ["mistakes", "baseline"];
+pub(crate) const REPORT_OPTIONAL_KEYS: [&str; 7] = [
+    "mistakes",
+    "baseline",
+    "reaction",
+    "skipped",
+    "unknowns",
+    "found",
+    "stopped",
+];
+
+pub(crate) const REACTION_VALUES: [&str; 4] = ["confirm", "partial", "challenge", "blocked"];
 
 /// D8 (docs/history/test-doctrine/CONTEXT.md) proof-string separator —
 /// three segments joined by `" — "` (space, em dash U+2014, space).
@@ -153,7 +163,7 @@ pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
 pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
     let parsed: Value = serde_json::from_str(raw)
         .map_err(|e| Fail::Thrown(format!("cells finish: --report is not valid JSON: {e}")))?;
-    let Value::Object(map) = parsed else {
+    let Value::Object(mut map) = parsed else {
         return Err(Fail::Thrown(format!(
             "cells finish: --report must be a JSON object with keys {}.",
             REPORT_KEYS.join(", ")
@@ -233,6 +243,55 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
                 "cells finish: --report key \"baseline\" must be a non-empty string — name what the same proof command produced on the base commit, or omit the key entirely.".to_string(),
             ))
         }
+    }
+    if let Some(value) = map.get("reaction") {
+        let lowered = match value {
+            Value::String(s) => js_trim(s).to_lowercase(),
+            _ => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"reaction\" must be a string — the worker's stance toward the brief, one of {}.",
+                    REACTION_VALUES.join(", ")
+                )))
+            }
+        };
+        if !REACTION_VALUES.contains(&lowered.as_str()) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --report key \"reaction\" must be one of {} — the worker's stance toward the brief.",
+                REACTION_VALUES.join(", ")
+            )));
+        }
+        map.insert("reaction".into(), Value::String(lowered));
+    }
+    for key in ["skipped", "unknowns", "found"] {
+        match map.get(key) {
+            None => {}
+            Some(Value::Array(items))
+                if items
+                    .iter()
+                    .all(|item| matches!(item, Value::String(s) if !js_trim(s).is_empty())) => {}
+            _ => {
+                return Err(Fail::Thrown(format!(
+                    "cells finish: --report key \"{key}\" must be an array of non-empty strings — [] states none, an absent key states no answer."
+                )))
+            }
+        }
+    }
+    match map.get("stopped") {
+        None => {}
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"stopped\" must be a non-empty string — name the part of the cell not done and the evidence for it.".to_string(),
+            ))
+        }
+    }
+    if matches!(map.get("reaction"), Some(Value::String(r)) if r == "partial")
+        && !map.contains_key("stopped")
+    {
+        return Err(Fail::Thrown(
+            "cells finish: --report key \"reaction\" is \"partial\" without \"stopped\" — add \"stopped\": \"<the part not done> — <evidence>\"."
+                .to_string(),
+        ));
     }
     // D8 (docs/history/test-doctrine/CONTEXT.md): a cap's own proof lives
     // WITH the cell, not in a fixed enum — `tests` is a proof string
