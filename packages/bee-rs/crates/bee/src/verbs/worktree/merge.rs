@@ -699,6 +699,7 @@ pub(crate) fn teardown_worktree(
             let _ = write_grants_file_atomic(&main_store_root, &next);
         }
     }
+    super::paseo_ws::archive(main_root, id);
     let _ = ws::unregister_workspace(main_root, id);
     release_all_for_holder(main_root, id);
     Ok(())

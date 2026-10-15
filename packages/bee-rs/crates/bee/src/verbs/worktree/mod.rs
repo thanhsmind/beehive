@@ -202,6 +202,7 @@ mod merge;
 mod phases;
 mod handlers;
 mod prune;
+pub(crate) mod paseo_ws;
 pub(crate) use self::registry::*;
 pub(crate) use self::git::*;
 pub(crate) use self::companion::*;
