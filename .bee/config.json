@@ -298,9 +298,6 @@
   },
   "herding": {
     "ceiling_seconds": 1800,
-    "paseo": {
-      "command": "/home/thanhsmind/.local/share/mise/installs/node/24.19.0/bin/paseo"
-    },
     "agent_command": "claude-sonnet",
     "control_command": [
       "claude",
