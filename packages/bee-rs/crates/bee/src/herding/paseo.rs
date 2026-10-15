@@ -25,6 +25,38 @@ fn discovery_inputs() -> (Option<String>, Option<PathBuf>, PathBuf) {
     (std::env::var("PASEO_CLI").ok(), home, PathBuf::from("/proc"))
 }
 
+pub const AGENT_SCOPE_VARS: [&str; 2] = ["PASEO_AGENT_ID", "PASEO_AGENT_CWD"];
+
+pub fn scrubbed_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    for var in AGENT_SCOPE_VARS {
+        command.env_remove(var);
+    }
+    command
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_INSIDE_PASEO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub fn set_inside_paseo_for_test(value: bool) {
+    TEST_INSIDE_PASEO.with(|c| c.set(value));
+}
+
+#[cfg(test)]
+pub fn inside_paseo() -> bool {
+    TEST_INSIDE_PASEO.with(|c| c.get())
+}
+
+#[cfg(not(test))]
+pub fn inside_paseo() -> bool {
+    ["PASEO_AGENT_ID", "PASEO_CLI"]
+        .iter()
+        .any(|k| std::env::var(k).is_ok_and(|v| !v.trim().is_empty()))
+}
+
 fn existing_file(value: &str) -> Option<String> {
     let value = value.trim();
     if value.is_empty() {
@@ -216,21 +248,30 @@ pub fn run_argv(
     argv
 }
 
-pub fn parse_run_agent_id(stdout: &str) -> Result<String, String> {
+fn first_json_from(stdout: &str, starts: &[char]) -> Option<Value> {
     for (i, c) in stdout.char_indices() {
-        if c == '{' {
+        if starts.contains(&c) {
             let mut de = serde_json::Deserializer::from_str(&stdout[i..]).into_iter::<Value>();
-            if let Some(Ok(Value::Object(map))) = de.next() {
-                if let Some(id) = map.get("agentId").and_then(Value::as_str) {
-                    if !id.trim().is_empty() {
-                        return Ok(id.to_string());
-                    }
-                }
-                return Err("first JSON object in output does not contain non-empty 'agentId'".to_string());
+            if let Some(Ok(value)) = de.next() {
+                return Some(value);
             }
         }
     }
-    Err("no JSON object found in output".to_string())
+    None
+}
+
+pub fn first_json_document(stdout: &str) -> Option<Value> {
+    first_json_from(stdout, &['{', '['])
+}
+
+pub fn parse_run_agent_id(stdout: &str) -> Result<String, String> {
+    match first_json_from(stdout, &['{']) {
+        Some(Value::Object(map)) => match map.get("agentId").and_then(Value::as_str) {
+            Some(id) if !id.trim().is_empty() => Ok(id.to_string()),
+            _ => Err("first JSON object in output does not contain non-empty 'agentId'".to_string()),
+        },
+        _ => Err("no JSON object found in output".to_string()),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -466,6 +507,86 @@ pub fn logs_tail_argv(id: &str, n: usize, filter: Option<&str>) -> Vec<String> {
         argv.push(f.to_string());
     }
     argv
+}
+
+pub fn workspace_ls_argv() -> Vec<String> {
+    vec!["workspace".to_string(), "ls".to_string(), "--json".to_string()]
+}
+
+pub fn project_ls_argv() -> Vec<String> {
+    vec!["project".to_string(), "ls".to_string(), "--json".to_string()]
+}
+
+pub fn workspace_create_argv(path: &str, project: Option<&str>) -> Vec<String> {
+    let mut argv = vec![
+        "workspace".to_string(),
+        "create".to_string(),
+        "--path".to_string(),
+        path.to_string(),
+        "--isolation".to_string(),
+        "local".to_string(),
+    ];
+    if let Some(p) = project {
+        argv.push("--project".to_string());
+        argv.push(p.to_string());
+    }
+    argv.push("--json".to_string());
+    argv
+}
+
+pub fn workspace_archive_argv(id: &str) -> Vec<String> {
+    vec![
+        "workspace".to_string(),
+        "archive".to_string(),
+        id.to_string(),
+        "--json".to_string(),
+    ]
+}
+
+fn paseo_error_text(raw: &str) -> String {
+    first_json_document(raw)
+        .and_then(|v| {
+            v.get("error")
+                .and_then(|e| e.get("message").or(Some(e)))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| raw.trim().to_string())
+}
+
+fn rows_with_path<'a>(doc: &'a Option<Value>, path_key: &str, id_key: &str, target: &Path) -> Option<&'a str> {
+    doc.as_ref()?.as_array()?.iter().find_map(|row| {
+        let path = row.get(path_key)?.as_str()?;
+        let id = row.get(id_key)?.as_str().filter(|s| !s.trim().is_empty())?;
+        crate::path_identity::canonical_paths_equal(Path::new(path), target).then_some(id)
+    })
+}
+
+pub fn ensure_workspace(cli: &dyn PaseoCli, main_root: &Path, dir: &Path) -> Result<String, String> {
+    let listed = cli.call(&workspace_ls_argv()).map_err(|e| paseo_error_text(&e))?;
+    let listed = first_json_document(&listed);
+    if let Some(id) = rows_with_path(&listed, "cwd", "workspaceId", dir) {
+        return Ok(id.to_string());
+    }
+    let projects = cli.call(&project_ls_argv()).map_err(|e| paseo_error_text(&e))?;
+    let projects = first_json_document(&projects);
+    let project = rows_with_path(&projects, "path", "projectId", main_root);
+    let created = cli
+        .call(&workspace_create_argv(&dir.to_string_lossy(), project))
+        .map_err(|e| paseo_error_text(&e))?;
+    match first_json_document(&created) {
+        Some(doc) => match doc.get("workspaceId").and_then(Value::as_str) {
+            Some(id) if !id.trim().is_empty() => Ok(id.to_string()),
+            _ => Err(paseo_error_text(&created)),
+        },
+        None => Err(format!("no JSON in paseo workspace create output: {}", created.trim())),
+    }
+}
+
+pub fn archive_workspace(cli: &dyn PaseoCli, id: &str) -> Result<(), String> {
+    cli.call(&workspace_archive_argv(id))
+        .map(|_| ())
+        .map_err(|e| paseo_error_text(&e))
 }
 
 pub fn permit_argv(agent: &str, allow: bool, request: Option<&str>, all: bool) -> Vec<String> {
@@ -734,7 +855,7 @@ fn run_with_deadline(
     timeout: std::time::Duration,
 ) -> Result<std::process::Output, String> {
     use std::io::Read;
-    let mut child = std::process::Command::new(command)
+    let mut child = scrubbed_command(command)
         .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -779,7 +900,7 @@ impl PaseoCli for RealPaseoCli {
     fn call(&self, args: &[String]) -> Result<String, String> {
         let output = match self.timeout {
             Some(t) => run_with_deadline(&self.command, args, t)?,
-            None => std::process::Command::new(&self.command)
+            None => scrubbed_command(&self.command)
                 .args(args)
                 .stdin(std::process::Stdio::null())
                 .output()
@@ -1494,5 +1615,187 @@ mod tests {
         });
         let claude_spec = PaseoSpec::from_config(&claude_cfg, "w-claude").unwrap().unwrap();
         assert!(!claude_spec.isolated_config);
+    }
+
+    struct ScriptedCli {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        reply: Box<dyn Fn(&[String]) -> Result<String, String> + Send + Sync>,
+    }
+
+    impl ScriptedCli {
+        fn new(reply: impl Fn(&[String]) -> Result<String, String> + Send + Sync + 'static) -> Self {
+            Self { calls: std::sync::Mutex::new(Vec::new()), reply: Box::new(reply) }
+        }
+
+        fn calls(&self) -> Vec<Vec<String>> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    impl PaseoCli for ScriptedCli {
+        fn call(&self, args: &[String]) -> Result<String, String> {
+            self.calls.lock().unwrap().push(args.to_vec());
+            (self.reply)(args)
+        }
+    }
+
+    #[test]
+    fn first_json_document_skips_wrapper_log_lines() {
+        let noisy = "12:00:01.123 › starting\n[login-shell-env] resolved {\n  \"PATH\": \"/x\"\n\n[{\"workspaceId\":\"wks_a\"}]\n";
+        let doc = first_json_document(noisy).expect("document");
+        assert_eq!(doc[0]["workspaceId"], "wks_a");
+        let arr = first_json_document("Using workspace wks_1\n[{\"workspaceId\":\"wks_a\"}]").unwrap();
+        assert_eq!(arr[0]["workspaceId"], "wks_a");
+        let obj = first_json_document("log line\n{\"workspaceId\":\"wks_b\"}").unwrap();
+        assert_eq!(obj["workspaceId"], "wks_b");
+        assert!(first_json_document("only logs\n").is_none());
+    }
+
+    #[test]
+    fn parse_run_agent_id_results_are_unchanged() {
+        assert_eq!(parse_run_agent_id("Using workspace wks_1\n{\"agentId\":\"a-1\"}").unwrap(), "a-1");
+        assert_eq!(
+            parse_run_agent_id("{\"status\":\"ok\"}").unwrap_err(),
+            "first JSON object in output does not contain non-empty 'agentId'"
+        );
+        assert_eq!(parse_run_agent_id("[1,2]").unwrap_err(), "no JSON object found in output");
+        assert_eq!(parse_run_agent_id("nothing").unwrap_err(), "no JSON object found in output");
+    }
+
+    #[test]
+    fn workspace_argv_shapes() {
+        assert_eq!(workspace_ls_argv(), vec!["workspace", "ls", "--json"]);
+        assert_eq!(project_ls_argv(), vec!["project", "ls", "--json"]);
+        assert_eq!(
+            workspace_create_argv("/w", Some("prj_1")),
+            vec!["workspace", "create", "--path", "/w", "--isolation", "local", "--project", "prj_1", "--json"]
+        );
+        assert_eq!(
+            workspace_create_argv("/w", None),
+            vec!["workspace", "create", "--path", "/w", "--isolation", "local", "--json"]
+        );
+        assert_eq!(workspace_archive_argv("wks_1"), vec!["workspace", "archive", "wks_1", "--json"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_workspace_reuses_a_workspace_at_a_symlinked_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("wt");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let link_s = link.to_string_lossy().into_owned();
+        let cli = ScriptedCli::new(move |args: &[String]| {
+            if args == workspace_ls_argv().as_slice() {
+                Ok(format!("[{{\"workspaceId\":\"wks_link\",\"cwd\":\"{link_s}\"}}]"))
+            } else {
+                Err("unexpected".to_string())
+            }
+        });
+        assert_eq!(ensure_workspace(&cli, tmp.path(), &real).unwrap(), "wks_link");
+        assert_eq!(cli.calls().len(), 1);
+    }
+
+    #[test]
+    fn ensure_workspace_creates_with_the_main_checkout_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        let main_s = main.to_string_lossy().into_owned();
+        let other_s = tmp.path().join("other").to_string_lossy().into_owned();
+        let cli = ScriptedCli::new(move |args: &[String]| {
+            if args == workspace_ls_argv().as_slice() {
+                Ok("[]".to_string())
+            } else if args == project_ls_argv().as_slice() {
+                Ok(format!(
+                    "[{{\"projectId\":\"prj_other\",\"path\":\"{other_s}\"}},{{\"projectId\":\"prj_main\",\"path\":\"{main_s}\"}}]"
+                ))
+            } else {
+                Ok("noise line\n{\"workspaceId\":\"wks_new\"}".to_string())
+            }
+        });
+        assert_eq!(ensure_workspace(&cli, &main, &wt).unwrap(), "wks_new");
+        assert_eq!(cli.calls()[2], workspace_create_argv(&wt.to_string_lossy(), Some("prj_main")));
+    }
+
+    #[test]
+    fn ensure_workspace_omits_project_when_none_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        let cli = ScriptedCli::new(|args: &[String]| {
+            if args.get(1).map(String::as_str) == Some("create") {
+                Ok("{\"workspaceId\":\"wks_plain\"}".to_string())
+            } else {
+                Ok("[{\"projectId\":\"prj_x\",\"path\":\"/nowhere/at/all\"}]".to_string())
+            }
+        });
+        assert_eq!(ensure_workspace(&cli, &main, &wt).unwrap(), "wks_plain");
+        assert_eq!(cli.calls()[2], workspace_create_argv(&wt.to_string_lossy(), None));
+    }
+
+    #[test]
+    fn ensure_workspace_reports_paseos_own_error_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let failing = ScriptedCli::new(|args: &[String]| {
+            if args.get(1).map(String::as_str) == Some("create") {
+                Err("{\n  \"error\": {\n    \"code\": \"WORKSPACE_CREATE_FAILED\",\n    \"message\": \"Unknown project: beehive\"\n  }\n}".to_string())
+            } else {
+                Ok("[]".to_string())
+            }
+        });
+        assert_eq!(ensure_workspace(&failing, tmp.path(), tmp.path()).unwrap_err(), "Unknown project: beehive");
+        let soft = ScriptedCli::new(|args: &[String]| {
+            if args.get(1).map(String::as_str) == Some("create") {
+                Ok("{\"error\":{\"message\":\"boom\"}}".to_string())
+            } else {
+                Ok("[]".to_string())
+            }
+        });
+        assert_eq!(ensure_workspace(&soft, tmp.path(), tmp.path()).unwrap_err(), "boom");
+    }
+
+    #[test]
+    fn archive_workspace_calls_workspace_archive() {
+        let cli = ScriptedCli::new(|_args: &[String]| Ok("{}".to_string()));
+        archive_workspace(&cli, "wks_9").unwrap();
+        assert_eq!(cli.calls(), vec![workspace_archive_argv("wks_9")]);
+    }
+
+    #[test]
+    fn inside_paseo_defaults_to_false_in_tests() {
+        assert!(!inside_paseo());
+        set_inside_paseo_for_test(true);
+        assert!(inside_paseo());
+        set_inside_paseo_for_test(false);
+        assert!(!inside_paseo());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn paseo_children_do_not_see_agent_scope_vars() {
+        let _guard = crate::hooks::herding_env_lock();
+        let prior: Vec<_> = AGENT_SCOPE_VARS.iter().map(|k| (*k, std::env::var_os(k))).collect();
+        for k in AGENT_SCOPE_VARS {
+            unsafe { std::env::set_var(k, "leak") };
+        }
+        let script = "echo ${PASEO_AGENT_ID:-absent} ${PASEO_AGENT_CWD:-absent}".to_string();
+        let plain = RealPaseoCli::new("sh").call(&["-c".to_string(), script.clone()]);
+        let timed = RealPaseoCli::new("sh")
+            .with_timeout(std::time::Duration::from_secs(10))
+            .call(&["-c".to_string(), script]);
+        for (k, v) in prior {
+            match v {
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
+            }
+        }
+        assert_eq!(plain.unwrap().trim(), "absent absent");
+        assert_eq!(timed.unwrap().trim(), "absent absent");
     }
 }

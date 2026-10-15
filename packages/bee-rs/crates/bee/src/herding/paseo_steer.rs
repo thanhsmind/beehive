@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 pub(crate) const STEER_SCRIPT: &str = include_str!("paseo_steer.mjs");
 
@@ -105,7 +105,7 @@ impl SteerRunner for RealSteerRunner {
     fn steer(&self, cli_dir: &Path, agent_id: &str, text: &str) -> Result<(), String> {
         let cli_dir_str = cli_dir.to_str().ok_or_else(|| "invalid utf-8 in cli_dir".to_string())?;
         let args = steer_argv(cli_dir_str, agent_id, text);
-        let output = Command::new("node")
+        let output = crate::herding::paseo::scrubbed_command("node")
             .args(&args)
             .stdin(Stdio::null())
             .output()

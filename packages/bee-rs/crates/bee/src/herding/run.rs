@@ -2854,6 +2854,13 @@ fn execute_new(opts: &Options, herdr: &dyn PaneTransport) -> ExecResult {
 
 /// Builds the child process environment, explicitly stripping leader session
 /// identity and injecting the herding worker markers (D11).
+pub(crate) fn paseo_env_pairs(child_env: BTreeMap<String, String>) -> Vec<(String, String)> {
+    child_env
+        .into_iter()
+        .filter(|(k, _)| !paseo::AGENT_SCOPE_VARS.contains(&k.as_str()))
+        .collect()
+}
+
 pub(crate) fn build_child_env(
     ambient: impl IntoIterator<Item = (String, String)>,
     agent_env: &BTreeMap<String, String>,
@@ -3553,7 +3560,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         }
     }
 
-    let env_pairs: Vec<(String, String)> = child_env.into_iter().collect();
+    let env_pairs = paseo_env_pairs(child_env);
 
     let version_output = cli.call(&["--version".to_string()]);
     let version_ok = match version_output {
@@ -4090,7 +4097,7 @@ impl WaitSource for RealWaitSource {
     fn arm(&mut self, timeout_secs: u64) {
         self.cancel();
         let argv = paseo::wait_argv(&self.agent_id, timeout_secs);
-        match std::process::Command::new(&self.command)
+        match paseo::scrubbed_command(&self.command)
             .args(&argv)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
@@ -11767,6 +11774,18 @@ mod tests {
         assert!(job_data.get("leader_session").is_some());
         assert_eq!(job_data.get("question_of").and_then(Value::as_str), Some("job-parent"));
         assert_eq!(job_data.get("question_round").and_then(Value::as_u64), Some(2));
+    }
+
+    #[test]
+    fn paseo_env_pairs_drop_agent_scope_vars() {
+        let mut env = BTreeMap::new();
+        env.insert("PASEO_AGENT_ID".to_string(), "caller".to_string());
+        env.insert("PASEO_AGENT_CWD".to_string(), "/caller".to_string());
+        env.insert("PASEO_CLI".to_string(), "/bin/paseo".to_string());
+        env.insert("BEE_HERDING_JOB_ID".to_string(), "job-1".to_string());
+        let pairs = paseo_env_pairs(env);
+        let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["BEE_HERDING_JOB_ID", "PASEO_CLI"]);
     }
 
     struct FakePaseoCli {
