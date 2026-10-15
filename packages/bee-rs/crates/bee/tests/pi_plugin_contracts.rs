@@ -1157,12 +1157,21 @@ fn run_harness_spec(harness: &Path, spec: Value) -> HarnessRun {
     run_harness_spec_with_env(harness, spec, &[])
 }
 
+const PASEO_ENV: [&str; 3] = ["PASEO_AGENT_ID", "PASEO_AGENT_CWD", "PASEO_CLI"];
+
+fn strip_paseo_env(cmd: &mut Command) {
+    for key in PASEO_ENV {
+        cmd.env_remove(key);
+    }
+}
+
 fn run_harness_spec_with_env(harness: &Path, spec: Value, env_vars: &[(&str, &str)]) -> HarnessRun {
     let extension = pi_extension_path();
     let mut cmd = Command::new("node");
     cmd.arg(harness).arg(&extension);
     cmd.env_remove("BEE_HERDING_WORKER");
     cmd.env_remove("BEE_HERDING_JOB_ID");
+    strip_paseo_env(&mut cmd);
     for (k, v) in env_vars {
         cmd.env(k, v);
     }
@@ -6582,11 +6591,10 @@ assert.strictEqual(derivePostExitTimeoutMs(3000000000), 2147483647, "extreme val
 console.log("OK");
 "#;
 
-    let output = std::process::Command::new("node")
-        .arg("--input-type=module")
-        .arg("-e")
-        .arg(script)
-        .arg(&ext_path)
+    let mut cmd = std::process::Command::new("node");
+    cmd.arg("--input-type=module").arg("-e").arg(script).arg(&ext_path);
+    strip_paseo_env(&mut cmd);
+    let output = cmd
         .output()
         .expect("run node timeout assertion script");
 
@@ -6880,11 +6888,10 @@ console.log("OK");
         wt_b = canon_wt_b,
     );
 
-    let output = std::process::Command::new("node")
-        .arg("--input-type=module")
-        .arg("-e")
-        .arg(script)
-        .arg(&ext_path)
+    let mut cmd = std::process::Command::new("node");
+    cmd.arg("--input-type=module").arg("-e").arg(script).arg(&ext_path);
+    strip_paseo_env(&mut cmd);
+    let output = cmd
         .output()
         .expect("run node adversarial test script");
 
@@ -9887,13 +9894,10 @@ if (component.focus !== undefined && component.focus !== false) {
 console.log("OK");
 "#;
 
-    let output = std::process::Command::new("node")
-        .arg("--input-type=module")
-        .arg("-e")
-        .arg(script)
-        .arg(&ext_path)
-        .output()
-        .expect("run node assertion script");
+    let mut cmd = std::process::Command::new("node");
+    cmd.arg("--input-type=module").arg("-e").arg(script).arg(&ext_path);
+    strip_paseo_env(&mut cmd);
+    let output = cmd.output().expect("run node assertion script");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
