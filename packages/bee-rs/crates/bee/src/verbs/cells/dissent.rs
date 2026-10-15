@@ -83,7 +83,15 @@ const VERB: &str = "recordDissent";
 pub(crate) fn run_dissent(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(
         &flags,
-        &["id", "reason", "alternative", "severity", "session-id", "force-ownership"],
+        &[
+            "id",
+            "reason",
+            "alternative",
+            "severity",
+            "new-evidence",
+            "session-id",
+            "force-ownership",
+        ],
     ) {
         return None;
     }
@@ -94,14 +102,16 @@ pub(crate) fn run_dissent(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
     let claim = flags.req_str("reason")?.to_string();
     let alternative = flags.req_str("alternative")?.to_string();
     let severity = flags.req_str("severity")?.to_string();
+    let new_evidence = flags.truthy_str("new-evidence").map(str::to_string);
     let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells dissent", use_json, t0, move |ctx| {
-        let cell = record_dissent(
+        let cell = record_dissent_with_evidence(
             &ctx.root,
             &id,
             &claim,
             &alternative,
             &severity,
+            new_evidence.as_deref(),
             session_flag.as_deref(),
             force,
         )?;
@@ -121,18 +131,31 @@ fn dissent_text(cell: &Value, severity: &str) -> String {
     }
 }
 
-/// The whole verb, minus flag parsing: validate, scan, append, release the
-/// claim, and — at `blocker` — block.
-///
-/// Order is load-bearing. Every refusal below happens BEFORE `mutate_cell`
-/// takes the `cells:<id>` lock, so a rejected dissent leaves the cell file
-/// byte-identical (data-integrity probe 9) and never removes a claim.
 pub(crate) fn record_dissent(
     root: &Path,
     id: &str,
     claim: &str,
     alternative: &str,
     severity: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    record_dissent_with_evidence(root, id, claim, alternative, severity, None, session_flag, force)
+}
+
+/// The whole verb, minus flag parsing: validate, scan, append, release the
+/// claim, and — at `blocker` — block.
+///
+/// Order is load-bearing. Every refusal below happens BEFORE `mutate_cell`
+/// takes the `cells:<id>` lock, so a rejected dissent leaves the cell file
+/// byte-identical (data-integrity probe 9) and never removes a claim.
+pub(crate) fn record_dissent_with_evidence(
+    root: &Path,
+    id: &str,
+    claim: &str,
+    alternative: &str,
+    severity: &str,
+    new_evidence: Option<&str>,
     session_flag: Option<&str>,
     force: bool,
 ) -> MR<Value> {
@@ -159,10 +182,24 @@ pub(crate) fn record_dissent(
     // and nothing else on the cell-trace write path scans anything.
     // Labelled by the FLAG the caller typed, not the stored field name: the
     // refusal is only useful if it names the thing they can edit.
+    let new_evidence_text = new_evidence.map(js_trim).filter(|text| !text.is_empty());
     assert_safe_decision_fields(&[
         ("reason", Some(claim_text)),
         ("alternative", Some(alternative_text)),
+        ("new-evidence", new_evidence_text),
     ])?;
+
+    if new_evidence_text.is_none() {
+        let entries = read_cell_norm(root, id)?
+            .and_then(|cell| cell.get("trace").and_then(|trace| trace.get(DISSENT_TRACE_KEY)).cloned())
+            .and_then(|value| value.as_array().cloned())
+            .unwrap_or_default();
+        if let Some((verdict, reason)) = newest_answered_dissent(&entries) {
+            return Err(Fail::Thrown(format!(
+                "{VERB}: cell \"{id}\" already carries an answered dissent — the newest verdict is \"{verdict}\" ({reason}). A point is dissented once (b2baf5e0): follow the ruling, or bring what is new with --new-evidence \"<what is new>\". Nothing was written."
+            )));
+        }
+    }
 
     let is_blocker = severity == "blocker";
     // The blocked reason a `blocker` dissent writes: it must read as a
@@ -174,6 +211,7 @@ pub(crate) fn record_dissent(
     let claim_owned = claim_text.to_string();
     let alternative_owned = alternative_text.to_string();
     let severity_owned = severity.to_string();
+    let new_evidence_owned = new_evidence_text.map(str::to_string);
 
     // `clear_claim_after = true` — requirement 2. `mutate_cell` releases the
     // claim FILE after a successful write, which is what
@@ -189,6 +227,9 @@ pub(crate) fn record_dissent(
         entry.insert("claim".into(), Value::String(claim_owned));
         entry.insert("alternative".into(), Value::String(alternative_owned));
         entry.insert("severity".into(), Value::String(severity_owned));
+        if let Some(evidence) = new_evidence_owned {
+            entry.insert("new_evidence".into(), Value::String(evidence));
+        }
         entry.insert(
             "worker".into(),
             match trace.get("worker") {
@@ -295,6 +336,20 @@ pub(crate) fn dissent_is_answered(entry: &Value) -> bool {
         }
         _ => true,
     }
+}
+
+pub(crate) fn newest_answered_dissent(entries: &[Value]) -> Option<(String, String)> {
+    entries.iter().rev().find_map(|entry| {
+        if !dissent_is_answered(entry) {
+            return None;
+        }
+        let Value::Object(map) = entry else { return None };
+        let text = |key: &str| match map.get(key) {
+            Some(Value::String(s)) => js_trim(s).to_string(),
+            _ => String::new(),
+        };
+        Some((text(DISSENT_VERDICT_KEY), text(DISSENT_VERDICT_REASON_KEY)))
+    })
 }
 
 /// What the verdict did, for the one-line confirmation. Filled inside the
@@ -1139,6 +1194,116 @@ mod tests {
         assert_eq!(read_cell_fixture(root, "v-12")["status"], json!("open"));
     }
 
+    #[test]
+    fn a_first_dissent_on_an_unanswered_cell_still_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "e-1", &cell("e-1", "claimed", json!([])));
+
+        record_dissent(root, "e-1", "the shape is wrong", "invert it", "consider", None, false)
+            .unwrap();
+        let rows = records(&read_cell_fixture(root, "e-1"));
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].get("new_evidence"), None, "no evidence was given, so none is stored");
+
+        record_dissent(root, "e-1", "and the scope is too wide", "cut it", "consider", None, false)
+            .unwrap();
+        assert_eq!(records(&read_cell_fixture(root, "e-1")).len(), 2);
+    }
+
+    #[test]
+    fn a_dissent_after_a_verdict_without_new_evidence_refuses_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "e-2", &cell("e-2", "claimed", json!([])));
+        record_dissent(root, "e-2", "first claim", "first alternative", "consider", None, false)
+            .unwrap();
+        record_dissent_verdict(root, "e-2", "reject", "the cell stands as handed over").unwrap();
+        let before = std::fs::read(cells_dir(root).join("e-2.json")).unwrap();
+
+        let refusal =
+            thrown(record_dissent(root, "e-2", "second claim", "second alternative", "consider", None, false));
+        assert!(refusal.starts_with("recordDissent: cell \"e-2\" already carries an answered dissent"), "{refusal}");
+        assert!(refusal.contains("reject"), "the refusal quotes the verdict: {refusal}");
+        assert!(refusal.contains("the cell stands as handed over"), "and its reason: {refusal}");
+        assert!(refusal.contains("--new-evidence"), "the refusal names the fix: {refusal}");
+        assert!(refusal.contains("b2baf5e0"), "and the decision behind the rule: {refusal}");
+
+        assert_eq!(
+            std::fs::read(cells_dir(root).join("e-2.json")).unwrap(),
+            before,
+            "a refused repeat dissent must leave the cell file byte-identical"
+        );
+        assert_eq!(records(&read_cell_fixture(root, "e-2")).len(), 1, "nothing was appended");
+
+        let blank = thrown(record_dissent_with_evidence(
+            root,
+            "e-2",
+            "third claim",
+            "third alternative",
+            "consider",
+            Some("   "),
+            None,
+            false,
+        ));
+        assert!(blank.contains("--new-evidence"), "{blank}");
+        assert_eq!(std::fs::read(cells_dir(root).join("e-2.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn a_dissent_with_new_evidence_after_a_verdict_appends_and_stores_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "e-3", &cell("e-3", "claimed", json!([])));
+        record_dissent(root, "e-3", "first claim", "first alternative", "consider", None, false)
+            .unwrap();
+        record_dissent_verdict(root, "e-3", "accept", "accepted, but the cell still stands").unwrap();
+
+        record_dissent_with_evidence(
+            root,
+            "e-3",
+            "the ruling missed a case",
+            "cover the empty list too",
+            "consider",
+            Some("  the empty-list case was never mentioned in the verdict  "),
+            None,
+            false,
+        )
+        .unwrap();
+
+        let rows = records(&read_cell_fixture(root, "e-3"));
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert_eq!(rows[0][DISSENT_VERDICT_KEY], json!("accept"), "the answered record stands");
+        assert_eq!(rows[0].get("new_evidence"), None);
+        assert_eq!(rows[1]["claim"], json!("the ruling missed a case"));
+        assert_eq!(
+            rows[1]["new_evidence"],
+            json!("the empty-list case was never mentioned in the verdict"),
+            "the evidence is trimmed and stored on the new entry"
+        );
+    }
+
+    #[test]
+    fn unsafe_new_evidence_is_refused_by_its_flag_name_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "e-4", &cell("e-4", "claimed", json!([])));
+        let before = std::fs::read(cells_dir(root).join("e-4.json")).unwrap();
+
+        let refusal = thrown(record_dissent_with_evidence(
+            root,
+            "e-4",
+            "c",
+            "a",
+            "consider",
+            Some("the key is AKIA0123456789ABCDEF"),
+            None,
+            false,
+        ));
+        assert!(refusal.contains("field \"new-evidence\""), "{refusal}");
+        assert_eq!(std::fs::read(cells_dir(root).join("e-4.json")).unwrap(), before);
+    }
+
     /// The verdict set is closed in the CODE, not only in the message, and
     /// `dissent_is_answered` is the ONE reading of "unanswered" the debt
     /// doors will share — a corrupt row never swallows the answer meant for
@@ -1150,5 +1315,26 @@ mod tests {
         assert!(!dissent_is_answered(&json!({"verdict": "  "})));
         assert!(dissent_is_answered(&json!({"verdict": "accept"})));
         assert!(dissent_is_answered(&json!("a corrupt row")));
+    }
+
+    #[test]
+    fn newest_answered_dissent_reads_the_newest_ruling_past_newer_questions() {
+        let rows = json!([
+            {"claim": "a", "verdict": "reject", "verdict_reason": "the cell stands"},
+            {"claim": "b", "verdict": "accept", "verdict_reason": "the second ruling"},
+            {"claim": "c"},
+            "a corrupt row",
+        ]);
+        assert_eq!(
+            newest_answered_dissent(rows.as_array().unwrap()),
+            Some(("accept".to_string(), "the second ruling".to_string()))
+        );
+        assert_eq!(newest_answered_dissent(&[]), None);
+        assert_eq!(newest_answered_dissent(&[json!({"claim": "a"})]), None);
+        assert_eq!(
+            newest_answered_dissent(&[json!({"verdict": "escalate"})]),
+            Some(("escalate".to_string(), String::new())),
+            "a verdict with no stored reason reads as an empty reason"
+        );
     }
 }
