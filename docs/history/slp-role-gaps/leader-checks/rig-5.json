@@ -1,0 +1,5 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"A write job with a frozen worktree past the window reads stalled with stall_reason no_diff_progress","artifact":"packages/bee-rs/crates/bee/src/herding.rs"},
+{"requirement":"A read-only job never stalls by fingerprint","artifact":"packages/bee-rs/crates/bee/src/herding.rs"},
+{"requirement":"Exactly one message is appended per stalled stretch","artifact":"packages/bee-rs/crates/bee/src/herding.rs"}
+]}

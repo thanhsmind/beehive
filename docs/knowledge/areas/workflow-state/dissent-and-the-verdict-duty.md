@@ -69,7 +69,7 @@ Two verbs, two meanings, no overload.
 
 The verdict is written to the **decision log**, fail-closed: if the log write
 does not land, the verdict does not count. That is what makes the answer durable
-and citable later instead of a line in a transcript nobody can find. Recording
+and citable from then on, instead of a line in a transcript nobody can find. Recording
 the verdict is also what releases the cell a blocker dissent parked — the pause
 and the release are two ends of one mechanism, so there is no state where the
 answer exists and the work is still stuck.

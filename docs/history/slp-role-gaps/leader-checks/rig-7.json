@@ -1,0 +1,5 @@
+{"schema":"leader-check/1","answers":[
+{"requirement":"The advisor prompt asks for recommendation, confidence and a falsifier","artifact":"packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+{"requirement":"Convergence hides lane and model names until scoring is done","artifact":"skills/bee-hive/references/gates-and-delegation.md"},
+{"requirement":"The reviewer checks the exact head and clean paths first","artifact":"packages/bee/prompts/reviewer.md"}
+]}
