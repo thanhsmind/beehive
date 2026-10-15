@@ -243,9 +243,13 @@ rule. It says nothing whatever about whether the rule was then obeyed
   guards still exit non-zero on a seeded violation. It matches on the shape of
   a size law, not on the names of the deleted files, so the same rule under a
   new identifier is still caught; its own negative controls prove that.
-- Standing-sheet meaning guard (R5): `scripts/tests/test_agents_budget.mjs` —
-  guards the 17-rule roster and the byte-identical render between the master
-  block and the rendered `AGENTS.md`, no size threshold anywhere in the suite;
+- Standing-sheet meaning guard (R5): `AGENTS.md` is rendered from
+  `packages/bee/AGENTS.block.md` by `bee dev regen`, and
+  `packages/bee-rs/crates/bee/tests/agents_block_render_parity.rs` pins the
+  byte-identical render, so an edit made to `AGENTS.md` alone is dropped by the
+  next regen. The Node suite that first held this guard,
+  `scripts/tests/test_agents_budget.mjs`, was deleted by the Rust port. It
+  guarded the 17-rule roster and the same render, with no size threshold;
   `EXPECTED_RULE_COUNT` moved 16→17 by appending, so
   `TERMINAL_HOME_RULES [1, 5, 6, 11]` was unaffected. The rule cost ~1,850 bytes
   and was funded by removing 835 bytes of restated prose plus the two stale

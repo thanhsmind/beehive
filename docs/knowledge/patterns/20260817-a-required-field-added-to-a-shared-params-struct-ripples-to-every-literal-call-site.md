@@ -30,3 +30,8 @@ guards included. Either name the sweep in the cell's files up front or
 expect the worker to record the fallout as a deviation; an optional
 field with a default is the cheaper shape when the sweep is not worth
 it.
+When several optional fields arrive together, group them in ONE
+sub-struct that has a default: slp-role-gaps rig-3 added five handback
+fields to the herding mailbox result that way, so each of its ten
+literal constructions gained one line instead of five (decision
+`e28c2a4e`, commit 40e475605).

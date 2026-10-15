@@ -715,7 +715,14 @@ The cap is the leader's, always. herding-cap-check D1 still refuses a done,
 uncapped cell with a non-zero exit that names `bee cells finish`; under
 pi-slp-dispatch-return D5 that refusal is the leader's planned cap signal, not a
 worker fault (seen live on psdr-1 and psdr-2, 2026-10-03: both `outcome=done`,
-both exit 1, both capped by the leader). The leader still checks `git log` and
+both exit 1, both capped by the leader). The refusal fires only on a
+`done` result of a dispatch that carries a cell id, so a blocked, timed-out,
+dead or cell-less run is untouched, and a missing or unreadable cell file lets
+the run through. It reports only, never caps: capping from the worker's own
+result file would turn an unchecked self-report into recorded proof. The check
+sits in the one run step both launch paths share (decisions `85e32ca2`,
+`a27ce76d`), and the dispatch door supplies the cell id it keys on
+(`areas/workflow-state/dispatch.md`). The leader still checks `git log` and
 runs the proof itself before it caps. A Task-tool or CLI-transport worker keeps
 the native contract and caps itself.
 

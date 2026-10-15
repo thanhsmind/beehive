@@ -103,6 +103,7 @@ never a generation timestamp or any other wall-clock value.
 - [slp-contract-original-request/](slp-contract-original-request/index.md) — 1 concept(s)
 - [slp-dissent-stop-and-ask/](slp-dissent-stop-and-ask/index.md) — 1 concept(s)
 - [slp-followup-gaps/](slp-followup-gaps/index.md) — 1 concept(s)
+- [slp-role-gaps/](slp-role-gaps/index.md) — 1 concept(s)
 - [slp-spec-drop-procedure/](slp-spec-drop-procedure/index.md) — 1 concept(s)
 - [slp-supervisor-heartbeat/](slp-supervisor-heartbeat/index.md) — 1 concept(s)
 - [stage-gate-phase-parity/](stage-gate-phase-parity/index.md) — 1 concept(s)

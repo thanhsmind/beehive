@@ -598,9 +598,18 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   schema, no mandatory full-suite rerun; a test re-run stays smell-only,
   and depth is risk-based (spot-check a low-risk mechanical unit, read the
   full diff and trace wiring on high risk, missing evidence, or a
-  report-versus-diff contradiction). Instruction-only: no door enforces it
-  (f5e3c084, touching 565e68d0 — independent review stays user-invoked;
-  feature leader-completeness-check).
+  report-versus-diff contradiction) (f5e3c084, touching 565e68d0 —
+  independent review stays user-invoked; feature leader-completeness-check).
+  A door now enforces it (leader-check-door, `a38dc4bd`): `bee cells
+  leader-check` records the check on `trace.leader_check` with verdict `ok`
+  or `gap`, and both `bee close` and `bee worktree merge` refuse a feature
+  whose capped cells carry no `ok` mark, unless a `leader-check-deferral`
+  decision names the feature. The mark is verified, not typed: a path-shaped
+  artifact must exist on disk, and at least one answer must name a path from
+  the cell's own `trace.files_changed`. A `gap` verdict records without
+  reopening the cell: every debt reader counts capped cells only, so a
+  reopen would clear both doors and make a recorded gap the cheapest way
+  past them.
 
 ## Edge Cases Settled
 

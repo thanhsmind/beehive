@@ -64,13 +64,27 @@ worker row `dp-r1` registered for it — before its cell lands in `skipped`; an
 unwind that itself fails earns its own `unwind_failed` reason rather than
 folding into `reservation_conflict`.
 
+**A cell dispatch names its cell on the herding command (dispatch-cell-id-flag,
+`3aa96ff2`).** When the door prepares a cell for a herding worker, the command
+it returns carries `--cell-id "<id>"`. Gather, reviewer and advisor commands
+stay byte-identical, and the cli and native shapes carry no cell id. Before
+this, the herding run's refusal of a done-but-uncapped cell never fired on a
+door-prepared dispatch, because it keys on that id and the door never passed
+one; its tests had used a hand-built input. A guard is proven through the real
+caller that feeds it, here by reading the command `bee dispatch prepare`
+actually emits.
+
 **Worker Result form (workflow-lessons wfl-1, 2026-08-11).** The rendered
 worker prompt requires a fenced JSON Result form `{outcome, commit, files,
 tests, deviations}` beside the final status token, and `cells finish --report`
 validates those five required keys (unknown key refused, missing keys named)
 into append-only `trace.report`; the flag absent keeps old finish behavior
 unchanged. Tending reads the form, never parses worker prose. Optional keys
-ride beside them: `mistakes` and `baseline`, and the worker's handback
+ride beside them: `mistakes`; `baseline` (what the same proof command
+produced on the base commit, so a result reads against a floor — a trace
+field, never a fourth proof-string segment, because the read path re-parses
+historical caps; name settled by `7bd47edd` after two sessions built it as
+`baseline` and `baseline_floor`); and the worker's handback
 (slp-role-gaps D1 `15f6804c`, D2 `6e81d8db`, contract `7db254ba`) — `reaction`
 (its stance toward the brief: confirm, partial, challenge or blocked, matched
 in any case and stored lowercase), `skipped`, `unknowns` and `found` (lists of

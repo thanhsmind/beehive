@@ -138,7 +138,13 @@ Three field failures (reported against a host repo, fixed generically):
   render`, never hand-fixed) and, when the logging context has a bound
   feature, that feature's own live `docs/history/<feature>/` dir
   (self-citation of live work is not staleness) — a different feature's
-  history is still a real citation and is never excluded.
+  history is still a real citation and is never excluded. The log-time
+  sweep queues a stub only when the touched decision has left the active
+  set (touches-sweep-active-gate, `00595ba4`): a `touches:` relation relates
+  without retiring, so a citation of a live decision is not stale. Measured
+  before the gate on 64 stubs, 37 cited a live decision and none of the rest
+  was a find the retiring sweep had missed; the gate also ends the loop where
+  settling a batch logged a decision whose own relation queued the next batch.
   **A decision that only RECORDS a sweep answer must relate to nothing.**
   Naming the swept ids as touched re-runs the sweep over every doc that cites
   them, so the answer mints one fresh stub per citing line — the same lines
