@@ -944,6 +944,18 @@ mod tests {
     }
 
     #[test]
+    fn detector_tick_resolves_and_declares_only_the_json_flag() {
+        let (entry, rest) =
+            resolve(&["detector", "tick"]).expect("detector.tick is in the registry");
+        assert_eq!(entry.invoke, "bee detector tick");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+        assert!(entry.properties.contains_key("json"));
+        assert_eq!(entry.properties.len(), 1);
+    }
+
+    #[test]
     fn detector_events_resolves_and_declares_no_required_flag() {
         let (entry, rest) =
             resolve(&["detector", "events"]).expect("detector.events is in the registry");
