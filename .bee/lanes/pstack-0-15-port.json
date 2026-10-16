@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "pstack-0-15-port",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pstack-0-15-port\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"pstack-0-15-port\" (lane).",
+  "created_at": "2026-10-16T14:41:29.472Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "multi-domain"
+    ],
+    "product_files": 8,
+    "rationale": "doctrine edits across four skills plus one Rust merge-door change; no public contract or hard-gate territory",
+    "updated_at": "2026-10-16T14:43:44.419Z",
+    "feature": "pstack-0-15-port"
+  }
+}
