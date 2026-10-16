@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "piggery-eval",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"piggery-eval\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"piggery-eval\" (lane).",
+  "next_action": "bee close finished \"piggery-eval\" — feature is closed.",
   "created_at": "2026-10-16T09:18:24.738Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "piggery-eval uat: read docs/history/research/piggery-xia.md on main, then accept or reject",
-    "asked_at": "2026-10-16T10:10:33.796Z",
-    "session": "50780349-fc8f-453b-a412-de10c286c01b"
-  },
+  "waiting_on": null,
   "route": {
     "class": "research",
     "lane": "small",
