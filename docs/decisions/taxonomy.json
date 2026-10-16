@@ -712,6 +712,7 @@
     "contract:herding-result-envelope",
     "contract:prune-precious-queue",
     "slp-detector",
-    "contract:detector-events"
+    "contract:detector-events",
+    "release-2-54-0"
   ]
 }
