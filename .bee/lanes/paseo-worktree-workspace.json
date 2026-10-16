@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "Bash",
-    "asked_at": "2026-10-16T09:13:21.385Z",
-    "session": "50780349-fc8f-453b-a412-de10c286c01b"
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-16T14:36:27.450Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   }
 }

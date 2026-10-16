@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"piggery-eval\" — feature is closed.",
   "created_at": "2026-10-16T09:18:24.738Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-16T10:42:04.068Z",
+    "session": "50780349-fc8f-453b-a412-de10c286c01b"
+  },
   "route": {
     "class": "research",
     "lane": "small",

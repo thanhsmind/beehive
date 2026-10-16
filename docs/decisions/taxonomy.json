@@ -713,6 +713,9 @@
     "contract:prune-precious-queue",
     "slp-detector",
     "contract:detector-events",
-    "release-2-54-0"
+    "release-2-54-0",
+    "reflect",
+    "bee-shaping",
+    "contract:proof-carried"
   ]
 }
