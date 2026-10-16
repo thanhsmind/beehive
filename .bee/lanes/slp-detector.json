@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-detector",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"slp-detector\" started at phase \"exploring\" (lane).",
-  "next_action": "await uat for slp-detector",
+  "next_action": "bee close finished \"slp-detector\" — feature is closed.",
   "created_at": "2026-10-15T14:48:34.144Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "gate_preview": {
     "feature": "slp-detector",
