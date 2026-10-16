@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "feature": "piggery-eval",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"piggery-eval\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"piggery-eval\" (lane).",
+  "created_at": "2026-10-16T09:18:24.738Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "piggery-eval merged gate: approve to land the spec drop, commit, and merge",
+    "asked_at": "2026-10-16T09:26:34.979Z",
+    "session": "50780349-fc8f-453b-a412-de10c286c01b"
+  },
+  "route": {
+    "class": "research",
+    "lane": "small",
+    "flags": [],
+    "product_files": 0,
+    "rationale": "evidence-only xia of piggery; docs only, no product code",
+    "updated_at": "2026-10-16T09:18:24.793Z",
+    "feature": "piggery-eval"
+  },
+  "merge_ready": {
+    "since": "2026-10-16T10:09:15.572Z",
+    "branch": "wt/piggery-eval",
+    "worktree_id": "beehive--wt--piggery-eval",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
