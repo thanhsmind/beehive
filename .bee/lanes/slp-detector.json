@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "slp-detector",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,19 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"slp-detector\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at d70d327; reload the product and test \"slp-detector\", then either approve uat (\"bee gate --name uat --approved true --lane slp-detector\") or fix it in the worktree and merge again.",
+  "next_action": "await uat for slp-detector",
   "created_at": "2026-10-15T14:48:34.144Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: slp-detector",
-    "asked_at": "2026-10-16T01:32:23.121Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "waiting_on": null,
   "gate_preview": {
     "feature": "slp-detector",
     "plan_sha256": "e3c2ef7baf5e474f2a5bb50020a91c55897bb2537195da2a042af4392347e0de",
-    "previewed_at": "2026-10-15T23:22:41.361Z",
+    "previewed_at": "2026-10-16T02:54:43.572Z",
     "cells": [
       {
         "id": "det-1",
@@ -486,7 +481,7 @@
   "approved_cell_packet": {
     "feature": "slp-detector",
     "plan_sha256": "e3c2ef7baf5e474f2a5bb50020a91c55897bb2537195da2a042af4392347e0de",
-    "previewed_at": "2026-10-15T23:22:41.361Z",
+    "previewed_at": "2026-10-16T02:54:43.572Z",
     "cells": [
       {
         "id": "det-1",
@@ -950,5 +945,14 @@
     "rationale": null,
     "updated_at": "2026-10-16T00:18:33.578Z",
     "feature": "slp-detector"
+  },
+  "last_scribing_run": {
+    "feature": "slp-detector",
+    "date": "2026-10-16",
+    "at": "2026-10-16T02:55:30.371Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "await uat for slp-detector"
   }
 }
