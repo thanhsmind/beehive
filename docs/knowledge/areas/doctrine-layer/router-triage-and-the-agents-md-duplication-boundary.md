@@ -117,6 +117,12 @@ rule never disappears — only its elaboration moves.
   reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
   as two. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
   the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
+  Every spoken line also carries its reason, placed last after an em dash, and every numbered step in
+  the nine class playbooks (`skills/bee-planning/playbooks/<class>.md`) states why it holds or points
+  at the home that does (pstack-0-15-port D1, cell p15-2, 2026-10-16): a rule with its reason lets an
+  agent derive the call in a case the text never names, and the reason lives here and in the
+  playbooks, never in the always-loaded contract. The bugfix playbook's cause-not-known paragraph ends
+  with the cheap always-on-signal sentence (pstack-0-15-port D5, same cell).
 
 ## Edge Cases Settled
 

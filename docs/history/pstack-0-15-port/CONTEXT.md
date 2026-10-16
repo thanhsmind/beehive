@@ -87,12 +87,16 @@ The exact wording of each "because" clause is planning's, bounded by D1.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+<!-- bee:not-a-deferral: both questions were answered inside the feature's own cells; this records the answers, it promises nothing later -->
+### Answered In Planning Or Execution
 
-- [ ] `git patch-id` cost on a long branch — measure once on this repo during the D2 cell.
-- [ ] Which 7 `spoken:` lines lack a reason — the D1 cell lists them from `rg -n '^  spoken:' | rg -v '—'`.
+- [x] `git patch-id` cost on a long branch — measured on cell p15-1's cap: about 35 ms for a 13-commit branch, run at most once per merge and only when the ancestry pass flagged a cap.
+- [x] Which 7 `spoken:` lines lacked a reason — listed in plan.md claim 5 (lines 186, 211, 239, 261, 307, 355, 367) and all filled by cell p15-2.
+<!-- /bee:not-a-deferral -->
 
-## Deferred Ideas
+## Out Of Scope, Recorded Elsewhere
 
-- Per-spawn effort at the door — backlog proposal `effort-by-lane-at-the-door` (D7).
+<!-- bee:not-a-deferral: these two items already have their own backlog rows; this section only names where they live -->
+- Per-spawn effort at the door — backlog proposal `effort-by-lane-at-the-door` (D7, feature-local decision `822faada`).
 - Principle restatement of the 14 `bee-principle-*` skills — backlog debt `principle-restatement`.
+<!-- /bee:not-a-deferral -->
