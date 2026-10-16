@@ -118,9 +118,9 @@ The command line, in full:
 
 ```
 .bee/bin/bee supervisor record --kind {observation|silence} \
-                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|dead-lead|none} \
+                               --signal {struggling-loop|budget-overrun|same-region-resubmit|big-decision|danger-op|dead-lead|self-correction|boundary-approach|test-on-unstable-contract|budget-80|none} \
                                --note "<one or two sentences>" \
-                               [--target-session <session-id>] [--tick <n>]
+                               [--target-session <session-id>] [--tick <n>] [--events <id,...>]
 ```
 
 The second form is the `advisor-nudge` record. It is a mailbox row addressed
@@ -132,7 +132,7 @@ an addressee and a point key:
                                --signal {struggling-loop|budget-overrun|same-region-resubmit} \
                                --target-session <session-id> \
                                --point-key <stable-slug> \
-                               --question "<one open question>" [--tick <n>]
+                               --question "<one open question>" [--tick <n>] [--events <id,...>]
 ```
 
 Every closed set is exactly as written — the verb refuses any other word,

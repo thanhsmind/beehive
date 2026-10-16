@@ -197,7 +197,7 @@ use std::time::Instant;
 
 // ─── store paths ────────────────────────────────────────────────────────
 
-fn supervisor_dir(control: &Path) -> PathBuf {
+pub(crate) fn supervisor_dir(control: &Path) -> PathBuf {
     control.join(".bee").join("supervisor")
 }
 
@@ -216,7 +216,7 @@ fn presence_path(control: &Path) -> PathBuf {
 /// The control root for a (possibly linked-worktree) repo root — the same
 /// cycle-free git walk `verbs/triggers` and `deferred_queue` already reuse.
 /// A supervisor tick and a worktree session must see ONE store.
-fn control_root_path(root: &Path) -> PathBuf {
+pub(crate) fn control_root_path(root: &Path) -> PathBuf {
     let root_s = root.to_string_lossy().into_owned();
     PathBuf::from(rsv::control_root_for(&root_s).unwrap_or(root_s))
 }
@@ -300,23 +300,31 @@ pub(crate) fn needs_human_decision(kind: &str) -> bool {
 /// starts a successor — the note it writes carries the facts and a resume line,
 /// and the human's keystroke is the spawn. The automatic half of the ported
 /// idea was refused at its plan check (`docs/history/slp-lead-recovery/`).
-pub(crate) const KNOWN_SIGNALS: [&str; 7] = [
+pub(crate) const KNOWN_SIGNALS: [&str; 11] = [
     "struggling-loop",
     "big-decision",
     "danger-op",
     "budget-overrun",
     "same-region-resubmit",
     "dead-lead",
+    "self-correction",
+    "boundary-approach",
+    "test-on-unstable-contract",
+    "budget-80",
     "none",
 ];
 
-pub(crate) const INTERVENTION_SIGNALS: [&str; 8] = [
+pub(crate) const INTERVENTION_SIGNALS: [&str; 12] = [
     "struggling-loop",
     "big-decision",
     "danger-op",
     "budget-overrun",
     "same-region-resubmit",
     "dead-lead",
+    "self-correction",
+    "boundary-approach",
+    "test-on-unstable-contract",
+    "budget-80",
     "none",
     "worker-question",
 ];
@@ -338,7 +346,7 @@ const MAX_QUESTION_SENTENCES: usize = 2;
 
 /// The bound on a point key. It is a slug a human reads in a refusal, not a
 /// sentence.
-const MAX_POINT_KEY_CHARS: usize = 80;
+pub(crate) const MAX_POINT_KEY_CHARS: usize = 80;
 
 #[derive(Debug)]
 pub(crate) struct Observation {
@@ -348,18 +356,21 @@ pub(crate) struct Observation {
     pub(crate) note: String,
     pub(crate) target_session: Option<String>,
     pub(crate) tick: Option<u64>,
+    pub(crate) events: Vec<String>,
 }
 
 impl Observation {
     fn to_value(&self) -> Value {
-        json!({
+        let mut v = json!({
             "ts": self.ts,
             "kind": self.kind,
             "signal": self.signal,
             "note": self.note,
             "target_session": self.target_session,
             "tick": self.tick,
-        })
+        });
+        with_events(&mut v, &self.events);
+        v
     }
 
     /// `None` for anything JSON-shaped but missing a required field or
@@ -379,13 +390,46 @@ impl Observation {
         let note = m.get("note")?.as_str()?.to_string();
         let target_session = m.get("target_session").and_then(Value::as_str).map(str::to_string);
         let tick = m.get("tick").and_then(Value::as_u64);
-        Some(Self { ts, kind, signal, note, target_session, tick })
+        Some(Self { ts, kind, signal, note, target_session, tick, events: read_events_field(m) })
     }
 
     fn line(&self) -> String {
         let target = self.target_session.as_deref().unwrap_or("-");
         let tick = self.tick.map(|t| t.to_string()).unwrap_or_else(|| "-".to_string());
-        format!("- {} [{}/{}] tick {} {} — {}", self.ts, self.kind, self.signal, tick, target, self.note)
+        format!(
+            "- {} [{}/{}] tick {} {} — {}{}",
+            self.ts,
+            self.kind,
+            self.signal,
+            tick,
+            target,
+            self.note,
+            events_suffix(&self.events)
+        )
+    }
+}
+
+fn read_events_field(m: &serde_json::Map<String, Value>) -> Vec<String> {
+    m.get("events")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+fn with_events(v: &mut Value, events: &[String]) {
+    if events.is_empty() {
+        return;
+    }
+    if let Some(map) = v.as_object_mut() {
+        map.insert("events".to_string(), Value::Array(events.iter().map(|e| json!(e)).collect()));
+    }
+}
+
+fn events_suffix(events: &[String]) -> String {
+    if events.is_empty() {
+        String::new()
+    } else {
+        format!(" [events: {}]", events.join(","))
     }
 }
 
@@ -394,7 +438,7 @@ impl Observation {
 /// collapses to a single space, and C0/C7F control characters are dropped.
 /// A note that carries its own line breaks would otherwise re-shape any
 /// surface that later prints it.
-fn one_line(text: &str) -> String {
+pub(crate) fn one_line(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut pending_space = false;
     for c in text.chars() {
@@ -429,6 +473,31 @@ fn parse_tick(cmd: &str, tick: Option<&str>) -> Result<Option<u64>, String> {
     }
 }
 
+fn check_events(control: &Path, cmd: &str, raw: Option<&str>) -> Result<Vec<String>, String> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    let known: std::collections::HashSet<String> =
+        crate::verbs::detector::read_events(control).into_iter().map(|e| e.id).collect();
+    let mut out: Vec<String> = Vec::new();
+    for part in raw.split(',') {
+        let id = one_line(part);
+        if id.is_empty() {
+            return Err(format!("bee {cmd}: --events is a comma-separated list of event ids."));
+        }
+        if !known.contains(&id) {
+            return Err(format!(
+                "bee {cmd}: --events names {id:?}, and the detector event store holds no such \
+                 event. Read them with `bee detector events` and name only the ids it lists."
+            ));
+        }
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
 /// Validate, then append. THE one write door for this store: every refusal
 /// below returns before a single byte is written, so a refused `record`
 /// leaves the store exactly as it found it (including still absent).
@@ -440,6 +509,7 @@ pub(crate) fn record_into(
     note: Option<&str>,
     target_session: Option<&str>,
     tick: Option<&str>,
+    events: Option<&str>,
 ) -> Result<Observation, String> {
     let Some(kind) = kind else {
         return Err(format!("bee {cmd}: --kind is required ({}).", ALL_KINDS.join("|")));
@@ -479,6 +549,7 @@ pub(crate) fn record_into(
         ));
     }
     let tick = parse_tick(cmd, tick)?;
+    let events = check_events(control, cmd, events)?;
     let rec = Observation {
         ts: now_iso(),
         kind: kind.to_string(),
@@ -486,6 +557,7 @@ pub(crate) fn record_into(
         note,
         target_session: target_session.map(|s| one_line(s)).filter(|s| !s.is_empty()),
         tick,
+        events,
     };
     // Creates .bee/supervisor/ on the first write (append_jsonl ensures the
     // parent directory) — the store never needs a separate init step.
@@ -562,6 +634,7 @@ pub(crate) struct Intervention {
     /// would read a claim that has since moved. `None` when the target held
     /// no claim, and then the key is absent from the row entirely.
     pub(crate) feature: Option<String>,
+    pub(crate) events: Vec<String>,
 }
 
 impl Intervention {
@@ -581,6 +654,7 @@ impl Intervention {
             "queued": self.queued,
         });
         with_feature(&mut v, self.feature.as_deref());
+        with_events(&mut v, &self.events);
         v
     }
 
@@ -606,6 +680,7 @@ impl Intervention {
             "needs_human_decision": needs_human_decision(&self.kind),
         });
         with_feature(&mut v, self.feature.as_deref());
+        with_events(&mut v, &self.events);
         v
     }
 }
@@ -654,6 +729,7 @@ impl Intervention {
             // here — which reads as "counts against no feature", never as a
             // parse failure.
             feature: non_empty("feature"),
+            events: read_events_field(m),
         })
     }
 
@@ -668,14 +744,15 @@ impl Intervention {
             (None, None, false) => "pending".to_string(),
         };
         format!(
-            "- {} [{}/{}] {} {} for {} ({state}) — {}",
+            "- {} [{}/{}] {} {} for {} ({state}) — {}{}",
             self.ts,
             self.kind,
             self.signal,
             self.id,
             self.point_key,
             self.target_session,
-            self.question
+            self.question,
+            events_suffix(&self.events)
         )
     }
 }
@@ -733,7 +810,7 @@ fn new_row_id() -> String {
 /// points out of one, so they are folded away before anything is compared;
 /// everything else must already BE a slug, because silently rewriting a key
 /// would hide the cap from the caller that has to reuse it.
-fn normalise_point_key(cmd: &str, raw: Option<&str>) -> Result<String, String> {
+pub(crate) fn normalise_point_key(cmd: &str, raw: Option<&str>) -> Result<String, String> {
     let Some(raw) = raw else {
         return Err(format!(
             "bee {cmd}: --point-key is required — the frequency cap is counted per point, and a \
@@ -835,6 +912,7 @@ pub(crate) fn record_intervention_into(
     point_key: Option<&str>,
     question: Option<&str>,
     tick: Option<&str>,
+    events: Option<&str>,
 ) -> Result<Intervention, String> {
     if !MAILBOX_KINDS.contains(&kind) {
         return Err(closed_set_error(cmd, "kind", kind, &MAILBOX_KINDS));
@@ -853,6 +931,7 @@ pub(crate) fn record_intervention_into(
     let point_key = normalise_point_key(cmd, point_key)?;
     let question = check_question(cmd, question)?;
     let tick = parse_tick(cmd, tick)?;
+    let events = check_events(control, cmd, events)?;
 
     // The frequency cap (c80debd7). Only a plain intervention is counted
     // against it: escalation is the remedy this refusal names, and `urgent` is
@@ -906,6 +985,7 @@ pub(crate) fn record_intervention_into(
         consented_at: None,
         consent_timeout_seconds: None,
         feature,
+        events,
     };
     if append_jsonl(&interventions_path(control), &rec.record_event()).is_err() {
         return Err(format!("bee {cmd}: could not append to the intervention mailbox."));
@@ -1624,7 +1704,7 @@ fn consent_config(control: &Path) -> ConsentConfig {
             .get("supervisor")
             .and_then(Value::as_object)
             .and_then(|m| m.get(CONSENT_KEY)),
-    )
+        )
 }
 
 /// Why an ask is NOT eligible. Every case c706053e names is its OWN variant,
@@ -3232,8 +3312,8 @@ fn flag<'a>(parsed: &'a ParsedArgs, name: &str) -> Option<&'a str> {
 
 /// Every value flag `record` accepts. One list for both row shapes: which
 /// ones are REQUIRED is decided by --kind, inside the validating seam.
-const RECORD_FLAGS: [&str; 7] =
-    ["kind", "signal", "note", "target-session", "tick", "point-key", "question"];
+const RECORD_FLAGS: [&str; 8] =
+    ["kind", "signal", "note", "target-session", "tick", "point-key", "question", "events"];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "supervisor" {
@@ -3278,6 +3358,7 @@ fn run_record(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         flag(&parsed, "note"),
         flag(&parsed, "target-session"),
         flag(&parsed, "tick"),
+        flag(&parsed, "events"),
     ) {
         Ok(rec) => rec,
         Err(msg) => return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0)),
@@ -3296,6 +3377,7 @@ fn emit_intervention(ctx: &Ctx, cmd: &str, kind: &str, parsed: &ParsedArgs, t0: 
         flag(parsed, "point-key"),
         flag(parsed, "question"),
         flag(parsed, "tick"),
+        flag(parsed, "events"),
     ) {
         Ok(rec) => rec,
         Err(msg) => return emit_error(&ctx.root, cmd, parsed.json, &msg, t0),
@@ -3688,6 +3770,7 @@ mod tests {
             Some("Looked at every live session; nothing needs a question."),
             None,
             None,
+            None,
         )
         .expect("a valid record is accepted");
 
@@ -3712,6 +3795,7 @@ mod tests {
             Some("Same test has failed three times with the same error."),
             Some("sess-42"),
             Some("7"),
+            None,
         )
         .unwrap();
         let rows = lines(control);
@@ -3733,12 +3817,173 @@ mod tests {
             Some("x"),
             None,
             None,
+            None,
         )
         .unwrap_err();
         assert!(err.contains("--kind must be one of observation, silence"), "{err}");
         assert!(err.contains("\"dispatch\""), "the refusal names what it got: {err}");
         assert!(!observations_path(control).exists(), "a refused record writes nothing at all");
         assert!(!supervisor_dir(control).exists(), "not even the store directory");
+    }
+
+    fn plant_event(control: &Path, signal: &str, point: &str) -> String {
+        let e = crate::verbs::detector::Event::new(
+            signal,
+            "job-1",
+            None,
+            None,
+            point,
+            "One sentence of context.",
+            "diff",
+        );
+        let id = e.id.clone();
+        crate::verbs::detector::append_event(control, &e).unwrap();
+        id
+    }
+
+    #[test]
+    fn events_is_accepted_on_a_silence_row_and_the_row_carries_the_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let id = plant_event(control, "budget-80", "budget-80-ceiling-job-1");
+
+        let rec = record_into(
+            control,
+            "supervisor record",
+            Some("silence"),
+            Some("budget-80"),
+            Some("Reviewed the budget event and chose silence."),
+            None,
+            None,
+            Some(&id),
+        )
+        .expect("a silence row judging a real event is accepted");
+        assert_eq!(rec.events, vec![id.clone()]);
+
+        let row: Value = serde_json::from_str(&lines(control)[0]).unwrap();
+        assert_eq!(row["events"], json!([id]));
+    }
+
+    #[test]
+    fn events_is_accepted_on_an_intervention_row_and_the_event_leaves_unjudged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let id = plant_event(control, "self-correction", "self-correction-job-1-abcd1234");
+
+        let rec = record_intervention_into(
+            control,
+            "supervisor record",
+            "intervention",
+            Some("self-correction"),
+            Some("sess-1"),
+            Some("self-correction-job-1-abcd1234"),
+            Some("What would tell you the restore was deliberate?"),
+            None,
+            Some(&id),
+        )
+        .expect("an intervention row judging a real event is accepted");
+        assert_eq!(rec.events, vec![id]);
+
+        let row: Value = serde_json::from_str(&mbx(control)[0]).unwrap();
+        assert_eq!(row["events"], json!([rec.events[0]]));
+    }
+
+    #[test]
+    fn events_naming_an_unknown_id_is_refused_by_name_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let cmd = "supervisor record";
+
+        let err = record_into(
+            control,
+            cmd,
+            Some("silence"),
+            Some("none"),
+            Some("Reviewed nothing."),
+            None,
+            None,
+            Some("deadbeef-dead-beef-dead-beefdeadbeef"),
+        )
+        .unwrap_err();
+        assert!(err.contains("deadbeef-dead-beef-dead-beefdeadbeef"), "the refusal names the id: {err}");
+        assert!(err.contains("bee detector events"), "the refusal names the read: {err}");
+        assert!(!observations_path(control).exists(), "a refused row writes nothing");
+
+        let err = record_intervention_into(
+            control,
+            cmd,
+            "intervention",
+            None,
+            Some("sess-1"),
+            Some("retry-loop"),
+            Some("What ends the retry?"),
+            None,
+            Some("no-such-event"),
+        )
+        .unwrap_err();
+        assert!(err.contains("no-such-event"), "{err}");
+        assert!(!interventions_path(control).exists(), "a refused mailbox row writes nothing");
+    }
+
+    #[test]
+    fn events_collapse_duplicates_and_keep_their_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        let a = plant_event(control, "budget-80", "budget-80-ceiling-job-1");
+        let b = plant_event(control, "boundary-approach", "boundary-approach-job-1-abcd1234");
+
+        let rec = record_into(
+            control,
+            "supervisor record",
+            Some("silence"),
+            Some("none"),
+            Some("Reviewed both."),
+            None,
+            None,
+            Some(&format!("{b},{a},{b}")),
+        )
+        .unwrap();
+        assert_eq!(rec.events, vec![b, a], "first occurrence wins, duplicates collapse");
+    }
+
+    #[test]
+    fn an_observation_row_without_events_reads_back_with_an_empty_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        record_into(
+            control,
+            "c",
+            Some("observation"),
+            Some("big-decision"),
+            Some("A call was taken."),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let row: Value = serde_json::from_str(&lines(control)[0]).unwrap();
+        assert!(row.get("events").is_none(), "an unjudging row carries no events key: {row}");
+        let store = read_observations(control);
+        assert!(store.rows[0].events.is_empty(), "and it reads back as empty");
+        assert!(!store.rows[0].line().contains("events:"), "no suffix on an unjudging line");
+    }
+
+    #[test]
+    fn from_value_tolerates_a_missing_events_key_and_a_mixed_array() {
+        let missing: Value = serde_json::from_str(
+            r#"{"ts":"2026-10-15T00:00:00.000Z","kind":"observation","signal":"none","note":"x"}"#,
+        )
+        .unwrap();
+        assert!(Observation::from_value(&missing).unwrap().events.is_empty());
+
+        let mixed: Value = serde_json::from_str(
+            r#"{"ts":"2026-10-15T00:00:00.000Z","kind":"observation","signal":"none","note":"x","events":["a",7,null,"b"]}"#,
+        )
+        .unwrap();
+        assert_eq!(Observation::from_value(&mixed).unwrap().events, vec!["a", "b"]);
+
+        let render = Observation::from_value(&mixed).unwrap();
+        assert!(render.line().contains("[events: a,b]"), "{}", render.line());
     }
 
     #[test]
@@ -3754,11 +3999,11 @@ mod tests {
             (Some("observation"), Some("none"), Some("x"), Some("later"), "--tick must be a non-negative"),
         ];
         for (kind, signal, note, tick, needle) in cases {
-            let err = record_into(control, cmd, kind, signal, note, None, tick).unwrap_err();
+            let err = record_into(control, cmd, kind, signal, note, None, tick, None).unwrap_err();
             assert!(err.contains(needle), "expected {needle:?} in {err:?}");
         }
         let long = "s".repeat(MAX_NOTE_CHARS + 1);
-        let err = record_into(control, cmd, Some("observation"), None, Some(&long), None, None).unwrap_err();
+        let err = record_into(control, cmd, Some("observation"), None, Some(&long), None, None, None).unwrap_err();
         assert!(err.contains("one or two sentences"), "{err}");
         assert!(!observations_path(control).exists(), "no refusal ever wrote a row");
     }
@@ -3769,9 +4014,9 @@ mod tests {
         let control = tmp.path();
         assert!(read_observations(control).rows.is_empty(), "a missing store reads as empty");
 
-        record_into(control, "c", Some("observation"), Some("big-decision"), Some("first"), None, Some("1"))
+        record_into(control, "c", Some("observation"), Some("big-decision"), Some("first"), None, Some("1"), None)
             .unwrap();
-        record_into(control, "c", Some("silence"), None, Some("second"), Some("sess-9"), Some("2")).unwrap();
+        record_into(control, "c", Some("silence"), None, Some("second"), Some("sess-9"), Some("2"), None).unwrap();
 
         let store = read_observations(control);
         assert!(store.unreadable.is_empty());
@@ -3788,7 +4033,7 @@ mod tests {
     fn one_bad_line_is_skipped_with_a_count_never_a_crash() {
         let tmp = tempfile::tempdir().unwrap();
         let control = tmp.path();
-        record_into(control, "c", Some("observation"), Some("danger-op"), Some("good"), None, None).unwrap();
+        record_into(control, "c", Some("observation"), Some("danger-op"), Some("good"), None, None, None).unwrap();
         // A half-written line (the crash a cold unattended appender can leave)
         // and a shape-valid row with a kind outside the closed set.
         let path = observations_path(control);
@@ -3812,6 +4057,7 @@ mod tests {
             Some("observation"),
             None,
             Some("  two\nlines\tand\r\nspaces  "),
+            None,
             None,
             None,
         )
@@ -3860,7 +4106,7 @@ mod tests {
         point: &str,
         question: &str,
     ) -> Result<Intervention, String> {
-        record_intervention_into(control, "supervisor record", kind, None, Some(target), Some(point), Some(question), None)
+        record_intervention_into(control, "supervisor record", kind, None, Some(target), Some(point), Some(question), None, None)
     }
 
     #[test]
@@ -4051,21 +4297,23 @@ mod tests {
         for signal in ["budget-overrun", "same-region-resubmit"] {
             assert!(KNOWN_SIGNALS.contains(&signal), "{signal} must be a known signal");
             record_intervention_into(
-                control, cmd, "advisor-nudge", Some(signal), Some("sess-1"), Some(signal), q, None,
+                control, cmd, "advisor-nudge", Some(signal), Some("sess-1"), Some(signal), q, None, None,
             )
             .unwrap_or_else(|e| panic!("{signal} must record: {e}"));
             // The observation seam takes the same word.
-            record_into(control, cmd, Some("observation"), Some(signal), Some("Seen."), None, None)
+            record_into(control, cmd, Some("observation"), Some(signal), Some("Seen."), None, None, None)
                 .unwrap_or_else(|e| panic!("{signal} must record as an observation: {e}"));
         }
 
         let err = record_intervention_into(
             control, cmd, "advisor-nudge", Some("budget-overun"), Some("sess-1"), Some("typo"), q, None,
+            None,
         )
         .unwrap_err();
         assert!(err.contains("--signal must be one of"), "a near-miss is still refused: {err}");
         let err = record_intervention_into(
             control, cmd, "advisor-nudges", None, Some("sess-1"), Some("typo"), q, None,
+            None,
         )
         .unwrap_err();
         assert!(err.contains("--kind must be one of"), "a near-miss kind is still refused: {err}");
@@ -4191,7 +4439,7 @@ mod tests {
             (Some("s"), Some("k"), Some(long_q), "an intervention is at most 2"),
         ];
         for (target, point, question, needle) in cases {
-            let err = record_intervention_into(control, cmd, "intervention", None, target, point, question, None)
+            let err = record_intervention_into(control, cmd, "intervention", None, target, point, question, None, None)
                 .unwrap_err();
             assert!(err.contains(needle), "expected {needle:?} in {err:?}");
         }
@@ -4206,7 +4454,7 @@ mod tests {
         let cmd = "supervisor record";
         let q = Some("What is the next check?");
         let one = |signal, tick, kind| {
-            record_intervention_into(control, cmd, kind, signal, Some("s"), Some("k"), q, tick)
+            record_intervention_into(control, cmd, kind, signal, Some("s"), Some("k"), q, tick, None)
                 .unwrap_err()
         };
         assert!(one(Some("vibes"), None, "intervention").contains("--signal must be one of"));
@@ -4215,13 +4463,13 @@ mod tests {
 
         let long = "s".repeat(MAX_QUESTION_CHARS + 1);
         let err =
-            record_intervention_into(control, cmd, "intervention", None, Some("s"), Some("k"), Some(&long), None)
+            record_intervention_into(control, cmd, "intervention", None, Some("s"), Some("k"), Some(&long), None, None)
                 .unwrap_err();
         assert!(err.contains("at most two sentences"), "{err}");
 
         // The observation seam refuses a mailbox kind rather than writing a
         // half-shaped row into the wrong store.
-        let err = record_into(control, cmd, Some("intervention"), None, Some("x"), None, None).unwrap_err();
+        let err = record_into(control, cmd, Some("intervention"), None, Some("x"), None, None, None).unwrap_err();
         assert!(err.contains("is a mailbox row"), "{err}");
         assert!(err.contains("--point-key"), "the refusal names what a mailbox row needs: {err}");
 
@@ -4382,6 +4630,7 @@ mod tests {
             None,
             Some("point-a"),
             Some("Is this it?"),
+            None,
             None,
         )
         .unwrap_err();
@@ -4749,6 +4998,7 @@ mod tests {
             note: note.to_string(),
             target_session: None,
             tick: None,
+            events: Vec::new(),
         };
         append_jsonl(&observations_path(control), &rec.to_value()).unwrap();
     }
@@ -4775,6 +5025,7 @@ mod tests {
             Some("danger-op"),
             Some("A worker was about to delete the worktree."),
             Some("sess-1"),
+            None,
             None,
         )
         .unwrap();
@@ -4955,6 +5206,7 @@ mod tests {
                 Some(&format!("A loop was seen, number {i}.")),
                 Some("sess-1"),
                 None,
+                None,
             )
             .unwrap();
         }
@@ -4965,6 +5217,7 @@ mod tests {
             Some("danger-op"),
             Some("The danger one."),
             Some("sess-1"),
+            None,
             None,
         )
         .unwrap();
@@ -5213,7 +5466,7 @@ mod tests {
             &json!({"event": "record", "id": "bad-1", "ts": now_iso(), "kind": "not-a-kind",
                     "signal": "none", "point_key": "p", "question": "?",
                     "target_session": "sess-1"}),
-        )
+                )
         .unwrap();
         append_jsonl(&interventions_path(control), &json!({"event": "record", "id": "bad-2"}))
             .unwrap();
@@ -5382,6 +5635,7 @@ mod tests {
             consented_at: None,
             consent_timeout_seconds: None,
             feature: None,
+            events: Vec::new(),
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
     }
@@ -5396,6 +5650,7 @@ mod tests {
             note: note.to_string(),
             target_session: None,
             tick: None,
+            events: Vec::new(),
         };
         append_jsonl(&observations_path(control), &rec.to_value()).unwrap();
     }
@@ -5652,6 +5907,7 @@ mod tests {
                 Some(&format!("A loop was seen, number {i}.")),
                 Some("sess-1"),
                 None,
+                None,
             )
             .unwrap();
         }
@@ -5724,6 +5980,7 @@ mod tests {
             consented_at: None,
             consent_timeout_seconds: None,
             feature: None,
+            events: Vec::new(),
         };
         append_jsonl(&interventions_path(control), &row.record_event()).unwrap();
         row.id
@@ -5830,6 +6087,7 @@ mod tests {
                 consented_at: None,
                 consent_timeout_seconds: None,
                 feature: None,
+                events: Vec::new(),
             };
             assert_eq!(
                 consent_refusal(&ConsentAsk::from_row(&row)),
@@ -5854,6 +6112,7 @@ mod tests {
             consented_at: None,
             consent_timeout_seconds: None,
             feature: None,
+            events: Vec::new(),
         };
         assert_eq!(
             consent_refusal(&ConsentAsk::from_row(&present)),
