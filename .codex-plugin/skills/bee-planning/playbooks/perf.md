@@ -1,11 +1,14 @@
 # perf
 
-1. Capture a baseline with the real command or trace, and record the number.
+1. Capture a baseline with the real command or trace, and record the number —
+   without it, no later number means anything.
 2. State the hypothesis — a mechanism the baseline shows. First ask whether
    the slow path must exist at all: a deleted path beats a faster one.
-3. Change ONE thing.
-4. Re-measure the same way, with the same command.
-5. Keep the win, discard the loss, and record BOTH numbers.
+3. Change ONE thing, so that the delta has one cause.
+4. Re-measure the same way, with the same command, so that the delta measures
+   the change and not the method.
+5. Keep the win, discard the loss, and record BOTH numbers — a loss on record
+   stops the next attempt from trying it again.
 
 **When the ask is a sustained metric target.** Prove the harness separates
 the target case, then freeze it. Report the median of several runs. Set the
