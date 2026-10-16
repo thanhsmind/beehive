@@ -387,6 +387,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `herding.supervisor_runtime` | selects the supervisor observer runtime: `"claude"` (default) or `"pi"` (paseo-pi-hardening D9). With `"pi"`, runs `team.pi.supervisor` under `worker-guard` with `BEE_SUPERVISOR_ALLOWED`. | `"claude"` |
 | `herding.paseo.broker_tick_secs` | interval in seconds for the Pi leader's internal broker timer (paseo-pi-hardening D8). Runs `bee herding broker tick --json` and sends news to the leader. | `30` |
 | `herding.paseo.heartbeat_cron` | cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8). Replaces the previous 5-minute default (`*/5 * * * *`). | `"*/30 * * * *"` |
+| `herding.budget.tokens_per_job` | token budget per herded job for the Detector's `budget-80` rule (slp-detector D3). A positive whole number. Read by `bee detector tick`. | unset ⇒ the token rule is off |
 | `herding.limits.concurrency` / `herding.limits.depth` | non-negative integers (piggery-borrow D3). `concurrency` caps live herding workers: a fresh `bee herding run`, and a `bee dispatch prepare` whose role resolves to a herding agent, counts live workers (wave ledger rows crossed against the live pane list, Paseo agents counted even with no pane list) and refuses at the limit with `{ok:false, reason:"limits.concurrency", live, limit, retryable:true, fix}`, or with `limits.unverifiable` when no live list can be read. `depth` caps nested runs: a run whose `BEE_HERDING_DEPTH` (absent = 0) reaches the limit refuses with `limits.depth`, and with a depth limit set the worker gets `BEE_HERDING_DEPTH` one above its caller. `bee dispatch prepare --explain` prints each check (role, claim, limits) as pass, refuse or skip and writes nothing. The cockpit spawn path (`herdr agent start` + `record-worker`) is not checked. | absent ⇒ no limit; payloads and pane exports byte-identical |
 | `herding.agents.<name>.paseo.isolated_config` | boolean flag for a Pi Paseo agent (herding-leader-toil D5). When true, creates an isolated Pi folder at `.bee/runtime/pi-agent/<name>/` and sets `PI_CODING_AGENT_DIR`. | `false` |
 
@@ -540,6 +541,13 @@ Sets the cron schedule for the Paseo heartbeat backstop (paseo-pi-hardening D8, 
 The default value is `"*/30 * * * *"` (superseding the previous 5-minute default).
 If the marker file contains a different cron, `ensureHeartbeat` updates the heartbeat schedule on session start.
 On session shutdown (except reload), the extension stops the broker timer and awaits heartbeat deletion (`paseo heartbeat delete <id>`).
+
+#### `herding.budget.tokens_per_job`
+
+Sets the token budget per herded job for the Detector's `budget-80` rule (slp-detector D3, store `936eb9a8`).
+The value is a positive whole number of tokens.
+The default is unset, and an unset key turns the token rule off.
+`bee detector tick` reads the key and fires one `budget-80` event when a live job's `usage.total_tokens` reaches 80% of it.
 
 #### `herding.agents.<name>.paseo.isolated_config`
 

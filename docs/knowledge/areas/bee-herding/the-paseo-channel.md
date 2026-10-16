@@ -292,6 +292,7 @@ The timer and the result drain send through one shared helper, so the busy and s
 While an idle send is still opening its turn (the turn-start latch), the timer holds the news and sends it on the first tick after the latch clears; a newer news tick replaces the held text. The shared helper never sends a plain message while that latch is set, so a failed send cannot clear a latch the drain set. Held news is dropped when the timer stops at shutdown.
 
 The Paseo heartbeat remains as a backstop.
+On every heartbeat, the extension also runs `bee detector tick --json` after the broker tick, and the detector outcome never changes the turn (slp-detector D5, store `a6232035`).
 The default schedule is `*/30 * * * *` (superseding paseo-pi D7, store `8ae5134d`).
 At session start, the extension creates one `bee-leader` heartbeat for the agent (paseo-pi D8, store `2aa8417a`).
 The extension records the heartbeat in a marker file at `.bee/runtime/paseo-heartbeat/<agent id>.json`.
