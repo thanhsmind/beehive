@@ -1,0 +1,247 @@
+{
+  "id": "det-1",
+  "feature": "slp-detector",
+  "title": "Add the detector event store, the read verb and the four signal names",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D4",
+    "03838ea8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "skills/bee-herding/references/supervisor-prompt.md",
+    ".agents/skills/bee-herding/references/supervisor-prompt.md",
+    ".claude/skills/bee-herding/references/supervisor-prompt.md",
+    ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+    ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+    ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/slp-detector/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/supervisor.rs — `rg -n 'KNOWN_SIGNALS|INTERVENTION_SIGNALS|RECORD_FLAGS|fn record_into|fn from_value|fn supervisor_dir|fn control_root_path|pub fn try_native'` — hits today: 303 `pub(crate) const KNOWN_SIGNALS: [&str; 7] = [`, 313 `pub(crate) const INTERVENTION_SIGNALS: [&str; 8] = [`, 336 `fn record_into(`, 376 `if !KNOWN_SIGNALS.contains(&signal.as_str()) {`, 3238 `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {`",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs — `rg -n 'supervisor::try_native'` — hit today: 136 `if let Some(code) = supervisor::try_native(args, t0) {`",
+    "packages/bee-rs/crates/bee/src/catalog.rs — `rg -n 'resolve\\(&\\[\"herding\", \"notify\"\\]\\)'` — hit today: 957 `let (entry, rest) = resolve(&[\"herding\", \"notify\"]).expect(\"herding.notify is in the registry\");`",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json — the `supervisor.list` and `supervisor.record` entries, the shape to copy",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'fn the_shipped_prompt_pins_the_record_verbs_own_closed_sets'` — hit today: 1302; this test pins the prompt to KNOWN_SIGNALS",
+    "skills/bee-herding/references/supervisor-prompt.md — `rg -n -- '--signal \\{'` — the record command line whose signal list grows"
+  ],
+  "affects_skills": [
+    "skills/bee-herding/references/supervisor-prompt.md"
+  ],
+  "affects_specs": [],
+  "action": "Per D1, D2 and D4. (1) Add module verbs/detector.rs with `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode>` that answers only when args[0] is `detector`, and hook it in verbs/mod.rs right after the `supervisor::try_native` block in the same shape. (2) The store: `.bee/supervisor/events.jsonl`, resolved against the control root with the same helpers supervisor.rs uses (`supervisor_dir`, `control_root_path`; widen their visibility to pub(crate) if needed). Event row per D2: `id` (uuid v4 string), `ts` (RFC 3339 UTC), `signal`, `job_id`, `cell_id` (string or null), `target_session` (string or null), `point_key` (the same slug rule `--point-key` enforces, 80 chars max), `excerpt` (one sentence, 300 chars max, whitespace collapsed), `source` (the surface read). Expose pub(crate) `EVENT_SIGNALS: [&str; 4]` holding exactly self-correction, boundary-approach, test-on-unstable-contract, budget-80; pub(crate) `append_event(control_root, &Event) -> Result<(), String>` that validates signal, point_key and excerpt before the append and refuses by name otherwise, creating the directory on first write; pub(crate) `read_events(control_root) -> Vec<Event>` oldest first, skipping malformed lines; pub(crate) `events_for_job(control_root, job_id) -> Vec<Event>`. (3) Verb `bee detector events [--unjudged] [--json]`: text form one line per row `- <ts> [<signal>] <job_id> <cell_id or -> <point_key> — <excerpt>`, JSON form `{events: [rows]}`; `--unjudged` keeps only rows whose id no row in observations.jsonl or interventions.jsonl names in its `events` array (D4 refinement e3de051a); a missing or empty store prints `No detector events.` in text form (JSON `{events: []}`) and exits 0. Register `detector.events` (flags unjudged, json) in generated/registry_payload.json in the same shape as `supervisor.list` (the precedent: `herding.notify` and `herding.fork` were added by hand in that shape), and add a catalog.rs resolve test beside the `herding notify` one. Do NOT register or implement `detector tick` here (det-2 owns it). (4) supervisor.rs: add the four names to KNOWN_SIGNALS (11 entries) and INTERVENTION_SIGNALS (12); add optional `--events <id,...>` to RECORD_FLAGS (today `const RECORD_FLAGS: [&str; 7] =`), legal on every record kind, every id must exist in events.jsonl (refused by name otherwise, nothing written), stored on the row as `events: [..]` only when given, on observation rows and on mailbox rows alike; Observation::from_value and the mailbox row reader read an optional `events` array and tolerate its absence; `supervisor list` and `supervisor pending` print ` [events: a,b]` after the note or question when present. (5) In skills/bee-herding/references/supervisor-prompt.md change only the record command line block: extend the `--signal {...}` set with the four names in this order after dead-lead, and add `[--events <id,...>]` after `[--tick <n>]`; then run `.bee/bin/bee dev regen` so the five generated copies and the release manifest update, and commit them in the same commit. Tests (author only what is not pinned): unknown signal still refused naming the set; `--events` happy on a silence row, happy on an intervention row (the row carries the ids and the event leaves `--unjudged`), and refused with an unknown id; from_value with and without `events`; `detector events` empty store prints `No detector events.`, two rows, `--unjudged` after a silence row names one and after an intervention row names the other; catalog resolve for detector events; registry_contracts green; the control_loop prompt-pin test green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee supervisor record --kind silence --signal budget-80 --note x is accepted",
+      "bee supervisor record --events <unknown id> is refused by name and writes nothing",
+      "bee detector events --unjudged lists only rows no observation, silence or mailbox row names",
+      "bee detector events with no store prints No detector events. and exits 0"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+        "substantive": "Event struct, EVENT_SIGNALS, append_event, read_events, events_for_job, the events verb and their tests"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "a detector.events entry"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs calls detector::try_native",
+      "supervisor record validates --events against events.jsonl",
+      "the supervisor prompt's record command line names the four signals and --events, five copies regenerated"
+    ],
+    "prohibitions": [
+      "No change to the Observation row fields that exist today",
+      "No detector tick verb or rule in this cell",
+      "No write to any store other than events.jsonl and observations.jsonl",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "det1-worker",
+    "outcome": "Detector event store, bee detector events, four signal names in both closed sets, --events on supervisor record; commit 3f41d09e2",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/herding/broker.rs",
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "skills/bee-herding/references/supervisor-prompt.md",
+      ".agents/skills/bee-herding/references/supervisor-prompt.md",
+      ".claude/skills/bee-herding/references/supervisor-prompt.md",
+      ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+      ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json",
+      ".opencode/skills/.bee-render.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Worker timed out bee's 1800 s ceiling (timed_out_ceiling) but the Paseo agent finished the cell on its own and wrote result-1.json; the leader capped from that result",
+      "Touched herding/broker.rs and hooks/prompt_context.rs beyond the declared files: every caller of record_into/record_intervention_into passes the new events argument as None — mechanical, judged intact",
+      "registry_payload.json hand-edited in the supervisor.list shape because no generator exists in the tree (decisions 3358743e, d515c1d7); file re-parsed, 212 commands",
+      "sync-ack: hooks/prompt_context.rs changed by one mechanical None argument to record_intervention_into; no doctrine behavior changed; the prompt and concept docs are det-4's cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T00:17:19.467Z",
+    "behavior_change": true,
+    "verification_evidence": "every leg ok as the worker recorded (supervisor 89, detector 12, catalog 19, control_loop 72+1, registry_contracts 12, release-manifest 419 files match); the full crate suite also ran: 4781 passed, 0 failed, 40 suites ok; four must-have truths driven live on a throwaway onboarded repo (report-1.md)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+    "claimed_at": "2026-10-15T23:26:17.917Z",
+    "sync_ack": "hooks/prompt_context.rs changed by one mechanical None argument to record_intervention_into; no doctrine behavior changed; the prompt and concept docs are det-4's cell",
+    "mistakes": [
+      {
+        "wrong": "the worker ran a shared-stack stash for a rustfmt check inside the worktree",
+        "better": "a temp WIP commit or a cargo fmt --check on the diff would not touch the shared stash",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Added verbs/detector.rs with the events.jsonl store, `bee detector events [--unjudged] [--json]`, the four detector signal names in both supervisor closed sets, `supervisor record --events <id,...>` with by-name refusal, the events row suffix on list/pending, the hand-registered detector.events entry, and the prompt record line regenerated across five copies; full suite 4781 passed / 0 failed.",
+      "commit": "3f41d09e2",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/herding/broker.rs",
+        "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "skills/bee-herding/references/supervisor-prompt.md",
+        ".agents/skills/bee-herding/references/supervisor-prompt.md",
+        ".claude/skills/bee-herding/references/supervisor-prompt.md",
+        ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+        ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+        ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+        ".agents/skills/.bee-render.json",
+        ".claude/skills/.bee-render.json",
+        ".claude-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/.bee-render.json",
+        ".opencode/skills/.bee-render.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check — green:unit — every leg ok as the worker recorded (supervisor 89, detector 12, catalog 19, control_loop 72+1, registry_contracts 12, release-manifest 419 files match); the full crate suite also ran: 4781 passed, 0 failed, 40 suites ok; four must-have truths driven live on a throwaway onboarded repo (report-1.md)",
+      "deviations": [
+        "Touched herding/broker.rs and hooks/prompt_context.rs beyond the declared files: every caller of record_into/record_intervention_into passes the new events argument as None — mechanical, judged intact",
+        "registry_payload.json hand-edited in the supervisor.list shape because no generator exists in the tree (decisions 3358743e, d515c1d7); file re-parsed, 212 commands",
+        "Worker timed out bee's 1800 s ceiling (timed_out_ceiling) but the Paseo agent finished the cell on its own and wrote result-1.json; the leader capped from that result"
+      ],
+      "reaction": "confirm"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee supervisor record --kind silence --signal budget-80 --note x is accepted",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+          },
+          {
+            "requirement": "bee supervisor record --events <unknown id> is refused by name and writes nothing",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+          },
+          {
+            "requirement": "bee detector events --unjudged lists only rows no observation, silence or mailbox row names",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "bee detector events with no store prints No detector events. and exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "verbs/mod.rs calls detector::try_native",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "supervisor record validates --events against events.jsonl",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/supervisor.rs"
+          },
+          {
+            "requirement": "the supervisor prompt's record command line names the four signals and --events, five copies regenerated",
+            "artifact": "skills/bee-herding/references/supervisor-prompt.md"
+          },
+          {
+            "requirement": "Event struct, EVENT_SIGNALS, append_event, read_events, events_for_job, the events verb and their tests",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/detector.rs"
+          },
+          {
+            "requirement": "a detector.events entry",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-16T00:17:48.153Z",
+        "recorded_by": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "events.jsonl store with the D2 row shape and closed EVENT_SIGNALS",
+            "status": "PASS",
+            "evidence": "verbs/detector.rs: Event, EVENT_SIGNALS, append_event, read_events; 12 tests",
+            "id": "det-1-check-1"
+          },
+          {
+            "name": "bee detector events --unjudged reads both record stores",
+            "status": "PASS",
+            "evidence": "judged_event_ids unions observations.jsonl and interventions.jsonl; test select_events_names_both_rows_and_unjudged_drops_what_a_row_judged",
+            "id": "det-1-check-2"
+          },
+          {
+            "name": "KNOWN_SIGNALS 11 and INTERVENTION_SIGNALS 12; --events validated against the store",
+            "status": "PASS",
+            "evidence": "supervisor.rs:303,317,3315; 6 new supervisor tests",
+            "id": "det-1-check-3"
+          },
+          {
+            "name": "prompt record line names the four signals; five copies regenerated; manifest refreshed",
+            "status": "PASS",
+            "evidence": "supervisor-prompt.md:121; cmp-equal copies; release-manifest --check 419",
+            "id": "det-1-check-4"
+          },
+          {
+            "name": "proof",
+            "status": "PASS",
+            "evidence": "full suite 4781 passed 0 failed at cap; four truths driven live on a throwaway repo (report-1.md)",
+            "id": "det-1-check-5"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-16T01:34:36.763Z"
+      }
+    ]
+  }
+}
