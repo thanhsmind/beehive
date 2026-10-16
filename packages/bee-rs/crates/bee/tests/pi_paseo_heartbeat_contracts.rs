@@ -1148,3 +1148,61 @@ assert.ok(lines.includes("bee hook worker-guard|agent-worker-env"), `the worker 
     );
 }
 
+#[test]
+fn test_run_detector_tick_argv_and_swallowed_error() {
+    run_js_test(
+        "test_run_detector_tick_argv_and_swallowed_error",
+        r#"
+const { runDetectorTick } = mod;
+
+const calls = [];
+const okExec = (bin, argv, options, cb) => {
+  calls.push({ bin, argv, options });
+  cb(null, JSON.stringify({ fired: [], scanned: 0 }), "");
+  return { stdin: { on() {}, end() {} } };
+};
+const ok = await runDetectorTick("/tmp/bee", "/tmp/root", { A: "1" }, okExec);
+assert.equal(ok, true);
+assert.equal(calls.length, 1);
+assert.equal(calls[0].bin, "/tmp/bee");
+assert.deepEqual(calls[0].argv, ["detector", "tick", "--json"]);
+assert.equal(calls[0].options.cwd, "/tmp/root");
+assert.equal(calls[0].options.timeout, 30000);
+assert.deepEqual(calls[0].options.env, { A: "1" });
+
+const failing = (bin, argv, options, cb) => {
+  cb(new Error("spawn ENOENT"), "", "boom");
+  return { stdin: { on() {}, end() {} } };
+};
+const failed = await runDetectorTick("/tmp/bee", "/tmp/root", {}, failing);
+assert.equal(failed, false);
+"#,
+    );
+}
+
+#[test]
+fn test_heartbeat_branch_runs_the_detector_tick_in_the_broker_tick_finally() {
+    let repo = repo_root();
+    let source = std::fs::read_to_string(repo.join(".pi/extensions/bee-guard/events.ts"))
+        .expect("events.ts reads");
+    let finally_at = source
+        .find("} finally {")
+        .expect("the heartbeat branch keeps its finally block");
+    let tail = &source[finally_at..];
+    let detector_at = tail
+        .find("await runDetectorTick(beeBinary, directory, beltEnv(), cp.execFile)")
+        .expect("the heartbeat finally must run the detector tick");
+    let clear_at = tail
+        .find("setTickRunning(false)")
+        .expect("the heartbeat finally clears the tick-running guard");
+    assert!(
+        detector_at < clear_at,
+        "the detector tick must run before setTickRunning(false)"
+    );
+    for protected in ["quietHeartbeatTurn", "heartbeatText"] {
+        assert!(
+            !tail[..detector_at.min(tail.len())].contains(&format!("{protected} =")),
+            "the detector tick must not change {protected}"
+        );
+    }
+}

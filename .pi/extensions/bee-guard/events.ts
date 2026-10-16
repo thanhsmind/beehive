@@ -10,6 +10,7 @@ import {
   isHeartbeatPrompt,
   parseTick,
   readPaseoSettings,
+  runDetectorTick,
   setTickRunning,
   startBrokerTimer,
   stopBrokerTimer,
@@ -402,6 +403,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
         quietHeartbeatTurn = true
         return { action: "transform", text: heartbeatText(null) }
       } finally {
+        await runDetectorTick(beeBinary, directory, beltEnv(), cp.execFile)
         setTickRunning(false)
       }
     }

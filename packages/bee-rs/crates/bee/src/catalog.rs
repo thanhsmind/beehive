@@ -816,7 +816,7 @@ mod tests {
         // the same reflection — what to have done instead — and a layer is
         // not an instead. `--severity` and `--type` (backlog.add) rank and
         // shape a row; neither says where a fix belongs.
-        const PINNED_FLAG_COUNT: usize = 225;
+        const PINNED_FLAG_COUNT: usize = 227;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
@@ -941,6 +941,38 @@ mod tests {
         assert!(entry.unavailable.is_none());
         assert_eq!(missing_required(entry, &[]), vec!["text".to_string()]);
         assert!(missing_required(entry, &["--text".to_string(), "hello".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn detector_tick_resolves_and_declares_only_the_json_flag() {
+        let (entry, rest) =
+            resolve(&["detector", "tick"]).expect("detector.tick is in the registry");
+        assert_eq!(entry.invoke, "bee detector tick");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+        assert!(entry.properties.contains_key("json"));
+        assert_eq!(entry.properties.len(), 1);
+    }
+
+    #[test]
+    fn detector_events_resolves_and_declares_no_required_flag() {
+        let (entry, rest) =
+            resolve(&["detector", "events"]).expect("detector.events is in the registry");
+        assert_eq!(entry.invoke, "bee detector events");
+        assert!(rest.is_empty());
+        assert!(entry.unavailable.is_none());
+        assert!(missing_required(entry, &[]).is_empty());
+        assert!(entry.properties.contains_key("unjudged"));
+        assert!(entry.properties.contains_key("json"));
+    }
+
+    #[test]
+    fn supervisor_record_declares_the_events_flag() {
+        let (entry, rest) =
+            resolve(&["supervisor", "record"]).expect("supervisor.record is in the registry");
+        assert!(rest.is_empty());
+        assert!(entry.properties.contains_key("events"));
     }
 
     #[test]

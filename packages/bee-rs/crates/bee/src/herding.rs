@@ -1050,6 +1050,28 @@ fn insert_usage(job_map: &mut Map<String, Value>, usage: Option<(u64, u64)>, job
     disp
 }
 
+fn insert_events(job_map: &mut Map<String, Value>, bee_dir: &Path, job_id: &str) -> String {
+    let control = bee_dir.parent().map(crate::verbs::supervisor::control_root_path).unwrap_or_else(|| bee_dir.to_path_buf());
+    let events = crate::verbs::detector::events_for_job(&control, job_id);
+    let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    for event in &events {
+        *counts.entry(event.signal.clone()).or_insert(0) += 1;
+    }
+    let judged = crate::verbs::detector::judged_event_ids(&control);
+    let unjudged = events.iter().filter(|e| !judged.contains(&e.id)).count();
+    let mut obj = Map::new();
+    for (signal, count) in &counts {
+        obj.insert(signal.clone(), Value::Number((*count).into()));
+    }
+    job_map.insert("events".into(), Value::Object(obj));
+    job_map.insert("unjudged".into(), Value::Number(unjudged.into()));
+    if counts.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = counts.iter().map(|(signal, count)| format!("{signal}:{count}")).collect();
+    format!(" events={} unjudged={unjudged}", parts.join(","))
+}
+
 fn parked_reason(job_id: &str, mode: Option<&str>, permissions: &[(String, String)]) -> String {
     let tools: Vec<&str> = permissions
         .iter()
@@ -1258,6 +1280,7 @@ fn collect_jobs(
             let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
                 + &insert_read_only(&mut job_map, &job_obj, true)
                 + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+                + &insert_events(&mut job_map, bee_dir, &job_id)
                 + &notify::insert_messages(&mut job_map, &job_dir);
 
             jobs_json.push(Value::Object(job_map));
@@ -1347,6 +1370,7 @@ fn collect_jobs(
         let usage_disp = insert_stall_reason(&mut job_map, bee_dir, &job_id, &status)
             + &insert_read_only(&mut job_map, &job_obj, false)
             + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)
+            + &insert_events(&mut job_map, bee_dir, &job_id)
             + &notify::insert_messages(&mut job_map, &job_dir);
 
         jobs_json.push(Value::Object(job_map));
@@ -2123,6 +2147,74 @@ mod tests {
             lines[0],
             "job-normal: pane_id=w4:p1 round=1 mark=null mark_reason=null status=working"
         );
+    }
+
+    #[test]
+    fn status_carries_detector_event_counts_by_signal_and_the_unjudged_number() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-det");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        std::fs::write(
+            job_dir.join("job.json"),
+            r#"{"job_id":"job-det","pane_id":"w4:p1","round":1}"#,
+        )
+        .unwrap();
+        let store = bee_dir.join("supervisor");
+        std::fs::create_dir_all(&store).unwrap();
+        let row = |id: &str, signal: &str| {
+            format!(
+                r#"{{"id":"{id}","ts":"2026-10-16T00:00:00Z","signal":"{signal}","job_id":"job-det","cell_id":null,"target_session":null,"point_key":"{signal}-job-det","excerpt":"one fact.","source":"diff"}}"#
+            )
+        };
+        std::fs::write(
+            store.join("events.jsonl"),
+            format!("{}\n{}\n", row("e1", "budget-80"), row("e2", "budget-80")),
+        )
+        .unwrap();
+
+        let live: HashSet<String> = ["w4:p1".to_string()].into_iter().collect();
+        let (_, val, lines) =
+            status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+        let job = &val["jobs"][0];
+        assert_eq!(job["events"], serde_json::json!({"budget-80": 2}));
+        assert_eq!(job["unjudged"], serde_json::json!(2));
+        let line = lines.iter().find(|l| l.starts_with("job-det:")).unwrap().clone();
+        assert!(line.contains(" events=budget-80:2 unjudged=2"), "{line}");
+    }
+
+    #[test]
+    fn status_carries_an_empty_events_object_and_no_text_suffix_when_the_job_has_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+        let bee_dir = root.join(".bee");
+        let job_dir = bee_dir.join("mailbox").join("job-quiet");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        std::fs::write(
+            job_dir.join("job.json"),
+            r#"{"job_id":"job-quiet","pane_id":"w4:p1","round":1}"#,
+        )
+        .unwrap();
+        let other = bee_dir.join("supervisor");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(
+            other.join("events.jsonl"),
+            r#"{"id":"x1","ts":"2026-10-16T00:00:00Z","signal":"budget-80","job_id":"job-other","cell_id":null,"target_session":null,"point_key":"budget-80-job-other","excerpt":"one fact.","source":"diff"}"#,
+        )
+        .unwrap();
+
+        let live: HashSet<String> = ["w4:p1".to_string()].into_iter().collect();
+        let (_, val, lines) =
+            status_with_panes_and_transport(&["--main-root", root_str, "--json"], None, Some(Some(live)));
+        let job = &val["jobs"][0];
+        assert_eq!(job["events"], serde_json::json!({}));
+        assert_eq!(job["unjudged"], serde_json::json!(0));
+        let line = lines.iter().find(|l| l.starts_with("job-quiet:")).unwrap().clone();
+        assert!(!line.contains("events="), "{line}");
+        assert!(!line.contains("unjudged="), "{line}");
     }
 
     #[test]

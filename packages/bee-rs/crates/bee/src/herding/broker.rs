@@ -580,6 +580,7 @@ pub(crate) fn tick_with(
                             Some(&point_key),
                             Some(&question_msg),
                             None,
+                            None,
                         );
                         let _ = crate::fsutil::write_json_atomic(&notice_marker, &json!({"sent_at": chrono::Utc::now().to_rfc3339()}));
                         notices_sent += 1;
@@ -629,6 +630,7 @@ pub(crate) fn tick_with(
                                     Some(leader_session),
                                     Some(&point_key),
                                     Some(&msg),
+                                    None,
                                     None,
                                 );
                                 if rec.is_ok() {
@@ -793,6 +795,7 @@ pub(crate) fn tick_with(
                 Some(&point_key),
                 Some(&clean_q),
                 None,
+                None,
             );
         } else {
             let adv_res = advisor_runner.run_advisor(main_root, &runtime, &question.text, &question.kind);
@@ -830,6 +833,7 @@ pub(crate) fn tick_with(
                         Some(&leader_session),
                         Some(&point_key),
                         Some(&clean_q),
+                        None,
                         None,
                     );
                 }
@@ -1526,6 +1530,7 @@ mod tests {
             Some("q-job-consent-1-1"),
             Some("Which option?"),
             None,
+            None,
         ).unwrap();
 
         let store_path = main_root.join(".bee").join("supervisor").join("interventions.jsonl");
@@ -1570,6 +1575,7 @@ mod tests {
             Some("sess-leader"),
             Some("q-job-nolearning-1-1"),
             Some("No preference?"),
+            None,
             None,
         ).unwrap();
 

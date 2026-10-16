@@ -2955,6 +2955,7 @@ mod tests {
             Some(point),
             Some(question),
             None,
+            None,
         )
         .expect("the fixture row must be accepted")
         .id

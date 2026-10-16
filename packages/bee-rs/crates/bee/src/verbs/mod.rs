@@ -21,6 +21,7 @@ pub mod capture;
 pub mod cells;
 pub mod decisions;
 pub mod deferred_queue;
+pub mod detector;
 pub mod discovery;
 pub mod drivers;
 pub mod feedback;
@@ -134,6 +135,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = supervisor::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = detector::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = work::try_native(args, t0) {
