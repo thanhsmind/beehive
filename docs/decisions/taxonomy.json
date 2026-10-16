@@ -710,6 +710,8 @@
     "contract:herding-stall",
     "contract:dissent-once",
     "contract:herding-result-envelope",
-    "contract:prune-precious-queue"
+    "contract:prune-precious-queue",
+    "slp-detector",
+    "contract:detector-events"
   ]
 }
