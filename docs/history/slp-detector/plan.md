@@ -67,7 +67,7 @@ Labels: `read` (file opened at that line), `ran` (command run, output held). Evi
 | 19 | A round's result file is `result-<round>.json` in the job mailbox, the live-job test | read | packages/bee-rs/crates/bee/src/herding/mailbox.rs:125 | format!("result-{round}.json") |
 | 20 | The Pi heartbeat handler already runs the broker tick where the detector tick goes beside it | read | .pi/extensions/bee-guard/events.ts:384 | ["herding", "broker", "tick", "--json"], |
 | 21 | The heartbeat prompt detector is an exported function with a node-run contract test | read | .pi/extensions/bee-guard/paseo-heartbeat.ts:99 | export function isHeartbeatPrompt(text: unknown): boolean { |
-| 22 | The prompt says there is no eighth surface and names the Detector as a later feature — the wording to change | read | skills/bee-herding/references/supervisor-prompt.md:61 | That is the whole list. There is no eighth surface: if a fact is not visible |
+| 22 | The prompt says there is no eighth surface and names the Detector as a separate feature — the wording to change | read | skills/bee-herding/references/supervisor-prompt.md:61 | That is the whole list. There is no eighth surface: if a fact is not visible |
 | 23 | Status already composes per-job display fields in one place where event counts join | read | packages/bee-rs/crates/bee/src/herding.rs:1260 | + &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj) |
 | 24 | A cell record carries a `files` list the boundary rule compares against | read | packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:534 | match cell.get("files") { |
 | 25 | The team roster hash for the role plan | ran | .bee/bin/bee team show --runtime claude --json (canonical sorted {description,role} rows, sha256) | 30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112 |
@@ -164,7 +164,7 @@ det-4 in parallel (disjoint files); then det-3 (needs the tick from det-2).
 
 | Phase | What Changes | Why Now | Demo | Unlocks |
 |---|---|---|---|---|
-| 1 store and names | `events.jsonl`, `bee detector events`, four names in both sets, `--events` on record, the prompt knows the words | Every later piece reads this contract | `bee supervisor record --signal budget-80 --kind silence --note x` is accepted; `bee detector events` prints an empty list | det-2, det-4 |
+| 1 store and names | `events.jsonl`, `bee detector events`, four names in both sets, `--events` on record, the prompt knows the words | Every following piece reads this contract | `bee supervisor record --signal budget-80 --kind silence --note x` is accepted; `bee detector events` prints an empty list | det-2, det-4 |
 | 2 rules | `bee detector tick` fires the four rules once per point | The store exists to receive them | A fixture job past 80% of its ceiling makes one `budget-80` row; a second tick adds none | det-3 |
 | 3 triggers, status, prompt | supervisor loop pre-step, heartbeat handler, status counts, prompt paragraphs and area docs | The tick exists to be run | `bee herding status` shows `events=budget-80:1`; the supervisor prompt names ten signals | close |
 
