@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"piggery-eval\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"piggery-eval\" (lane).",
+  "next_action": "Merged into main at e19ab51; capture what settled, then bee close --feature piggery-eval.",
   "created_at": "2026-10-16T09:18:24.738Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "piggery-eval merged gate: approve to land the spec drop, commit, and merge",
-    "asked_at": "2026-10-16T09:26:34.979Z",
-    "session": "50780349-fc8f-453b-a412-de10c286c01b"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "research",
     "lane": "small",
@@ -28,12 +23,5 @@
     "rationale": "evidence-only xia of piggery; docs only, no product code",
     "updated_at": "2026-10-16T09:18:24.793Z",
     "feature": "piggery-eval"
-  },
-  "merge_ready": {
-    "since": "2026-10-16T10:09:15.572Z",
-    "branch": "wt/piggery-eval",
-    "worktree_id": "beehive--wt--piggery-eval",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
