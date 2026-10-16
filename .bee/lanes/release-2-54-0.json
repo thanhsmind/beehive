@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-54-0",
   "mode": "tiny",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-54-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"release-2-54-0\" (lane).",
+  "next_action": "bee close finished \"release-2-54-0\" — feature is closed.",
   "created_at": "2026-10-16T03:53:56.176Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Cây sạch, permit mới gắn commit 31748b1a7. Chạy script.",
-    "asked_at": "2026-10-16T04:09:17.923Z",
-    "session": "7504dd00-ad2f-49c6-9913-687bf1b353cc"
-  },
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
