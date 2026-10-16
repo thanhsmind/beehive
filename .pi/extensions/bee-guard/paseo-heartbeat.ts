@@ -326,6 +326,36 @@ export async function deleteHeartbeat(
   } catch {}
 }
 
+export async function runDetectorTick(
+  beeBinary: string,
+  directory: string,
+  env: Record<string, string>,
+  execFileFn: typeof cp.execFile,
+): Promise<boolean> {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = execFileFn(
+        beeBinary,
+        ["detector", "tick", "--json"],
+        { cwd: directory, timeout: 30000, encoding: "utf8", env },
+        (error: any) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve()
+          }
+        },
+      )
+      child.stdin?.on("error", () => {})
+      child.stdin?.end()
+    })
+    return true
+  } catch (err: any) {
+    console.error(`bee detector tick (heartbeat): ${err?.message ?? err}`)
+    return false
+  }
+}
+
 export function parseTick(stdout: unknown): TickResult | null {
   if (typeof stdout !== "string") {
     return null

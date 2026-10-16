@@ -329,6 +329,7 @@ Bash(.bee/bin/bee herding status:*),\
 Bash(.bee/bin/bee herding occupancy:*),\
 Bash(.bee/bin/bee herding pane list:*),\
 Bash(.bee/bin/bee herding pane read:*),\
+Bash(.bee/bin/bee detector events:*),\
 Bash(.bee/bin/bee supervisor list:*),\
 Bash(.bee/bin/bee supervisor record:*),\
 Read";
@@ -886,6 +887,12 @@ impl ArgvProvider for RealArgvProvider {
     }
 
     fn spec_for(&self, _iteration: u64) -> Result<(Argv, SpawnSpec), String> {
+        if self.role == Role::Supervisor {
+            let fired = crate::verbs::detector::tick_quiet(&self.main_root);
+            if fired > 0 {
+                eprintln!("supervisor: detector fired {fired} event(s) this tick");
+            }
+        }
         resolve_iteration(&self.main_root, self.role, self.turn_ceiling)
     }
 }
@@ -1219,6 +1226,47 @@ mod tests {
 
         let argv = resolve_iteration_argv(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
         assert_eq!(argv.last().unwrap(), SUPERVISOR_ALLOWED_TOOLS);
+    }
+
+    #[test]
+    fn supervisor_allowlist_carries_the_detector_events_read() {
+        for kind in [TransportKind::Herdr, TransportKind::Tmux] {
+            let tools = allowed_tools_for(Role::Supervisor, kind);
+            assert!(
+                tools.contains("Bash(.bee/bin/bee detector events:*)"),
+                "{kind:?}: the detector events read is missing: {tools}"
+            );
+            let detector = tools.find("Bash(.bee/bin/bee detector events:*)").unwrap();
+            let supervisor = tools.find("Bash(.bee/bin/bee supervisor list:*)").unwrap();
+            assert!(detector < supervisor, "{kind:?}: detector events must sit before supervisor list");
+        }
+    }
+
+    #[test]
+    fn supervisor_spec_for_ticks_the_detector_and_leaves_no_events_on_an_empty_mailbox() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(bee_dir.join("mailbox")).unwrap();
+        let provider =
+            RealArgvProvider { main_root: tmp.path().to_path_buf(), role: Role::Supervisor, turn_ceiling: 12 };
+        let (argv, _spec) = provider.spec_for(0).expect("a supervisor spec resolves");
+        assert_eq!(argv.last().unwrap(), SUPERVISOR_ALLOWED_TOOLS);
+        assert!(
+            !bee_dir.join("supervisor").join("events.jsonl").exists(),
+            "an empty mailbox must leave no events file"
+        );
+    }
+
+    #[test]
+    fn resolve_iteration_alone_never_ticks_the_detector() {
+        let tmp = supervisor_root();
+        let bee_dir = tmp.path().join(".bee");
+        std::fs::create_dir_all(bee_dir.join("mailbox")).unwrap();
+        resolve_iteration(tmp.path(), Role::Supervisor, 12).expect("argv resolves");
+        assert!(
+            !bee_dir.join("supervisor").exists(),
+            "resolve_iteration alone must write nothing under .bee/supervisor"
+        );
     }
 
     #[test]
