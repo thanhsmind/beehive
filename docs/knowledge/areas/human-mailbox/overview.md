@@ -217,6 +217,21 @@ scheduler being introduced to watch for this.
     about what a run answered. The cap itself adds no refusal of its own.
 <!-- /bee:not-a-deferral -->
 
+## A mistake seen twice
+
+A reflection key — `(fix_at, what)`, as `bee feedback rank` folds it — seen
+twice is a fix-first candidate, taken at the highest fix-at layer that works:
+`architecture` before `check` before `doctrine` (pstack-0-15-port D4,
+`ef0f5a29`). The second sighting is seen on two surfaces: the `bee feedback
+rank` count at 2 or the `lesson` decision it mints, and the close door's
+`Filed for "<feature>": N fix-at row(s)` line. What follows is one fix-first
+cell whose proof line carries the new guard, lint, or test shown FAILING on
+the past mistake, then green. When the past mistake cannot be reproduced, the
+layer drops to `doctrine` with the reason recorded. `FIX_AT_VALUES` stays
+`architecture|check|doctrine|none`; the sub-kind of a `check` (type, lint,
+test) rides in `--better`. Why: a rule nothing enforces is the repeat waiting
+to happen, and a guard never seen red proves only that it compiles.
+
 ## Edge Cases Settled
 
 - **A run with no entries** produces no invalid letter.

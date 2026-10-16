@@ -117,6 +117,12 @@ rule never disappears — only its elaboration moves.
   reads any line opening with a dash as a new rule row, so a sibling bullet would report one rule
   as two. `tests/rule_index_parity.rs` pins the three copies — the markers in `AGENTS.md`,
   the markers in `packages/bee/AGENTS.block.md`, and the rows here — plus the spoken line's presence.
+  Every spoken line also carries its reason, placed last after an em dash, and every numbered step in
+  the nine class playbooks (`skills/bee-planning/playbooks/<class>.md`) states why it holds or points
+  at the home that does (pstack-0-15-port D1, cell p15-2, 2026-10-16): a rule with its reason lets an
+  agent derive the call in a case the text never names, and the reason lives here and in the
+  playbooks, never in the always-loaded contract. The bugfix playbook's cause-not-known paragraph ends
+  with the cheap always-on-signal sentence (pstack-0-15-port D5, same cell).
 
 ## Edge Cases Settled
 
@@ -183,7 +189,7 @@ rule never disappears — only its elaboration moves.
 Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_at` records are tracked here:
 
 - `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
-  spoken: run the proof your change type needs, then record it on the cap as command, result, and why that scope
+  spoken: run the proof your change type needs, then record it on the cap as command, result, and why that scope — bee close runs no tests
   - applied_at:
     - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md`
@@ -208,7 +214,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
 - `agents-capture-line-at-close` (AGENTS.md § Capture what settles):
-  spoken: write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled'
+  spoken: write it down the moment it settles, and close every task with a capture line or a plain 'nothing settled' — lanes scale ceremony, never memory
   - applied_at:
     - `skills/bee-capturing/SKILL.md`
     - `skills/bee-hive/SKILL.md`
@@ -236,7 +242,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md`
     - `packages/bee/prompts/worker-cell.md`
 - `agents-bee-defect-report` (AGENTS.md § Care for the session):
-  spoken: when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here
+  spoken: when bee itself breaks, file it upstream with bee report issue, tell the human the link, and never patch bee here — a local patch hides the defect
   - applied_at:
     - `docs/knowledge/areas/feedback-digest/bee-report-issues.md`
     - `skills/bee-evolving/SKILL.md`
@@ -258,7 +264,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `docs/knowledge/areas/doctrine-layer/the-communication-contract.md`
     - `skills/bee-hive/references/routing-and-contracts.md`
 - `agents-worktree-first` (AGENTS.md § Bee workflow):
-  spoken: start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix
+  spoken: start code-touching feature work in its own worktree; main takes integration, release and a solo tiny fix — sessions never write over each other
   - applied_at:
     - `docs/knowledge/areas/workflow-state/worktree-isolation.md`
     - `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`
@@ -304,7 +310,7 @@ host repo at all — which is why the parity fence also reads the rendered
 plugin trees, not just `skills/`.
 
 - `bee-principle-red-before-green` (expertise/tests.md § Red before green):
-  spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it
+  spoken: reproduce the bug as a failing test and watch it fail for the reported reason before you fix it — a never-red test proves nothing
   classes: feature, bugfix, refactor
   - applied_at:
     - `skills/bee-principle-red-before-green/SKILL.md`
@@ -352,7 +358,7 @@ plugin trees, not just `skills/`.
     - `skills/bee-principle-test-behavior-not-structure/SKILL.md`
 
 - `bee-principle-verify-before-reporting` (expertise/review.md § Verify before reporting):
-  spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently
+  spoken: reproduce or trace a suspected defect before you file it, and record the suspicions that failed verification instead of dropping them silently — a wrong finding buries real ones
   classes: feature, bugfix, refactor, docs, release, perf
   - applied_at:
     - `skills/bee-principle-verify-before-reporting/SKILL.md`
@@ -364,7 +370,7 @@ plugin trees, not just `skills/`.
     - `skills/bee-principle-the-rebuild-test/SKILL.md`
 
 - `bee-principle-one-fact-one-home` (expertise/knowledge.md § One fact, one home):
-  spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it
+  spoken: read what the base already holds before writing, then extend the existing entry instead of filing a near-duplicate beside it — each copy must be kept true
   classes: docs, feature, refactor
   - applied_at:
     - `skills/bee-principle-one-fact-one-home/SKILL.md`

@@ -55,6 +55,7 @@ pub(crate) struct Staged {
     /// refusal — this door checks recorded proof and runs nothing
     /// (verbs/cells/proof.rs), and D4 adds no new door.
     pub(crate) proof_stale: Vec<String>,
+    pub(crate) proof_carried: Vec<String>,
     /// uat-stop-placement D4.1: the placement `uat_stop_config` already
     /// resolved for the merge precondition above, carried across the
     /// released lock so P3's lane write (D4.2) and cleanup suppression
@@ -113,6 +114,111 @@ fn stale_proof_cells(
         })
         .map(|(id, _)| id.clone())
         .collect()
+}
+
+fn commit_patch_id(main_root: &Path, commit: &str) -> Option<String> {
+    let shown = run_git(main_root, &["show", commit]);
+    if shown.status != Some(0) {
+        return None;
+    }
+    let diff = shown.stdout.unwrap_or_default();
+    if diff.is_empty() {
+        return None;
+    }
+    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], diff.as_bytes());
+    if filtered.status != Some(0) {
+        return None;
+    }
+    let out = filtered.stdout.unwrap_or_default();
+    let id = out.split_whitespace().next().unwrap_or("").to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+type PatchIdPair = (String, String);
+
+fn branch_patch_ids(main_root: &Path, base: &str, branch: &str) -> Option<Vec<PatchIdPair>> {
+    let range = format!("{base}..{branch}");
+    let logged = run_git(main_root, &["log", "-p", "--format=%H", &range]);
+    if logged.status != Some(0) {
+        return None;
+    }
+    let stream = logged.stdout.unwrap_or_default();
+    if stream.trim().is_empty() {
+        return None;
+    }
+    let filtered = run_git_stdin(main_root, &["patch-id", "--stable"], stream.as_bytes());
+    if filtered.status != Some(0) {
+        return None;
+    }
+    let out = filtered.stdout.unwrap_or_default();
+    let pairs: Vec<PatchIdPair> = out
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let id = fields.next()?;
+            let commit = fields.next()?;
+            if id.is_empty() || commit.is_empty() {
+                None
+            } else {
+                Some((id.to_string(), commit.to_string()))
+            }
+        })
+        .collect();
+    if pairs.is_empty() {
+        None
+    } else {
+        Some(pairs)
+    }
+}
+
+fn split_carried_proof(
+    main_root: &Path,
+    branch: &str,
+    proof: &crate::verbs::cells::ProofCheck,
+    first_pass: Vec<String>,
+) -> (Vec<String>, Vec<String>) {
+    if first_pass.is_empty() {
+        return (first_pass, Vec::new());
+    }
+    let base = run_git(main_root, &["merge-base", "HEAD", branch]);
+    if base.status != Some(0) {
+        return (first_pass, Vec::new());
+    }
+    let base = js_trim(&base.stdout.unwrap_or_default()).to_string();
+    if base.is_empty() {
+        return (first_pass, Vec::new());
+    }
+    let Some(branch_ids) = branch_patch_ids(main_root, &base, branch) else {
+        return (first_pass, Vec::new());
+    };
+    let mut stale = Vec::new();
+    let mut carried = Vec::new();
+    for id in first_pass {
+        let commit = proof
+            .commits
+            .iter()
+            .find(|(cell, _)| cell == &id)
+            .map(|(_, commit)| commit.clone());
+        let matched = commit
+            .as_deref()
+            .and_then(|commit| commit_patch_id(main_root, commit).map(|pid| (pid, commit)))
+            .map(|(pid, commit)| {
+                branch_ids
+                    .iter()
+                    .any(|(branch_pid, branch_commit)| branch_pid == &pid && branch_commit != commit)
+            })
+            .unwrap_or(false);
+        if matched {
+            carried.push(id);
+        } else {
+            stale.push(id);
+        }
+    }
+    (stale, carried)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -548,10 +654,14 @@ pub(crate) fn merge_stage(
     // merge base needs it; it cannot sit after the merge either, because the
     // merge is what destroys the base. Nothing here can refuse — the rows
     // are carried to P3 and reported beside the merge that landed.
-    let proof_stale = proof
+    let first_pass = proof
         .as_ref()
         .map(|p| stale_proof_cells(main_root, &branch, p))
         .unwrap_or_default();
+    let (proof_stale, proof_carried) = proof
+        .as_ref()
+        .map(|p| split_carried_proof(main_root, &branch, p, first_pass))
+        .unwrap_or((Vec::new(), Vec::new()));
 
     // worktree-companion-hook: every zero-mutation refusal above (both
     // dirty-tree checks, detached-HEAD, branch-mismatch) has now cleared, so
@@ -676,6 +786,7 @@ pub(crate) fn merge_stage(
         bookkeeping_commit,
         proof,
         proof_stale,
+        proof_carried,
         feature: identity.feature.clone(),
         uat_stop,
     })))
@@ -835,6 +946,7 @@ pub(crate) fn merge_finish(
         bookkeeping_commit,
         proof,
         proof_stale,
+        proof_carried,
         feature,
         uat_stop,
     } = state;
@@ -913,6 +1025,17 @@ pub(crate) fn merge_finish(
                     "{} capped cell(s) recorded their proof before the merge base this branch is landing against ({}) — the tree moved after those proofs were taken, so they were never run against what is merging now. The merge is NOT refused (bee worktree merge checks recorded proof and runs nothing); re-run their proof if the change is one main could have broken.",
                     proof_stale.len(),
                     proof_stale.join(", "),
+                ),
+            }));
+        }
+        if !proof_carried.is_empty() {
+            result.insert("proof_carried".into(), json!({
+                "code": "proof_carried",
+                "cells": proof_carried,
+                "message": format!(
+                    "{} capped cell(s) ({}) were proven at a commit the rebase rewrote; the patch is unchanged, so the recorded proof still describes this code. Nothing to re-run.",
+                    proof_carried.len(),
+                    proof_carried.join(", "),
                 ),
             }));
         }

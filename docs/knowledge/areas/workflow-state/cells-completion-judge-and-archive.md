@@ -334,7 +334,13 @@ swarming goal-check evaluates a completed unit of work. What happens: tiny and
 small lanes run mechanical checks only, unchanged; standard lanes dispatch one
 judge per completed behavior-changing unit; high-risk lanes dispatch the same
 judge with a preference for model independence from the builder, recording the
-outcome honestly either way (B31). A needs-revision verdict whose finding
+outcome honestly either way (B31). After a rebase, a conflict resolution, or a
+minor fix — no new behavior and under 30 changed lines counted from the capped
+commit — the leader has the worker re-run the recorded proof command at the new
+head instead of dispatching a fresh judge; new behavior, a redesign, or a diff
+at or over 30 lines returns to the lane's normal row, and the slice's sampled
+judge still covers the cell (pstack-0-15-port D3, cell p15-3, 2026-10-16; the
+row lives in the judge-tier table, `skills/bee-hive/references/gates-and-delegation.md`). A needs-revision verdict whose finding
 looks automatically fixable means the unit is not yet done — it is
 re-dispatched with the exact failing checks, and the attempt history (B26)
 gains a failed entry carrying the judge's failure signature; a needs-revision

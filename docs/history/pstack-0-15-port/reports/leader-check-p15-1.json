@@ -1,0 +1,12 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "After a clean rebase, bee worktree merge reports proof_carried for the cap, in the JSON and in the printed text, and not proof_stale", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"},
+    {"requirement": "After a plain merge from main (no rebase), bee worktree merge still reports proof_stale", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"},
+    {"requirement": "Neither advisory ever refuses the merge", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"},
+    {"requirement": "The branch-side patch-id stream runs at most once per merge, and only when the first pass flagged a cap", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"},
+    {"requirement": "run_git_stdin helper beside run_git", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"},
+    {"requirement": "a proof-carried: line beside proof-stale: in the printed merge text", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"},
+    {"requirement": "the concept names proof_carried, the patch-id rule, and D2", "artifact": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"}
+  ]
+}

@@ -153,6 +153,19 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
   own `git merge-base` call — `merge.rs`'s base is a local inside a helper whose only caller runs
   ~150 lines after the proof read — and rendered in `handlers.rs`, the one place a merge prints,
   so it is visible in the word output and not only under `--json`.
+- **A cleaner rebase is not stale proof — `proof_carried` (pstack-0-15-port D2, decision
+  `91835aa0`; cell p15-1).** A verdict covers a patch, not a SHA. When main moves and the branch is
+  rebased onto it, every cap commit is rewritten, so the ancestry test above names all of them
+  `proof_stale` — a false positive, because the code each proof describes is byte-identical. On
+  the first pass flagging anything at all, the door computes the patch-ids ONCE for the commits
+  between the merge base and the branch head (`git log -p --format=%H <base>..<branch>` piped
+  through `git patch-id --stable`) and each flagged commit's own patch-id (`git show <commit>`
+  piped through the same filter). A flagged commit whose patch-id appears in the branch-side set
+  moves to `proof_carried` with the message "the patch is unchanged, so the recorded proof still
+  describes this code. Nothing to re-run."; the rest stay `proof_stale`. Both are advisories that
+  never refuse the merge, both ride the JSON result and the printed text (`proof-carried:` beside
+  `proof-stale:`), and both fail open — any git call that does not exit 0, an empty patch-id, or
+  an empty range leaves the first-pass answer untouched and carries nothing.
 - **Keeping the worktree is the default outcome now; teardown is the opt-in
   (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
   commits something, the worktree, its branch, and its registration all stay in place, and the

@@ -4,11 +4,11 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "1857dbc4f4d40e1aca31d51fed7d2e490e5686ddd1310f9a65177eed2eaccad2"
+      "sha256": "eb04f7ecb644434edfaed66cdc58489219e76db4674cc72e8fcb2b58f475a602"
     },
     {
       "name": "bee-evolving",
-      "sha256": "9b71db46c0f1244a4d1946c404f99a2c0da6ea608525fc7497bbd8fcf1c3ebd3"
+      "sha256": "231162e2eb8d3de61bba8b07594b17bab24420643a259273627d913287fb5448"
     },
     {
       "name": "bee-grooming",
@@ -24,7 +24,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "fbc92196409d2692203b5a4af60194600e0442872c94de64b580a4e9631159af"
+      "sha256": "d528c6c2ceb82fb977daac06a197a134a7c84a350a643d28fb8a64185dc62c3f"
     },
     {
       "name": "bee-how",
@@ -32,7 +32,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "96df98c139b087601e7dd49dc8e694bb3bee62c0b6b5fdc9a2a10923acd05aab"
+      "sha256": "c1ff0f4df61f5ec488d1a6658073827317247bbc78a727b2decd1b055b850b05"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -100,7 +100,7 @@
     },
     {
       "name": "bee-shaping",
-      "sha256": "0b86596723866bb221f2f3a30657ce0d36efd4dd5056d5e23611532c71490f08"
+      "sha256": "c3a830ec4d55a421d7a701f810d9e87350169da6189b31c636de49fea4e124eb"
     },
     {
       "name": "bee-swarming",

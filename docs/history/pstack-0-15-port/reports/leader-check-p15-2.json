@@ -1,0 +1,10 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "Every spoken line in the rule index carries a reason after an em dash, placed last", "artifact": "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"},
+    {"requirement": "Every numbered playbook step states why it holds or points at the home that does", "artifact": "skills/bee-planning/playbooks/feature.md"},
+    {"requirement": "The bugfix playbook names the cheap always-on signal", "artifact": "skills/bee-planning/playbooks/bugfix.md"},
+    {"requirement": "rendered copies under .claude/skills and the plugin trees match skills/ after regen", "artifact": ".claude/skills/bee-planning/playbooks/feature.md"},
+    {"requirement": "No edit to packages/bee/AGENTS.block.md or AGENTS.md", "artifact": "docs/history/codex-harness-hardening/release-manifest.json"}
+  ]
+}

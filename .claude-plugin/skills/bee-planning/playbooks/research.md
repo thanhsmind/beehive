@@ -1,12 +1,15 @@
 # research
 
-1. Read-only: the outcome is an account, never a diff.
-2. Trace the runtime path, not just the file list.
-3. Name every source searched that came up EMPTY.
+1. Read-only: the outcome is an account, never a diff — an edit changes the
+   thing you report on.
+2. Trace the runtime path, not just the file list — the list shows what
+   exists, not what runs.
+3. Name every source searched that came up EMPTY, so that nobody searches it
+   again or reads its silence as unchecked.
 4. End with anchors a reader can open — `path:line`, or the command that ran.
-5. A question that chooses between alternatives ends in a recommendation and
-   a tradeoffs table. An answer that leads to a change re-routes to `bugfix`
-   or `feature`.
+5. A question that chooses between alternatives ends in a recommendation — the
+   reader came for a pick — and a tradeoffs table. An answer that leads to a
+   change re-routes to `bugfix` or `feature`.
 
 Both flows have ONE home: `bee-researching/references/trace-and-provenance.md`
 — § "Trace" for step 2, § "Provenance sweep" for step 3.

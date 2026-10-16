@@ -5,6 +5,13 @@ shows the moves; this file carries the craft and judgment detail.
 
 ## Interview craft
 
+- **Play the goal back first.** When an interview question is about to
+  follow, one line in your own words says what the user is after and
+  whether the ask is missing detail or already full. Choices that are
+  the user's to make stay open; no rewritten request comes back, and the
+  line is never a question. A clear ask that locks from one confirmation
+  gets no playback line. A wrong reading caught here costs one line;
+  caught at the gate, it costs the plan.
 - **One question per turn.** Each answer reframes what is worth asking
   next; a batch buries the reframe. Broad questions lead — they are the
   ones others hinge on.

@@ -1519,6 +1519,12 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 stale.get("message").map(jsjson::js_to_string).unwrap_or_default()
             ));
         }
+        if let Some(carried) = r.get("proof_carried") {
+            lines.push(format!(
+                "  proof-carried: {}",
+                carried.get("message").map(jsjson::js_to_string).unwrap_or_default()
+            ));
+        }
         if let Some(warning) = r.get("warning") {
             lines.push(format!(
                 "  WARNING ({}): {}",

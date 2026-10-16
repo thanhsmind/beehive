@@ -93,6 +93,8 @@ mechanical-edit exemption exists): failing pressure test recorded FIRST, then th
 then re-test GREEN. bee-evolving never implements inline — it conducts the loop, not the edit. A
 fix touching non-skill surfaces still enters the normal bee chain (cells, verification, capping).
 A fix for an `issue#<n>` pick carries `Fixes thanhsmind/beehive#<n>` in its commit body.
+A repeated mistake takes its fix layer and red-first proof from
+`docs/knowledge/areas/human-mailbox/overview.md` ("A mistake seen twice").
 
 **Learning placement:** a promoted learning lands in the knowledge bundle or the target skill's
 `references/` by default; editing the skill's body is allowed only for a load-bearing invariant —
