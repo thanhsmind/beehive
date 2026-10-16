@@ -13,8 +13,13 @@
   "summary": "Feature \"prune-queue-copy\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"prune-queue-copy\" — feature is closed.",
   "created_at": "2026-10-15T13:47:52.594Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Tính năng đã đóng. Bây giờ tôi chạy prune thật, đúng như bản chạy thử.",
+    "asked_at": "2026-10-15T14:15:18.424Z",
+    "session": "7842a05d-f159-4653-a18d-48ea6abf8cf1"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",

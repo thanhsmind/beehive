@@ -1,0 +1,966 @@
+{
+  "schema_version": "1.0",
+  "feature": "slp-detector",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"slp-detector\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-15T14:48:34.144Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Guard trong worktree chặn nhiều lệnh đọc; lệnh `herding run --continue` cũng phải chạy từ main. Tôi rời worktree rồi làm tiếp từ main.",
+    "asked_at": "2026-10-16T00:44:33.429Z",
+    "session": "7504dd00-ad2f-49c6-9913-687bf1b353cc"
+  },
+  "gate_preview": {
+    "feature": "slp-detector",
+    "plan_sha256": "e3c2ef7baf5e474f2a5bb50020a91c55897bb2537195da2a042af4392347e0de",
+    "previewed_at": "2026-10-15T23:22:41.361Z",
+    "cells": [
+      {
+        "id": "det-1",
+        "feature": "slp-detector",
+        "title": "Add the detector event store, the read verb and the four signal names",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D4",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "skills/bee-herding/references/supervisor-prompt.md",
+          ".agents/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/supervisor.rs — `rg -n 'KNOWN_SIGNALS|INTERVENTION_SIGNALS|RECORD_FLAGS|fn record_into|fn from_value|fn supervisor_dir|fn control_root_path|pub fn try_native'` — hits today: 303 `pub(crate) const KNOWN_SIGNALS: [&str; 7] = [`, 313 `pub(crate) const INTERVENTION_SIGNALS: [&str; 8] = [`, 336 `fn record_into(`, 376 `if !KNOWN_SIGNALS.contains(&signal.as_str()) {`, 3238 `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {`",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs — `rg -n 'supervisor::try_native'` — hit today: 136 `if let Some(code) = supervisor::try_native(args, t0) {`",
+          "packages/bee-rs/crates/bee/src/catalog.rs — `rg -n 'resolve\\(&\\[\"herding\", \"notify\"\\]\\)'` — hit today: 957 `let (entry, rest) = resolve(&[\"herding\", \"notify\"]).expect(\"herding.notify is in the registry\");`",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json — the `supervisor.list` and `supervisor.record` entries, the shape to copy",
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'fn the_shipped_prompt_pins_the_record_verbs_own_closed_sets'` — hit today: 1302; this test pins the prompt to KNOWN_SIGNALS",
+          "skills/bee-herding/references/supervisor-prompt.md — `rg -n -- '--signal \\{'` — the record command line whose signal list grows"
+        ],
+        "affects_skills": [
+          "skills/bee-herding/references/supervisor-prompt.md"
+        ],
+        "affects_specs": [],
+        "action": "Per D1, D2 and D4. (1) Add module verbs/detector.rs with `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode>` that answers only when args[0] is `detector`, and hook it in verbs/mod.rs right after the `supervisor::try_native` block in the same shape. (2) The store: `.bee/supervisor/events.jsonl`, resolved against the control root with the same helpers supervisor.rs uses (`supervisor_dir`, `control_root_path`; widen their visibility to pub(crate) if needed). Event row per D2: `id` (uuid v4 string), `ts` (RFC 3339 UTC), `signal`, `job_id`, `cell_id` (string or null), `target_session` (string or null), `point_key` (the same slug rule `--point-key` enforces, 80 chars max), `excerpt` (one sentence, 300 chars max, whitespace collapsed), `source` (the surface read). Expose pub(crate) `EVENT_SIGNALS: [&str; 4]` holding exactly self-correction, boundary-approach, test-on-unstable-contract, budget-80; pub(crate) `append_event(control_root, &Event) -> Result<(), String>` that validates signal, point_key and excerpt before the append and refuses by name otherwise, creating the directory on first write; pub(crate) `read_events(control_root) -> Vec<Event>` oldest first, skipping malformed lines; pub(crate) `events_for_job(control_root, job_id) -> Vec<Event>`. (3) Verb `bee detector events [--unjudged] [--json]`: text form one line per row `- <ts> [<signal>] <job_id> <cell_id or -> <point_key> — <excerpt>`, JSON form `{events: [rows]}`; `--unjudged` keeps only rows whose id no row in observations.jsonl or interventions.jsonl names in its `events` array (D4 refinement e3de051a); a missing or empty store prints `No detector events.` in text form (JSON `{events: []}`) and exits 0. Register `detector.events` (flags unjudged, json) in generated/registry_payload.json in the same shape as `supervisor.list` (the precedent: `herding.notify` and `herding.fork` were added by hand in that shape), and add a catalog.rs resolve test beside the `herding notify` one. Do NOT register or implement `detector tick` here (det-2 owns it). (4) supervisor.rs: add the four names to KNOWN_SIGNALS (11 entries) and INTERVENTION_SIGNALS (12); add optional `--events <id,...>` to RECORD_FLAGS (today `const RECORD_FLAGS: [&str; 7] =`), legal on every record kind, every id must exist in events.jsonl (refused by name otherwise, nothing written), stored on the row as `events: [..]` only when given, on observation rows and on mailbox rows alike; Observation::from_value and the mailbox row reader read an optional `events` array and tolerate its absence; `supervisor list` and `supervisor pending` print ` [events: a,b]` after the note or question when present. (5) In skills/bee-herding/references/supervisor-prompt.md change only the record command line block: extend the `--signal {...}` set with the four names in this order after dead-lead, and add `[--events <id,...>]` after `[--tick <n>]`; then run `.bee/bin/bee dev regen` so the five generated copies and the release manifest update, and commit them in the same commit. Tests (author only what is not pinned): unknown signal still refused naming the set; `--events` happy on a silence row, happy on an intervention row (the row carries the ids and the event leaves `--unjudged`), and refused with an unknown id; from_value with and without `events`; `detector events` empty store prints `No detector events.`, two rows, `--unjudged` after a silence row names one and after an intervention row names the other; catalog resolve for detector events; registry_contracts green; the control_loop prompt-pin test green.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "bee supervisor record --kind silence --signal budget-80 --note x is accepted",
+            "bee supervisor record --events <unknown id> is refused by name and writes nothing",
+            "bee detector events --unjudged lists only rows no observation, silence or mailbox row names",
+            "bee detector events with no store prints No detector events. and exits 0"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+              "substantive": "Event struct, EVENT_SIGNALS, append_event, read_events, events_for_job, the events verb and their tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "a detector.events entry"
+            }
+          ],
+          "key_links": [
+            "verbs/mod.rs calls detector::try_native",
+            "supervisor record validates --events against events.jsonl",
+            "the supervisor prompt's record command line names the four signals and --events, five copies regenerated"
+          ],
+          "prohibitions": [
+            "No change to the Observation row fields that exist today",
+            "No detector tick verb or rule in this cell",
+            "No write to any store other than events.jsonl and observations.jsonl",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-2",
+        "feature": "slp-detector",
+        "title": "Add bee detector tick with the four deterministic rules",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "det-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3",
+          "D5",
+          "32492fc4",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-1's module: Event, EVENT_SIGNALS, append_event, read_events)",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs — `rg -n 'pub\\(crate\\) fn mailbox_dir|pub\\(crate\\) fn job_path|pub\\(crate\\) fn result_path|fn result_filename'` — hits today: 60 `pub(crate) fn mailbox_dir(bee_dir: &Path, job_id: &str) -> PathBuf {`, 66 `pub(crate) fn job_path(bee_dir: &Path, job_id: &str) -> PathBuf {`, 116 `pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {`, 125 `format!(\"result-{round}.json\")`",
+          "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"ceiling_secs\": opts.ceiling_secs|\"created_at\"|\"cell_id\"|\"leader_session\"|\"round\"|fn record_round_usage'` — the job.json fields the rules read",
+          "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'fn worktree_fingerprint|let diff = git'` — hits today: 708 `fn worktree_fingerprint(cwd: &str) -> Option<String> {`, 715 `let diff = git(&[\"diff\", \"HEAD\"])?;` — the git invocation shape to mirror",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs — `rg -n 'pub\\(crate\\) fn resolve_cell_budgets|pub\\(crate\\) fn attempts_since_budget_reset|pub\\(crate\\) fn check_cell_budgets'` — hits today: 722, 740, 777; the claims count rule reuses these",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'fn event_has_contract_tag|fn contract_citation_refusal'` — how a cell's decisions resolve to contract-tagged decisions",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs — `rg -n 'pub\\(crate\\) enum ContractStatus|pub\\(crate\\) fn contract_status_over|pub\\(crate\\) fn contract_status\\('` — hits today: 324, 394, 419",
+          "packages/bee-rs/crates/bee/src/verbs/cells/read.rs — `rg -n 'pub\\(crate\\) fn read_cell'` — hit today: 180 `pub(crate) fn read_cell(root: &Path, id: &str) -> Result<Option<Value>, Delegate> {` — the one reader for a cell record by id; never a second parser",
+          "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs — `rg -n 'pub\\(crate\\) fn declared_covers|pub\\(crate\\) fn frozen_judge_hits'` — hits today: 119 `pub(crate) fn declared_covers(declared: &[Value], file: &str) -> bool {`, 200 `pub(crate) fn frozen_judge_hits(changed: &Value, declared: &Value) -> Vec<(String, &'static str)> {` — the boundary matcher to reuse",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'contract_status_over\\('` — hit today: 1286 `match crate::verbs::decisions::contract_status_over(` — the hoisted-reads pattern for a whole decisions walk",
+          "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"created_at\": chrono::Utc::now\\(\\).to_rfc3339\\(\\),|\"continued_at\"'` — hits today: 2595 (and the two sibling spawn sites near 3194 and 3500) `\"created_at\": chrono::Utc::now().to_rfc3339(),`, 4936 `m.insert(\"continued_at\".into(), Value::String(chrono::Utc::now().to_rfc3339()));`"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1, D3 with its refinement 32492fc4, and D5. (1) run.rs: at each of the three spawn sites that write `\"created_at\": chrono::Utc::now().to_rfc3339(),` also write `base_sha`: the cwd's HEAD commit read through one small helper that runs the version-control CLI with `-C <cwd>` and `rev-parse HEAD` the way worktree_fingerprint in herding.rs runs it, null when the cwd is not a checkout; one helper, three call sites. (2) Add `bee detector tick [--json]` to verbs/detector.rs, register `detector.tick` (flag json) in generated/registry_payload.json in the same shape as `detector.events`, and add a catalog.rs resolve test. The tick resolves the control root, lists every `.bee/mailbox/<job>/job.json`, and treats a job as live when `result-<round>.json` is absent for the job's `round` (default 1). It loads the job's cell record with `crate::verbs::cells::read_cell` when `cell_id` is set; with no cell only the ceiling and token rules apply. The changed set: `diff --name-only <base_sha>` plus `ls-files --others --exclude-standard`, both through the same CLI helper against the job cwd, repo-relative paths, minus every path under `.bee/` or `docs/decisions/`; `base_sha` is job.json `base_sha`, else the value stored in the job's detector state file, else the cwd's HEAD captured now and stored there (the first tick of an old job then sees only untracked paths). Rules, each firing at most one event per (job_id, signal, point_key) — before appending, skip any triple already present in events.jsonl: budget-80 (a) ceiling: now minus `continued_at` when present else `created_at`, at or above 0.8 times `ceiling_secs`, point_key `budget-80-ceiling-<job_id>`; (b) claims: `attempts_since_budget_reset(cell).len() + 1` at or above 0.8 times `resolve_cell_budgets(cell).max_claims`, point_key `budget-80-claims-<job_id>`; (c) tokens: job.json `usage.total_tokens` (the last finished round) at or above 0.8 times config `herding.budget.tokens_per_job` when that key is a positive number, point_key `budget-80-tokens-<job_id>`. test-on-unstable-contract: walk the cell's `decisions` once with the hoisted reads the way handlers_write.rs does around `contract_status_over(`; for each id naming an active decision with a `contract:<name>` tag whose status is Unsettled, when the changed set holds a test path (a `tests/` or `spec/` path segment, or a file name matching `*_test.*`, `*.test.*` or `*_tests.*`), fire with point_key `unstable-contract-<name>-<job_id>`. boundary-approach: when the cell's `files` is non-empty, every changed path for which `declared_covers(files, path)` is false fires with point_key `boundary-approach-<job_id>-<key>` where `<key>` is the first 8 hex chars of sha256(path); the excerpt carries the path. self-correction: read `.bee/supervisor/detector/<job_id>.json` (`{base_sha, changed_paths: [..], at}`); every path present there and absent from the current changed set fires with point_key `self-correction-<job_id>-<key>` (same key rule); then write the current set and base_sha to that file (create the directory on first write). Every event carries `cell_id`, `target_session` = job.json `leader_session`, `source` naming the surface (`job.json`, `cell`, `diff`, `config`), and an `excerpt` of one sentence holding the numbers or the path. A job whose job.json is unreadable, whose cwd is missing, or whose cwd is not a checkout prints one warning line on stderr and is skipped; the tick exits 0 unless the store itself cannot be written. Output: with `--json` `{fired: [events], scanned: n}`; text form one line per fired event in the `detector events` shape and a final line `detector: scanned <n> jobs, fired <m>`. Expose pub(crate) `tick_quiet(control_root: &Path) -> usize` returning the fired count with warnings on stderr, for det-3. Tests on tempdir fixtures (a real checkout per job cwd, job.json and cell records written as plain JSON in the shapes the writers use): every det-2 row of the plan's test matrix, plus the dedupe case (second tick fires none).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "a live job at 80% of ceiling_secs produces exactly one budget-80 row across two ticks",
+            "a job with result-<round>.json present produces no row and is not counted in scanned",
+            "a changed path that declared_covers accepts fires no boundary-approach row; a path under .bee/ never fires",
+            "a path committed mid-round stays in the changed set (diff against base_sha), so no self-correction row fires on a commit",
+            "an untracked new test file counts as a changed path",
+            "the tick never calls a model, paseo, or the network"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+              "substantive": "the tick verb, the four rules, tick_quiet, the per-job state file, and fixture tests for every matrix row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "a detector.tick entry"
+            }
+          ],
+          "key_links": [
+            "the tick reads cells through the existing cell reader and budgets through validate.rs",
+            "the tick reads contract status through decisions/read.rs contract_status",
+            "tick_quiet is pub(crate) for the control loop"
+          ],
+          "prohibitions": [
+            "No write outside .bee/supervisor/events.jsonl and .bee/supervisor/detector/",
+            "No write to estimate_minutes",
+            "No second parser for cells, job.json or decisions",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-3",
+        "feature": "slp-detector",
+        "title": "Run the tick from the supervisor loop and the Pi heartbeat, count events in status",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "det-2"
+        ],
+        "decisions": [
+          "D4",
+          "D5",
+          "D6",
+          "e3de051a",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'const SUPERVISOR_ALLOWED_TOOLS|Bash\\(.bee/bin/bee supervisor list:\\*\\)|SUPERVISOR_FORBIDDEN_TOOL_TOKENS|pub\\(crate\\) fn resolve_iteration|if role == Role::Supervisor \\{'` — hits today: 325 `const SUPERVISOR_ALLOWED_TOOLS: &str = \"Bash(.bee/bin/bee status:*),\\`, 558 `pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<(Argv, SpawnSpec), String> {`, 578 `if role == Role::Supervisor {`",
+          "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'insert_usage\\(&mut job_map|fn insert_usage|fn insert_read_only'` — hits today: 1031 `fn insert_usage(`, 1260 and 1349 `+ &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)` — the per-job composer, two call sites",
+          ".pi/extensions/bee-guard/events.ts — `rg -n '\\[\"herding\", \"broker\", \"tick\", \"--json\"\\]|const tick = parseTick|quietHeartbeatTurn ='` — hit today: 384 `[\"herding\", \"broker\", \"tick\", \"--json\"],` inside the heartbeat branch of the input handler",
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts — `rg -n 'export function isHeartbeatPrompt|export function parseTick|export function heartbeatText'` — hits today: 99, 329, 346 — exported helpers the node contract tests import",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs — `rg -n 'fn run_js_test|fn test_is_heartbeat_prompt'` — the node-run test harness to extend",
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-2: tick_quiet, events_for_job)"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D4 with its refinement e3de051a, D5 and D6. (1) control_loop.rs: in `impl ArgvProvider for RealArgvProvider`, inside `fn spec_for`, before the line `resolve_iteration(&self.main_root, self.role, self.turn_ceiling)`, when `self.role == Role::Supervisor` call `crate::verbs::detector::tick_quiet(&self.main_root)` and, when it returns more than zero, print one stderr line `supervisor: detector fired <n> event(s) this tick`; a tick failure never fails the iteration; resolve_iteration itself does not change (tests call it directly). Add the line `Bash(.bee/bin/bee detector events:*),\\` to SUPERVISOR_ALLOWED_TOOLS directly before the `supervisor list` line, and extend the existing allowlist test to assert it while the forbidden-token test stays green. (2) herding.rs status: add `insert_events(job_map, bee_dir, job_id) -> String` beside insert_usage and call it at both composer call sites; it reads `detector::events_for_job` and the judged ids, writes JSON `events` as an object `{<signal>: <count>}` over all events (an empty object when none) and `unjudged` as a number, and returns the text suffix ` events=<signal>:<n>[,<signal>:<n>] unjudged=<k>` sorted by signal name, or an empty string when there are no events. No existing field moves or disappears. (3) paseo-heartbeat.ts: add `export async function runDetectorTick(beeBinary: string, directory: string, env: Record<string,string>, execFileFn): Promise<boolean>` that runs `[\"detector\", \"tick\", \"--json\"]` with a 30000 ms timeout, resolves true on exit 0 and false otherwise, logging `bee detector tick (heartbeat): <message>` on error, never throwing. events.ts heartbeat branch: inside the `finally` block that follows the broker tick, before `setTickRunning(false)`, `await runDetectorTick(beeBinary, directory, beltEnv(), cp.execFile)`; the result is discarded so quietHeartbeatTurn, heartbeatText and the news rule do not change, and a failed broker tick never skips it. (4) Tests: in control_loop.rs a test that RealArgvProvider::spec_for for Role::Supervisor on a tempdir main root with an empty mailbox still resolves and leaves no events file, and that resolve_iteration alone writes nothing under .bee/supervisor; herding.rs status tests for a job with two events of one signal (JSON object, unjudged count and text suffix) and a job with none (empty object, no suffix); in pi_paseo_heartbeat_contracts.rs a run_js_test that runDetectorTick calls execFile with argv `[\"detector\",\"tick\",\"--json\"]` and resolves false without throwing when execFile reports an error, plus a source-level assertion that events.ts calls runDetectorTick inside the heartbeat branch's finally block. (5) The two .pi/extensions files sit under a root the release manifest hashes: after the edits run `.bee/bin/bee dev regen` and commit the manifest with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "a supervisor iteration runs the detector tick in the real argv provider before its argv resolves; resolve_iteration alone never ticks",
+            "the supervisor allowlist carries detector events and no forbidden token",
+            "bee herding status --json carries events as an object and unjudged as a number per job; the text line carries events=<signal>:<n> unjudged=<k> only when events exist",
+            "a Paseo heartbeat runs detector tick in the broker tick's finally block and its outcome never changes the heartbeat turn text"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+              "substantive": "the supervisor-arm pre-step and the widened allowlist with tests"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+              "substantive": "runDetectorTick exported and tested"
+            }
+          ],
+          "key_links": [
+            "resolve_iteration calls detector::tick_quiet in the supervisor arm",
+            "events.ts calls runDetectorTick in the heartbeat branch",
+            "status composes insert_events at both call sites"
+          ],
+          "prohibitions": [
+            "No new paseo heartbeat or schedule",
+            "No change to quietHeartbeatTurn, heartbeatText or the news rule",
+            "No status field removed or renamed",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-4",
+        "feature": "slp-detector",
+        "title": "Teach the supervisor prompt and the bee-herding concepts the detector",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [
+          "det-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "skills/bee-herding/references/supervisor-prompt.md",
+          ".agents/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/bee-herding/index.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "docs/config-reference.md — `rg -n 'herding.paseo.heartbeat_cron'` — hits today: 389 (table row) and 537 (section) — the shape for the new `herding.budget.tokens_per_job` row",
+          "docs/specs/slp-supervisor-lead-peer/slp-supervisor-lead-peer.md — sections 1 (Detector), 4.7, 4.8 and 5 S4",
+          "skills/bee-herding/references/supervisor-prompt.md — `rg -n 'There is no eighth surface|Judge against exactly six signals|You look for six things|Record the silence, with its reason|supervisor record --kind'` — hits today: 61 `That is the whole list. There is no eighth surface: if a fact is not visible`, 67 `### 2. Judge against exactly six signals`",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md (frontmatter decisions and owns.code, the 'One tick, one record' and 'Four stores, one root' sections)",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md — `rg -n 'The leader heartbeat and broker timer'`",
+          ".claude/skills/bee-technical-writing/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-herding/references/supervisor-prompt.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Per D1, D3, D4, D5 and D6, with bee-technical-writing. (1) supervisor-prompt.md: in step 1 add a seventh command `.bee/bin/bee detector events --unjudged` with one line saying what it lists; rewrite the 'no eighth surface' paragraph so it says the seven commands are the whole list, that the Detector is bee code (not you) which reads the jobs and writes one event per fact it sees, that an event is a fact and never a finding, and that you still do not scan transcripts or poll; rename step 2 to 'Judge against exactly ten signals' and update 'six things' wording; add four paragraphs in the existing style for self-correction, boundary-approach, test-on-unstable-contract and budget-80, each stating what the Detector saw (the D3 rule in plain words), what to read before speaking (the job's pane with `herding pane read`, the cell with `cells list`), that a healthy stream is a silence row, and that an intervention on an event carries the event's point_key as `--point-key`; in step 3 say that an observation or silence row made after reading events names the ids it judged with `--events`, and that an event nobody names stays in `--unjudged` for the next tick; keep the record command line det-1 already updated; keep every existing rule and the `Record the silence, with its reason` sentence. Then run `.bee/bin/bee dev regen` and commit the five copies and the manifest. (2) the-supervisor-observer concept: add a section 'The Detector' (what it is per D1, the rules per D3, the judged mark per D4, the two trigger points per D5), add verbs/detector.rs to owns.code, add the D-ids with their one-line gist to the decisions list, and replace the sentence that says no new poller was built with the current truth; keep the diagram, adding one state for events read. (3) the-paseo-channel concept: in 'The leader heartbeat and broker timer' add one sentence that the heartbeat also runs `bee detector tick --json` after the broker tick and that its outcome never changes the turn. (4) docs/config-reference.md: add a table row and a section for `herding.budget.tokens_per_job` in the shape of `herding.paseo.heartbeat_cron` (default: unset, meaning the token rule is off; a positive whole number of tokens per herded job; read by `bee detector tick`). (5) Run `.bee/bin/bee knowledge index` so index.md regenerates. Also say in step 2 of the prompt that an event names a job and that a job in a shared worktree can carry a sibling's path, so the pane read decides. Proof: the control_loop prompt-pin test green, `.bee/bin/bee knowledge index --check` green, `.bee/bin/bee dev release-manifest --check` green.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the supervisor prompt lists seven read commands and ten signals",
+            "the prompt tells a tick to name judged event ids with --events on its observation or silence row",
+            "the five generated copies equal the source and the manifest check is green",
+            "the bee-herding concept names verbs/detector.rs in owns.code and the slp-detector decisions"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-herding/references/supervisor-prompt.md",
+              "substantive": "seventh command, ten-signal section with four new paragraphs, the judged-events rule"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+              "substantive": "a 'The Detector' section with pointers"
+            }
+          ],
+          "key_links": [
+            "the prompt's seventh command is the verb det-1 built",
+            "the concept's owns.code names verbs/detector.rs"
+          ],
+          "prohibitions": [
+            "No change to the record command line beyond what det-1 wrote",
+            "No new signal name outside the four",
+            "No hand edit of the five generated copies (regen only)"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "det-1 to det-3 change Rust verbs, the control loop, status and the Pi extension."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "det-4 rewrites the supervisor prompt paragraphs and the bee-herding concepts."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check, 7 product files."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-15T23:22:46.075Z",
+    "feature": "slp-detector",
+    "newest_decision_id": "fd3a8040-7424-44a9-bb4d-88a08237c054",
+    "plan_sha256": "e3c2ef7baf5e474f2a5bb50020a91c55897bb2537195da2a042af4392347e0de",
+    "advisor": "hat-wave:hat-facts-gaps,hat-alternatives,hat-user-impact",
+    "digest_head": "# SLP Detector — hat wave synthesis\n\nDate: 2026-10-15. Seats: hat-facts-gaps, hat-alternatives, hat-user-impact\n(three, standard lane, 7 product files). Budget: all three returned inside\nthe ceiling; none dropped.\n\nPLAN CHECK\nWork: slp-detector current slice (det-1..det-4)\n\nSTRUCTURE\nBLOCKERS (facts-gaps, 1, fixed):\n- Key links / membership: the changed set built from a diff against HEAD\n  loses committed paths (workers commit mid-job, bee-build.md:3), loses\n  untracked files, and nothing record"
+  },
+  "approved_cell_packet": {
+    "feature": "slp-detector",
+    "plan_sha256": "e3c2ef7baf5e474f2a5bb50020a91c55897bb2537195da2a042af4392347e0de",
+    "previewed_at": "2026-10-15T23:22:41.361Z",
+    "cells": [
+      {
+        "id": "det-1",
+        "feature": "slp-detector",
+        "title": "Add the detector event store, the read verb and the four signal names",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D4",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+          "packages/bee-rs/crates/bee/src/verbs/supervisor.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "skills/bee-herding/references/supervisor-prompt.md",
+          ".agents/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/supervisor.rs — `rg -n 'KNOWN_SIGNALS|INTERVENTION_SIGNALS|RECORD_FLAGS|fn record_into|fn from_value|fn supervisor_dir|fn control_root_path|pub fn try_native'` — hits today: 303 `pub(crate) const KNOWN_SIGNALS: [&str; 7] = [`, 313 `pub(crate) const INTERVENTION_SIGNALS: [&str; 8] = [`, 336 `fn record_into(`, 376 `if !KNOWN_SIGNALS.contains(&signal.as_str()) {`, 3238 `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {`",
+          "packages/bee-rs/crates/bee/src/verbs/mod.rs — `rg -n 'supervisor::try_native'` — hit today: 136 `if let Some(code) = supervisor::try_native(args, t0) {`",
+          "packages/bee-rs/crates/bee/src/catalog.rs — `rg -n 'resolve\\(&\\[\"herding\", \"notify\"\\]\\)'` — hit today: 957 `let (entry, rest) = resolve(&[\"herding\", \"notify\"]).expect(\"herding.notify is in the registry\");`",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json — the `supervisor.list` and `supervisor.record` entries, the shape to copy",
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'fn the_shipped_prompt_pins_the_record_verbs_own_closed_sets'` — hit today: 1302; this test pins the prompt to KNOWN_SIGNALS",
+          "skills/bee-herding/references/supervisor-prompt.md — `rg -n -- '--signal \\{'` — the record command line whose signal list grows"
+        ],
+        "affects_skills": [
+          "skills/bee-herding/references/supervisor-prompt.md"
+        ],
+        "affects_specs": [],
+        "action": "Per D1, D2 and D4. (1) Add module verbs/detector.rs with `pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode>` that answers only when args[0] is `detector`, and hook it in verbs/mod.rs right after the `supervisor::try_native` block in the same shape. (2) The store: `.bee/supervisor/events.jsonl`, resolved against the control root with the same helpers supervisor.rs uses (`supervisor_dir`, `control_root_path`; widen their visibility to pub(crate) if needed). Event row per D2: `id` (uuid v4 string), `ts` (RFC 3339 UTC), `signal`, `job_id`, `cell_id` (string or null), `target_session` (string or null), `point_key` (the same slug rule `--point-key` enforces, 80 chars max), `excerpt` (one sentence, 300 chars max, whitespace collapsed), `source` (the surface read). Expose pub(crate) `EVENT_SIGNALS: [&str; 4]` holding exactly self-correction, boundary-approach, test-on-unstable-contract, budget-80; pub(crate) `append_event(control_root, &Event) -> Result<(), String>` that validates signal, point_key and excerpt before the append and refuses by name otherwise, creating the directory on first write; pub(crate) `read_events(control_root) -> Vec<Event>` oldest first, skipping malformed lines; pub(crate) `events_for_job(control_root, job_id) -> Vec<Event>`. (3) Verb `bee detector events [--unjudged] [--json]`: text form one line per row `- <ts> [<signal>] <job_id> <cell_id or -> <point_key> — <excerpt>`, JSON form `{events: [rows]}`; `--unjudged` keeps only rows whose id no row in observations.jsonl or interventions.jsonl names in its `events` array (D4 refinement e3de051a); a missing or empty store prints `No detector events.` in text form (JSON `{events: []}`) and exits 0. Register `detector.events` (flags unjudged, json) in generated/registry_payload.json in the same shape as `supervisor.list` (the precedent: `herding.notify` and `herding.fork` were added by hand in that shape), and add a catalog.rs resolve test beside the `herding notify` one. Do NOT register or implement `detector tick` here (det-2 owns it). (4) supervisor.rs: add the four names to KNOWN_SIGNALS (11 entries) and INTERVENTION_SIGNALS (12); add optional `--events <id,...>` to RECORD_FLAGS (today `const RECORD_FLAGS: [&str; 7] =`), legal on every record kind, every id must exist in events.jsonl (refused by name otherwise, nothing written), stored on the row as `events: [..]` only when given, on observation rows and on mailbox rows alike; Observation::from_value and the mailbox row reader read an optional `events` array and tolerate its absence; `supervisor list` and `supervisor pending` print ` [events: a,b]` after the note or question when present. (5) In skills/bee-herding/references/supervisor-prompt.md change only the record command line block: extend the `--signal {...}` set with the four names in this order after dead-lead, and add `[--events <id,...>]` after `[--tick <n>]`; then run `.bee/bin/bee dev regen` so the five generated copies and the release manifest update, and commit them in the same commit. Tests (author only what is not pinned): unknown signal still refused naming the set; `--events` happy on a silence row, happy on an intervention row (the row carries the ids and the event leaves `--unjudged`), and refused with an unknown id; from_value with and without `events`; `detector events` empty store prints `No detector events.`, two rows, `--unjudged` after a silence row names one and after an intervention row names the other; catalog resolve for detector events; registry_contracts green; the control_loop prompt-pin test green.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee supervisor && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "bee supervisor record --kind silence --signal budget-80 --note x is accepted",
+            "bee supervisor record --events <unknown id> is refused by name and writes nothing",
+            "bee detector events --unjudged lists only rows no observation, silence or mailbox row names",
+            "bee detector events with no store prints No detector events. and exits 0"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+              "substantive": "Event struct, EVENT_SIGNALS, append_event, read_events, events_for_job, the events verb and their tests"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "a detector.events entry"
+            }
+          ],
+          "key_links": [
+            "verbs/mod.rs calls detector::try_native",
+            "supervisor record validates --events against events.jsonl",
+            "the supervisor prompt's record command line names the four signals and --events, five copies regenerated"
+          ],
+          "prohibitions": [
+            "No change to the Observation row fields that exist today",
+            "No detector tick verb or rule in this cell",
+            "No write to any store other than events.jsonl and observations.jsonl",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-2",
+        "feature": "slp-detector",
+        "title": "Add bee detector tick with the four deterministic rules",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "det-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3",
+          "D5",
+          "32492fc4",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/catalog.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-1's module: Event, EVENT_SIGNALS, append_event, read_events)",
+          "packages/bee-rs/crates/bee/src/herding/mailbox.rs — `rg -n 'pub\\(crate\\) fn mailbox_dir|pub\\(crate\\) fn job_path|pub\\(crate\\) fn result_path|fn result_filename'` — hits today: 60 `pub(crate) fn mailbox_dir(bee_dir: &Path, job_id: &str) -> PathBuf {`, 66 `pub(crate) fn job_path(bee_dir: &Path, job_id: &str) -> PathBuf {`, 116 `pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {`, 125 `format!(\"result-{round}.json\")`",
+          "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"ceiling_secs\": opts.ceiling_secs|\"created_at\"|\"cell_id\"|\"leader_session\"|\"round\"|fn record_round_usage'` — the job.json fields the rules read",
+          "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'fn worktree_fingerprint|let diff = git'` — hits today: 708 `fn worktree_fingerprint(cwd: &str) -> Option<String> {`, 715 `let diff = git(&[\"diff\", \"HEAD\"])?;` — the git invocation shape to mirror",
+          "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs — `rg -n 'pub\\(crate\\) fn resolve_cell_budgets|pub\\(crate\\) fn attempts_since_budget_reset|pub\\(crate\\) fn check_cell_budgets'` — hits today: 722, 740, 777; the claims count rule reuses these",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'fn event_has_contract_tag|fn contract_citation_refusal'` — how a cell's decisions resolve to contract-tagged decisions",
+          "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs — `rg -n 'pub\\(crate\\) enum ContractStatus|pub\\(crate\\) fn contract_status_over|pub\\(crate\\) fn contract_status\\('` — hits today: 324, 394, 419",
+          "packages/bee-rs/crates/bee/src/verbs/cells/read.rs — `rg -n 'pub\\(crate\\) fn read_cell'` — hit today: 180 `pub(crate) fn read_cell(root: &Path, id: &str) -> Result<Option<Value>, Delegate> {` — the one reader for a cell record by id; never a second parser",
+          "packages/bee-rs/crates/bee/src/verbs/cells/judge.rs — `rg -n 'pub\\(crate\\) fn declared_covers|pub\\(crate\\) fn frozen_judge_hits'` — hits today: 119 `pub(crate) fn declared_covers(declared: &[Value], file: &str) -> bool {`, 200 `pub(crate) fn frozen_judge_hits(changed: &Value, declared: &Value) -> Vec<(String, &'static str)> {` — the boundary matcher to reuse",
+          "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs — `rg -n 'contract_status_over\\('` — hit today: 1286 `match crate::verbs::decisions::contract_status_over(` — the hoisted-reads pattern for a whole decisions walk",
+          "packages/bee-rs/crates/bee/src/herding/run.rs — `rg -n '\"created_at\": chrono::Utc::now\\(\\).to_rfc3339\\(\\),|\"continued_at\"'` — hits today: 2595 (and the two sibling spawn sites near 3194 and 3500) `\"created_at\": chrono::Utc::now().to_rfc3339(),`, 4936 `m.insert(\"continued_at\".into(), Value::String(chrono::Utc::now().to_rfc3339()));`"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D1, D3 with its refinement 32492fc4, and D5. (1) run.rs: at each of the three spawn sites that write `\"created_at\": chrono::Utc::now().to_rfc3339(),` also write `base_sha`: the cwd's HEAD commit read through one small helper that runs the version-control CLI with `-C <cwd>` and `rev-parse HEAD` the way worktree_fingerprint in herding.rs runs it, null when the cwd is not a checkout; one helper, three call sites. (2) Add `bee detector tick [--json]` to verbs/detector.rs, register `detector.tick` (flag json) in generated/registry_payload.json in the same shape as `detector.events`, and add a catalog.rs resolve test. The tick resolves the control root, lists every `.bee/mailbox/<job>/job.json`, and treats a job as live when `result-<round>.json` is absent for the job's `round` (default 1). It loads the job's cell record with `crate::verbs::cells::read_cell` when `cell_id` is set; with no cell only the ceiling and token rules apply. The changed set: `diff --name-only <base_sha>` plus `ls-files --others --exclude-standard`, both through the same CLI helper against the job cwd, repo-relative paths, minus every path under `.bee/` or `docs/decisions/`; `base_sha` is job.json `base_sha`, else the value stored in the job's detector state file, else the cwd's HEAD captured now and stored there (the first tick of an old job then sees only untracked paths). Rules, each firing at most one event per (job_id, signal, point_key) — before appending, skip any triple already present in events.jsonl: budget-80 (a) ceiling: now minus `continued_at` when present else `created_at`, at or above 0.8 times `ceiling_secs`, point_key `budget-80-ceiling-<job_id>`; (b) claims: `attempts_since_budget_reset(cell).len() + 1` at or above 0.8 times `resolve_cell_budgets(cell).max_claims`, point_key `budget-80-claims-<job_id>`; (c) tokens: job.json `usage.total_tokens` (the last finished round) at or above 0.8 times config `herding.budget.tokens_per_job` when that key is a positive number, point_key `budget-80-tokens-<job_id>`. test-on-unstable-contract: walk the cell's `decisions` once with the hoisted reads the way handlers_write.rs does around `contract_status_over(`; for each id naming an active decision with a `contract:<name>` tag whose status is Unsettled, when the changed set holds a test path (a `tests/` or `spec/` path segment, or a file name matching `*_test.*`, `*.test.*` or `*_tests.*`), fire with point_key `unstable-contract-<name>-<job_id>`. boundary-approach: when the cell's `files` is non-empty, every changed path for which `declared_covers(files, path)` is false fires with point_key `boundary-approach-<job_id>-<key>` where `<key>` is the first 8 hex chars of sha256(path); the excerpt carries the path. self-correction: read `.bee/supervisor/detector/<job_id>.json` (`{base_sha, changed_paths: [..], at}`); every path present there and absent from the current changed set fires with point_key `self-correction-<job_id>-<key>` (same key rule); then write the current set and base_sha to that file (create the directory on first write). Every event carries `cell_id`, `target_session` = job.json `leader_session`, `source` naming the surface (`job.json`, `cell`, `diff`, `config`), and an `excerpt` of one sentence holding the numbers or the path. A job whose job.json is unreadable, whose cwd is missing, or whose cwd is not a checkout prints one warning line on stderr and is skipped; the tick exits 0 unless the store itself cannot be written. Output: with `--json` `{fired: [events], scanned: n}`; text form one line per fired event in the `detector events` shape and a final line `detector: scanned <n> jobs, fired <m>`. Expose pub(crate) `tick_quiet(control_root: &Path) -> usize` returning the fired count with warnings on stderr, for det-3. Tests on tempdir fixtures (a real checkout per job cwd, job.json and cell records written as plain JSON in the shapes the writers use): every det-2 row of the plan's test matrix, plus the dedupe case (second tick fires none).",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee detector && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee catalog && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+        "must_haves": {
+          "truths": [
+            "a live job at 80% of ceiling_secs produces exactly one budget-80 row across two ticks",
+            "a job with result-<round>.json present produces no row and is not counted in scanned",
+            "a changed path that declared_covers accepts fires no boundary-approach row; a path under .bee/ never fires",
+            "a path committed mid-round stays in the changed set (diff against base_sha), so no self-correction row fires on a commit",
+            "an untracked new test file counts as a changed path",
+            "the tick never calls a model, paseo, or the network"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/detector.rs",
+              "substantive": "the tick verb, the four rules, tick_quiet, the per-job state file, and fixture tests for every matrix row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "a detector.tick entry"
+            }
+          ],
+          "key_links": [
+            "the tick reads cells through the existing cell reader and budgets through validate.rs",
+            "the tick reads contract status through decisions/read.rs contract_status",
+            "tick_quiet is pub(crate) for the control loop"
+          ],
+          "prohibitions": [
+            "No write outside .bee/supervisor/events.jsonl and .bee/supervisor/detector/",
+            "No write to estimate_minutes",
+            "No second parser for cells, job.json or decisions",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-3",
+        "feature": "slp-detector",
+        "title": "Run the tick from the supervisor loop and the Pi heartbeat, count events in status",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "det-2"
+        ],
+        "decisions": [
+          "D4",
+          "D5",
+          "D6",
+          "e3de051a",
+          "03838ea8"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          ".pi/extensions/bee-guard/events.ts",
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/control_loop.rs — `rg -n 'const SUPERVISOR_ALLOWED_TOOLS|Bash\\(.bee/bin/bee supervisor list:\\*\\)|SUPERVISOR_FORBIDDEN_TOOL_TOKENS|pub\\(crate\\) fn resolve_iteration|if role == Role::Supervisor \\{'` — hits today: 325 `const SUPERVISOR_ALLOWED_TOOLS: &str = \"Bash(.bee/bin/bee status:*),\\`, 558 `pub(crate) fn resolve_iteration(main_root: &Path, role: Role, turn_ceiling: u64) -> Result<(Argv, SpawnSpec), String> {`, 578 `if role == Role::Supervisor {`",
+          "packages/bee-rs/crates/bee/src/herding.rs — `rg -n 'insert_usage\\(&mut job_map|fn insert_usage|fn insert_read_only'` — hits today: 1031 `fn insert_usage(`, 1260 and 1349 `+ &insert_usage(&mut job_map, job_usage(bee_dir, &job_id), &job_obj)` — the per-job composer, two call sites",
+          ".pi/extensions/bee-guard/events.ts — `rg -n '\\[\"herding\", \"broker\", \"tick\", \"--json\"\\]|const tick = parseTick|quietHeartbeatTurn ='` — hit today: 384 `[\"herding\", \"broker\", \"tick\", \"--json\"],` inside the heartbeat branch of the input handler",
+          ".pi/extensions/bee-guard/paseo-heartbeat.ts — `rg -n 'export function isHeartbeatPrompt|export function parseTick|export function heartbeatText'` — hits today: 99, 329, 346 — exported helpers the node contract tests import",
+          "packages/bee-rs/crates/bee/tests/pi_paseo_heartbeat_contracts.rs — `rg -n 'fn run_js_test|fn test_is_heartbeat_prompt'` — the node-run test harness to extend",
+          "packages/bee-rs/crates/bee/src/verbs/detector.rs (det-2: tick_quiet, events_for_job)"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Per D4 with its refinement e3de051a, D5 and D6. (1) control_loop.rs: in `impl ArgvProvider for RealArgvProvider`, inside `fn spec_for`, before the line `resolve_iteration(&self.main_root, self.role, self.turn_ceiling)`, when `self.role == Role::Supervisor` call `crate::verbs::detector::tick_quiet(&self.main_root)` and, when it returns more than zero, print one stderr line `supervisor: detector fired <n> event(s) this tick`; a tick failure never fails the iteration; resolve_iteration itself does not change (tests call it directly). Add the line `Bash(.bee/bin/bee detector events:*),\\` to SUPERVISOR_ALLOWED_TOOLS directly before the `supervisor list` line, and extend the existing allowlist test to assert it while the forbidden-token test stays green. (2) herding.rs status: add `insert_events(job_map, bee_dir, job_id) -> String` beside insert_usage and call it at both composer call sites; it reads `detector::events_for_job` and the judged ids, writes JSON `events` as an object `{<signal>: <count>}` over all events (an empty object when none) and `unjudged` as a number, and returns the text suffix ` events=<signal>:<n>[,<signal>:<n>] unjudged=<k>` sorted by signal name, or an empty string when there are no events. No existing field moves or disappears. (3) paseo-heartbeat.ts: add `export async function runDetectorTick(beeBinary: string, directory: string, env: Record<string,string>, execFileFn): Promise<boolean>` that runs `[\"detector\", \"tick\", \"--json\"]` with a 30000 ms timeout, resolves true on exit 0 and false otherwise, logging `bee detector tick (heartbeat): <message>` on error, never throwing. events.ts heartbeat branch: inside the `finally` block that follows the broker tick, before `setTickRunning(false)`, `await runDetectorTick(beeBinary, directory, beltEnv(), cp.execFile)`; the result is discarded so quietHeartbeatTurn, heartbeatText and the news rule do not change, and a failed broker tick never skips it. (4) Tests: in control_loop.rs a test that RealArgvProvider::spec_for for Role::Supervisor on a tempdir main root with an empty mailbox still resolves and leaves no events file, and that resolve_iteration alone writes nothing under .bee/supervisor; herding.rs status tests for a job with two events of one signal (JSON object, unjudged count and text suffix) and a job with none (empty object, no suffix); in pi_paseo_heartbeat_contracts.rs a run_js_test that runDetectorTick calls execFile with argv `[\"detector\",\"tick\",\"--json\"]` and resolves false without throwing when execFile reports an error, plus a source-level assertion that events.ts calls runDetectorTick inside the heartbeat branch's finally block. (5) The two .pi/extensions files sit under a root the release manifest hashes: after the edits run `.bee/bin/bee dev regen` and commit the manifest with the change.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_paseo_heartbeat_contracts && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "a supervisor iteration runs the detector tick in the real argv provider before its argv resolves; resolve_iteration alone never ticks",
+            "the supervisor allowlist carries detector events and no forbidden token",
+            "bee herding status --json carries events as an object and unjudged as a number per job; the text line carries events=<signal>:<n> unjudged=<k> only when events exist",
+            "a Paseo heartbeat runs detector tick in the broker tick's finally block and its outcome never changes the heartbeat turn text"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+              "substantive": "the supervisor-arm pre-step and the widened allowlist with tests"
+            },
+            {
+              "path": ".pi/extensions/bee-guard/paseo-heartbeat.ts",
+              "substantive": "runDetectorTick exported and tested"
+            }
+          ],
+          "key_links": [
+            "resolve_iteration calls detector::tick_quiet in the supervisor arm",
+            "events.ts calls runDetectorTick in the heartbeat branch",
+            "status composes insert_events at both call sites"
+          ],
+          "prohibitions": [
+            "No new paseo heartbeat or schedule",
+            "No change to quietHeartbeatTurn, heartbeatText or the news rule",
+            "No status field removed or renamed",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "det-4",
+        "feature": "slp-detector",
+        "title": "Teach the supervisor prompt and the bee-herding concepts the detector",
+        "lane": "standard",
+        "role": "docs",
+        "status": "open",
+        "deps": [
+          "det-1"
+        ],
+        "decisions": [
+          "D1",
+          "D3",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "skills/bee-herding/references/supervisor-prompt.md",
+          ".agents/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude/skills/bee-herding/references/supervisor-prompt.md",
+          ".claude-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".codex-plugin/skills/bee-herding/references/supervisor-prompt.md",
+          ".opencode/skills/bee-herding/references/supervisor-prompt.md",
+          "docs/history/codex-harness-hardening/release-manifest.json",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+          "docs/knowledge/areas/bee-herding/index.md",
+          "docs/config-reference.md"
+        ],
+        "read_first": [
+          "docs/history/slp-detector/CONTEXT.md",
+          "docs/config-reference.md — `rg -n 'herding.paseo.heartbeat_cron'` — hits today: 389 (table row) and 537 (section) — the shape for the new `herding.budget.tokens_per_job` row",
+          "docs/specs/slp-supervisor-lead-peer/slp-supervisor-lead-peer.md — sections 1 (Detector), 4.7, 4.8 and 5 S4",
+          "skills/bee-herding/references/supervisor-prompt.md — `rg -n 'There is no eighth surface|Judge against exactly six signals|You look for six things|Record the silence, with its reason|supervisor record --kind'` — hits today: 61 `That is the whole list. There is no eighth surface: if a fact is not visible`, 67 `### 2. Judge against exactly six signals`",
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md (frontmatter decisions and owns.code, the 'One tick, one record' and 'Four stores, one root' sections)",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md — `rg -n 'The leader heartbeat and broker timer'`",
+          ".claude/skills/bee-technical-writing/SKILL.md"
+        ],
+        "affects_skills": [
+          "skills/bee-herding/references/supervisor-prompt.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Per D1, D3, D4, D5 and D6, with bee-technical-writing. (1) supervisor-prompt.md: in step 1 add a seventh command `.bee/bin/bee detector events --unjudged` with one line saying what it lists; rewrite the 'no eighth surface' paragraph so it says the seven commands are the whole list, that the Detector is bee code (not you) which reads the jobs and writes one event per fact it sees, that an event is a fact and never a finding, and that you still do not scan transcripts or poll; rename step 2 to 'Judge against exactly ten signals' and update 'six things' wording; add four paragraphs in the existing style for self-correction, boundary-approach, test-on-unstable-contract and budget-80, each stating what the Detector saw (the D3 rule in plain words), what to read before speaking (the job's pane with `herding pane read`, the cell with `cells list`), that a healthy stream is a silence row, and that an intervention on an event carries the event's point_key as `--point-key`; in step 3 say that an observation or silence row made after reading events names the ids it judged with `--events`, and that an event nobody names stays in `--unjudged` for the next tick; keep the record command line det-1 already updated; keep every existing rule and the `Record the silence, with its reason` sentence. Then run `.bee/bin/bee dev regen` and commit the five copies and the manifest. (2) the-supervisor-observer concept: add a section 'The Detector' (what it is per D1, the rules per D3, the judged mark per D4, the two trigger points per D5), add verbs/detector.rs to owns.code, add the D-ids with their one-line gist to the decisions list, and replace the sentence that says no new poller was built with the current truth; keep the diagram, adding one state for events read. (3) the-paseo-channel concept: in 'The leader heartbeat and broker timer' add one sentence that the heartbeat also runs `bee detector tick --json` after the broker tick and that its outcome never changes the turn. (4) docs/config-reference.md: add a table row and a section for `herding.budget.tokens_per_job` in the shape of `herding.paseo.heartbeat_cron` (default: unset, meaning the token rule is off; a positive whole number of tokens per herded job; read by `bee detector tick`). (5) Run `.bee/bin/bee knowledge index` so index.md regenerates. Also say in step 2 of the prompt that an event names a job and that a job in a shared worktree can carry a sibling's path, so the pane read decides. Proof: the control_loop prompt-pin test green, `.bee/bin/bee knowledge index --check` green, `.bee/bin/bee dev release-manifest --check` green.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee control_loop && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "the supervisor prompt lists seven read commands and ten signals",
+            "the prompt tells a tick to name judged event ids with --events on its observation or silence row",
+            "the five generated copies equal the source and the manifest check is green",
+            "the bee-herding concept names verbs/detector.rs in owns.code and the slp-detector decisions"
+          ],
+          "artifacts": [
+            {
+              "path": "skills/bee-herding/references/supervisor-prompt.md",
+              "substantive": "seventh command, ten-signal section with four new paragraphs, the judged-events rule"
+            },
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-supervisor-observer-and-its-interventions.md",
+              "substantive": "a 'The Detector' section with pointers"
+            }
+          ],
+          "key_links": [
+            "the prompt's seventh command is the verb det-1 built",
+            "the concept's owns.code names verbs/detector.rs"
+          ],
+          "prohibitions": [
+            "No change to the record command line beyond what det-1 wrote",
+            "No new signal name outside the four",
+            "No hand edit of the five generated copies (regen only)"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "det-1 to det-3 change Rust verbs, the control loop, status and the Pi extension."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "det-4 rewrites the supervisor prompt paragraphs and the bee-herding concepts."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check, 7 product files."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        }
+      ]
+    }
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "multi-domain"
+    ],
+    "product_files": 7,
+    "rationale": null,
+    "updated_at": "2026-10-16T00:18:33.578Z",
+    "feature": "slp-detector"
+  },
+  "merge_ready": {
+    "since": "2026-10-16T01:28:58.503Z",
+    "branch": "wt/slp-detector",
+    "worktree_id": "beehive--wt--slp-detector",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt",
+      "judge-debt",
+      "routing",
+      "doc-deferral"
+    ]
+  }
+}
