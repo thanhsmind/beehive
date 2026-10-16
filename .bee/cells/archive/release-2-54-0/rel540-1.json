@@ -1,0 +1,135 @@
+{
+  "id": "rel540-1",
+  "feature": "release-2-54-0",
+  "title": "Publish release 2.54.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-54-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.54.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.54.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.54.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.54.0",
+      "tag v2.54.0 exists locally and on the remote",
+      "the GitHub release for v2.54.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.54.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.54.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "rel540-worker",
+    "outcome": "Release 2.54.0 published through scripts/release.sh; final OK line printed, tag v2.54.0 live",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "the lead ran the script under a fresh deployment permit instead of the Paseo deploy worker, because the worker pane does not carry the issuer session (same as release-2-53-0, issue 103) — hit an unforeseen obstacle",
+      "the tracked broker-heartbeat.json was committed and marked skip-worktree for the run so a live broker tick could not dirty the tree; the flag was removed after the run (friction row filed) — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T04:20:18.310Z",
+    "behavior_change": false,
+    "verification_evidence": "the script ran the declared suite before tagging and printed its final line 'release  OK  bee 2.54.0 is live'; CI run https://github.com/thanhsmind/beehive/actions/runs/38849398234; log /mnt/data/Projects/goglbe/beehive/.bee/spikes/slp-detector/release3.log",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+    "verify_command": "bash scripts/release.sh 2.54.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-10-16T03:55:34.959Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+        "owner_bypassed": null,
+        "at": "2026-10-16T04:20:18.310Z"
+      }
+    ],
+    "no_mistakes": true,
+    "commit_pending": "the release commit b55b26347 is made by scripts/release.sh with the fixed subject Release 2.54.0 and carries no cell trailer by design",
+    "inline_reason": "the lead ran the sanctioned script under a fresh deployment permit after the deploy worker could not consume its permit (issue 103)",
+    "report": {
+      "outcome": "Release 2.54.0 published: commit b55b26347, tag v2.54.0 pushed, release-binaries run 38849398234 green, six assets incl. SHA256SUMS",
+      "commit": "b55b26347",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.54.0 && bee dev release-manifest --check — green:live — the script ran the declared suite before tagging and printed its final line 'release  OK  bee 2.54.0 is live'; CI run https://github.com/thanhsmind/beehive/actions/runs/38849398234; log /mnt/data/Projects/goglbe/beehive/.bee/spikes/slp-detector/release3.log",
+      "deviations": [
+        "the lead ran the script under a fresh deployment permit instead of the Paseo deploy worker, because the worker pane does not carry the issuer session (same as release-2-53-0, issue 103) — hit an unforeseen obstacle",
+        "the tracked broker-heartbeat.json was committed and marked skip-worktree for the run so a live broker tick could not dirty the tree; the flag was removed after the run (friction row filed) — hit an unforeseen obstacle"
+      ],
+      "mistakes": [],
+      "reaction": "confirm"
+    },
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.54.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.54.0 exists locally and on the remote",
+            "artifact": "docs/history/release-2-54-0/plan.md"
+          },
+          {
+            "requirement": "the GitHub release for v2.54.0 carries the binaries and SHA256SUMS",
+            "artifact": "docs/history/release-2-54-0/plan.md"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": "docs/history/release-2-54-0/plan.md"
+          },
+          {
+            "requirement": "the pushed tag is what triggers release-binaries.yml",
+            "artifact": "docs/history/release-2-54-0/plan.md"
+          },
+          {
+            "requirement": "version 2.54.0",
+            "artifact": ".claude-plugin/plugin.json"
+          }
+        ],
+        "recorded_at": "2026-10-16T04:20:18.384Z",
+        "recorded_by": "7504dd00-ad2f-49c6-9913-687bf1b353cc",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Dispatch đã sẵn (vai deploy, có dispatch_id để script ủy quyền). Chạy worker release.",
-    "asked_at": "2026-10-16T03:55:49.456Z",
+    "subject": "Cây sạch, permit mới gắn commit 31748b1a7. Chạy script.",
+    "asked_at": "2026-10-16T04:09:17.923Z",
     "session": "7504dd00-ad2f-49c6-9913-687bf1b353cc"
   },
   "route": {
