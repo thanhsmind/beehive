@@ -139,6 +139,8 @@ runs it.
    already-promoted pattern recurs, escalate it to a durable owner —
    hook, guard, doctor check, or test — or record the one-line reason
    prose stays (`references/promotion.md` ("Promotion Decision Tree")).
+   A repeated reflection follows
+   `docs/knowledge/areas/human-mailbox/overview.md` ("A mistake seen twice").
 5. Log the decisions future planning must honor; supersede outdated
    ones, never edit them. File unresolved friction with
    `bee backlog add` so grooming can hunt it later.
