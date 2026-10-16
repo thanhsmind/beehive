@@ -1,0 +1,71 @@
+{
+  "id": "pe-1",
+  "feature": "piggery-eval",
+  "title": "Land the piggery xia brief and its spec drop",
+  "action": "The brief docs/history/research/piggery-xia.md is already written by the leader. Create docs/discovery/spec-drops/sup-20261016-a506.md from docs/history/piggery-eval/spec-drop-draft.md: same content, but drop the two-line \"Draft held here...\" paragraph; then delete the draft file. Commit the brief, the spec drop, the draft removal and docs/history/piggery-eval/ in one commit. Docs only.",
+  "verify": "Both files exist; every verdict row cites a repo path that exists (rg/fd); the brief never gives bee's gate piggery's meaning.",
+  "files": [
+    "docs/history/research/piggery-xia.md",
+    "docs/discovery/spec-drops/sup-20261016-a506.md",
+    "docs/history/piggery-eval/spec-drop-draft.md",
+    "docs/history/piggery-eval/CONTEXT.md",
+    "docs/history/piggery-eval/plan.md"
+  ],
+  "lane": "small",
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "role": "docs",
+  "affects_skills": [],
+  "affects_specs": [],
+  "status": "capped",
+  "deps": [],
+  "read_first": [],
+  "trace": {
+    "worker": "pe-docs-1",
+    "outcome": "Landed the piggery xia brief and spec drop sup-20261016-a506; draft removed",
+    "files_changed": [
+      "docs/history/research/piggery-xia.md",
+      "docs/discovery/spec-drops/sup-20261016-a506.md",
+      "docs/history/piggery-eval/CONTEXT.md",
+      "docs/history/piggery-eval/plan.md",
+      "docs/history/piggery-eval/spec-drop-draft.md"
+    ],
+    "deviations": [
+      "the draft removal shows no deletion in the commit — the draft was never tracked, so removing it before staging left nothing to record — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T10:09:15.542Z",
+    "behavior_change": false,
+    "verification_evidence": "docs pointer check via python3 -I .bee/tmp/pe/check.py: brief checked=29 missing=2 (docs/guide.md and docs/reference.md are piggery-relative, both exist under /mnt/data/Projects/refs/slp/piggery/docs/), spec drop checked=1 missing=0; rg gate shows the two meanings kept apart",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "50780349-fc8f-453b-a412-de10c286c01b",
+    "verify_command": "Both files exist; every verdict row cites a repo path that exists (rg/fd); the brief never gives bee's gate piggery's meaning.",
+    "claimed_at": "2026-10-16T10:07:59.867Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Landed the piggery xia brief and spec drop sup-20261016-a506; draft removed",
+      "commit": "063080a7a",
+      "files": [
+        "docs/history/research/piggery-xia.md",
+        "docs/discovery/spec-drops/sup-20261016-a506.md",
+        "docs/history/piggery-eval/CONTEXT.md",
+        "docs/history/piggery-eval/plan.md"
+      ],
+      "tests": "Both files exist; every verdict row cites a repo path that exists (rg/fd); the brief never gives bee's gate piggery's meaning. — green:static — docs pointer check via python3 -I .bee/tmp/pe/check.py: brief checked=29 missing=2 (docs/guide.md and docs/reference.md are piggery-relative, both exist under /mnt/data/Projects/refs/slp/piggery/docs/), spec drop checked=1 missing=0; rg gate shows the two meanings kept apart",
+      "deviations": [
+        "the draft removal shows no deletion in the commit — the draft was never tracked, so removing it before staging left nothing to record — the plan was wrong about a fact"
+      ],
+      "mistakes": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 265 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

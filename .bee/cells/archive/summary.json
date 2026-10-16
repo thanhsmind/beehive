@@ -1643,5 +1643,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-16T04:20:27.500Z"
+  },
+  "piggery-eval": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-16T10:16:09.462Z"
   }
 }

@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"piggery-eval\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at e19ab51; capture what settled, then bee close --feature piggery-eval.",
+  "next_action": "Continue bee-exploring for \"piggery-eval\" (lane).",
   "created_at": "2026-10-16T09:18:24.738Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "piggery-eval uat: read docs/history/research/piggery-xia.md on main, then accept or reject",
+    "asked_at": "2026-10-16T10:10:33.796Z",
+    "session": "50780349-fc8f-453b-a412-de10c286c01b"
+  },
   "route": {
     "class": "research",
     "lane": "small",

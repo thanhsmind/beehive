@@ -894,3 +894,5 @@
 {"ts":"2026-10-16T07:53:30.657Z","event":"complete","id":"e2d48413-b5fb-418f-9d03-a7a72153432f"}
 {"ts":"2026-10-16T07:53:30.828Z","event":"complete","id":"25eed8a1-adfd-4417-86cb-fb9d8c0d01d2"}
 {"ts":"2026-10-16T07:53:34.569Z","event":"complete","id":"47616d54-3908-4eb7-af41-546e3466458d"}
+{"ts":"2026-10-16T10:10:20.998Z","event":"add","id":"0bfa2743-ec48-4656-9ae7-82235f7120b2","kind":"worktree-cleanup","feature":"piggery-eval","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--piggery-eval"],"reason":"Worktree beehive--wt--piggery-eval (branch wt/piggery-eval) merged into main at e19ab5185d70ceb1ac84b58efbe0da28e4a24e73 and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-10-16T10:16:09.472Z","event":"add","id":"3db377e6-c8ad-4a99-9b79-e7a37d5eb209","kind":"promote","feature":"piggery-eval","cells":[],"areas":[],"files":["docs/history/piggery-eval/promote-proposals.md"],"reason":"Promote proposal for \"piggery-eval\" awaiting apply — docs/history/piggery-eval/promote-proposals.md."}
