@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-2-55-0",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-2-55-0\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"release-2-55-0\" (lane).",
+  "created_at": "2026-10-17T04:29:54.388Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "release",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 0,
+    "rationale": "release execution through the sanctioned script; no source change",
+    "updated_at": "2026-10-17T04:30:16.764Z",
+    "feature": "release-2-55-0"
+  }
+}
