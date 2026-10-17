@@ -350,6 +350,7 @@ pub(crate) fn derive_economics(
     resolved: &Resolved,
     native_confirmed: bool,
     declared: Option<&str>,
+    effort: Option<&EffortChoice>,
 ) -> Map<String, Value> {
     let is_native_confirmed = channel == "codex-native"
         && ((matches!(resolved, Resolved::Native { .. }) && native_confirmed)
@@ -414,6 +415,11 @@ pub(crate) fn derive_economics(
     );
     out.insert("channel".into(), Value::String(channel.to_string()));
     out.insert("enforcement".into(), Value::String(enforcement.to_string()));
+    let text = |v: Option<&String>| v.map_or(Value::Null, |s| Value::String(s.clone()));
+    out.insert("effort".into(), text(effort.and_then(|c| c.effort.as_ref())));
+    out.insert("effort_base".into(), text(effort.and_then(|c| c.base.as_ref())));
+    out.insert("effort_step".into(), Value::from(effort.map_or(0, |c| c.step)));
+    out.insert("effort_reason".into(), Value::String(effort.map_or("none", |c| c.reason.as_str()).to_string()));
     out
 }
 
@@ -672,10 +678,10 @@ mod tests {
 
     #[test]
     fn derive_economics_herding_exec() {
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 
@@ -688,29 +694,30 @@ mod tests {
             &Resolved::Budget,
             false,
             Some("gemini-3.8-flash-high"),
+            None,
         );
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"gemini-3.8-flash-high","effective_model":null,"effective_model_status":"declared","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":"gemini-3.8-flash-high","effective_model":null,"effective_model_status":"declared","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 
     #[test]
     fn derive_economics_cli_exec_declared() {
         let cli = Resolved::Cli { command: "tool --model gpt-4o".into() };
-        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"), None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"gpt-4o","effective_model":null,"effective_model_status":"declared","channel":"cli-exec","enforcement":"cli-command"}"#
+            r#"{"logical_tier":"generation","requested_model":"gpt-4o","effective_model":null,"effective_model_status":"declared","channel":"cli-exec","enforcement":"cli-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 
     #[test]
     fn derive_economics_session_model() {
-        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None);
+        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model"}"#
+            r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 }

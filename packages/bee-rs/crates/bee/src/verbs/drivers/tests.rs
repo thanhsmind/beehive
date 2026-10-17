@@ -743,22 +743,74 @@ use std::time::Instant;
         assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
     }
 
+    #[test]
+    fn effort_for_dispatch_moves_every_ladder_row() {
+        let row = |base: &str, kind: &str, lane: Option<&str>| {
+            let c = effort_for_dispatch(Some(base), kind, lane);
+            (c.effort, c.step, c.reason)
+        };
+        for (kind, lane, effort, step, reason) in [
+            ("cell", Some("high-risk"), "xhigh", 1, "cell/high-risk"),
+            ("cell", Some("tiny"), "medium", -1, "cell/tiny"),
+            ("cell", Some("small"), "high", 0, "cell/small"),
+            ("cell", Some("standard"), "high", 0, "cell/standard"),
+            ("cell", Some("spike"), "high", 0, "cell/spike"),
+            ("gather", None, "low", -2, "gather/-"),
+            ("advisor", None, "medium", -1, "advisor/-"),
+            ("reviewer", None, "high", 0, "reviewer/-"),
+        ] {
+            assert_eq!(
+                row("high", kind, lane),
+                (Some(effort.to_string()), step, reason.to_string()),
+                "{kind}/{lane:?}"
+            );
+        }
+
+        assert_eq!(
+            row("max", "cell", Some("high-risk")),
+            (Some("max".to_string()), 1, "cell/high-risk".to_string()),
+            "a raised max clamps at the top"
+        );
+        assert_eq!(
+            row("low", "gather", None),
+            (Some("low".to_string()), -2, "gather/-".to_string()),
+            "a lowered low clamps at the bottom"
+        );
+
+        let none = effort_for_dispatch(None, "cell", Some("high-risk"));
+        assert_eq!(none.effort, None);
+        assert_eq!(none.base, None);
+        assert_eq!(none.step, 0);
+        assert_eq!(none.reason, "no-base");
+
+        let off_scale = effort_for_dispatch(Some("turbo"), "gather", None);
+        assert_eq!(off_scale.effort, None);
+        assert_eq!(off_scale.base, Some("turbo".to_string()));
+        assert_eq!(off_scale.step, 0);
+        assert_eq!(off_scale.reason, "no-base");
+
+        let unknown = effort_for_dispatch(Some("high"), "cell", Some("weird"));
+        assert_eq!(unknown.effort, Some("high".to_string()));
+        assert_eq!(unknown.step, 0);
+        assert_eq!(unknown.reason, "unmapped:cell/weird");
+    }
+
     // ── economics ──────────────────────────────────────────────────────────
 
     #[test]
     fn derive_economics_matches_the_honest_mapping() {
         let model = Resolved::Model { model: "sonnet".into(), effort: None };
-        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None);
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param"}"#
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // codex-native without a confirmed override is ALWAYS
         // inherited-or-unknown, whatever the tier resolves to.
-        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false, None);
+        let e = derive_economics("codex-native", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"codex-native","enforcement":"prompt-budget"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"codex-native","enforcement":"prompt-budget","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // A confirmed native override: native-requested, effective_model still
         // null (catalog-accepted is not runtime-confirmed, D7).
@@ -769,23 +821,35 @@ use std::time::Instant;
             agent_type: "worker".into(),
             fallback: None,
         };
-        let e = derive_economics("codex-native", "generation", None, &native, true, None);
+        let e = derive_economics("codex-native", "generation", None, &native, true, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":"gpt-5","effective_model":null,"effective_model_status":"native-requested","channel":"codex-native","enforcement":"native-model-param"}"#
+            r#"{"logical_tier":"generation","requested_model":"gpt-5","effective_model":null,"effective_model_status":"native-requested","channel":"codex-native","enforcement":"native-model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // cli-exec never reports a requested_model.
         let cli = Resolved::Cli { command: "glm run".into() };
-        let e = derive_economics("cli-exec", "generation", None, &cli, false, None);
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
         // herding-exec mirrors cli-exec, never prompt-budget.
-        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None);
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false, None, None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
+        );
+        let raised = effort_for_dispatch(Some("high"), "cell", Some("high-risk"));
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, Some(&raised));
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":"xhigh","effort_base":"high","effort_step":1,"effort_reason":"cell/high-risk"}"#
+        );
+        let bare = effort_for_dispatch(None, "gather", None);
+        let e = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, Some(&bare));
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":"sonnet","effective_model":"sonnet","effective_model_status":"pinned","channel":"claude-agent","enforcement":"model-param","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"no-base"}"#
         );
     }
 
@@ -919,7 +983,7 @@ use std::time::Instant;
         assert_eq!(p.get("description"), Some(&json!("gather (sonnet)")));
         // The marker anchors at the very start of the prompt.
         let prompt = p.get("prompt").unwrap().as_str().unwrap();
-        assert!(prompt.starts_with("[bee-tier: generation]\nGather: locate and digest"));
+        assert!(prompt.starts_with("[bee-tier: generation] [bee-kind: gather]\nGather: locate and digest"));
         // The prepare-time record is NOT written on a non-recording pass.
         assert!(!root.join(".bee/logs/dispatch.jsonl").exists());
     }
@@ -1937,7 +2001,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), Some(&json!("sonnet")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -1975,7 +2039,7 @@ use std::time::Instant;
         assert_eq!(payload.get("model"), None, "ceiling dispatch must have no model param");
         assert_eq!(payload.get("subagent_type"), Some(&json!("bee-build")));
         assert_eq!(payload.get("description"), Some(&json!("c-1: critical ceiling fix (ceiling)")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("ceiling")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -2005,7 +2069,7 @@ use std::time::Instant;
         let codex_payload = v_codex.get("payload").unwrap();
         assert_eq!(codex_payload.get("model"), None);
         assert_eq!(codex_payload.get("task_name"), Some(&json!("c_1_critical_ceiling_fix")));
-        assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling]\n"));
+        assert!(codex_payload.get("message").unwrap().as_str().unwrap().starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let codex_econ = v_codex.get("economics").unwrap();
         assert_eq!(codex_econ.get("channel"), Some(&json!("session-model")));
         assert_eq!(codex_econ.get("tier_source"), Some(&json!("cell")));
@@ -2067,7 +2131,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: ceiling]\n"));
+            .starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("channel"), Some(&json!("session-model")));
         assert_eq!(econ.get("enforcement"), Some(&json!("session-model")));
@@ -2095,7 +2159,7 @@ use std::time::Instant;
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: ceiling]\n"));
+            .starts_with("[bee-tier: ceiling] [bee-kind: cell]"));
         assert_eq!(
             v_codex.get("economics").unwrap().get("channel"),
             Some(&json!("session-model"))
@@ -2241,7 +2305,7 @@ use std::time::Instant;
             if escalated {
                 assert_eq!(payload.get("model"), None, "{id}: escalated means no model param");
                 assert!(
-                    prompt.starts_with("[bee-tier: ceiling]\n"),
+                    prompt.starts_with("[bee-tier: ceiling] [bee-kind: cell]"),
                     "{id}: an escalated dispatch travels under the escalation word: {prompt}"
                 );
             } else {
@@ -2251,7 +2315,7 @@ use std::time::Instant;
                     "{id}: an uncounted cell must resolve a real model, never the session one"
                 );
                 assert!(
-                    !prompt.starts_with("[bee-tier: ceiling]\n"),
+                    !prompt.starts_with("[bee-tier: ceiling] [bee-kind: cell]"),
                     "{id}: an uncounted cell must not travel under the escalation word: {prompt}"
                 );
                 assert_eq!(econ.get("channel"), Some(&json!("claude-agent")), "{id}");
@@ -2363,7 +2427,7 @@ use std::time::Instant;
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let payload = v.get("payload").unwrap();
         assert_eq!(payload.get("model"), Some(&json!("sonnet")));
-        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation]\n"));
+        assert!(payload.get("prompt").unwrap().as_str().unwrap().starts_with("[bee-tier: generation] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("generation")));
         assert_eq!(econ.get("tier_source"), Some(&json!("default")));
@@ -3802,7 +3866,7 @@ use std::time::Instant;
         let cmd = payload.get("command").unwrap().as_str().unwrap();
         assert!(cmd.starts_with("codex exec --sandbox read-only --ephemeral"), "cmd: {cmd}");
         assert!(cmd.contains("--model 'gpt-5.5'"), "cmd: {cmd}");
-        assert!(cmd.contains("-c model_reasoning_effort='medium'"), "cmd: {cmd}");
+        assert!(cmd.contains("-c model_reasoning_effort='low'"), "cmd: {cmd}");
         assert!(cmd.ends_with(" -"), "cmd: {cmd}");
         assert!(payload.get("stdin").is_some());
 
@@ -3811,6 +3875,85 @@ use std::time::Instant;
         assert_eq!(econ.get("enforcement"), Some(&json!("cli-command")));
         assert_eq!(econ.get("effective_model_status"), Some(&json!("declared")));
         assert_eq!(econ.get("requested_model"), Some(&json!("gpt-5.5")));
+    }
+
+    #[test]
+    fn codex_gather_moves_a_high_effort_two_steps_down() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"read":{"model":"gpt-5.5","effort":"high"}}}}"#);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "gather", None, None, false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        let cmd = v["payload"]["command"].as_str().unwrap();
+        assert!(cmd.contains("-c model_reasoning_effort='low'"), "cmd: {cmd}");
+        let econ = &v["economics"];
+        assert_eq!(econ["effort"], json!("low"));
+        assert_eq!(econ["effort_base"], json!("high"));
+        assert_eq!(econ["effort_step"], json!(-2));
+        assert_eq!(econ["effort_reason"], json!("gather/-"));
+    }
+
+    #[test]
+    fn codex_native_cell_carries_kind_and_lane_markers_and_the_moved_effort() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":{"model":"gpt-5","effort":"medium"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","lane":"tiny","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["tool"], json!("spawn_agent"));
+        assert_eq!(v["payload"]["reasoning_effort"], json!("low"));
+        let message = v["payload"]["message"].as_str().unwrap();
+        assert!(message.lines().next().unwrap().ends_with("[bee-kind: cell] [bee-lane: tiny]"), "{message}");
+    }
+
+    #[test]
+    fn claude_high_risk_cell_raises_effort_one_step_and_marks_kind_and_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"model":"sonnet","effort":"high"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"t","lane":"high-risk","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["tool"], json!("Agent"));
+        assert_eq!(v["payload"]["effort"], json!("xhigh"));
+        let prompt = v["payload"]["prompt"].as_str().unwrap();
+        let marker = prompt.lines().next().unwrap();
+        assert!(marker.contains("[bee-kind: cell]"), "{marker}");
+        assert!(marker.contains("[bee-lane: high-risk]"), "{marker}");
+        let econ = &v["economics"];
+        assert_eq!(econ["effort"], json!("xhigh"));
+        assert_eq!(econ["effort_base"], json!("high"));
+        assert_eq!(econ["effort_step"], json!(1));
+        assert_eq!(econ["effort_reason"], json!("cell/high-risk"));
+    }
+
+    #[test]
+    fn claude_role_with_no_effort_sends_no_effort_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None).unwrap()
+        else {
+            panic!("expected an envelope");
+        };
+        assert_eq!(v["payload"].get("effort"), None);
+        assert!(v["payload"]["prompt"].as_str().unwrap().lines().next().unwrap().ends_with("[bee-kind: gather]"));
+        assert_eq!(v["economics"]["effort_reason"], json!("no-base"));
     }
 
     #[test]
@@ -4036,7 +4179,7 @@ done
                 "--model",
                 hostile_model,
                 "-c",
-                &format!("model_reasoning_effort={hostile_effort}"),
+                "model_reasoning_effort=low",
                 "-"
             ],
             "exact argv mismatch"
@@ -7075,7 +7218,7 @@ exit 0
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: test]\n"));
+            .starts_with("[bee-tier: test] [bee-kind: cell]"));
         let econ = v.get("economics").unwrap();
         assert_eq!(econ.get("logical_tier"), Some(&json!("test")));
         assert_eq!(econ.get("tier_source"), Some(&json!("cell")));
@@ -7118,7 +7261,7 @@ exit 0
                     .unwrap()
                     .as_str()
                     .unwrap()
-                    .starts_with("[bee-tier: generation]\n"),
+                    .starts_with("[bee-tier: generation] [bee-kind: cell]"),
                 "{id}: the marker names the role that resolved"
             );
             let econ = v.get("economics").unwrap();
@@ -7157,7 +7300,7 @@ exit 0
             .unwrap()
             .as_str()
             .unwrap()
-            .starts_with("[bee-tier: extraction]\n"));
+            .starts_with("[bee-tier: extraction] [bee-kind: cell]"));
         assert_eq!(
             v.get("economics").unwrap().get("requested_model"),
             Some(&json!("haiku-custom")),
@@ -7200,7 +7343,7 @@ exit 0
                     .unwrap()
                     .as_str()
                     .unwrap()
-                    .starts_with(&format!("[bee-tier: {role}]\n")),
+                    .starts_with(&format!("[bee-tier: {role}] [bee-kind: cell]")),
                 "{id}: the marker names the role that resolved"
             );
             let econ = v.get("economics").unwrap();
@@ -7528,10 +7671,10 @@ exit 0
     /// gather kind's slot moved nothing else.
     #[test]
     fn no_fallback_chain_config_leaves_the_whole_dispatch_payload_byte_identical() {
-        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
+        const GATHER: &str = r#"{"subagent_type":"bee-gather","prompt":"[bee-tier: read] [bee-kind: gather]\nGather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"gather (haiku)","model":"haiku"}"#;
         // pi-run-friction-fixes prf-6 re-cut the REVIEWER golden ONCE, on purpose: reviewer.md gained the lens line.
-        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
-        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
+        const REVIEWER: &str = r#"{"subagent_type":"bee-review","prompt":"[bee-tier: review] [bee-kind: reviewer]\nReview: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.\nThe dispatcher names one review lens (Purpose) in the purpose/prompt; review through that lens only, and follow review.md for what a finding is and how to set severity.\nBefore you review, check that HEAD equals the frozen review head and that the in-scope paths are clean. On a mismatch, stop and report `REVIEW_HEAD_MISMATCH` with the fix line `re-freeze the review head, or commit or drop the stray paths`.\nThe brief never carries the orchestrator's own verdict, leaning or expected findings.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.","description":"reviewer (opus)","model":"opus"}"#;
+        const ADVISOR: &str = r#"{"subagent_type":"general-purpose","prompt":"[bee-tier: advisor] [bee-kind: advisor]\nAdvisor consult: produce an independent digest/opinion on the given question. Read-only.\n\nDigest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.\nEnd the answer with three things: a recommendation; a confidence 0-100 (90+ = checked in the repo, 50 = reasoned but unchecked, below 30 = a guess); and a falsifier — one concrete check that would prove the recommendation wrong, marked not run.","description":"advisor (fable)","model":"fable"}"#;
 
         let t0 = tempfile::tempdir().unwrap();
         let none = chain_repo(&t0, "");
@@ -10278,7 +10421,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let cli = Resolved::Cli { command: "foo --model gpt-4o".into() };
         let empty_cfg = json!({});
         assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("gpt-4o".to_string()));
-        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("gpt-4o"), None);
         assert_eq!(e.get("requested_model"), Some(&json!("gpt-4o")));
         assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
     }
@@ -10288,7 +10431,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let cli = Resolved::Cli { command: "tool --model=claude-3-5-sonnet".into() };
         let empty_cfg = json!({});
         assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("claude-3-5-sonnet".to_string()));
-        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("claude-3-5-sonnet"));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("claude-3-5-sonnet"), None);
         assert_eq!(e.get("requested_model"), Some(&json!("claude-3-5-sonnet")));
         assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
     }
@@ -10298,7 +10441,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let cli = Resolved::Cli { command: "tool -m mistral-large".into() };
         let empty_cfg = json!({});
         assert_eq!(declared_model_for(&empty_cfg, &cli, "claude"), Some("mistral-large".to_string()));
-        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("mistral-large"));
+        let e = derive_economics("cli-exec", "generation", None, &cli, false, Some("mistral-large"), None);
         assert_eq!(e.get("requested_model"), Some(&json!("mistral-large")));
         assert_eq!(e.get("effective_model_status"), Some(&json!("declared")));
     }
@@ -10350,10 +10493,10 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let res = Resolved::Herding { agent: Some("no-model-agent".into()), fallback: None };
         let declared = declared_model_for(&cfg, &res, "claude");
         assert_eq!(declared, None);
-        let e = derive_economics("herding-exec", "generation", None, &res, false, declared.as_deref());
+        let e = derive_economics("herding-exec", "generation", None, &res, false, declared.as_deref(), None);
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
-            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command","effort":null,"effort_base":null,"effort_step":0,"effort_reason":"none"}"#
         );
     }
 
@@ -10395,11 +10538,11 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     #[test]
     fn native_model_slot_still_pinned_and_session_model_still_inherited_or_unknown() {
         let model = Resolved::Model { model: "sonnet".into(), effort: None };
-        let e_pinned = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None);
+        let e_pinned = derive_economics("claude-agent", "generation", Some("sonnet"), &model, false, None, None);
         assert_eq!(e_pinned.get("effective_model_status"), Some(&json!("pinned")));
         assert_eq!(e_pinned.get("requested_model"), Some(&json!("sonnet")));
 
-        let e_session = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None);
+        let e_session = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false, None, None);
         assert_eq!(e_session.get("effective_model_status"), Some(&json!("inherited-or-unknown")));
         assert_eq!(e_session.get("requested_model"), Some(&Value::Null));
     }
@@ -10758,7 +10901,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         let payload = v.get("payload").unwrap();
         let prompt = payload.get("prompt").and_then(Value::as_str).unwrap();
         // Legacy prompt starts with [bee-tier: code] with NO [bee-feature:] or [bee-cell:] markers
-        assert!(prompt.starts_with("[bee-tier: code]\n"), "legacy prompt was: {prompt}");
+        assert!(prompt.starts_with("[bee-tier: code] [bee-kind: cell]"), "legacy prompt was: {prompt}");
         assert!(!prompt.contains("[bee-feature:"), "legacy prompt must not contain bee-feature");
         assert!(payload.get("planned_role").is_none());
         assert!(payload.get("plan_sha256").is_none());
