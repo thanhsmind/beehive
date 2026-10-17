@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"effort-at-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at f42364e; reload the product and test \"effort-at-the-door\", then either approve uat (\"bee gate --name uat --approved true --lane effort-at-the-door\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-16T15:29:14.244Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "EnterWorktree",
-    "asked_at": "2026-10-17T01:28:49.243Z",
-    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
+    "subject": "uat: effort-at-the-door",
+    "asked_at": "2026-10-17T02:50:53.455Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -666,14 +666,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-17T02:44:22.604Z",
-    "branch": "wt/effort-at-the-door",
-    "worktree_id": "beehive--wt--effort-at-the-door",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt"
-    ]
   }
 }
