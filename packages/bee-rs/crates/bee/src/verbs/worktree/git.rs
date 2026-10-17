@@ -112,13 +112,18 @@ pub(crate) fn run_git_stdin(cwd: &Path, args: &[&str], input: &[u8]) -> GitOut {
     let Ok(mut child) = spawned else {
         return GitOut { status: None, stdout: None, stderr: None };
     };
-    if let Some(mut stdin) = child.stdin.take() {
-        if stdin.write_all(input).is_err() {
-            let _ = child.kill();
-        }
-        drop(stdin);
+    let writer = child.stdin.take().map(|mut stdin| {
+        let input = input.to_vec();
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+            drop(stdin);
+        })
+    });
+    let waited = child.wait_with_output();
+    if let Some(handle) = writer {
+        let _ = handle.join();
     }
-    match child.wait_with_output() {
+    match waited {
         Ok(out) => GitOut {
             status: out.status.code(),
             stdout: Some(String::from_utf8_lossy(&out.stdout).into_owned()),

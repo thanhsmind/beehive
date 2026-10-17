@@ -153,7 +153,7 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
   own `git merge-base` call — `merge.rs`'s base is a local inside a helper whose only caller runs
   ~150 lines after the proof read — and rendered in `handlers.rs`, the one place a merge prints,
   so it is visible in the word output and not only under `--json`.
-- **A cleaner rebase is not stale proof — `proof_carried` (pstack-0-15-port D2, decision
+- **A clean rebase is not stale proof — `proof_carried` (pstack-0-15-port D2, decision
   `91835aa0`; cell p15-1).** A verdict covers a patch, not a SHA. When main moves and the branch is
   rebased onto it, every cap commit is rewritten, so the ancestry test above names all of them
   `proof_stale` — a false positive, because the code each proof describes is byte-identical. On
