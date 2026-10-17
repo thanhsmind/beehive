@@ -554,6 +554,89 @@ pub fn codex_statusline_next_text(text: &str) -> String {
     format!("{text}{sep}\n[tui]\n{CODEX_STATUS_LINE_BLOCK}")
 }
 
+pub const WORKTREE_TOOL_ALLOW: [&str; 2] = ["EnterWorktree", "ExitWorktree"];
+
+pub fn worktree_tool_allow_missing(repo_root: &Path) -> bool {
+    let settings_path = repo_root.join(".claude").join("settings.json");
+    if !exists(&settings_path) {
+        return true;
+    }
+    let text = read_text_if_exists(&settings_path);
+    if text.trim().is_empty() {
+        return true;
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let Value::Object(m) = parsed else { return false };
+    match m.get("permissions") {
+        None => true,
+        Some(Value::Object(p)) => match p.get("allow") {
+            None => true,
+            Some(Value::Array(a)) => {
+                !WORKTREE_TOOL_ALLOW.iter().all(|name| a.iter().any(|v| v.as_str() == Some(*name)))
+            }
+            Some(_) => false,
+        },
+        Some(_) => false,
+    }
+}
+
+pub fn merge_worktree_tool_allow(settings_path: &Path) -> Merged {
+    let text = read_text_if_exists(settings_path);
+    if text.trim().is_empty() {
+        let mut permissions = Map::new();
+        permissions.insert(
+            "allow".into(),
+            Value::Array(WORKTREE_TOOL_ALLOW.iter().map(|n| json!(n)).collect()),
+        );
+        let mut out = Map::new();
+        out.insert("permissions".into(), Value::Object(permissions));
+        return Merged {
+            text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))),
+            changed: true,
+        };
+    }
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Merged { text, changed: false },
+    };
+    let mut existing = match parsed {
+        Value::Object(m) => m,
+        _ => return Merged { text, changed: false },
+    };
+    let mut allow: Vec<Value> = match existing.get("permissions") {
+        None => Vec::new(),
+        Some(Value::Object(p)) => match p.get("allow") {
+            None => Vec::new(),
+            Some(Value::Array(a)) => a.clone(),
+            Some(_) => return Merged { text, changed: false },
+        },
+        Some(_) => return Merged { text, changed: false },
+    };
+    let mut changed = false;
+    for name in WORKTREE_TOOL_ALLOW {
+        if !allow.iter().any(|v| v.as_str() == Some(name)) {
+            allow.push(json!(name));
+            changed = true;
+        }
+    }
+    if !changed {
+        return Merged { text, changed: false };
+    }
+    let mut permissions = match existing.get("permissions") {
+        Some(Value::Object(p)) => p.clone(),
+        _ => Map::new(),
+    };
+    permissions.insert("allow".into(), Value::Array(allow));
+    existing.insert("permissions".into(), Value::Object(permissions));
+    Merged {
+        text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(existing))),
+        changed: true,
+    }
+}
+
 // ── statusline opt-in ──────────────────────────────────────────────────────
 
 /// The canonical statusLine command onboarding writes to .claude/settings.json.
@@ -1333,5 +1416,108 @@ mod tests {
         assert!(has_status_line_key("status_line=[]\n"));
         assert!(!has_status_line_key("# status_line = x\n"));
         assert!(!has_status_line_key("status_line_use_colors = true\n"));
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_writes_a_fresh_file_with_both_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        let expected = format!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "permissions": { "allow": ["EnterWorktree", "ExitWorktree"] }
+            }))
+        );
+        assert_eq!(res.text, expected);
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "   \n\t").unwrap();
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        assert_eq!(res.text, expected);
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_appends_only_missing_names_and_keeps_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings,
+            "{\n  \"model\": \"opus\",\n  \"permissions\": {\n    \"allow\": [\"Bash(ls:*)\", \"EnterWorktree\"],\n    \"deny\": [\"Read\"]\n  },\n  \"zeta\": 1\n}\n",
+        )
+        .unwrap();
+
+        let res = merge_worktree_tool_allow(&settings);
+        assert!(res.changed);
+        let v: Value = serde_json::from_str(&res.text).unwrap();
+        let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(keys, vec!["model", "permissions", "zeta"]);
+        assert_eq!(v["model"], "opus");
+        assert_eq!(v["zeta"], 1);
+        assert_eq!(v["permissions"]["deny"], json!(["Read"]));
+        assert_eq!(
+            v["permissions"]["allow"],
+            json!(["Bash(ls:*)", "EnterWorktree", "ExitWorktree"])
+        );
+
+        std::fs::write(&settings, &res.text).unwrap();
+        let again = merge_worktree_tool_allow(&settings);
+        assert!(!again.changed);
+        assert_eq!(again.text, res.text);
+    }
+
+    #[test]
+    fn merge_worktree_tool_allow_leaves_unchanged_the_shapes_it_cannot_merge() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        for body in [
+            "{ this is not json",
+            "[1, 2, 3]",
+            r#"{"permissions": "not-an-object"}"#,
+            r#"{"permissions": {"allow": "not-an-array"}}"#,
+        ] {
+            std::fs::write(&settings, body).unwrap();
+            let res = merge_worktree_tool_allow(&settings);
+            assert!(!res.changed, "must not change {body}");
+            assert_eq!(res.text, body);
+        }
+    }
+
+    #[test]
+    fn worktree_tool_allow_missing_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        assert!(worktree_tool_allow_missing(dir.path()));
+
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::write(&settings, "").unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, "   \n\t ").unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"model": "opus"}"#).unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": {"allow": ["EnterWorktree"]}}"#).unwrap();
+        assert!(worktree_tool_allow_missing(dir.path()));
+        std::fs::write(
+            &settings,
+            r#"{"permissions": {"allow": ["EnterWorktree", "ExitWorktree"]}}"#,
+        )
+        .unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+
+        std::fs::write(&settings, "{ this is not json").unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, "[1, 2, 3]").unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": "not-an-object"}"#).unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
+        std::fs::write(&settings, r#"{"permissions": {"allow": "not-an-array"}}"#).unwrap();
+        assert!(!worktree_tool_allow_missing(dir.path()));
     }
 }

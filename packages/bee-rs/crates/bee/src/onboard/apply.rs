@@ -344,7 +344,11 @@ pub fn apply_computed_plan(
     // either order, and `scripts/install.sh` promises that `.bak` restores the
     // pre-bee state. Whichever writer reaches a file first takes its backup;
     // the rest find it taken.
-    let mut backed_up: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let mut backed_up: std::collections::HashSet<PathBuf> = plan
+        .iter()
+        .map(|item| join_rel(repo_root, item["path"].as_str().unwrap_or("")))
+        .filter(|path| !exists(path))
+        .collect();
     let mut backup_once = |path: &Path, taken: &mut std::collections::HashSet<PathBuf>| {
         if !exists(path) || !taken.insert(path.to_path_buf()) {
             return;
@@ -571,6 +575,15 @@ pub fn apply_computed_plan(
                 // `ensure_codex_statusline` below does.
                 if hw::statusline_settings_absent(repo_root) {
                     let merged = hw::merge_statusline_settings(&target);
+                    if merged.changed {
+                        backup_once(&target, &mut backed_up);
+                        let _ = write_file_atomic(&target, merged.text.as_bytes());
+                    }
+                }
+            }
+            "merge_worktree_tool_allow" => {
+                if hw::worktree_tool_allow_missing(repo_root) {
+                    let merged = hw::merge_worktree_tool_allow(&target);
                     if merged.changed {
                         backup_once(&target, &mut backed_up);
                         let _ = write_file_atomic(&target, merged.text.as_bytes());
