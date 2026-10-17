@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-verify-trust",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"pstack-verify-trust\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 3eff40f; capture what settled, then bee close --feature pstack-verify-trust.",
+  "next_action": "bee close --feature pstack-verify-trust",
   "created_at": "2026-10-17T04:10:13.914Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "EnterWorktree",
+    "asked_at": "2026-10-17T04:12:27.636Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
+  },
   "route": {
     "class": "docs",
     "lane": "small",
@@ -165,5 +170,14 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "pstack-verify-trust",
+    "date": "2026-10-17",
+    "at": "2026-10-17T04:17:33.786Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "bee close --feature pstack-verify-trust"
   }
 }

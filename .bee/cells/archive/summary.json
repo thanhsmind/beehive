@@ -1653,5 +1653,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-17T03:49:52.385Z"
+  },
+  "pstack-verify-trust": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:17:46.200Z"
   }
 }
