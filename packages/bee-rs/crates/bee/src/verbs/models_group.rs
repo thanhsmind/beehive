@@ -32,7 +32,8 @@
 
 use crate::state::read_config_raw;
 use crate::verbs::drivers::{
-    declared_model_for, default_models, normalize_models, resolve_role, Resolved, RUNTIMES,
+    declared_model_for, default_models, normalize_models, resolve_role, Resolved, EFFORT_LADDER,
+    EFFORT_LEVELS, RUNTIMES,
 };
 use crate::verbs::knowledge::{g_prelude, pre_json_scan, GPre};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV};
@@ -113,6 +114,14 @@ fn row(
         "transport".into(),
         transport.map(Value::String).unwrap_or(Value::Null),
     );
+    let effort = slot
+        .get("effort")
+        .and_then(Value::as_str)
+        .map(js_trim)
+        .filter(|e| EFFORT_LEVELS.contains(e))
+        .map(|e| Value::String(e.to_string()))
+        .unwrap_or(Value::Null);
+    m.insert("effort".into(), effort);
     // VERBATIM: no normalize, no trim, no key filtering.
     m.insert("slot".into(), slot.clone());
     Value::Object(m)
@@ -208,6 +217,21 @@ pub(crate) fn build_table(raw_models: Option<&Value>, runtime: Option<&str>) -> 
     result.insert("runtimes".into(), Value::Array(runtimes));
     result.insert("counts".into(), Value::Object(counts));
     result.insert("note".into(), Value::String(TEACH.to_string()));
+    let idle = !result["runtimes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| r["roles"].as_array().into_iter().flatten())
+        .any(|r| r["effort"].is_string());
+    let ladder: Vec<Value> = EFFORT_LADDER
+        .iter()
+        .map(|(kind, lane, step)| {
+            let lane = if lane.is_empty() { Value::Null } else { Value::from(*lane) };
+            serde_json::json!({"kind": kind, "lane": lane, "step": step})
+        })
+        .collect();
+    result.insert("effort_ladder".into(), Value::Array(ladder));
+    result.insert("effort_ladder_idle".into(), Value::Bool(idle));
     Ok(Value::Object(result))
 }
 
@@ -255,42 +279,14 @@ fn render(result: &Value) -> String {
             .map(|r| r.get("description").and_then(Value::as_str).unwrap_or("").len())
             .max()
             .unwrap_or(0);
-        let width_model = roles
-            .iter()
-            .map(|r| match r.get("model") {
-                Some(Value::String(s)) => s.len(),
-                _ => {
-                    let tr = r.get("transport").and_then(Value::as_str).unwrap_or("");
-                    if tr.starts_with("herding") {
-                        "model chosen by the agent".len()
-                    } else if r.get("slot").is_some_and(Value::is_null) {
-                        "unset".len()
-                    } else {
-                        1
-                    }
-                }
-            })
-            .max()
-            .unwrap_or(0);
+        let width_model = roles.iter().map(|r| model_cell(r).chars().count()).max().unwrap_or(0);
 
         for role_row in roles {
             let role = role_row.get("role").and_then(Value::as_str).unwrap_or("?");
             let source = role_row.get("source").and_then(Value::as_str).unwrap_or("?");
             let source_col = format!("[{source}]");
             let description = role_row.get("description").and_then(Value::as_str).unwrap_or("");
-            let model_str = match role_row.get("model") {
-                Some(Value::String(s)) => s.as_str(),
-                _ => {
-                    let tr = role_row.get("transport").and_then(Value::as_str).unwrap_or("");
-                    if tr.starts_with("herding") {
-                        "model chosen by the agent"
-                    } else if role_row.get("slot").is_some_and(Value::is_null) {
-                        "unset"
-                    } else {
-                        "-"
-                    }
-                }
-            };
+            let model_str = model_cell(role_row);
             let transport_str = role_row.get("transport").and_then(Value::as_str).unwrap_or("-");
 
             let line = format!(
@@ -299,7 +295,46 @@ fn render(result: &Value) -> String {
             lines.push(line);
         }
     }
+    lines.push(String::new());
+    lines.push(ladder_line(result.get("effort_ladder_idle") != Some(&Value::Bool(false))));
     lines.join("\n")
+}
+
+fn model_cell(role_row: &Value) -> String {
+    let model = match role_row.get("model") {
+        Some(Value::String(s)) => s.as_str(),
+        _ => {
+            let tr = role_row.get("transport").and_then(Value::as_str).unwrap_or("");
+            if tr.starts_with("herding") {
+                "model chosen by the agent"
+            } else if role_row.get("slot").is_some_and(Value::is_null) {
+                "unset"
+            } else {
+                "-"
+            }
+        }
+    };
+    match role_row.get("effort").and_then(Value::as_str) {
+        Some(effort) => format!("{model}/{effort}"),
+        None => model.to_string(),
+    }
+}
+
+fn ladder_line(idle: bool) -> String {
+    let rows: Vec<String> = EFFORT_LADDER
+        .iter()
+        .map(|(kind, lane, step)| {
+            let name = if lane.is_empty() { kind.to_string() } else { format!("{kind}/{lane}") };
+            let step = if *step > 0 { format!("+{step}") } else { step.to_string() };
+            format!("{name} {step}")
+        })
+        .collect();
+    let (low, max) = (EFFORT_LEVELS[0], EFFORT_LEVELS[EFFORT_LEVELS.len() - 1]);
+    let mut line = format!("effort ladder: {} (clamped to {low}…{max}; no base → none)", rows.join(" · "));
+    if idle {
+        line.push_str(" — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot");
+    }
+    line
 }
 
 
@@ -616,6 +651,40 @@ mod tests {
         assert_eq!(code["slot"], json!({"model": "opus", "description": "write code"}));
         assert_eq!(code["model"], json!("opus"));
         assert_eq!(code["transport"], json!("native"));
+    }
+
+    const LADDER_LINE: &str = "effort ladder: cell/high-risk +1 · cell/tiny -1 · cell/small 0 · cell/standard 0 · cell/spike 0 · gather -2 · advisor -1 · reviewer 0 (clamped to low…max; no base → none)";
+    const IDLE_SUFFIX: &str = " — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot";
+
+    #[test]
+    fn the_ladder_line_says_idle_when_no_role_sets_effort() {
+        let raw = json!({"claude": {"code": {"model": "opus"}}});
+        let text = render(&table(&raw, Some("claude")));
+        let line = text.lines().find(|l| l.starts_with("effort ladder:")).expect("ladder line");
+        assert_eq!(line, format!("{LADDER_LINE}{IDLE_SUFFIX}"));
+    }
+
+    #[test]
+    fn a_role_with_effort_shows_model_slash_effort_and_the_ladder_is_live() {
+        let raw = json!({"claude": {"code": {"kind": "native", "model": "opus", "effort": "high"}}});
+        let text = render(&table(&raw, Some("claude")));
+        let code = text.lines().find(|l| l.contains("[configured]")).expect("code row");
+        assert!(code.contains("opus/high"), "{code}");
+        let line = text.lines().find(|l| l.starts_with("effort ladder:")).expect("ladder line");
+        assert_eq!(line, LADDER_LINE);
+    }
+
+    #[test]
+    fn the_json_carries_the_ladder_and_its_idle_state() {
+        let idle = table(&json!({"claude": {"code": {"model": "opus"}}}), Some("claude"));
+        assert_eq!(idle["effort_ladder_idle"], json!(true));
+        let ladder = idle["effort_ladder"].as_array().expect("effort_ladder array");
+        assert_eq!(ladder.len(), EFFORT_LADDER.len());
+        assert_eq!(ladder[0], json!({"kind": "cell", "lane": "high-risk", "step": 1}));
+        assert_eq!(ladder[5], json!({"kind": "gather", "lane": null, "step": -2}));
+        let live = table(&json!({"claude": {"code": {"model": "opus", "effort": "max"}}}), Some("claude"));
+        assert_eq!(live["effort_ladder_idle"], json!(false));
+        assert_eq!(role(&live, "claude", "code")["effort"], json!("max"));
     }
 
     #[test]

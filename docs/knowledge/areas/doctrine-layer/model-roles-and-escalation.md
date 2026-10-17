@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1]
+  decisions: [model-role-split D1/D2/D3/D4/D5/D6/D8/D9/D10/D11/D12, escalate-off-disarm D1/D2, role-surface-cleanup D1, role-edge-hardening D1, semantic-role-routing D1/D2/D3/D4/D5/D6/D7/D9, deploy-stage-execution D1, effort-at-the-door D2/D4/D4a/D5/D7/D10]
   sources: ["model-role-split (docs/history/model-role-split/CONTEXT.md, 34 cells, merged 2026-08-25)", "docs/discovery/model-role-split/MAP.md", "docs/history/research/oh-my-pi-model-roles-distill.md", "docs/history/model-role-split/reports/review-r2.md", "role-slot-description cell rsd-1 (capture stub c1952702, flushed 2026-08-26)", "models-show-verb cells ms-1..ms-3 (capture stub feeed5df, flushed 2026-08-26)", "agent-model-unpin cells amu-1/amu-2 (capture stub 003a23fc, flushed 2026-08-26)"]
   authoritative_for: "doctrine-layer: how a unit of work selects the model that runs it"
 ---
@@ -347,6 +347,28 @@ plan-rev bump after approval — which retires the gate you just took. The
 previous release's `docs/history/release-<version>/` is the template to copy;
 reading it first is what avoids rediscovering all three.
 
+**B24 — The door moves effort by kind and lane; the leader passes none**
+(effort-at-the-door D2, D4, D4a, D5, D7, D10). A role slot's `effort` in
+`team.<runtime>.<role>` is the base on the closed scale `low < medium < high <
+xhigh < max`. `bee dispatch prepare` moves it one ladder, `EFFORT_LADDER` beside
+`EFFORT_LEVELS` in `models.rs`, and clamps at both ends: `cell/high-risk` +1,
+`cell/tiny` −1, `cell/small` 0, `cell/standard` 0, `cell/spike` 0, `gather` −2,
+`advisor` −1, `reviewer` 0. A role with no `effort` gets none and the step reads
+`no-base` — so nothing moves until a role sets `effort`, and `bee team show`
+says so on its `effort ladder:` line (`— idle: …`, `effort_ladder_idle` in
+`--json`). The leader passes no effort; the door's value is what the payload
+carries. The door writes `[bee-kind: <kind>]` on every native payload and
+`[bee-lane: <lane>]` for a cell, and the model guard recomputes the same
+function from those tokens with config as the base: on the claude leg a
+missing or different `Agent` `effort` is REPAIRED to the computed value, the
+AO5 posture of the model repair; the codex leg compares `reasoning_effort`
+and denies a mismatch as before; no `[bee-kind:]` token is allowed unchanged.
+`derive_economics` carries `effort`, `effort_base`, `effort_step` and
+`effort_reason` after `enforcement`, so the audit is a grep over the dispatch
+log: `rg '"effort":"max"' .bee/logs/dispatch.jsonl` (or any other value). The
+herding arm carries no effort until `bee herding run` gains a per-run thinking
+flag (Open Gaps).
+
 ## Pi has fan-out paths bee does not use — and that stays a choice, not an oversight
 
 <!-- bee:not-a-deferral: This section records rejected transport alternatives and the current decision; it promises no future work. -->
@@ -394,3 +416,19 @@ core: the extension factory, `on(session_start|tool_call|tool_result)`,
   model param, so a configured `team.opencode.code` is currently ignored.
 - `role` previously lacked a revision door; this was settled by `bee cells reroute`
   under decision `68bc3484` (B20).
+- A herding dispatch carries no effort (B24): `bee herding run` has no per-run
+  thinking flag (`herding/run.rs` `parse_options`), so the ladder stops at the
+  native and codex sinks until that flag exists.
+
+## Pointers (implementation)
+
+- The scale, the ladder and the one function `effort_for_dispatch`:
+  `packages/bee-rs/crates/bee/src/verbs/drivers/models.rs`.
+- The door that applies the step and writes `[bee-kind:]`/`[bee-lane:]`:
+  `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`.
+- The four economics keys: `derive_economics` in
+  `packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs`.
+- The recompute-and-repair (claude) and deny (codex) legs:
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`.
+- The `effort ladder:` line, the `model/effort` cell and the JSON keys:
+  `packages/bee-rs/crates/bee/src/verbs/models_group.rs`.
