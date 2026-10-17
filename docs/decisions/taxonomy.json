@@ -716,6 +716,7 @@
     "release-2-54-0",
     "reflect",
     "bee-shaping",
-    "contract:proof-carried"
+    "contract:proof-carried",
+    "contract:effort-ladder"
   ]
 }

@@ -2,19 +2,24 @@
   "schema_version": "1.0",
   "feature": "effort-at-the-door",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },
   "summary": "Feature \"effort-at-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"effort-at-the-door\" (lane).",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-16T15:29:14.244Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "EnterWorktree",
+    "asked_at": "2026-10-17T01:28:49.243Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -25,5 +30,650 @@
     "rationale": "dispatch payload and economics gain effort fields the model-guard hook enforces (a hook-facing contract); one Rust area, models.rs/prepare.rs/model_guard.rs plus tests and one knowledge concept",
     "updated_at": "2026-10-16T15:30:08.771Z",
     "feature": "effort-at-the-door"
+  },
+  "gate_preview": {
+    "feature": "effort-at-the-door",
+    "plan_sha256": "adc54708c23b7c6653f884e1bdabf1f94a5b92a3ec273b4ca16cfcaeffc9fe81",
+    "previewed_at": "2026-10-17T00:56:52.980Z",
+    "cells": [
+      {
+        "id": "ead-1",
+        "feature": "effort-at-the-door",
+        "title": "Move each dispatch's effort by kind and lane at the door and record it",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "b61a2784-6cd9-40f3-8321-79e0637fd163",
+          "826497a9-095e-4095-a7f0-f993485c381b",
+          "507dbdf8-1984-4873-a88f-349e1ba1bdc3",
+          "8233df26-b0ea-4988-8987-14a5859431bd"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D2, D3, D5, D7, D10 and the contract decision d6ec1958. (1) LADDER, one home. In packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, directly under `pub(crate) const EFFORT_LEVELS: [&str; 5] = [\"low\", \"medium\", \"high\", \"xhigh\", \"max\"];`, add `pub(crate) const EFFORT_LADDER: [(&str, &str, i64); 8]` with rows (\"cell\",\"high-risk\",1), (\"cell\",\"tiny\",-1), (\"cell\",\"small\",0), (\"cell\",\"standard\",0), (\"cell\",\"spike\",0), (\"gather\",\"\",-2), (\"advisor\",\"\",-1), (\"reviewer\",\"\",0), a `pub(crate) struct EffortChoice { pub effort: Option<String>, pub base: Option<String>, pub step: i64, pub reason: String }`, and `pub(crate) fn effort_for_dispatch(base: Option<&str>, kind: &str, lane: Option<&str>) -> EffortChoice`. Rules: base None or not in EFFORT_LEVELS → effort None, base as given, step 0, reason \"no-base\"; else find the row by (kind, lane) for kind cell or by (kind, \"\") otherwise — no row → step 0, reason \"unmapped:<kind>/<lane or ->\"; add the step to the base index, clamp 0..=4, reason \"<kind>/<lane or ->\" (e.g. \"cell/high-risk\", \"gather/-\"). (2) APPLY ONCE in packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs right after `let (resolved, is_escalated) = …` (search that prefix near ADVISOR_ROLE): `lane` = for kind cell, `cell.as_ref().and_then(|c| vget(c, \"lane\")).and_then(Value::as_str)`, else None; when `resolved` is `Resolved::Model { effort, .. }` or `Resolved::Native { effort, .. }`, compute the choice and REPLACE the resolved effort with `choice.effort`, so `codex_spawn_payload` (`reasoning_effort`) and the `-c model_reasoning_effort` CLI arm read the moved value with no edit of their own. Keep `choice` for steps 3-5. The escalated (ceiling / session-model) path stays untouched. (3) MARKER AND CLAUDE SINK (D10, D3). Where the prompt's marker line is built (search `[bee-tier:` and `extra_markers`), append ` [bee-kind: <kind>]` on EVERY native payload, outside the v2-only `extra_markers` block, and ` [bee-lane: <lane>]` when kind is cell and the lane is known. In the claude Agent arm (search `payload.insert(\"model\".into(), Value::String(model.clone()));`) also insert `effort` = `choice.effort` when Some. (4) ECONOMICS (D5). Give `derive_economics` in packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs one more parameter `effort: Option<&EffortChoice>` and insert AFTER `enforcement`, in this order: `effort` (string or null), `effort_base` (string or null), `effort_step` (integer), `effort_reason` (string); when the parameter is None emit null/null/0/\"none\". Update every caller in guard.rs, prepare.rs and drivers/tests.rs (about 16 sites). hooks/model_guard.rs has its own hand-rolled twin `derive_dispatch_economics` and does NOT call this function — leave that file alone; ead-2 owns it. (5) EXPLAIN ROW (D7). `bee dispatch prepare` has no human text mode; add one row to `explain_checks` (search `pub(crate) fn explain_checks(`): name `effort`, result `pass`, detail `<base> → <effort> (<+1|-1|0>, <reason>)` or `none (no-base)`. (6) RED FIRST, required, in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs: (a) a table test over effort_for_dispatch covering all eight rows, both clamps (max +1 → max; low −2 → low), None base, an unknown lane; (b) a prepare test: claude `--kind cell` on a high-risk cell with role effort `high` → payload `effort` = `xhigh`, prompt contains `[bee-kind: cell]` and `[bee-lane: high-risk]`, economics effort/effort_base/effort_step/effort_reason = xhigh/high/1/\"cell/high-risk\"; (c) a `--kind gather` on codex with effort `high` → `-c model_reasoning_effort='low'` and prompt contains `[bee-kind: gather]` (extend `codex_prepared_non_cell_gather_uses_read_only_sandbox_cli` or add beside it); (d) extend `derive_economics_matches_the_honest_mapping` with the four keys in order and the None case. Run before implementing and record the red; implement; record the green. Scope: `cargo test -p bee verbs::drivers`. Build the binary once at the end (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) and run `packages/bee-rs/target/release/bee dispatch prepare --runtime claude --kind advisor --role hat-value --stage plan-check-value --json` from the worktree to show the four economics keys and `[bee-kind: advisor]` in the prompt; never overwrite .bee/bin/bee. No code comments (comment ratchet `.bee/bin/bee dev comment-baseline --check`).",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers` is green, AND the recorded red run of the new tests failed before the implementation; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. `packages/bee-rs/target/release/bee dispatch prepare --runtime claude --kind advisor --role hat-value --stage plan-check-value --json` prints economics with keys effort, effort_base, effort_step, effort_reason and a prompt containing `[bee-kind: advisor]`.",
+        "must_haves": {
+          "truths": [
+            "A high-risk cell dispatch on claude carries effort one step above the role's base; a gather carries two steps below; both clamp at the scale ends",
+            "A role with no configured effort yields no effort key and reason no-base",
+            "Every native payload's prompt carries [bee-kind:], and a cell's carries [bee-lane:]",
+            "Economics carries effort, effort_base, effort_step, effort_reason after enforcement, in that order, in the envelope and the dispatch log",
+            "The codex sinks read the moved value with no change to their own code"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+              "substantive": "EFFORT_LADDER, EffortChoice and effort_for_dispatch beside EFFORT_LEVELS"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "one application at the resolve site; marker tokens; effort key on the claude Agent payload; one explain row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+              "substantive": "derive_economics with the four keys"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "ladder table test, prepare tests, economics test, seen red then green"
+            }
+          ],
+          "key_links": [
+            "prepare.rs calls models::effort_for_dispatch exactly once per dispatch",
+            "every derive_economics caller passes the choice"
+          ],
+          "prohibitions": [
+            "No change to which model a role resolves to",
+            "No edit to hooks/model_guard.rs",
+            "No new config key",
+            "No write to .bee/bin/bee",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "ead-2",
+        "feature": "effort-at-the-door",
+        "title": "Make both guard legs read the ladder and repair a hand-picked Agent effort",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "ead-1"
+        ],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "85192add-1382-4497-830b-790597e19f7a",
+          "5009d4f1-6578-48df-9f88-47b3d237b08c",
+          "8233df26-b0ea-4988-8987-14a5859431bd"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D4, D4a, D10 and the contract decision d6ec1958, in packages/bee-rs/crates/bee/src/hooks/model_guard.rs only. INPUTS (D10): parse two new marker tokens beside the existing `[bee-tier:` / `[bee-cell:` parse (search `strip_prefix_ascii_ci(rest, \"[bee-cell:\")`): `[bee-kind: <kind>]` and `[bee-lane: <lane>]`. Kind comes from the token; when `[bee-cell: <id>]` names a cell the store can read (`crate::verbs::cells::read_cell(&main_root, cell_id)`, already used in this file — search it), the cell's `lane` wins over the token; otherwise the token's lane; a prompt with NO `[bee-kind:]` token takes the legacy path: no effort expectation, allowed unchanged. Never derive kind from the role name. CLAUDE LEG (D4): in `evaluate_claude_dispatch` (search `fn evaluate_claude_dispatch`) read the optional `effort` param from tool_input, compute `crate::verbs::drivers::models::effort_for_dispatch(configured effort of the resolved tier, kind, lane)` — the ONE ladder home — and compare: expected Some(e) and param == e → allow; expected Some(e) and param missing or different → REPAIR the `effort` param to e, code `effort-param-repaired`, note `[bee-tier: t] expects effort \"e\", dispatch carried \"p\" → \"e\" (D4: the door picks effort)`; expected None and param present → repair by removing the param (same code); expected None and absent → allow. The effort repair COMPOSES with the model repair: the model leg returns early today (`return repair(\"param-tier-repaired\", …)`), so restructure so one `Verdict` can carry both corrected params — give `Verdict` an optional `effort` field, extend `repair(...)` (three callers) accordingly, and make `repair_stdout` emit both in one `updatedInput`. CODEX LEG (D4a): in `evaluate_codex_spawn`, where `expected` is the configured effort (search `(Some(expected), Some(actual)) if actual != expected`), compute expected as `effort_for_dispatch(configured, kind, lane).effort` from the same tokens; keep the deny posture and codes exactly; keep `codex_spawn_mismatched_effort_override_refused` green by moving its fixture to a laddered value where needed. TWIN: `derive_dispatch_economics` (search `fn derive_dispatch_economics(`) is a hand-rolled copy that does not call `derive_economics`; add the same four keys after `enforcement`, in the same order, and extend the twin's own order test (search `derive_dispatch_economics(&config, &models, false, &verdict)`). Delete the stale doc line `/// * Claude's Agent interface has no effort parameter.` (the comment ratchet may fall, never rise). RED FIRST, required, in the in-file `mod tests`: (a) wrong effort repaired; (b) missing effort repaired; (c) right effort allowed; (d) expected-none with a param present → param removed; (e) model and effort both wrong → ONE repair carrying both; (f) `[bee-kind: advisor]` on tier `plan` and on `lane-1` with a base → the door's value allowed unchanged; (g) no `[bee-kind:]` token → allowed unchanged; (h) codex spawn with the ladder-moved `reasoning_effort` → allowed, with the unmoved base → denied. Run before the fix and record the red; implement; record green. Scope: `cargo test -p bee hooks::model_guard`. No code comments.",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::model_guard` is green, AND the recorded red run of the new tests failed before the fix; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean.",
+        "must_haves": {
+          "truths": [
+            "An Agent call whose effort differs from the door's value is repaired to it, never denied, and the human sees the guard's note",
+            "An Agent call with the right effort, including plan and lane-* tiers dispatched as advisor, is allowed unchanged",
+            "A codex spawn carrying the ladder-moved reasoning_effort is allowed; one carrying a different value is still denied",
+            "A prompt with no [bee-kind:] token is allowed unchanged",
+            "The guard and the door compute effort from the same function on the same inputs"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+              "substantive": "marker token parse, effort leg in evaluate_claude_dispatch composing with the model repair, laddered expected value in evaluate_codex_spawn, four keys in derive_dispatch_economics, eight new tests seen red then green"
+            }
+          ],
+          "key_links": [
+            "model_guard.rs calls models::effort_for_dispatch, no second ladder",
+            "the twin's order test pins the four keys"
+          ],
+          "prohibitions": [
+            "No new deny code",
+            "No change to the deny posture of the codex leg",
+            "No edit outside hooks/model_guard.rs",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "ead-3",
+        "feature": "effort-at-the-door",
+        "title": "Print the ladder and its idle state in team show and state the rule in the concept",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "ead-1"
+        ],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "869dbfc8-eee2-45e0-9bf3-4cdfe4e47165",
+          "3e6435bc-df1a-425c-9e36-0a3550beb25f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D7 and D8. (1) TEAM SHOW. In packages/bee-rs/crates/bee/src/verbs/models_group.rs, the `team show` handler (search `g_prelude(\"team show\"`) prints the role table. (a) In the existing model column print `<model>/<effort>` when the slot carries an effort (e.g. `opus/high`), else the model alone — no new column, so `team_show_columns_order_on_claude_and_pi` stays green. (b) After the table print ONE line rendered FROM `crate::verbs::drivers::models::EFFORT_LADDER` and `EFFORT_LEVELS`, never typed by hand: `effort ladder: cell/high-risk +1 · cell/tiny -1 · cell/small 0 · cell/standard 0 · cell/spike 0 · gather -2 · advisor -1 · reviewer 0 (clamped to low…max; no base → none)`; when no role on the runtime carries an effort, append ` — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot`. (c) In `--json` mode add top-level `effort_ladder` (array of {kind, lane, step} from the constant) and `effort_ladder_idle` (bool). RED FIRST in the in-file tests: one test for the text line with the idle suffix on a roster with no effort, one for the `model/effort` cell and no suffix on a roster with one, one for the JSON keys — run before the change and recorded red, then green. (2) CONCEPT (D8). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one B-rule after the last B-rule, in the file's voice: the door moves effort by kind and lane on the ladder (name every row), the leader passes no effort, the door writes `[bee-kind:]`/`[bee-lane:]` and the guard recomputes the same function from them with config as the base and repairs a different or missing Agent effort (codex leg denies as before), economics carries effort/effort_base/effort_step/effort_reason, the audit path is `rg '\"effort\":\"max\"' .bee/logs/dispatch.jsonl` (or any value), nothing moves until a role sets `effort`, and the herding arm carries no effort until `bee herding run` gains a per-run thinking flag — name that last one under Open Gaps too. Cite `effort-at-the-door D2, D4, D4a, D5, D7, D10` and add Pointers to models.rs, prepare.rs, guard.rs, model_guard.rs, models_group.rs. Run `.bee/bin/bee knowledge index --check`. Scope: `cargo test -p bee verbs::models_group`. No code comments.",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::models_group` is green, AND the recorded red run of the three new tests failed before the change. `packages/bee-rs/target/release/bee team show --runtime claude` (built with `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) prints a line starting `effort ladder:` ending with the idle suffix. `rg -c 'effort-at-the-door D2' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` prints at least 1. `.bee/bin/bee knowledge index --check` is clean. `.bee/bin/bee dev comment-baseline --check` is clean.",
+        "must_haves": {
+          "truths": [
+            "bee team show prints the ladder from the one constant, text and JSON, and says when it is idle",
+            "A role's configured effort is visible in team show beside its model",
+            "The concept states the rule, the repair posture, the audit grep, the idle condition and the herding gap"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+              "substantive": "effort ladder line with idle suffix, model/effort cell, JSON keys, three tests seen red then green"
+            },
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+              "substantive": "one new B-rule citing effort-at-the-door D2, D4, D4a, D5, D7, D10 with pointers and an Open Gap"
+            }
+          ],
+          "key_links": [
+            "models_group.rs reads models::EFFORT_LADDER, no copy"
+          ],
+          "prohibitions": [
+            "No new team show column",
+            "No write to .bee/bin/bee",
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "gather done; report recorded"
+        },
+        {
+          "stage": "plan-check",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "standard with more than five product files opens the three-seat wave"
+        },
+        {
+          "stage": "plan-check-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "SMALLER PATH at plan altitude"
+        },
+        {
+          "stage": "plan-check-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "what the explain row and team show line read like"
+        },
+        {
+          "stage": "plan-check-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-check-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "code",
+          "classification": "required",
+          "role": "code",
+          "reason": "ead-1, ead-2, ead-3 Rust changes and tests"
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "the one concept edit rides the code cell ead-3"
+        },
+        {
+          "stage": "test",
+          "classification": "conditional",
+          "role": "test",
+          "condition": "a code worker cannot show the red run",
+          "reason": "red-first author"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "goal-check smells or the 1-in-3 sample lands",
+          "reason": "standard judge tier"
+        },
+        {
+          "stage": "gather",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "gather done at research"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "fall-through only"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "hat seats carry the consult"
+        },
+        {
+          "stage": "lanes",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lanes-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lanes-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "plan",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans inline"
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-17T00:56:53.063Z",
+    "feature": "effort-at-the-door",
+    "newest_decision_id": "27ac48a5-e3eb-45dd-ac69-64212ae9a080",
+    "plan_sha256": "adc54708c23b7c6653f884e1bdabf1f94a5b92a3ec273b4ca16cfcaeffc9fe81",
+    "advisor": "hat-wave",
+    "digest_head": "# effort-at-the-door — plan-step hat wave, synthesis\n\nThree seats, one draft of `plan.md`, 2026-10-17. All three returned inside\nthe ceiling; none dropped. The leader folded every finding into the second\ndraft of `plan.md` and two new decisions (D4a `5009d4f1`, D10 `8233df26`).\n\n## MANDATE 1 — Structure (facts-gaps)\n\n- BLOCKER, fixed by D4a: the codex guard leg denies any `reasoning_effort`\n  different from the configured base, so wave 1 alone would deny every codex\n  gather/advisor dispatch. ea"
+  },
+  "approved_cell_packet": {
+    "feature": "effort-at-the-door",
+    "plan_sha256": "adc54708c23b7c6653f884e1bdabf1f94a5b92a3ec273b4ca16cfcaeffc9fe81",
+    "previewed_at": "2026-10-17T00:56:52.980Z",
+    "cells": [
+      {
+        "id": "ead-1",
+        "feature": "effort-at-the-door",
+        "title": "Move each dispatch's effort by kind and lane at the door and record it",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "b61a2784-6cd9-40f3-8321-79e0637fd163",
+          "826497a9-095e-4095-a7f0-f993485c381b",
+          "507dbdf8-1984-4873-a88f-349e1ba1bdc3",
+          "8233df26-b0ea-4988-8987-14a5859431bd"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D2, D3, D5, D7, D10 and the contract decision d6ec1958. (1) LADDER, one home. In packages/bee-rs/crates/bee/src/verbs/drivers/models.rs, directly under `pub(crate) const EFFORT_LEVELS: [&str; 5] = [\"low\", \"medium\", \"high\", \"xhigh\", \"max\"];`, add `pub(crate) const EFFORT_LADDER: [(&str, &str, i64); 8]` with rows (\"cell\",\"high-risk\",1), (\"cell\",\"tiny\",-1), (\"cell\",\"small\",0), (\"cell\",\"standard\",0), (\"cell\",\"spike\",0), (\"gather\",\"\",-2), (\"advisor\",\"\",-1), (\"reviewer\",\"\",0), a `pub(crate) struct EffortChoice { pub effort: Option<String>, pub base: Option<String>, pub step: i64, pub reason: String }`, and `pub(crate) fn effort_for_dispatch(base: Option<&str>, kind: &str, lane: Option<&str>) -> EffortChoice`. Rules: base None or not in EFFORT_LEVELS → effort None, base as given, step 0, reason \"no-base\"; else find the row by (kind, lane) for kind cell or by (kind, \"\") otherwise — no row → step 0, reason \"unmapped:<kind>/<lane or ->\"; add the step to the base index, clamp 0..=4, reason \"<kind>/<lane or ->\" (e.g. \"cell/high-risk\", \"gather/-\"). (2) APPLY ONCE in packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs right after `let (resolved, is_escalated) = …` (search that prefix near ADVISOR_ROLE): `lane` = for kind cell, `cell.as_ref().and_then(|c| vget(c, \"lane\")).and_then(Value::as_str)`, else None; when `resolved` is `Resolved::Model { effort, .. }` or `Resolved::Native { effort, .. }`, compute the choice and REPLACE the resolved effort with `choice.effort`, so `codex_spawn_payload` (`reasoning_effort`) and the `-c model_reasoning_effort` CLI arm read the moved value with no edit of their own. Keep `choice` for steps 3-5. The escalated (ceiling / session-model) path stays untouched. (3) MARKER AND CLAUDE SINK (D10, D3). Where the prompt's marker line is built (search `[bee-tier:` and `extra_markers`), append ` [bee-kind: <kind>]` on EVERY native payload, outside the v2-only `extra_markers` block, and ` [bee-lane: <lane>]` when kind is cell and the lane is known. In the claude Agent arm (search `payload.insert(\"model\".into(), Value::String(model.clone()));`) also insert `effort` = `choice.effort` when Some. (4) ECONOMICS (D5). Give `derive_economics` in packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs one more parameter `effort: Option<&EffortChoice>` and insert AFTER `enforcement`, in this order: `effort` (string or null), `effort_base` (string or null), `effort_step` (integer), `effort_reason` (string); when the parameter is None emit null/null/0/\"none\". Update every caller in guard.rs, prepare.rs and drivers/tests.rs (about 16 sites). hooks/model_guard.rs has its own hand-rolled twin `derive_dispatch_economics` and does NOT call this function — leave that file alone; ead-2 owns it. (5) EXPLAIN ROW (D7). `bee dispatch prepare` has no human text mode; add one row to `explain_checks` (search `pub(crate) fn explain_checks(`): name `effort`, result `pass`, detail `<base> → <effort> (<+1|-1|0>, <reason>)` or `none (no-base)`. (6) RED FIRST, required, in packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs: (a) a table test over effort_for_dispatch covering all eight rows, both clamps (max +1 → max; low −2 → low), None base, an unknown lane; (b) a prepare test: claude `--kind cell` on a high-risk cell with role effort `high` → payload `effort` = `xhigh`, prompt contains `[bee-kind: cell]` and `[bee-lane: high-risk]`, economics effort/effort_base/effort_step/effort_reason = xhigh/high/1/\"cell/high-risk\"; (c) a `--kind gather` on codex with effort `high` → `-c model_reasoning_effort='low'` and prompt contains `[bee-kind: gather]` (extend `codex_prepared_non_cell_gather_uses_read_only_sandbox_cli` or add beside it); (d) extend `derive_economics_matches_the_honest_mapping` with the four keys in order and the None case. Run before implementing and record the red; implement; record the green. Scope: `cargo test -p bee verbs::drivers`. Build the binary once at the end (`cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) and run `packages/bee-rs/target/release/bee dispatch prepare --runtime claude --kind advisor --role hat-value --stage plan-check-value --json` from the worktree to show the four economics keys and `[bee-kind: advisor]` in the prompt; never overwrite .bee/bin/bee. No code comments (comment ratchet `.bee/bin/bee dev comment-baseline --check`).",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::drivers` is green, AND the recorded red run of the new tests failed before the implementation; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. `packages/bee-rs/target/release/bee dispatch prepare --runtime claude --kind advisor --role hat-value --stage plan-check-value --json` prints economics with keys effort, effort_base, effort_step, effort_reason and a prompt containing `[bee-kind: advisor]`.",
+        "must_haves": {
+          "truths": [
+            "A high-risk cell dispatch on claude carries effort one step above the role's base; a gather carries two steps below; both clamp at the scale ends",
+            "A role with no configured effort yields no effort key and reason no-base",
+            "Every native payload's prompt carries [bee-kind:], and a cell's carries [bee-lane:]",
+            "Economics carries effort, effort_base, effort_step, effort_reason after enforcement, in that order, in the envelope and the dispatch log",
+            "The codex sinks read the moved value with no change to their own code"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+              "substantive": "EFFORT_LADDER, EffortChoice and effort_for_dispatch beside EFFORT_LEVELS"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+              "substantive": "one application at the resolve site; marker tokens; effort key on the claude Agent payload; one explain row"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+              "substantive": "derive_economics with the four keys"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+              "substantive": "ladder table test, prepare tests, economics test, seen red then green"
+            }
+          ],
+          "key_links": [
+            "prepare.rs calls models::effort_for_dispatch exactly once per dispatch",
+            "every derive_economics caller passes the choice"
+          ],
+          "prohibitions": [
+            "No change to which model a role resolves to",
+            "No edit to hooks/model_guard.rs",
+            "No new config key",
+            "No write to .bee/bin/bee",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "ead-2",
+        "feature": "effort-at-the-door",
+        "title": "Make both guard legs read the ladder and repair a hand-picked Agent effort",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "ead-1"
+        ],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "85192add-1382-4497-830b-790597e19f7a",
+          "5009d4f1-6578-48df-9f88-47b3d237b08c",
+          "8233df26-b0ea-4988-8987-14a5859431bd"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D4, D4a, D10 and the contract decision d6ec1958, in packages/bee-rs/crates/bee/src/hooks/model_guard.rs only. INPUTS (D10): parse two new marker tokens beside the existing `[bee-tier:` / `[bee-cell:` parse (search `strip_prefix_ascii_ci(rest, \"[bee-cell:\")`): `[bee-kind: <kind>]` and `[bee-lane: <lane>]`. Kind comes from the token; when `[bee-cell: <id>]` names a cell the store can read (`crate::verbs::cells::read_cell(&main_root, cell_id)`, already used in this file — search it), the cell's `lane` wins over the token; otherwise the token's lane; a prompt with NO `[bee-kind:]` token takes the legacy path: no effort expectation, allowed unchanged. Never derive kind from the role name. CLAUDE LEG (D4): in `evaluate_claude_dispatch` (search `fn evaluate_claude_dispatch`) read the optional `effort` param from tool_input, compute `crate::verbs::drivers::models::effort_for_dispatch(configured effort of the resolved tier, kind, lane)` — the ONE ladder home — and compare: expected Some(e) and param == e → allow; expected Some(e) and param missing or different → REPAIR the `effort` param to e, code `effort-param-repaired`, note `[bee-tier: t] expects effort \"e\", dispatch carried \"p\" → \"e\" (D4: the door picks effort)`; expected None and param present → repair by removing the param (same code); expected None and absent → allow. The effort repair COMPOSES with the model repair: the model leg returns early today (`return repair(\"param-tier-repaired\", …)`), so restructure so one `Verdict` can carry both corrected params — give `Verdict` an optional `effort` field, extend `repair(...)` (three callers) accordingly, and make `repair_stdout` emit both in one `updatedInput`. CODEX LEG (D4a): in `evaluate_codex_spawn`, where `expected` is the configured effort (search `(Some(expected), Some(actual)) if actual != expected`), compute expected as `effort_for_dispatch(configured, kind, lane).effort` from the same tokens; keep the deny posture and codes exactly; keep `codex_spawn_mismatched_effort_override_refused` green by moving its fixture to a laddered value where needed. TWIN: `derive_dispatch_economics` (search `fn derive_dispatch_economics(`) is a hand-rolled copy that does not call `derive_economics`; add the same four keys after `enforcement`, in the same order, and extend the twin's own order test (search `derive_dispatch_economics(&config, &models, false, &verdict)`). Delete the stale doc line `/// * Claude's Agent interface has no effort parameter.` (the comment ratchet may fall, never rise). RED FIRST, required, in the in-file `mod tests`: (a) wrong effort repaired; (b) missing effort repaired; (c) right effort allowed; (d) expected-none with a param present → param removed; (e) model and effort both wrong → ONE repair carrying both; (f) `[bee-kind: advisor]` on tier `plan` and on `lane-1` with a base → the door's value allowed unchanged; (g) no `[bee-kind:]` token → allowed unchanged; (h) codex spawn with the ladder-moved `reasoning_effort` → allowed, with the unmoved base → denied. Run before the fix and record the red; implement; record green. Scope: `cargo test -p bee hooks::model_guard`. No code comments.",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::model_guard` is green, AND the recorded red run of the new tests failed before the fix; both outputs in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean.",
+        "must_haves": {
+          "truths": [
+            "An Agent call whose effort differs from the door's value is repaired to it, never denied, and the human sees the guard's note",
+            "An Agent call with the right effort, including plan and lane-* tiers dispatched as advisor, is allowed unchanged",
+            "A codex spawn carrying the ladder-moved reasoning_effort is allowed; one carrying a different value is still denied",
+            "A prompt with no [bee-kind:] token is allowed unchanged",
+            "The guard and the door compute effort from the same function on the same inputs"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+              "substantive": "marker token parse, effort leg in evaluate_claude_dispatch composing with the model repair, laddered expected value in evaluate_codex_spawn, four keys in derive_dispatch_economics, eight new tests seen red then green"
+            }
+          ],
+          "key_links": [
+            "model_guard.rs calls models::effort_for_dispatch, no second ladder",
+            "the twin's order test pins the four keys"
+          ],
+          "prohibitions": [
+            "No new deny code",
+            "No change to the deny posture of the codex leg",
+            "No edit outside hooks/model_guard.rs",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "ead-3",
+        "feature": "effort-at-the-door",
+        "title": "Print the ladder and its idle state in team show and state the rule in the concept",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "ead-1"
+        ],
+        "decisions": [
+          "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+          "869dbfc8-eee2-45e0-9bf3-4cdfe4e47165",
+          "3e6435bc-df1a-425c-9e36-0a3550beb25f"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "read_first": [
+          "docs/history/effort-at-the-door/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+          "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "behavior_change": true,
+        "action": "Per effort-at-the-door D7 and D8. (1) TEAM SHOW. In packages/bee-rs/crates/bee/src/verbs/models_group.rs, the `team show` handler (search `g_prelude(\"team show\"`) prints the role table. (a) In the existing model column print `<model>/<effort>` when the slot carries an effort (e.g. `opus/high`), else the model alone — no new column, so `team_show_columns_order_on_claude_and_pi` stays green. (b) After the table print ONE line rendered FROM `crate::verbs::drivers::models::EFFORT_LADDER` and `EFFORT_LEVELS`, never typed by hand: `effort ladder: cell/high-risk +1 · cell/tiny -1 · cell/small 0 · cell/standard 0 · cell/spike 0 · gather -2 · advisor -1 · reviewer 0 (clamped to low…max; no base → none)`; when no role on the runtime carries an effort, append ` — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot`. (c) In `--json` mode add top-level `effort_ladder` (array of {kind, lane, step} from the constant) and `effort_ladder_idle` (bool). RED FIRST in the in-file tests: one test for the text line with the idle suffix on a roster with no effort, one for the `model/effort` cell and no suffix on a roster with one, one for the JSON keys — run before the change and recorded red, then green. (2) CONCEPT (D8). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one B-rule after the last B-rule, in the file's voice: the door moves effort by kind and lane on the ladder (name every row), the leader passes no effort, the door writes `[bee-kind:]`/`[bee-lane:]` and the guard recomputes the same function from them with config as the base and repairs a different or missing Agent effort (codex leg denies as before), economics carries effort/effort_base/effort_step/effort_reason, the audit path is `rg '\"effort\":\"max\"' .bee/logs/dispatch.jsonl` (or any value), nothing moves until a role sets `effort`, and the herding arm carries no effort until `bee herding run` gains a per-run thinking flag — name that last one under Open Gaps too. Cite `effort-at-the-door D2, D4, D4a, D5, D7, D10` and add Pointers to models.rs, prepare.rs, guard.rs, model_guard.rs, models_group.rs. Run `.bee/bin/bee knowledge index --check`. Scope: `cargo test -p bee verbs::models_group`. No code comments.",
+        "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::models_group` is green, AND the recorded red run of the three new tests failed before the change. `packages/bee-rs/target/release/bee team show --runtime claude` (built with `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) prints a line starting `effort ladder:` ending with the idle suffix. `rg -c 'effort-at-the-door D2' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` prints at least 1. `.bee/bin/bee knowledge index --check` is clean. `.bee/bin/bee dev comment-baseline --check` is clean.",
+        "must_haves": {
+          "truths": [
+            "bee team show prints the ladder from the one constant, text and JSON, and says when it is idle",
+            "A role's configured effort is visible in team show beside its model",
+            "The concept states the rule, the repair posture, the audit grep, the idle condition and the herding gap"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+              "substantive": "effort ladder line with idle suffix, model/effort cell, JSON keys, three tests seen red then green"
+            },
+            {
+              "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+              "substantive": "one new B-rule citing effort-at-the-door D2, D4, D4a, D5, D7, D10 with pointers and an Open Gap"
+            }
+          ],
+          "key_links": [
+            "models_group.rs reads models::EFFORT_LADDER, no copy"
+          ],
+          "prohibitions": [
+            "No new team show column",
+            "No write to .bee/bin/bee",
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "gather done; report recorded"
+        },
+        {
+          "stage": "plan-check",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "standard with more than five product files opens the three-seat wave"
+        },
+        {
+          "stage": "plan-check-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "SMALLER PATH at plan altitude"
+        },
+        {
+          "stage": "plan-check-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "what the explain row and team show line read like"
+        },
+        {
+          "stage": "plan-check-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "plan-check-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "five-seat wave is high-risk only"
+        },
+        {
+          "stage": "code",
+          "classification": "required",
+          "role": "code",
+          "reason": "ead-1, ead-2, ead-3 Rust changes and tests"
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "the one concept edit rides the code cell ead-3"
+        },
+        {
+          "stage": "test",
+          "classification": "conditional",
+          "role": "test",
+          "condition": "a code worker cannot show the red run",
+          "reason": "red-first author"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "goal-check smells or the 1-in-3 sample lands",
+          "reason": "standard judge tier"
+        },
+        {
+          "stage": "gather",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "gather done at research"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "fall-through only"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "hat seats carry the consult"
+        },
+        {
+          "stage": "lanes",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lanes-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lanes-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "no herding cockpit"
+        },
+        {
+          "stage": "plan",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "the leader plans inline"
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-17T02:44:22.604Z",
+    "branch": "wt/effort-at-the-door",
+    "worktree_id": "beehive--wt--effort-at-the-door",
+    "uat": "pending",
+    "blocked_by": [
+      "scribing-debt"
+    ]
   }
 }

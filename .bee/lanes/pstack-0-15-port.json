@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-0-15-port",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"pstack-0-15-port\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bce76a9; reload the product and test \"pstack-0-15-port\", then either approve uat (\"bee gate --name uat --approved true --lane pstack-0-15-port\") or fix it in the worktree and merge again.",
+  "next_action": "await uat, then bee close --feature pstack-0-15-port with pattern verdicts",
   "created_at": "2026-10-16T14:41:29.472Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: pstack-0-15-port",
-    "asked_at": "2026-10-16T15:23:45.166Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "question",
+    "subject": "D7 effort-per-spawn: door applies the rule (A) or leader gets a bounded --effort flag (B)?",
+    "asked_at": "2026-10-16T15:28:03.344Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   },
   "route": {
     "class": "feature",
@@ -736,5 +736,17 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "pstack-0-15-port",
+    "date": "2026-10-16",
+    "at": "2026-10-16T15:25:11.557Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "workflow-state",
+      "worktree-parallelism",
+      "human-mailbox"
+    ],
+    "next_action": "await uat, then bee close --feature pstack-0-15-port with pattern verdicts"
   }
 }
