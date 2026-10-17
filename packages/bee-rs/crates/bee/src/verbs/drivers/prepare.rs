@@ -698,14 +698,11 @@ fn codex_spawn_payload(
     prompt_body: &str,
     model: Option<&str>,
     effort: Option<&str>,
-    extra_markers: Option<&str>,
+    extra_markers: &str,
 ) -> Map<String, Value> {
     let mut payload = Map::new();
     payload.insert("task_name".into(), Value::String(codex_task_name(subject)));
-    let marker_line = match extra_markers {
-        Some(m) if !m.is_empty() => format!("[bee-tier: {tier}] {m}"),
-        _ => format!("[bee-tier: {tier}]"),
-    };
+    let marker_line = format!("[bee-tier: {tier}] {extra_markers}");
     payload.insert(
         "message".into(),
         Value::String(format!("{marker_line}\nAssignment: {subject}\n{prompt_body}")),
@@ -2324,6 +2321,20 @@ pub(crate) fn prepare_dispatch_wire(
         }
         (r, false)
     };
+    let lane: Option<&str> = if kind == "cell" {
+        cell.as_ref().and_then(|c| vget(c, "lane")).and_then(Value::as_str)
+    } else {
+        None
+    };
+    let mut resolved = resolved;
+    let effort_choice = match &mut resolved {
+        Resolved::Model { effort, .. } | Resolved::Native { effort, .. } => {
+            let choice = effort_for_dispatch(effort.as_deref(), kind, lane);
+            *effort = choice.effort.clone();
+            Some(choice)
+        }
+        _ => None,
+    };
 
     // THE NAME THE DISPATCH TRAVELS UNDER — the role that resolved, which on
     // every path but a fallen-through cell role is the token asked for.
@@ -2520,34 +2531,30 @@ pub(crate) fn prepare_dispatch_wire(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
-    let extra_markers: Option<String> = v2_info.as_ref().map(|v2| {
+    let v2_markers: Option<String> = v2_info.as_ref().map(|v2| {
         if kind == "cell" {
             let cell_id_str = cell_id.unwrap_or_default();
             let stage_part = v2.stage.as_deref().map(|s| format!(" [bee-stage: {s}]")).unwrap_or_default();
-            format!("[bee-feature: {}]{stage_part} [bee-cell: {cell_id_str}]", v2.feature)
+            format!("[bee-feature: {}]{stage_part} [bee-cell: {cell_id_str}] ", v2.feature)
         } else {
             let stage_str = v2.stage.as_deref().unwrap_or_default();
-            format!("[bee-feature: {}] [bee-stage: {stage_str}]", v2.feature)
+            format!("[bee-feature: {}] [bee-stage: {stage_str}] ", v2.feature)
         }
     });
+    let lane_marker = lane.map(|l| format!(" [bee-lane: {l}]")).unwrap_or_default();
+    let extra_markers = format!("{}[bee-kind: {kind}]{lane_marker}", v2_markers.unwrap_or_default());
 
-    let marker_header = match &extra_markers {
-        Some(extra) => format!("[bee-tier: {marker_role}] {extra}"),
-        None => format!("[bee-tier: {marker_role}]"),
-    };
+    let marker_header = format!("[bee-tier: {marker_role}] {extra_markers}");
 
     if is_escalated {
         if runtime == "codex" {
             tool = "spawn_agent".into();
-            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None, extra_markers.as_deref());
+            payload = codex_spawn_payload(&subject, ESCALATION_WORD, &prompt_body, None, None, &extra_markers);
             channel = "session-model".into();
         } else {
             tool = "Agent".into();
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
-            let escalated_header = match &extra_markers {
-                Some(extra) => format!("[bee-tier: {ESCALATION_WORD}] {extra}"),
-                None => format!("[bee-tier: {ESCALATION_WORD}]"),
-            };
+            let escalated_header = format!("[bee-tier: {ESCALATION_WORD}] {extra_markers}");
             payload.insert(
                 "prompt".into(),
                 Value::String(format!("{escalated_header}\n{prompt_body}")),
@@ -2781,7 +2788,7 @@ pub(crate) fn prepare_dispatch_wire(
                         &prompt_body,
                         Some(model),
                         effort.as_deref(),
-                        extra_markers.as_deref(),
+                        &extra_markers,
                     );
                     channel = "codex-native".into();
                     extra_transport = Some("native-override");
@@ -2818,7 +2825,7 @@ pub(crate) fn prepare_dispatch_wire(
                     Resolved::Model { model, effort } => (Some(model.as_str()), effort.as_deref()),
                     _ => (None, None),
                 };
-                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort, extra_markers.as_deref());
+                payload = codex_spawn_payload(&subject, marker_role, &prompt_body, cfg_model, cfg_effort, &extra_markers);
                 channel = "codex-native".into();
             }
             _ => {
@@ -2842,6 +2849,9 @@ pub(crate) fn prepare_dispatch_wire(
                 payload.insert("description".into(), Value::String(format!("{subject} ({model_tag})")));
                 if let Resolved::Model { model, .. } = &resolved {
                     payload.insert("model".into(), Value::String(model.clone()));
+                }
+                if let Some(effort) = effort_choice.as_ref().and_then(|c| c.effort.clone()) {
+                    payload.insert("effort".into(), Value::String(effort));
                 }
                 channel = "claude-agent".into();
             }
@@ -2939,6 +2949,7 @@ pub(crate) fn prepare_dispatch_wire(
         &resolved,
         native_confirmed,
         declared.as_deref(),
+        effort_choice.as_ref(),
     );
     economics.insert("tier_source".into(), Value::String(tier_source.to_string()));
     // lane-model-diversity D2 — the seat that was ASKED FOR, beside the role
@@ -3553,7 +3564,22 @@ pub(crate) fn explain_checks(
         }
     };
     let limits = limits.unwrap_or_else(|| serde_json::json!({ "check": "limits", "result": "skip", "detail": "role did not resolve" }));
-    vec![role, claim_check, limits]
+    let effort = match prepared {
+        Prepared::Value(v) if v["economics"].is_object() => {
+            let e = &v["economics"];
+            let detail = match (e["effort_base"].as_str(), e["effort"].as_str()) {
+                (Some(base), Some(effort)) => {
+                    let step = e["effort_step"].as_i64().unwrap_or(0);
+                    let step = if step > 0 { format!("+{step}") } else { step.to_string() };
+                    format!("{base} → {effort} ({step}, {})", e["effort_reason"].as_str().unwrap_or(""))
+                }
+                _ => format!("none ({})", e["effort_reason"].as_str().unwrap_or("no-base")),
+            };
+            explain_check("effort", true, detail)
+        }
+        _ => serde_json::json!({ "check": "effort", "result": "skip", "detail": "role did not resolve" }),
+    };
+    vec![role, claim_check, limits, effort]
 }
 
 fn explain_text(checks: &[Value]) -> String {
@@ -5822,11 +5848,12 @@ mod role_flag_tests {
                 (json!("role"), json!("pass")),
                 (json!("claim"), json!("pass")),
                 (json!("limits"), json!("refuse")),
+                (json!("effort"), json!("skip")),
             ]
         );
         assert!(checks[2]["detail"].as_str().unwrap().starts_with("limits.depth: "), "{checks:?}");
         let text = explain_text(&checks);
-        assert_eq!(text.lines().count(), 3, "{text}");
+        assert_eq!(text.lines().count(), 4, "{text}");
         assert!(text.lines().nth(2).unwrap().starts_with("limits: refuse — limits.depth: "), "{text}");
     }
 
@@ -5877,7 +5904,7 @@ mod role_flag_tests {
         let end = stdout.rfind('}').map(|i| i + 1).unwrap();
         let v: Value = serde_json::from_str(&stdout[start..end]).unwrap();
         let results: Vec<_> = v["explain"].as_array().unwrap().iter().map(|c| c["result"].clone()).collect();
-        assert_eq!(results, vec![json!("pass"), json!("pass"), json!("refuse")], "{v}");
+        assert_eq!(results, vec![json!("pass"), json!("pass"), json!("refuse"), json!("skip")], "{v}");
         assert_eq!(before, tree(&root), "explain claimed, reserved or recorded something");
     }
 }

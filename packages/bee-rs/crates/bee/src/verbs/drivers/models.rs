@@ -26,6 +26,40 @@ use std::time::Instant;
 
 pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
+pub(crate) const EFFORT_LADDER: [(&str, &str, i64); 8] = [
+    ("cell", "high-risk", 1),
+    ("cell", "tiny", -1),
+    ("cell", "small", 0),
+    ("cell", "standard", 0),
+    ("cell", "spike", 0),
+    ("gather", "", -2),
+    ("advisor", "", -1),
+    ("reviewer", "", 0),
+];
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EffortChoice {
+    pub effort: Option<String>,
+    pub base: Option<String>,
+    pub step: i64,
+    pub reason: String,
+}
+
+pub(crate) fn effort_for_dispatch(base: Option<&str>, kind: &str, lane: Option<&str>) -> EffortChoice {
+    let base_owned = base.map(str::to_string);
+    let Some(index) = base.and_then(|b| EFFORT_LEVELS.iter().position(|l| *l == b)) else {
+        return EffortChoice { effort: None, base: base_owned, step: 0, reason: "no-base".into() };
+    };
+    let lane_key = if kind == "cell" { lane.unwrap_or("") } else { "" };
+    let label = format!("{kind}/{}", lane.filter(|_| kind == "cell").unwrap_or("-"));
+    let (step, reason) = match EFFORT_LADDER.iter().find(|(k, l, _)| *k == kind && *l == lane_key) {
+        Some((_, _, step)) => (*step, label),
+        None => (0, format!("unmapped:{label}")),
+    };
+    let moved = (index as i64 + step).clamp(0, EFFORT_LEVELS.len() as i64 - 1) as usize;
+    EffortChoice { effort: Some(EFFORT_LEVELS[moved].to_string()), base: base_owned, step, reason }
+}
+
 // opencode-support E4/S4: opencode joins claude/codex as a real `team.<rt>`
 // key (docs/config-reference.md) rather than the silently-ignored third key
 // it used to be — every function below is already keyed generically off this

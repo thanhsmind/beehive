@@ -1,0 +1,12 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "A high-risk cell dispatch on claude carries effort one step above the role's base; a gather carries two steps below; both clamp at the scale ends", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "A role with no configured effort yields no effort key and reason no-base", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"},
+    {"requirement": "Every native payload's prompt carries [bee-kind:], and a cell's carries [bee-lane:]", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "Economics carries effort, effort_base, effort_step, effort_reason after enforcement, in that order, in the envelope and the dispatch log", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"},
+    {"requirement": "The codex sinks read the moved value with no change to their own code", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "prepare.rs calls models::effort_for_dispatch exactly once per dispatch", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "every derive_economics caller passes the choice", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"}
+  ]
+}
