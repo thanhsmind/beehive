@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "onboard-allow-worktree-tools",
   "mode": null,
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"onboard-allow-worktree-tools\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"onboard-allow-worktree-tools\" (lane).",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-17T03:49:13.524Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -23,5 +23,12 @@
     "rationale": "add-only permissions.allow projection for EnterWorktree/ExitWorktree in onboarding's .claude/settings.json write; 3 product files + tests, 0 flags",
     "updated_at": "2026-10-17T03:49:13.571Z",
     "feature": "onboard-allow-worktree-tools"
+  },
+  "merge_ready": {
+    "since": "2026-10-17T04:12:10.128Z",
+    "branch": "wt/onboard-allow-worktree-tools",
+    "worktree_id": "beehive--wt--onboard-allow-worktree-tools",
+    "uat": "pending",
+    "blocked_by": []
   }
 }

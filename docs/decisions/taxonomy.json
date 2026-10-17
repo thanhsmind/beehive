@@ -719,6 +719,7 @@
     "contract:proof-carried",
     "contract:effort-ladder",
     "bee-swarming",
-    "bee-technical-writing"
+    "bee-technical-writing",
+    "contract:worktree-tool-allow"
   ]
 }
