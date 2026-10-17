@@ -59,7 +59,8 @@ one-line pointer to discovery.md when one exists.>
 ## Approach
 <Recommended path (cites decision ids) · rejected alternatives (one line
 each) · compact risk map (component / LOW-MEDIUM-HIGH / Lands in: the cell
-id that carries the risk / proof needed). When approach.md exists, drop this
+id that carries the risk / proof needed; a MEDIUM or HIGH row states the one
+fact and its run output, per "Risk map" below). When approach.md exists, drop this
 section and point to it.>
 
 Waves: <the groups that run in parallel, and the reason for each serial edge>
@@ -199,7 +200,14 @@ in `.bee/state.json`. Approval stamps this packet.
 ## Risk map
 | Component | Risk | Reason | Lands in | Proof needed |
 |---|---|---|---|---|
-| <area> | LOW/MEDIUM/HIGH | <why> | <cell id> | <command, inspection, or spike question> |
+| <area> | LOW/MEDIUM/HIGH | <why; MEDIUM/HIGH: the one fact: …> | <cell id> | <command, inspection, or spike question> |
+
+Every MEDIUM or HIGH row names the one fact the change is safe because of
+(for example: this call only drops entries already dead), written as `the
+one fact: …` in the Reason cell, and the command or small script that proves
+that fact by running the real code. The planner runs it before the gate and
+pastes the output as the row's evidence. A reason that only sounds safe moves
+the row to Open Questions: a writeup reads the same whether it is true or not.
 
 ## Files and order
 <bounded list, likely touch order>

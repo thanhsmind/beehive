@@ -50,7 +50,11 @@ and prints the binary path. First build is slow (minutes); later ones are
 seconds. **Never hardcode `packages/bee-rs/target/release/bee`** — this machine
 sets `CARGO_TARGET_DIR`, so the binary lands elsewhere. Ask `control-bee bin`.
 
-`launch` prints the sandbox path and is ready when it exits 0. It:
+`launch` prints the sandbox path and is ready when it exits 0.
+Ready means usable: the sandbox came up from an empty data dir with every migration and
+seed step done, and the first mapped feature can be driven. A process that
+answers, or a doctor row that passes before init finished, is not ready, and
+evidence captured before that point is discarded. It:
 
 1. picks a run id and writes `$VERIFY_HOME/current-run`,
 2. creates `$VERIFY_HOME/run/<id>/repo`, `git init`s it, makes a seed commit,
