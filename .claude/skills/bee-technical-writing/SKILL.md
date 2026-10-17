@@ -109,6 +109,9 @@ Source: Kohl, The Global English Style Guide (SAS Press). Guideline text fetched
 - Apply the `bee-unslop` skill to every doc this skill touches. That skill owns the slop-pattern catalog: AI vocabulary, filler, hedging, formatting tells.
 - Never rewrite quoted evidence, ids, commands or code.
 - PR descriptions and commit messages are writing too. Every layer except Diátaxis applies to them. A PR body is a briefing that a reviewer can read in under a minute. Do not paste swarm logs, SHA lists, or metric tables. Link them.
+  - Title: `type(scope): subject`, imperative, no trailing period. Name a real symbol when one carries the change.
+  - Body: up to six short sections, in this order. **Why**: one to three sentences. **What changed**: one to three bullets. **Scope**: what it covers and what it leaves out. **Tradeoffs**: only the rejected alternatives a reviewer would ask about; skip it when there are none. **Blast Radius**: who or what it touches, and why that is safe. **Verification**: the real commands run and their outcomes; for perf, one primary number.
+  - Logs, SHA lists, lane recitals and file-by-file checklists go in a linked artifact, never in the body.
 - Product UI strings are not documentation. Use your product's copy guidelines for those.
 - Indent code snippets with tabs. Write real paths and real symbols. Make every count or tree claim true at the commit that lands it, and include the command that regenerates it.
 

@@ -16,7 +16,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "5026a2d72c01ece2da89226830a035e3c7bf1b5886960e1d02ec3ec21a6f6eec"
+      "sha256": "c8b19649035ca2f5c367902f5754e97007d72a0d25e0e2c8f6f96e219cda99c9"
     },
     {
       "name": "bee-herdr",
@@ -24,7 +24,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "212a7347560effedd3c264452a13c336a6c3deab626c05d561b53dac02eeb81a"
+      "sha256": "09e92bd126a776d06a878bbc52e7789618af205ca72c7163fcb7f81330dc13e6"
     },
     {
       "name": "bee-how",
@@ -104,7 +104,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "1ce7956a7d2c375b6b9e938aa902bae4f039ebc6a5da611bc91e821cb61dbca6"
+      "sha256": "e9c19e168427520a1cf00addec4ef93c91532541bb08d04721c064a7c890b6ee"
     },
     {
       "name": "bee-teach",
@@ -112,7 +112,7 @@
     },
     {
       "name": "bee-technical-writing",
-      "sha256": "bc6da6f714391480708733b329780fbe6b1804daada41ab7daf4bffaec3f3bd4"
+      "sha256": "362cf1786cf923e319e5e2afcc85e7e3441d1e4d9ee7700b4818d483b621b18b"
     },
     {
       "name": "bee-unslop",

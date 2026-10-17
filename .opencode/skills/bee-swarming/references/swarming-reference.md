@@ -271,9 +271,17 @@ authority call, a dissent, a plan conflict.
 | Provider error — quota, auth, empty response, stall, 5xx | Take the next step of the payload's `fallback_chain`. |
 | Red proof or task miss | Re-dispatch on the same role with the failing excerpt (step 7). Never another model — the fallback-chain gate in "Model Roles — Config-Driven, Runtime-Keyed" is that rule. |
 | Silent death — stuck, per step 6 | `bee cells unclaim`, `bee reservations release`, then re-dispatch. |
+| Silent worker, unsure if stuck | Probe read-only: `bee cells list`, `bee reservations list`, the pane or job record. Never resume or re-prompt it to find out — a resume restarts an idle worker. |
+| Context or budget cap hit | Re-dispatch with a smaller scope: split the cell or narrow its files. The same brief hits the same cap. |
+| Transport drop — pane died, connection lost | Re-dispatch the same brief once. |
+| Tool error the worker could not route around | Re-dispatch on a different configured role or transport, with a logged `role-reroute` decision. |
+| Unknown failure | Retry once, then apply the two-retries rule below. |
+| Late return — a worker reports after its cell was re-dispatched or capped | Reconcile against the current cell state first. A unique finding is salvaged through a fresh cell, never a blind accept — the late report was written against a base that has moved. |
 
-A second failed re-dispatch of the same cell ends the retries: surface it
-to the user with both diagnoses. Two workers failing on one root cause is
+A second failed re-dispatch of the same cell ends the retries: abandon the
+dispatch, write one postmortem line (`bee mailbox reflect`, or the cap's
+`deviations`), replan around it, and surface it to the user with both
+diagnoses. Two workers failing on one root cause is
 the systemic stop in `bee-swarming/SKILL.md` ("Hard rules (both roles)").
 
 ## Proof at finish and close, in full
