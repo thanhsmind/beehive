@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-0-15-port",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"pstack-0-15-port\" started at phase \"exploring\" (lane).",
-  "next_action": "await uat, then bee close --feature pstack-0-15-port with pattern verdicts",
+  "next_action": "bee close finished \"pstack-0-15-port\" — feature is closed.",
   "created_at": "2026-10-16T14:41:29.472Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
