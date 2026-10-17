@@ -1,0 +1,128 @@
+{
+  "id": "rel550-1",
+  "feature": "release-2-55-0",
+  "title": "Publish release 2.55.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-55-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.55.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.55.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.55.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.55.0",
+      "tag v2.55.0 exists locally and on the remote",
+      "the GitHub release for v2.55.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.55.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.55.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "w-rel550-1",
+    "outcome": "bee 2.55.0 is live: tag v2.55.0 pushed, release-binaries green, assets verified",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "The herding deploy worker was refused as deploy_authorization_wrong_session because the pane lacked BEE_SESSION_ID; the leader ran the script in the issuing session under a fresh permit — hit an unforeseen obstacle (bee issue filed)",
+      "Two earlier permits were spent: one by the worker's refused authorize, one by a dirty-tree abort caused by the bee heartbeat file — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-17T04:51:32.303Z",
+    "behavior_change": false,
+    "verification_evidence": "the script's own test gate ran the declared suite (40 suites, all ok) before tagging; release-binaries run https://github.com/thanhsmind/beehive/actions/runs/39003702082 green; assets verified at https://github.com/thanhsmind/beehive/releases/tag/v2.55.0; final line 'release OK bee 2.55.0 is live'",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "bash scripts/release.sh 2.55.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-10-17T04:31:00.385Z",
+    "mistakes": [
+      {
+        "wrong": "Started the release with bee bookkeeping files still dirty, so the first authorized run aborted on a dirty tree and burned a one-time permit",
+        "better": "commit .bee bookkeeping in the same command that takes the permit",
+        "fix_at": "doctrine"
+      }
+    ],
+    "commit_pending": "the release commit 03d2032d9 is written by scripts/release.sh with its fixed subject; the cell trailer cannot ride it, exactly as release-2-54-0",
+    "report": {
+      "outcome": "bee 2.55.0 released: both plugin manifests at 2.55.0, declared suite green before the tag, release commit 03d2032d9, tag v2.55.0 pushed, release-binaries run 39003702082 green, five binaries and SHA256SUMS published",
+      "commit": "03d2032d9",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.55.0 && bee dev release-manifest --check — green:live — the script's own test gate ran the declared suite (40 suites, all ok) before tagging; release-binaries run https://github.com/thanhsmind/beehive/actions/runs/39003702082 green; assets verified at https://github.com/thanhsmind/beehive/releases/tag/v2.55.0; final line 'release OK bee 2.55.0 is live'",
+      "deviations": [
+        "The herding deploy worker was refused as deploy_authorization_wrong_session because the pane lacked BEE_SESSION_ID; the leader ran the script in the issuing session under a fresh permit — hit an unforeseen obstacle (bee issue filed)",
+        "Two earlier permits were spent: one by the worker's refused authorize, one by a dirty-tree abort caused by the bee heartbeat file — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "Started the release with bee bookkeeping files still dirty, so the first authorized run aborted on a dirty tree and burned a one-time permit — commit .bee bookkeeping in the same command that takes the permit — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.55.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.55.0 exists locally and on the remote",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "the GitHub release for v2.55.0 carries the binaries and SHA256SUMS",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": "docs/history/release-2-55-0/CONTEXT.md"
+          },
+          {
+            "requirement": "the pushed tag is what triggers release-binaries.yml",
+            "artifact": ".claude-plugin/plugin.json"
+          }
+        ],
+        "recorded_at": "2026-10-17T04:52:34.621Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "skipped: commit_pending"
+      }
+    ]
+  }
+}

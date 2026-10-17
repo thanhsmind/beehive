@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-55-0",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-55-0\" started at phase \"exploring\" (lane).",
-  "next_action": "dispatch rel550-1 under the deploy role",
+  "next_action": "bee close --feature release-2-55-0",
   "created_at": "2026-10-17T04:29:54.388Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Lần trước script dừng vì file heartbeat của bee làm cây bẩn. Tôi đã commit nó, lấy permit mới và chạy lại ngay trong cùng một lệnh. Chờ kết",
-    "asked_at": "2026-10-17T04:42:04.514Z",
-    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
-  },
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
@@ -380,5 +375,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "release-2-55-0",
+    "date": "2026-10-17",
+    "at": "2026-10-17T04:52:51.232Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "bee close --feature release-2-55-0"
   }
 }
