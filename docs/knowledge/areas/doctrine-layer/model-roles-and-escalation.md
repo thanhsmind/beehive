@@ -323,7 +323,7 @@ rows. Four were genuinely new and worth having: a per-Pi-version capability
 audit table, the role's own description reaching the worker's prompt, a
 measured note per herding agent, and the reviewer reading the retained
 artifact. The finding that saved the most work is negative: the source BUILT
-per-role toolset narrowing and later abolished it (ADR 0008 amended by ADR
+per-role toolset narrowing and then abolished it (ADR 0008 amended by ADR
 0064). A source that tried a thing and retired it is stronger evidence than one
 that never tried it, so this stays unbuilt here by decision, not by omission.
 Brief: `docs/history/research/ak-pi-workflow-roles-xia.md`.
@@ -348,7 +348,7 @@ previous release's `docs/history/release-<version>/` is the template to copy;
 reading it first is what avoids rediscovering all three.
 
 **B24 — The door moves effort by kind and lane; the leader passes none**
-(effort-at-the-door D1, D2, D3, D4, D4a, D5, D7, D8, D9, D10; D6 keeps fast
+(effort-at-the-door D1-D10 and effort-at-the-door D4a; D6 keeps fast
 mode out of the door — a session toggle the user owns). A role slot's `effort` in
 `team.<runtime>.<role>` is the base on the closed scale `low < medium < high <
 xhigh < max`. `bee dispatch prepare` moves it one ladder, `EFFORT_LADDER` beside

@@ -84,13 +84,15 @@ The function and constant names, where the ladder step is applied inside
 
 ## Outstanding Questions
 
-### Deferred To Planning
+<!-- bee:not-a-deferral: the one question was answered in planning (D10) and execution (ead-2); this records the answer, it promises nothing -->
+### Answered In Planning
 
-- [ ] Whether the guard can read the cell's lane cheaply from `[bee-cell:]` — the cells store read already exists for the claim guard; planning names the helper.
+- [x] Whether the guard can read the cell's lane cheaply from `[bee-cell:]` — yes: `door_effort` in `model_guard.rs` reads it through `crate::verbs::cells::read_cell`, and D10 made the `[bee-lane:]` token the fallback.
+<!-- /bee:not-a-deferral -->
 
-## Deferred Ideas
+## Out Of Scope, Recorded Elsewhere
 
-<!-- bee:not-a-deferral: these items already have, or get in this feature's close, their own backlog rows; this section only names them -->
+<!-- bee:not-a-deferral: these items already have their own backlog rows; this section only names them -->
 - A per-run `--thinking` flag on `bee herding run` so the herding arm can carry the door's effort (backlog at close).
 - Fast mode by urgency signal (D6, not ported).
 <!-- /bee:not-a-deferral -->
