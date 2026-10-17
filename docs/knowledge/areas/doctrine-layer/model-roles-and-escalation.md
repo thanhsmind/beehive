@@ -348,7 +348,8 @@ previous release's `docs/history/release-<version>/` is the template to copy;
 reading it first is what avoids rediscovering all three.
 
 **B24 — The door moves effort by kind and lane; the leader passes none**
-(effort-at-the-door D2, D4, D4a, D5, D7, D10). A role slot's `effort` in
+(effort-at-the-door D1, D2, D3, D4, D4a, D5, D7, D8, D9, D10; D6 keeps fast
+mode out of the door — a session toggle the user owns). A role slot's `effort` in
 `team.<runtime>.<role>` is the base on the closed scale `low < medium < high <
 xhigh < max`. `bee dispatch prepare` moves it one ladder, `EFFORT_LADDER` beside
 `EFFORT_LEVELS` in `models.rs`, and clamps at both ends: `cell/high-risk` +1,
