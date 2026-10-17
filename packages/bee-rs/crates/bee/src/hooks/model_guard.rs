@@ -16,10 +16,10 @@ use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
-use crate::verbs::drivers::{declared_model_for, normalize_models, resolve_tier, Resolved};
+use crate::verbs::drivers::{declared_model_for, effort_for_dispatch, normalize_models, resolve_tier, EffortChoice, Resolved};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const HOOK_NAME: &str = "model-guard";
@@ -205,6 +205,8 @@ pub(crate) struct PromptAnchoredMarkers {
     pub feature: Option<String>,
     pub stage: Option<String>,
     pub cell: Option<String>,
+    pub kind: Option<String>,
+    pub lane: Option<String>,
 }
 
 pub(crate) fn parse_anchored_markers(text: &str) -> PromptAnchoredMarkers {
@@ -212,60 +214,26 @@ pub(crate) fn parse_anchored_markers(text: &str) -> PromptAnchoredMarkers {
     let mut rest = text;
     loop {
         rest = rest.trim_start_matches(is_js_ws);
-        if !rest.starts_with('[') {
+        let prefixes = ["[bee-tier:", "[bee-feature:", "[bee-stage:", "[bee-cell:", "[bee-kind:", "[bee-lane:"];
+        let Some((index, tail)) =
+            prefixes.iter().enumerate().find_map(|(i, p)| strip_prefix_ascii_ci(rest, p).map(|t| (i, t)))
+        else {
+            break;
+        };
+        let Some((name, after)) = tail.trim_start_matches(is_js_ws).split_once(']') else { break };
+        if name.is_empty() || name.contains(is_js_ws) || name.contains('[') {
             break;
         }
-        if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-tier:") {
-            let tail = tail.trim_start_matches(is_js_ws);
-            if let Some((name, after)) = tail.split_once(']') {
-                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
-                    if markers.tier.is_none() {
-                        markers.tier = Some(name.to_string());
-                    }
-                    rest = after;
-                    continue;
-                }
-            }
-            break;
-        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-feature:") {
-            let tail = tail.trim_start_matches(is_js_ws);
-            if let Some((name, after)) = tail.split_once(']') {
-                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
-                    if markers.feature.is_none() {
-                        markers.feature = Some(name.to_string());
-                    }
-                    rest = after;
-                    continue;
-                }
-            }
-            break;
-        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-stage:") {
-            let tail = tail.trim_start_matches(is_js_ws);
-            if let Some((name, after)) = tail.split_once(']') {
-                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
-                    if markers.stage.is_none() {
-                        markers.stage = Some(name.to_string());
-                    }
-                    rest = after;
-                    continue;
-                }
-            }
-            break;
-        } else if let Some(tail) = strip_prefix_ascii_ci(rest, "[bee-cell:") {
-            let tail = tail.trim_start_matches(is_js_ws);
-            if let Some((name, after)) = tail.split_once(']') {
-                if !name.is_empty() && !name.contains(is_js_ws) && !name.contains('[') {
-                    if markers.cell.is_none() {
-                        markers.cell = Some(name.to_string());
-                    }
-                    rest = after;
-                    continue;
-                }
-            }
-            break;
-        } else {
-            break;
-        }
+        let slot = match index {
+            0 => &mut markers.tier,
+            1 => &mut markers.feature,
+            2 => &mut markers.stage,
+            3 => &mut markers.cell,
+            4 => &mut markers.kind,
+            _ => &mut markers.lane,
+        };
+        slot.get_or_insert_with(|| name.to_string());
+        rest = after;
     }
     markers
 }
@@ -296,6 +264,8 @@ fn parse_claude_anchored_markers(tool_input: &Map<String, Value>) -> PromptAncho
         feature: desc_markers.feature.or(prompt_markers.feature),
         stage: desc_markers.stage.or(prompt_markers.stage),
         cell: desc_markers.cell.or(prompt_markers.cell),
+        kind: desc_markers.kind.or(prompt_markers.kind),
+        lane: desc_markers.lane.or(prompt_markers.lane),
     }
 }
 
@@ -476,7 +446,6 @@ fn role_slot_description(models_raw: Option<&Value>, runtime: &str, role: &str) 
 /// separate facts:
 ///
 /// * `normalize_tier_value` retains configured `{model, effort}` values.
-/// * Claude's Agent interface has no effort parameter.
 /// * Codex payload preparation carries model and effort for both Model and
 ///   Native settings when that route is supported. Read-only jobs use the
 ///   CLI's model and effort arguments instead.
@@ -718,18 +687,19 @@ struct Verdict {
     /// updatedInput are not something a guard should bet a dropped prompt on.
     updated_input: Option<Value>,
     notes: Vec<String>,
+    effort: Option<EffortChoice>,
 }
 
 fn no_opinion() -> Verdict {
-    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None, updated_input: None, notes: Vec::new() }
+    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 fn allow(transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type, updated_input: None, notes: Vec::new() }
+    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 fn deny(reason: String, transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type, updated_input: None, notes: Vec::new() }
+    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type, updated_input: None, notes: Vec::new(), effort: None }
 }
 
 /// Allow, with one field of the request rewritten on a replacement copy.
@@ -750,6 +720,7 @@ fn repair(
         subagent_type,
         updated_input: Some(updated_input),
         notes: vec![note],
+        effort: None,
     }
 }
 
@@ -798,6 +769,27 @@ fn is_read_only_role(role: &str) -> bool {
     ) || crate::verbs::drivers::SEAT_ROLES.contains(&role)
 }
 
+fn store_main_root(root: &Path) -> PathBuf {
+    match crate::roots::resolve_store_root_worktree(root) {
+        crate::roots::RootsWt::Go(store_roots) => store_roots.main_root(),
+        _ => root.to_path_buf(),
+    }
+}
+
+fn door_effort(root: Option<&Path>, markers: &PromptAnchoredMarkers, resolved: &Resolved) -> Option<EffortChoice> {
+    let kind = markers.kind.as_deref()?;
+    let stored_lane = root.zip(markers.cell.as_deref()).and_then(|(root, id)| {
+        let cell = crate::verbs::cells::read_cell(&store_main_root(root), id).ok().flatten()?;
+        cell.get("lane").and_then(Value::as_str).map(String::from)
+    });
+    let lane = stored_lane.or_else(|| markers.lane.clone());
+    let base = match resolved {
+        Resolved::Model { effort, .. } | Resolved::Native { effort, .. } => effort.as_deref(),
+        _ => None,
+    };
+    Some(effort_for_dispatch(base, kind, lane.as_deref()))
+}
+
 fn evaluate_semantic_role_routing(
     root: Option<&Path>,
     runtime: &str,
@@ -808,10 +800,7 @@ fn evaluate_semantic_role_routing(
         return Ok(());
     };
 
-    let main_root = match crate::roots::resolve_store_root_worktree(root) {
-        crate::roots::RootsWt::Go(store_roots) => store_roots.main_root(),
-        _ => root.to_path_buf(),
-    };
+    let main_root = store_main_root(root);
 
     let mut feature = markers.feature.clone();
 
@@ -1128,7 +1117,9 @@ FIX: set model: \"{cfg_model}\"."
                 _ => {}
             }
 
-            match (cfg_effort.as_deref(), effort_param.as_deref()) {
+            let choice = door_effort(root, &markers, &resolved);
+            let expected = choice.as_ref().map_or_else(|| cfg_effort.clone(), |c| c.effort.clone());
+            match (expected.as_deref(), effort_param.as_deref()) {
                 (Some(expected), None) => {
                     let reason = format!(
                         "bee-model-guard: role \"{role}\" requires configured reasoning effort \"{expected}\", but spawn_agent carries no reasoning_effort parameter.\n\
@@ -1152,7 +1143,7 @@ FIX: omit the reasoning_effort parameter."
                 }
                 _ => {}
             }
-            allow("codex-spawn-marker", Some(role), model_param, None)
+            Verdict { effort: choice, ..allow("codex-spawn-marker", Some(role), model_param, None) }
         }
         Resolved::Inherit => {
             if model_param.is_some() || effort_param.is_some() {
@@ -1209,6 +1200,42 @@ fn dispatch_kind_for_role(role: &str) -> Option<&'static str> {
 }
 
 fn evaluate_claude_dispatch(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
+    let mut verdict = evaluate_claude_model(root, tool_input, models);
+    let (Value::Object(obj), Some(t), false, Some(_)) =
+        (tool_input, verdict.tier.clone(), verdict.deny, verdict.transport)
+    else {
+        return verdict;
+    };
+    let resolved = resolve_tier(models, &t, "claude", GUARD_PURPOSE);
+    let Some(choice) = door_effort(root, &parse_claude_anchored_markers(obj), &resolved) else { return verdict };
+    let param = obj.get("effort").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    if param != choice.effort.as_deref() {
+        let mut fixed = match verdict.updated_input.take() {
+            Some(Value::Object(map)) => map,
+            _ => obj.clone(),
+        };
+        let carried = param.map_or_else(|| "no effort".to_string(), |p| format!("\"{p}\""));
+        let note = match &choice.effort {
+            Some(e) => {
+                fixed.insert("effort".into(), Value::String(e.clone()));
+                format!("[bee-tier: {t}] expects effort \"{e}\", dispatch carried {carried} → \"{e}\" (D4: the door picks effort)")
+            }
+            None => {
+                fixed.remove("effort");
+                format!("[bee-tier: {t}] expects no effort, dispatch carried {carried} → removed (D4: the door picks effort)")
+            }
+        };
+        if verdict.notes.is_empty() {
+            verdict.transport = Some("effort-param-repaired");
+        }
+        verdict.notes.push(note);
+        verdict.updated_input = Some(Value::Object(fixed));
+    }
+    verdict.effort = Some(choice);
+    verdict
+}
+
+fn evaluate_claude_model(root: Option<&Path>, tool_input: &Value, models: &Map<String, Value>) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
 
     let model_param: Option<String> = obj
@@ -1671,6 +1698,12 @@ fn derive_dispatch_economics(
     out.insert("effective_model_status".into(), Value::String(effective_status.to_string()));
     out.insert("channel".into(), Value::String(channel.to_string()));
     out.insert("enforcement".into(), Value::String(enforcement.to_string()));
+    let effort = verdict.effort.as_ref();
+    let text = |v: Option<&String>| v.map_or(Value::Null, |s| Value::String(s.clone()));
+    out.insert("effort".into(), text(effort.and_then(|c| c.effort.as_ref())));
+    out.insert("effort_base".into(), text(effort.and_then(|c| c.base.as_ref())));
+    out.insert("effort_step".into(), Value::from(effort.map_or(0, |c| c.step)));
+    out.insert("effort_reason".into(), Value::String(effort.map_or("none", |c| c.reason.as_str()).to_string()));
     Some(out)
 }
 
@@ -4054,6 +4087,7 @@ mod tests {
             subagent_type: None,
             updated_input: None,
             notes: vec![],
+            effort: None,
         };
         let guard_econ = derive_dispatch_economics(&config, &models, false, &verdict).unwrap();
 
@@ -4067,6 +4101,17 @@ mod tests {
             guard_econ.get("effective_model_status"),
             "prepare and guard effective_model_status must agree"
         );
+        let keys: Vec<&str> = guard_econ.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            [
+                "logical_tier", "requested_model", "effective_model", "effective_model_status", "channel",
+                "enforcement", "effort", "effort_base", "effort_step", "effort_reason"
+            ]
+        );
+        for key in ["effort", "effort_base", "effort_step", "effort_reason"] {
+            assert_eq!(prep_econ.get(key), guard_econ.get(key), "prepare and guard {key} must agree");
+        }
         assert_eq!(prep_econ.get("requested_model"), Some(&json!("gemini-3.8-flash-high")));
         assert_eq!(prep_econ.get("effective_model_status"), Some(&json!("declared")));
     }
@@ -4134,6 +4179,135 @@ mod tests {
         }
     }
 
+    fn effort_fixture() -> tempfile::TempDir {
+        fixture(&json!({"team": {
+            "claude": {
+                "code": {"model": "sonnet", "effort": "high"},
+                "test": "haiku",
+                "plan": {"model": "opus", "effort": "high"},
+                "lane-1": {"model": "fable", "effort": "xhigh"}
+            },
+            "codex": {"generation": {"model": "gpt-5.5", "effort": "high"}}
+        }}))
+    }
+
+    fn agent_call(description: &str, model: &str, effort: Option<&str>) -> Value {
+        let mut input = json!({"description": description, "prompt": "work", "model": model});
+        if let Some(e) = effort {
+            input["effort"] = json!(e);
+        }
+        json!({"tool_name": "Agent", "tool_input": input})
+    }
+
+    #[test]
+    fn effort_wrong_value_is_repaired_to_the_door_value() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: cell] [bee-lane: high-risk]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["effort"], json!("xhigh"));
+        assert!(out["systemMessage"].as_str().unwrap().contains("expects effort \"xhigh\""), "{stdout}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "effort-param-repaired");
+        assert_eq!(d["effort"], "xhigh");
+        assert_eq!(d["effort_base"], "high");
+        assert_eq!(d["effort_step"], 1);
+    }
+
+    #[test]
+    fn effort_missing_is_repaired_to_the_door_value() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-lane: tiny] [bee-kind: cell]", "sonnet", None);
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["effort"], json!("medium"));
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["model"], json!("sonnet"));
+    }
+
+    #[test]
+    fn effort_matching_the_door_value_is_allowed_unchanged() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: gather]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        assert!(stdout.is_empty(), "{stdout}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["effort_reason"], "gather/-");
+    }
+
+    #[test]
+    fn effort_on_a_role_with_no_base_is_removed() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: test] [bee-kind: cell] [bee-lane: standard]", "haiku", Some("high"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        let fixed = out["hookSpecificOutput"]["updatedInput"].as_object().unwrap();
+        assert!(!fixed.contains_key("effort"), "{stdout}");
+        assert_eq!(fixed["model"], json!("haiku"));
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "effort-param-repaired");
+        assert_eq!(d["effort_reason"], "no-base");
+    }
+
+    #[test]
+    fn wrong_model_and_wrong_effort_land_in_one_repair() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code] [bee-kind: cell] [bee-lane: standard]", "opus", Some("max"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        let out = repair_output(&stdout);
+        let fixed = &out["hookSpecificOutput"]["updatedInput"];
+        assert_eq!(fixed["model"], json!("sonnet"));
+        assert_eq!(fixed["effort"], json!("high"));
+        let message = out["systemMessage"].as_str().unwrap();
+        assert!(message.contains("AO5") && message.contains("D4"), "{message}");
+    }
+
+    #[test]
+    fn advisor_kind_on_plan_and_lane_roles_is_allowed_at_the_door_value() {
+        let fx = effort_fixture();
+        for (tier, model, effort) in [("plan", "opus", "medium"), ("lane-1", "fable", "high")] {
+            let call = agent_call(&format!("[bee-tier: {tier}] [bee-kind: advisor]"), model, Some(effort));
+            let (code, stdout, stderr) = run_full(fx.path(), call);
+            assert_eq!(code, 0, "{tier}: {stderr}");
+            assert!(stdout.is_empty(), "{tier}: {stdout}");
+        }
+    }
+
+    #[test]
+    fn effort_without_a_kind_token_is_allowed_unchanged() {
+        let fx = effort_fixture();
+        let call = agent_call("[bee-tier: code]", "sonnet", Some("low"));
+        let (code, stdout, stderr) = run_full(fx.path(), call);
+        assert_eq!(code, 0, "{stderr}");
+        assert!(stdout.is_empty(), "{stdout}");
+    }
+
+    #[test]
+    fn codex_spawn_reads_the_laddered_reasoning_effort() {
+        let fx = effort_fixture();
+        let spawn = |effort: &str| {
+            json!({"tool_name": "spawn_agent", "tool_input": {
+                "task_name": "task",
+                "message": "[bee-tier: generation] [bee-kind: cell] [bee-lane: high-risk] build",
+                "model": "gpt-5.5",
+                "reasoning_effort": effort,
+                "fork_turns": "none"
+            }})
+        };
+        let (code, stderr) = run_payload(fx.path(), spawn("xhigh"));
+        assert_eq!(code, 0, "the ladder-moved effort must pass: {stderr}");
+        let (code, stderr) = run_payload(fx.path(), spawn("high"));
+        assert_eq!(code, 2, "the unmoved base must refuse");
+        assert!(stderr.contains("reasoning_effort: \"high\" does not match"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "codex-spawn-effort-mismatch");
+    }
+
     #[test]
     fn test_parse_anchored_markers() {
         let text = "[bee-tier: code] [bee-feature: my-feat] [bee-stage: plan] [bee-cell: c-1] Do something";
@@ -4154,6 +4328,13 @@ mod tests {
         let m3 = parse_anchored_markers(legacy);
         assert_eq!(m3.tier.as_deref(), Some("generation"));
         assert!(m3.feature.is_none());
+
+        let laddered = "[bee-tier: code] [bee-kind: cell] [bee-feature: f] [bee-lane: tiny] [bee-cell: c-2] go";
+        let m5 = parse_anchored_markers(laddered);
+        assert_eq!(m5.kind.as_deref(), Some("cell"));
+        assert_eq!(m5.lane.as_deref(), Some("tiny"));
+        assert_eq!(m5.feature.as_deref(), Some("f"));
+        assert_eq!(m5.cell.as_deref(), Some("c-2"));
 
         let invalid = "[bee-tier: has space] task";
         let m4 = parse_anchored_markers(invalid);
