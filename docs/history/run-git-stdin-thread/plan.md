@@ -36,7 +36,13 @@ merge door. One inline cell on main.
     "affects_specs": ["docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"],
     "behavior_change": false,
     "action": "Per run-git-stdin-thread D1: in run_git_stdin, take the child's stdin, move the input into std::thread::spawn which does write_all and drops the handle, call child.wait_with_output on the parent, then join the thread and ignore its result. Keep GitOut and every fail-open path. Per D2 no new test. Fix the typo 'A cleaner rebase' to 'A clean rebase' in the concept. No code comments.",
-    "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green; `rg -c 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` prints 1; `.bee/bin/bee dev comment-baseline --check` is clean."
+    "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green; `rg -c 'A clean rebase is not stale proof' docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` prints 1; `.bee/bin/bee dev comment-baseline --check` is clean.",
+    "must_haves": {
+      "truths": ["run_git_stdin never blocks on a full stdout pipe", "every existing worktree test stays green"],
+      "artifacts": [{"path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs", "substantive": "stdin written from a spawned thread, stdout read with wait_with_output"}],
+      "key_links": ["phases.rs callers unchanged"],
+      "prohibitions": ["No change to the GitOut shape", "No new code comments"]
+    }
   }
 ]
 ```
