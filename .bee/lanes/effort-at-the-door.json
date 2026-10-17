@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "effort-at-the-door",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"effort-at-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at f42364e; reload the product and test \"effort-at-the-door\", then either approve uat (\"bee gate --name uat --approved true --lane effort-at-the-door\") or fix it in the worktree and merge again.",
+  "next_action": "await uat, then bee close --feature effort-at-the-door with pattern verdicts",
   "created_at": "2026-10-16T15:29:14.244Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "uat: effort-at-the-door",
-    "asked_at": "2026-10-17T02:50:53.455Z",
-    "session": "bee-worktree-merge-sessionless"
+    "subject": "uat: effort-at-the-door (ladder now live) and pstack-0-15-port — both merged on main",
+    "asked_at": "2026-10-17T03:01:22.656Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   },
   "route": {
     "class": "feature",
@@ -666,5 +666,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "effort-at-the-door",
+    "date": "2026-10-17",
+    "at": "2026-10-17T02:51:04.999Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "await uat, then bee close --feature effort-at-the-door with pattern verdicts"
   }
 }

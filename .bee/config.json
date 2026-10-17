@@ -132,11 +132,13 @@
       },
       "test": {
         "model": "opus",
-        "description": "author or repair tests, red-first"
+        "description": "author or repair tests, red-first",
+        "effort": "high"
       },
       "docs": {
         "model": "opus",
-        "description": "doc edits and parity sweeps"
+        "description": "doc edits and parity sweeps",
+        "effort": "high"
       },
       "deploy": {
         "kind": "herding",
@@ -145,7 +147,8 @@
       },
       "plan": {
         "model": "opus",
-        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan"
+        "description": "planning-shaped work — shaping a slice, drafting cells, plan checks — asked for with --role plan",
+        "effort": "high"
       },
       "extraction": {
         "kind": "herding",
@@ -159,11 +162,13 @@
       },
       "review": {
         "model": "opus",
-        "description": "independent read-only check of a claim or diff"
+        "description": "independent read-only check of a claim or diff",
+        "effort": "high"
       },
       "advisor": {
         "model": "fable",
-        "description": "session-class consult for high-risk gates"
+        "description": "session-class consult for high-risk gates",
+        "effort": "high"
       },
       "supervisor": {
         "kind": "herding",
@@ -172,35 +177,43 @@
       },
       "lane-1": {
         "model": "fable",
-        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief"
+        "description": "blind-lane seat 1 — isolated design proposal; three seats run three different brains on one identical brief",
+        "effort": "high"
       },
       "lane-2": {
         "model": "opus",
-        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief"
+        "description": "blind-lane seat 2 — isolated design proposal; three seats run three different brains on one identical brief",
+        "effort": "high"
       },
       "lane-3": {
         "model": "opus",
-        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
+        "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief",
+        "effort": "high"
       },
       "hat-facts-gaps": {
         "model": "opus",
-        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test"
+        "description": "hat: what the spec cannot answer — 5-Layer rubric + Truth Table Test",
+        "effort": "high"
       },
       "hat-risks": {
         "model": "fable",
-        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation"
+        "description": "hat: what breaks, and can it be undone — CRUD lifecycle, the delete half is the reversibility interrogation",
+        "effort": "high"
       },
       "hat-value": {
         "model": "opus",
-        "description": "hat: is this worth its cost — materiality test"
+        "description": "hat: is this worth its cost — materiality test",
+        "effort": "high"
       },
       "hat-alternatives": {
         "model": "opus",
-        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude"
+        "description": "hat: is there a cheaper shape — the SMALLER PATH question at spec altitude",
+        "effort": "high"
       },
       "hat-user-impact": {
         "model": "opus",
-        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+        "description": "hat: what the user sees and feels — gray-area probes + the SEE mock",
+        "effort": "high"
       }
     },
     "codex": {
