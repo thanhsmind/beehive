@@ -1,0 +1,214 @@
+{
+  "id": "p15-1",
+  "feature": "pstack-0-15-port",
+  "title": "Carry a capped proof across a rebase when its patch-id matches",
+  "lane": "standard",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "91835aa0-9361-4a38-9833-af796910044f",
+    "0154bcb7-5daa-480c-aee1-af90bbc8143f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "read_first": [
+    "docs/history/pstack-0-15-port/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "behavior_change": true,
+  "action": "Per pstack-0-15-port D2. (1) HELPER. `run_git` in packages/bee-rs/crates/bee/src/verbs/worktree/git.rs sets `.stdin(std::process::Stdio::null())` (search that line), so it cannot feed `git patch-id`. Add beside it one helper, `run_git_stdin(cwd, args, input: &[u8])`, same return shape as `run_git`, that writes `input` to the child's stdin; no `sh -c`, no shell. (2) COMPARE. In packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs, `stale_proof_cells` (doc comment starts `/// D4: the capped cells of this feature whose recorded proof predates`) filters `proof.commits` with `run_git(main_root, &[\"merge-base\", \"--is-ancestor\", &base, commit]).status == Some(1)`. Keep that filter as the first pass. Then, ONLY when its result is non-empty, compute the branch-side patch-ids ONCE: run `git log -p --format=%H <base>..<branch>` with `run_git`, feed its stdout to `git patch-id --stable` with `run_git_stdin`, and read one `<patch-id> <commit>` line per commit. For each commit the first pass flagged, compute its own patch-id the same way (`git show <commit>` fed to `git patch-id --stable`). A flagged commit whose patch-id appears in the branch-side set goes to a NEW list `proof_carried`; the rest stay `proof_stale`. Fail open exactly as the existing code does: any git call that does not exit 0, an empty patch-id, or an empty range leaves the first-pass answer as it was and carries nothing. Thread `proof_carried` beside `proof_stale` through the same struct and the same P3 insert (search `result.insert(\"proof_stale\".into()`), with code `proof_carried`, a `cells` array, and this message: `N capped cell(s) (<ids>) were proven at a commit the rebase rewrote; the patch is unchanged, so the recorded proof still describes this code. Nothing to re-run.` (3) PRINT. packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs renders the human text with `if let Some(stale) = r.get(\"proof_stale\") {` → `  proof-stale: …`; add the sibling `  proof-carried: …` line right after it, same shape. (4) KNOWLEDGE. In docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md, where it names the `proof-stale` advisory (search `proof-stale`), add one short paragraph naming `proof_carried`, the patch-id rule, and D2 (decision 91835aa0). (5) RED FIRST, required: add one test beside `a_proof_taken_before_the_merge_base_is_named_and_the_merge_still_lands` in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs that commits work on the branch, caps a cell at that sha, moves main, REBASES the branch onto main (`git rebase main` in the worktree), merges, and asserts: the JSON result carries `proof_carried.cells == [\"<id>\"]`, no `proof_stale` row names that id, the printed text carries `proof-carried:` and not `proof-stale:` for it, and the merge landed. Run it before the fix and record the red output; then implement and record the green run. Keep the existing stale test green: a plain merge from main still reports `proof_stale`. Record on the cap the wall-clock of the patch-id stream on this repo's longest live branch (one `git log -p` run), the open cost question from CONTEXT.md. (6) No new code comments: the comment ratchet `.bee/bin/bee dev comment-baseline --check` reds the suite on any count that rises; the why lives in the concept paragraph and D2.",
+  "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green, AND the recorded red run of the new rebase test failed before the fix. Both outputs are in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. `rg -n proof_carried docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` returns at least one line.",
+  "must_haves": {
+    "truths": [
+      "After a clean rebase, bee worktree merge reports proof_carried for the cap, in the JSON and in the printed text, and not proof_stale",
+      "After a plain merge from main (no rebase), bee worktree merge still reports proof_stale",
+      "Neither advisory ever refuses the merge",
+      "The branch-side patch-id stream runs at most once per merge, and only when the first pass flagged a cap"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "substantive": "patch-id compare feeding a proof_carried list beside proof_stale, fail-open on every git error"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "substantive": "run_git_stdin helper beside run_git"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "a proof-carried: line beside proof-stale: in the printed merge text"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "one new rebase test seen red then green"
+      }
+    ],
+    "key_links": [
+      "the P3 result carries proof_carried beside proof_stale and verify, and the text renderer prints it"
+    ],
+    "prohibitions": [
+      "No change to ProofCheck's public shape",
+      "No refusal path added",
+      "No shell invocation (sh -c) for git",
+      "No new code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-p15-1",
+    "outcome": "D2 landed: bee worktree merge reports proof_carried (JSON + printed text) for a cap whose patch-id survives a rebase, keeps proof_stale for a plain merge, and never refuses; new rebase test seen red then green (commit c7daa1bb8).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-16T15:16:17.219Z",
+    "behavior_change": true,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests — green:unit — 199 passed, 0 failed (whole crate: 4306 passed, 0 failed); new test red before the fix at tests.rs:1029 'no entry found for key'; .bee/bin/bee dev comment-baseline --check clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green, AND the recorded red run of the new rebase test failed before the fix. Both outputs are in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. `rg -n proof_carried docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` returns at least one line.",
+    "claimed_at": "2026-10-16T14:59:47.810Z",
+    "mistakes": [
+      {
+        "wrong": "the first patch-id match in phases.rs had no identity check, so a cap still on the branch matched its own commit and the existing stale test went red",
+        "better": "match only against a different commit id, which the cell text should have named",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "D2 landed: bee worktree merge reports proof_carried (JSON + printed text) for a cap whose patch-id survives a rebase, keeps proof_stale for a plain merge, and never refuses; new rebase test seen red then green (commit c7daa1bb8).",
+      "commit": "c7daa1bb8ed03c665c7cf200a8c866c408eaa57b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+      ],
+      "tests": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests` is green, AND the recorded red run of the new rebase test failed before the fix. Both outputs are in the cap evidence. `.bee/bin/bee dev comment-baseline --check` is clean. `rg -n proof_carried docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md` returns at least one line. — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::worktree::tests — green:unit — 199 passed, 0 failed (whole crate: 4306 passed, 0 failed); new test red before the fix at tests.rs:1029 'no entry found for key'; .bee/bin/bee dev comment-baseline --check clean",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "After a clean rebase, bee worktree merge reports proof_carried for the cap, in the JSON and in the printed text, and not proof_stale",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          },
+          {
+            "requirement": "After a plain merge from main (no rebase), bee worktree merge still reports proof_stale",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+          },
+          {
+            "requirement": "Neither advisory ever refuses the merge",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "The branch-side patch-id stream runs at most once per merge, and only when the first pass flagged a cap",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+          },
+          {
+            "requirement": "run_git_stdin helper beside run_git",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+          },
+          {
+            "requirement": "a proof-carried: line beside proof-stale: in the printed merge text",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+          },
+          {
+            "requirement": "the concept names proof_carried, the patch-id rule, and D2",
+            "artifact": "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+          }
+        ],
+        "recorded_at": "2026-10-16T15:16:36.684Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "a: carried computed only for flagged commits, branch stream at most once",
+            "status": "PASS",
+            "evidence": "phases.rs:184 returns early when first_pass.is_empty(); branch_patch_ids (phases.rs:143) is called once in split_carried_proof before the per-cell loop",
+            "id": "c1"
+          },
+          {
+            "name": "b: match excludes the commit's own id",
+            "status": "PASS",
+            "evidence": "phases.rs:212 branch_pid == &pid && branch_commit != commit",
+            "id": "c2"
+          },
+          {
+            "name": "c: fail open on git error / empty patch-id / empty range",
+            "status": "PASS",
+            "evidence": "merge-base status!=0 or empty base, log status!=0 or blank stream, patch-id status!=0 or no pairs: each returns (first_pass, []); commit_patch_id None -> cell stays stale (phases.rs:119-216). Note: git.rs:116 write_all before read can hang past ~800 commits — a hang, not a fail-open; follow-up cell p15-4",
+            "id": "c3"
+          },
+          {
+            "name": "d: neither advisory refuses",
+            "status": "PASS",
+            "evidence": "phases.rs:657-664 computes the lists only; phases.rs:1031-1041 inserts an advisory row; test asserts no MErr::Thrown and answer.ok",
+            "id": "c4"
+          },
+          {
+            "name": "e: handlers prints proof-carried line",
+            "status": "PASS",
+            "evidence": "handlers.rs:1522-1526 '  proof-carried: {}' right after proof-stale",
+            "id": "c5"
+          },
+          {
+            "name": "f: rebase test asserts JSON, text, merged==true",
+            "status": "PASS",
+            "evidence": "tests.rs:979-1034; cargo test -p bee verbs::worktree::tests 199 passed, 0 failed",
+            "id": "c6"
+          },
+          {
+            "name": "g: no new code comments",
+            "status": "PASS",
+            "evidence": "git show c7daa1bb8 -- packages/ | rg '^\\+' | rg '//|/\\*|#' -> no output",
+            "id": "c7"
+          },
+          {
+            "name": "h: concept paragraph names proof_carried, patch-id rule, D2",
+            "status": "PASS",
+            "evidence": "returning-and-the-merge-gate.md:156-168",
+            "id": "c8"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "deepseek-v4.1-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-16T15:20:45.734Z"
+      }
+    ]
+  }
+}

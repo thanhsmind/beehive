@@ -1,0 +1,215 @@
+{
+  "id": "p15-3",
+  "feature": "pstack-0-15-port",
+  "title": "Narrow the re-verify after a rebase, play the goal back at intake, and fix a twice-seen mistake at the highest layer",
+  "lane": "standard",
+  "role": "docs",
+  "status": "capped",
+  "deps": [
+    "p15-2"
+  ],
+  "decisions": [
+    "f6925422-cfc1-4264-80bd-630cd547246e",
+    "55b8bbe8-0658-4832-acfa-729e5ff22d49",
+    "ef0f5a29-8a90-4c0c-b58b-bc0bf8b3aa95"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    "skills/bee-evolving/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/knowledge/areas/human-mailbox/overview.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pstack-0-15-port/CONTEXT.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    "skills/bee-evolving/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    "skills/bee-evolving/SKILL.md",
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/human-mailbox/overview.md"
+  ],
+  "behavior_change": true,
+  "action": "Three doctrine edits, per pstack-0-15-port D3, D6 and D4; each rule has ONE home. EDIT 1 — the narrowed re-verify (D3). In skills/bee-hive/references/gates-and-delegation.md, section `### Goal-check judge tier — verification, not review`, the table has rows `tiny`/`small`, `standard`, `high-risk`. Add ONE row after `high-risk`, Lane column `any lane, after a rebase, a conflict resolution, or a minor fix`. The row states: the LEADER applies it, never the worker; the worker re-runs the cell's recorded proof command at the new head and records it, no fresh judge dispatch for that cell; a minor fix is a change with no new behavior and under 30 changed lines by `git diff --stat <capped sha>..HEAD`, cumulative since the cap, so two small fixes do not each dodge; new behavior, a redesign, or a diff at or over 30 lines returns to that lane's normal row; the slice's sampled judge still covers the cell; the slice-close tick names the skip as `re-verified at new head, no judge (minor fix, N lines since cap)`. Say why in the row: the judge already saw the behavior, and the proof command is what a rebase can break. Keep the paragraph under the table that says this table is the single home; add no pointer anywhere else. EDIT 2 — goal playback (D6). In skills/bee-shaping/references/shaping-reference.md, section `## Interview craft`, add ONE bullet as the FIRST move, before `**One question per turn.**`, named `**Play the goal back first.**`: when an interview question is about to follow, one line in the agent's own words says what the user is after and whether the ask is missing detail or already full; choices that are the user's to make stay open; no rewritten request is returned, and the line is never a question; a clear ask that locks from one confirmation gets no playback line. Say why: a wrong reading caught here costs one line, caught at the gate it costs the plan. Three or four sentences, in the file's voice. EDIT 3 — a mistake seen twice (D4). HOME: docs/knowledge/areas/human-mailbox/overview.md, which names the fix-at layers (search `from a closed set`). Add one short section, `## A mistake seen twice`, stating: a reflection key, `(fix_at, what)` as `bee feedback rank` folds it, seen twice is a fix-first candidate, taken at the highest fix-at layer that works (architecture before check before doctrine); the second sighting is SEEN on two surfaces, the `bee feedback rank` count at 2 or the `lesson` decision it mints, and the close door's `Filed for \"<feature>\": N fix-at row(s)` line; what follows is one fix-first cell whose proof line carries the new guard, lint, or test shown FAILING on the past mistake, then green; when the past mistake cannot be reproduced, the layer drops to `doctrine` with the reason recorded; `FIX_AT_VALUES` stays `architecture|check|doctrine|none`, and the sub-kind of a `check` (type, lint, test) rides in `--better`. Say why: a rule nothing enforces is the repeat waiting to happen, and a guard never seen red proves only that it compiles. POINTERS, one sentence each, never the rule text: in skills/bee-evolving/SKILL.md section `## 3. The fix — handed off under the Iron Law, never inline`, point at that home by path and heading; in skills/bee-capturing/SKILL.md step 4, at the sentence `when an already-promoted pattern recurs, escalate it to a durable owner`, add the pointer there (the step is already the twice rule's nearest kin; do not add a second copy). REGEN, inside this cell: `.bee/bin/bee dev regen` (it ends with `release-manifest --write` itself); commit the regenerated copies with the change.",
+  "verify": "`rg -n 'under 30 changed lines' skills/bee-hive/references/gates-and-delegation.md` returns one line inside the judge-tier table and `rg -c 'lines since cap' skills/bee-hive/references/gates-and-delegation.md` prints 1. `rg -n 'Play the goal back first' skills/bee-shaping/references/shaping-reference.md` returns one line above `One question per turn`. `rg -n 'A mistake seen twice' docs/knowledge/areas/human-mailbox/overview.md` returns one heading line. `rg -c 'seen twice' skills/bee-evolving/SKILL.md skills/bee-capturing/SKILL.md` prints 1 for each file. `.bee/bin/bee knowledge check --json` reports no new finding. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean.",
+  "must_haves": {
+    "truths": [
+      "The judge-tier table names the narrowed re-verify with its diff base, its 30-line bound, the leader as applier, and the tick that records the skip",
+      "Interview craft opens with the goal-playback move and says when it does not fire",
+      "The twice rule, its two sighting surfaces, the red-first guard, and the reproduce-fails fallback have one home; bee-evolving and bee-capturing each point at it in one sentence",
+      "FIX_AT_VALUES is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "a fourth judge-tier row with lane, judge, model, verdict handling filled"
+      },
+      {
+        "path": "skills/bee-shaping/references/shaping-reference.md",
+        "substantive": "first Interview-craft bullet is the playback move"
+      },
+      {
+        "path": "docs/knowledge/areas/human-mailbox/overview.md",
+        "substantive": "a section stating the twice rule, the layer order, the sighting surfaces, the red-first guard, the fallback, and why"
+      }
+    ],
+    "key_links": [
+      "both skill sentences name the concept path and heading",
+      "rendered copies under .claude/skills and the plugin trees match skills/ after regen"
+    ],
+    "prohibitions": [
+      "No edit to packages/bee-rs (FIX_AT_VALUES stays)",
+      "No rule text duplicated into a skill",
+      "No edit to AGENTS.block.md or bee-swarming",
+      "No pointer added outside the single homes"
+    ]
+  },
+  "trace": {
+    "worker": "w-p15-3",
+    "outcome": "Judge-tier table gains the narrowed re-verify row; Interview craft opens with goal playback; human-mailbox overview owns the twice rule with one-sentence pointers from bee-evolving and bee-capturing",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-shaping/references/shaping-reference.md",
+      "skills/bee-evolving/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "docs/knowledge/areas/human-mailbox/overview.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "pointer sentences lead with repeated mistake / repeated reflection instead of seen twice — the heading name already carries seen twice and verify wants a count of 1 per file — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-16T15:17:00.587Z",
+    "behavior_change": true,
+    "verification_evidence": "docs-only doctrine edits; every rg count matched, regen 3/3 green, manifest 419 files match, knowledge check has 0 errors and only the pre-existing not_canonical frontmatter warnings",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`rg -n 'under 30 changed lines' skills/bee-hive/references/gates-and-delegation.md` returns one line inside the judge-tier table and `rg -c 'lines since cap' skills/bee-hive/references/gates-and-delegation.md` prints 1. `rg -n 'Play the goal back first' skills/bee-shaping/references/shaping-reference.md` returns one line above `One question per turn`. `rg -n 'A mistake seen twice' docs/knowledge/areas/human-mailbox/overview.md` returns one heading line. `rg -c 'seen twice' skills/bee-evolving/SKILL.md skills/bee-capturing/SKILL.md` prints 1 for each file. `.bee/bin/bee knowledge check --json` reports no new finding. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean.",
+    "claimed_at": "2026-10-16T15:06:10.358Z",
+    "mistakes": [
+      {
+        "wrong": "first pointer drafts in bee-evolving and bee-capturing used seen twice twice per file, failing the cell verify count",
+        "better": "run the verify rg counts against the planned wording before writing",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "D3 row in gates-and-delegation.md judge-tier table (after high-risk); D6 first Interview-craft bullet in shaping-reference.md; D4 section ## A mistake seen twice in human-mailbox/overview.md; pointers in bee-evolving section 3 and bee-capturing step 4",
+      "commit": "dcf06bc00",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-shaping/references/shaping-reference.md",
+        "skills/bee-evolving/SKILL.md",
+        "skills/bee-capturing/SKILL.md",
+        "docs/knowledge/areas/human-mailbox/overview.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "`rg -n 'under 30 changed lines' skills/bee-hive/references/gates-and-delegation.md` returns one line inside the judge-tier table and `rg -c 'lines since cap' skills/bee-hive/references/gates-and-delegation.md` prints 1. `rg -n 'Play the goal back first' skills/bee-shaping/references/shaping-reference.md` returns one line above `One question per turn`. `rg -n 'A mistake seen twice' docs/knowledge/areas/human-mailbox/overview.md` returns one heading line. `rg -c 'seen twice' skills/bee-evolving/SKILL.md skills/bee-capturing/SKILL.md` prints 1 for each file. `.bee/bin/bee knowledge check --json` reports no new finding. `.bee/bin/bee dev regen` runs clean and `.bee/bin/bee dev release-manifest --check` is clean. — green:static — docs-only doctrine edits; every rg count matched, regen 3/3 green, manifest 419 files match, knowledge check has 0 errors and only the pre-existing not_canonical frontmatter warnings",
+      "deviations": [
+        "pointer sentences lead with repeated mistake / repeated reflection instead of seen twice — the heading name already carries seen twice and verify wants a count of 1 per file — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "first pointer drafts in bee-evolving and bee-capturing used seen twice twice per file, failing the cell verify count — run the verify rg counts against the planned wording before writing — none"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 155 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "The judge-tier table names the narrowed re-verify with its diff base, its 30-line bound, the leader as applier, and the tick that records the skip",
+            "artifact": "skills/bee-hive/references/gates-and-delegation.md"
+          },
+          {
+            "requirement": "Interview craft opens with the goal-playback move and says when it does not fire",
+            "artifact": "skills/bee-shaping/references/shaping-reference.md"
+          },
+          {
+            "requirement": "The twice rule, its two sighting surfaces, the red-first guard, and the reproduce-fails fallback have one home; bee-evolving and bee-capturing each point at it in one sentence",
+            "artifact": "docs/knowledge/areas/human-mailbox/overview.md"
+          },
+          {
+            "requirement": "FIX_AT_VALUES is unchanged",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "both skill sentences name the concept path and heading",
+            "artifact": "skills/bee-evolving/SKILL.md"
+          },
+          {
+            "requirement": "rendered copies under .claude/skills and the plugin trees match skills/ after regen",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-10-16T15:18:28.750Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "name": "a: judge-tier 4th row",
+            "status": "PASS",
+            "evidence": "gates-and-delegation.md:411 names the LEADER, git diff --stat <capped sha>..HEAD, cumulative since the cap, under 30 changed lines, return to the lane's normal row, sampled judge still covers the cell, the tick text, and a Why clause",
+            "id": "c1"
+          },
+          {
+            "name": "b: playback bullet first, says when it does not fire, no rewritten request",
+            "status": "PASS",
+            "evidence": "shaping-reference.md:8-14 before 'One question per turn' (line 15)",
+            "id": "c2"
+          },
+          {
+            "name": "c: twice-rule section complete",
+            "status": "PASS",
+            "evidence": "human-mailbox/overview.md:220-233; FIX_AT_VALUES unchanged (mailbox.rs:628 still 4 values)",
+            "id": "c3"
+          },
+          {
+            "name": "d: pointers carry no rule text",
+            "status": "PASS",
+            "evidence": "bee-evolving/SKILL.md:96-97 and bee-capturing/SKILL.md:142-143 are one sentence each, naming path + heading only",
+            "id": "c4"
+          },
+          {
+            "name": "e: rendered .claude/skills copies match",
+            "status": "PASS",
+            "evidence": "diff: shaping-reference, bee-evolving, bee-capturing identical; gates-and-delegation differs only by the stripped bee:only pi/codex blocks",
+            "id": "c5"
+          },
+          {
+            "name": "f: no edit to AGENTS.block.md, AGENTS.md, bee-swarming, bee-rs",
+            "status": "PASS",
+            "evidence": "git show --name-only dcf06bc00 | rg 'AGENTS|bee-swarming|bee-rs' -> no output",
+            "id": "c6"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-16T15:20:45.737Z"
+      }
+    ]
+  }
+}

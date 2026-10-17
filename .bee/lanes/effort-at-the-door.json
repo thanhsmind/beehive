@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "effort-at-the-door",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"effort-at-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "await uat, then bee close --feature effort-at-the-door with pattern verdicts",
+  "next_action": "bee close finished \"effort-at-the-door\" — feature is closed.",
   "created_at": "2026-10-16T15:29:14.244Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
