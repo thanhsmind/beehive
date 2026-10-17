@@ -1,0 +1,8 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "run_git_stdin never blocks on a full stdout pipe", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"},
+    {"requirement": "every existing worktree test stays green", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"},
+    {"requirement": "phases.rs callers unchanged", "artifact": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"}
+  ]
+}
