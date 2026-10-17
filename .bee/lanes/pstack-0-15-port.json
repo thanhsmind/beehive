@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pstack-0-15-port\" started at phase \"exploring\" (lane).",
   "next_action": "await uat, then bee close --feature pstack-0-15-port with pattern verdicts",
   "created_at": "2026-10-16T14:41:29.472Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "D7 effort-per-spawn: door applies the rule (A) or leader gets a bounded --effort flag (B)?",
-    "asked_at": "2026-10-16T15:28:03.344Z",
-    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

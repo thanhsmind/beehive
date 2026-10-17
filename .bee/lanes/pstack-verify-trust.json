@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
-    "subject": "EnterWorktree",
-    "asked_at": "2026-10-17T04:12:27.636Z",
+    "subject": "uat: effort-at-the-door and pstack-0-15-port — merged on main; pstack-playbook-rules and pstack-verify-trust closed",
+    "asked_at": "2026-10-17T04:17:55.109Z",
     "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   },
   "route": {

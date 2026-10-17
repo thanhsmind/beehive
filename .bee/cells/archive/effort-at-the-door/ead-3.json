@@ -1,0 +1,188 @@
+{
+  "id": "ead-3",
+  "feature": "effort-at-the-door",
+  "title": "Print the ladder and its idle state in team show and state the rule in the concept",
+  "lane": "standard",
+  "role": "test",
+  "status": "capped",
+  "deps": [
+    "ead-1"
+  ],
+  "decisions": [
+    "d6ec1958-6c5f-464f-aeb6-0774d866fb91",
+    "869dbfc8-eee2-45e0-9bf3-4cdfe4e47165",
+    "3e6435bc-df1a-425c-9e36-0a3550beb25f"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "read_first": [
+    "docs/history/effort-at-the-door/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "behavior_change": true,
+  "action": "Per effort-at-the-door D7 and D8. (1) TEAM SHOW. In packages/bee-rs/crates/bee/src/verbs/models_group.rs, the `team show` handler (search `g_prelude(\"team show\"`) prints the role table. (a) In the existing model column print `<model>/<effort>` when the slot carries an effort (e.g. `opus/high`), else the model alone — no new column, so `team_show_columns_order_on_claude_and_pi` stays green. (b) After the table print ONE line rendered FROM `crate::verbs::drivers::models::EFFORT_LADDER` and `EFFORT_LEVELS`, never typed by hand: `effort ladder: cell/high-risk +1 · cell/tiny -1 · cell/small 0 · cell/standard 0 · cell/spike 0 · gather -2 · advisor -1 · reviewer 0 (clamped to low…max; no base → none)`; when no role on the runtime carries an effort, append ` — idle: no role sets effort; add \"effort\" to a team.<runtime>.<role> slot`. (c) In `--json` mode add top-level `effort_ladder` (array of {kind, lane, step} from the constant) and `effort_ladder_idle` (bool). RED FIRST in the in-file tests: one test for the text line with the idle suffix on a roster with no effort, one for the `model/effort` cell and no suffix on a roster with one, one for the JSON keys — run before the change and recorded red, then green. (2) CONCEPT (D8). In docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md add one B-rule after the last B-rule, in the file's voice: the door moves effort by kind and lane on the ladder (name every row), the leader passes no effort, the door writes `[bee-kind:]`/`[bee-lane:]` and the guard recomputes the same function from them with config as the base and repairs a different or missing Agent effort (codex leg denies as before), economics carries effort/effort_base/effort_step/effort_reason, the audit path is `rg '\"effort\":\"max\"' .bee/logs/dispatch.jsonl` (or any value), nothing moves until a role sets `effort`, and the herding arm carries no effort until `bee herding run` gains a per-run thinking flag — name that last one under Open Gaps too. Cite `effort-at-the-door D2, D4, D4a, D5, D7, D10` and add Pointers to models.rs, prepare.rs, guard.rs, model_guard.rs, models_group.rs. Run `.bee/bin/bee knowledge index --check`. Scope: `cargo test -p bee verbs::models_group`. No code comments.",
+  "verify": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::models_group` is green, AND the recorded red run of the three new tests failed before the change. `packages/bee-rs/target/release/bee team show --runtime claude` (built with `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) prints a line starting `effort ladder:` ending with the idle suffix. `rg -c 'effort-at-the-door D2' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` prints at least 1. `.bee/bin/bee knowledge index --check` is clean. `.bee/bin/bee dev comment-baseline --check` is clean.",
+  "must_haves": {
+    "truths": [
+      "bee team show prints the ladder from the one constant, text and JSON, and says when it is idle",
+      "A role's configured effort is visible in team show beside its model",
+      "The concept states the rule, the repair posture, the audit grep, the idle condition and the herding gap"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "substantive": "effort ladder line with idle suffix, model/effort cell, JSON keys, three tests seen red then green"
+      },
+      {
+        "path": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md",
+        "substantive": "one new B-rule citing effort-at-the-door D2, D4, D4a, D5, D7, D10 with pointers and an Open Gap"
+      }
+    ],
+    "key_links": [
+      "models_group.rs reads models::EFFORT_LADDER, no copy"
+    ],
+    "prohibitions": [
+      "No new team show column",
+      "No write to .bee/bin/bee",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-ead-3",
+    "outcome": "team show prints model/effort and the effort ladder line with idle suffix from EFFORT_LADDER, plus effort_ladder/effort_ladder_idle JSON; concept gains B24, Open Gap and Pointers",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [
+      "test uses the drivers re-export EFFORT_LADDER instead of the path drivers::models::EFFORT_LADDER — the models module is private and the re-export is the same constant — the plan was wrong about a fact",
+      "committed with a path-scoped commit instead of staging into the shared index — the concurrent-worker guard refuses staging while w-ead-2 is live — hit an unforeseen obstacle",
+      "ran the team show verify with /home/thanhsmind/.cache/cargo-target/release/bee instead of packages/bee-rs/target/release/bee — CARGO_TARGET_DIR points there, per the leader note — the plan was wrong about a fact",
+      "proof command segment is the whole verify text verbatim — the cap refuses any proof command that is not an exact match of the prose verify field — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-17T02:44:22.577Z",
+    "behavior_change": true,
+    "verification_evidence": "touched models_group.rs team show and the model-roles concept; models_group filter 18 passed incl. 3 new tests seen red first (15 passed, 3 failed before the change); full crate run once 4322 passed 0 failed 24 ignored; the release binary at /home/thanhsmind/.cache/cargo-target/release/bee (CARGO_TARGET_DIR) ran team show --runtime claude and printed the effort ladder line ending with the idle suffix; rg -c printed 2; knowledge index --check and comment-baseline --check clean",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+    "verify_command": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::models_group` is green, AND the recorded red run of the three new tests failed before the change. `packages/bee-rs/target/release/bee team show --runtime claude` (built with `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) prints a line starting `effort ladder:` ending with the idle suffix. `rg -c 'effort-at-the-door D2' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` prints at least 1. `.bee/bin/bee knowledge index --check` is clean. `.bee/bin/bee dev comment-baseline --check` is clean.",
+    "claimed_at": "2026-10-17T02:22:28.190Z",
+    "mistakes": [
+      {
+        "wrong": "first cargo test call with a PATH prefix and a python heredoc edit were refused by the worktree guard",
+        "better": "call cargo by absolute path and edit with the Edit tool from the start",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "team show prints model/effort and the effort ladder line with idle suffix from EFFORT_LADDER, plus effort_ladder/effort_ladder_idle JSON; concept gains B24, Open Gap and Pointers",
+      "commit": "df86d3a39",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/models_group.rs",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "`PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee verbs::models_group` is green, AND the recorded red run of the three new tests failed before the change. `packages/bee-rs/target/release/bee team show --runtime claude` (built with `cargo build --release --manifest-path packages/bee-rs/Cargo.toml`) prints a line starting `effort ladder:` ending with the idle suffix. `rg -c 'effort-at-the-door D2' docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md` prints at least 1. `.bee/bin/bee knowledge index --check` is clean. `.bee/bin/bee dev comment-baseline --check` is clean. — green:unit — touched models_group.rs team show and the model-roles concept; models_group filter 18 passed incl. 3 new tests seen red first (15 passed, 3 failed before the change); full crate run once 4322 passed 0 failed 24 ignored; the release binary at /home/thanhsmind/.cache/cargo-target/release/bee (CARGO_TARGET_DIR) ran team show --runtime claude and printed the effort ladder line ending with the idle suffix; rg -c printed 2; knowledge index --check and comment-baseline --check clean",
+      "deviations": [
+        "test uses the drivers re-export EFFORT_LADDER instead of the path drivers::models::EFFORT_LADDER — the models module is private and the re-export is the same constant — the plan was wrong about a fact",
+        "committed with a path-scoped commit instead of staging into the shared index — the concurrent-worker guard refuses staging while w-ead-2 is live — hit an unforeseen obstacle",
+        "ran the team show verify with /home/thanhsmind/.cache/cargo-target/release/bee instead of packages/bee-rs/target/release/bee — CARGO_TARGET_DIR points there, per the leader note — the plan was wrong about a fact",
+        "proof command segment is the whole verify text verbatim — the cap refuses any proof command that is not an exact match of the prose verify field — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "first cargo test call with a PATH prefix and a python heredoc edit were refused by the worktree guard — call cargo by absolute path and edit with the Edit tool from the start — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee team show prints the ladder from the one constant, text and JSON, and says when it is idle",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+          },
+          {
+            "requirement": "A role's configured effort is visible in team show beside its model",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+          },
+          {
+            "requirement": "The concept states the rule, the repair posture, the audit grep, the idle condition and the herding gap",
+            "artifact": "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+          },
+          {
+            "requirement": "models_group.rs reads models::EFFORT_LADDER, no copy",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/models_group.rs"
+          }
+        ],
+        "recorded_at": "2026-10-17T02:45:24.249Z",
+        "recorded_by": "858d1a15-cfb6-415b-8dc2-d60635a62b9b",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "name": "a: ladder line from constants + idle suffix",
+            "status": "PASS",
+            "evidence": "models_group.rs ladder_line maps EFFORT_LADDER and EFFORT_LEVELS; built binary prints the line with the idle suffix; test the_ladder_line_says_idle_when_no_role_sets_effort"
+          },
+          {
+            "id": "c2",
+            "name": "b: model/effort in the existing column",
+            "status": "PASS",
+            "evidence": "model_cell() returns '<model>/<effort>'; no new column; test a_role_with_effort_shows_model_slash_effort_and_the_ladder_is_live; models_group 18 passed"
+          },
+          {
+            "id": "c3",
+            "name": "c: JSON effort_ladder (8) + effort_ladder_idle",
+            "status": "PASS",
+            "evidence": "build_table inserts both keys; test the_json_carries_the_ladder_and_its_idle_state; live --json prints effort_ladder and effort_ladder_idle true"
+          },
+          {
+            "id": "c4",
+            "name": "d: B24 content, cites, Pointers, Open Gap",
+            "status": "PASS",
+            "evidence": "model-roles-and-escalation.md:350-370: every ladder row, leader passes none, tokens, repair vs deny, four keys, audit grep, idle condition, herding gap; cites D2, D4, D4a, D5, D7, D10; Open Gaps bullet; Pointers section"
+          },
+          {
+            "id": "c5",
+            "name": "e: no code comments",
+            "status": "PASS",
+            "evidence": "rg over git show df86d3a39 -- packages/ empty; comment-baseline --check clean"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-17T02:49:43.632Z"
+      }
+    ]
+  },
+  "role_reroutes": [
+    {
+      "from": "code",
+      "to": "test",
+      "decision": "d660436f-f988-40b4-a740-9f63d925a87d",
+      "at": "2026-10-17T02:08:51.733Z",
+      "plan_sha256": "adc54708c23b7c6653f884e1bdabf1f94a5b92a3ec273b4ca16cfcaeffc9fe81"
+    }
+  ]
+}

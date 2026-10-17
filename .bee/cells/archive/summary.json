@@ -1658,5 +1658,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-17T04:17:46.200Z"
+  },
+  "effort-at-the-door": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:19:06.400Z"
   }
 }
