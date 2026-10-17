@@ -32,7 +32,7 @@
     },
     {
       "name": "bee-planning",
-      "sha256": "c1ff0f4df61f5ec488d1a6658073827317247bbc78a727b2decd1b055b850b05"
+      "sha256": "fb2c32d88d0ea8a98014f37bb076d123c0781b7bea5fac9d808032b686fd9702"
     },
     {
       "name": "bee-principle-chestertons-fence",
@@ -104,7 +104,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "a4c3960a3718999a4663cde8e064f740645b487de3f0ac7aaf8cd12aa02932c0"
+      "sha256": "30d46dad2d84d645c798db4537982d3221e06d59d70e9e013bdf0e00cc3da576"
     },
     {
       "name": "bee-teach",

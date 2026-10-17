@@ -272,7 +272,11 @@ steps for its single worker — never wave analysis or multi-cell assignment.
      slice. `high-risk`: every slice. `standard`: selective — dispatch on
      smell, on a worker's/model's first slice of the feature, or on the
      ~1-in-3 sample (choice stated in the slice-close tick, never a silent
-     skip); any `NEEDS_REVISION` escalates that worker to judge-every-slice
+     skip). The slice-close tick also names the judge — `judged by <model>`
+     from the judge-record's recorded judge model and `model_independence`,
+     or `frozen judge only` on tiny/small — so the human sees who verified
+     without asking; this is the goal-check judge, never the user-invoked
+     review. Any `NEEDS_REVISION` escalates that worker to judge-every-slice
      for the feature's remainder (tier table in
      `bee-hive/references/gates-and-delegation.md`, "Goal-check judge
      tier"). The judge returns one verdict per cell. The leader records
