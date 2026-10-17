@@ -1795,15 +1795,22 @@ fn apply_then_replan_is_a_no_op_which_is_what_the_installer_recheck_asserts() {
 // ── new to opt-out: everything that must NOT happen ────────────────────────
 
 #[test]
-fn an_existing_project_level_entry_is_left_byte_for_byte() {
+fn an_existing_project_level_entry_is_preserved_while_the_worktree_tools_are_added() {
     let fx = posix_fixture();
     write_project_level_entry(&fx);
     let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
 
     apply(&fx, &[]);
 
-    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
-    assert!(!fx.repo.join(".claude").join("settings.json.bak").exists());
+    let before: Value = serde_json::from_str(&original).unwrap();
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert_eq!(v["statusLine"], before["statusLine"]);
+    assert_eq!(v["permissions"]["allow"], json!(["EnterWorktree", "ExitWorktree"]));
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".claude").join("settings.json.bak")).unwrap(),
+        original
+    );
     // The script IS still vendored — the host asked for it.
     assert!(vendored(&fx).exists());
 }
@@ -1815,14 +1822,17 @@ fn an_existing_user_level_entry_is_preference_and_nothing_is_vendored() {
         &settings_path(&fx),
         "{\n  \"statusLine\": { \"type\": \"command\", \"command\": \"bash ~/.claude/mine.sh\" }\n}\n",
     );
-    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+    let original: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
 
     let acts = actions(&plan(&fx, &[]), "plan");
     assert!(!acts.contains(&"merge_statusline_settings".to_string()));
     assert!(!acts.contains(&"copy_statusline".to_string()));
 
     apply(&fx, &[]);
-    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert_eq!(v["statusLine"], original["statusLine"], "a user-level entry is a preference");
     assert!(!vendored(&fx).exists());
 }
 
@@ -1836,13 +1846,11 @@ fn a_non_object_statusline_value_is_preference_too() {
     ] {
         let fx = posix_fixture();
         write(&settings_path(&fx), body);
-        let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+        let original: Value = serde_json::from_str(body).unwrap();
         apply(&fx, &[]);
-        assert_eq!(
-            std::fs::read_to_string(settings_path(&fx)).unwrap(),
-            original,
-            "left alone: {body}"
-        );
+        let v: Value =
+            serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+        assert_eq!(v["statusLine"], original["statusLine"], "left alone: {body}");
         assert!(!vendored(&fx).exists(), "nothing vendored: {body}");
     }
 }
@@ -1882,11 +1890,13 @@ fn a_settings_file_whose_root_is_not_an_object_is_left_alone() {
 // ── the two ways out ───────────────────────────────────────────────────────
 
 #[test]
-fn no_statusline_writes_nothing_vendors_nothing_and_still_converges() {
+fn no_statusline_writes_no_status_entry_vendors_nothing_and_still_converges() {
     let fx = posix_fixture();
     let a = apply(&fx, &["--no-statusline"]);
     assert_ne!(a["status"], "blocked_hooks_merge");
-    assert!(!settings_path(&fx).exists());
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert!(v.get("statusLine").is_none());
     assert!(!vendored(&fx).exists());
 
     let p = plan(&fx, &["--no-statusline"]);
@@ -1895,14 +1905,17 @@ fn no_statusline_writes_nothing_vendors_nothing_and_still_converges() {
 }
 
 #[test]
-fn no_statusline_on_a_host_that_already_carries_the_entry_touches_neither_file() {
+fn no_statusline_on_a_host_that_already_carries_the_entry_leaves_it_and_the_script_alone() {
     let fx = posix_fixture();
     write_project_level_entry(&fx);
-    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+    let original: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
 
     apply(&fx, &["--no-statusline"]);
 
-    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert_eq!(v["statusLine"], original["statusLine"]);
     assert!(!vendored(&fx).exists());
     assert_eq!(plan(&fx, &["--no-statusline"])["status"], "up_to_date");
 }
@@ -1917,7 +1930,9 @@ fn the_project_config_opt_out_behaves_exactly_like_the_flag() {
 
     apply(&fx, &[]);
 
-    assert!(!settings_path(&fx).exists());
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    assert!(v.get("statusLine").is_none());
     assert!(!vendored(&fx).exists());
     let ledger: Value = serde_json::from_str(
         &std::fs::read_to_string(fx.repo.join(".bee").join("onboarding.json")).unwrap(),
@@ -1946,7 +1961,7 @@ fn repo_hooks_and_the_statusline_default_share_one_backup_holding_the_original()
     let settings: Value =
         serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
     let keys: Vec<&str> = settings.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-    assert_eq!(keys, vec!["model", "hooks", "statusLine"], "both writers landed");
+    assert_eq!(keys, vec!["model", "hooks", "statusLine", "permissions"], "all three writers landed");
 }
 
 #[test]
@@ -2039,4 +2054,120 @@ fn skills_with_claude_codex_and_pi_blocks_render_per_d1_into_managed_roots() {
     .unwrap();
     assert_eq!(agents_sidecar["schema"], "bee-render/2");
     assert_eq!(agents_sidecar["target_runtime"], "codex");
+}
+
+fn allow_list(fx: &Fixture) -> Vec<String> {
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(fx)).unwrap()).unwrap();
+    settings["permissions"]["allow"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn a_virgin_settings_file_gains_both_worktree_tools_in_permissions_allow() {
+    let fx = posix_fixture();
+    assert!(!settings_path(&fx).exists());
+
+    let acts = actions(&plan(&fx, &[]), "plan");
+    assert!(acts.contains(&"merge_worktree_tool_allow".to_string()));
+
+    apply(&fx, &[]);
+
+    assert_eq!(allow_list(&fx), vec!["EnterWorktree".to_string(), "ExitWorktree".to_string()]);
+}
+
+#[test]
+fn an_existing_allow_list_is_appended_add_only_and_keeps_foreign_keys() {
+    let fx = posix_fixture();
+    write(
+        &settings_path(&fx),
+        "{\n  \"model\": \"opus\",\n  \"permissions\": {\n    \"allow\": [\"Bash(ls:*)\"],\n    \"deny\": [\"Read\"]\n  },\n  \"zeta\": 1\n}\n",
+    );
+
+    apply(&fx, &["--no-statusline"]);
+
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(settings_path(&fx)).unwrap()).unwrap();
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    assert_eq!(keys, vec!["model", "permissions", "zeta"], "top-level keys untouched");
+    assert_eq!(v["model"], "opus");
+    assert_eq!(v["zeta"], 1);
+    assert_eq!(v["permissions"]["deny"], json!(["Read"]), "deny survives");
+    assert_eq!(
+        v["permissions"]["allow"],
+        json!(["Bash(ls:*)", "EnterWorktree", "ExitWorktree"]),
+        "only the missing names are appended, in place"
+    );
+}
+
+#[test]
+fn settings_that_already_hold_both_names_plan_nothing_and_write_no_backup() {
+    let fx = posix_fixture();
+    write(
+        &settings_path(&fx),
+        "{\n  \"permissions\": { \"allow\": [\"EnterWorktree\", \"ExitWorktree\"] }\n}\n",
+    );
+    let original = std::fs::read_to_string(settings_path(&fx)).unwrap();
+
+    let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
+    assert!(
+        !acts.contains(&"merge_worktree_tool_allow".to_string()),
+        "both names present must not replan"
+    );
+    assert!(!actions(&plan(&fx, &[]), "plan").contains(&"merge_worktree_tool_allow".to_string()));
+
+    apply(&fx, &["--no-statusline"]);
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), original);
+    assert!(!fx.repo.join(".claude").join("settings.json.bak").exists());
+}
+
+#[test]
+fn an_unparseable_settings_file_is_never_written_by_the_worktree_projection() {
+    let fx = posix_fixture();
+    let broken = "{ this is not json";
+    write(&settings_path(&fx), broken);
+
+    let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
+    assert!(!acts.contains(&"merge_worktree_tool_allow".to_string()));
+
+    let a = apply(&fx, &["--no-statusline"]);
+    assert_ne!(a["status"], "blocked_hooks_merge");
+    assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), broken);
+}
+
+#[test]
+fn an_unmergeable_permissions_shape_is_left_alone_and_still_converges() {
+    for body in [
+        "{\n  \"permissions\": \"not-an-object\"\n}\n",
+        "{\n  \"permissions\": { \"allow\": \"not-an-array\" }\n}\n",
+    ] {
+        let fx = posix_fixture();
+        write(&settings_path(&fx), body);
+
+        let acts = actions(&plan(&fx, &["--no-statusline"]), "plan");
+        assert!(!acts.contains(&"merge_worktree_tool_allow".to_string()), "{body}");
+
+        apply(&fx, &["--no-statusline"]);
+        assert_eq!(std::fs::read_to_string(settings_path(&fx)).unwrap(), body);
+        assert_eq!(plan(&fx, &["--no-statusline"])["status"], "up_to_date", "{body}");
+    }
+}
+
+#[test]
+fn a_second_run_after_apply_reports_up_to_date_for_the_worktree_projection() {
+    let fx = posix_fixture();
+    apply(&fx, &[]);
+
+    let p = plan(&fx, &[]);
+    assert_eq!(p["status"], "up_to_date");
+    assert!(
+        !actions(&p, "plan").contains(&"merge_worktree_tool_allow".to_string()),
+        "a settled projection replans nothing"
+    );
+    let a = apply(&fx, &[]);
+    assert_eq!(a["recheck"], "up_to_date");
 }

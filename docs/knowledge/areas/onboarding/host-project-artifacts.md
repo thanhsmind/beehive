@@ -86,6 +86,19 @@ bee's source.
 [`repo-local-guardrails.md`](repo-local-guardrails.md)'s pointer, which carries the
 same source bullet.)
 
+**Allow the worktree tools the host project needs (every run).** Trigger: an
+onboarded repo whose `.claude/settings.json` carries no `permissions.allow`, or
+one missing `EnterWorktree` or `ExitWorktree`. What blocks it: nothing. What
+changes: the two names are projected ADD-ONLY into the host repo's own
+settings file — `permissions` and `allow` are created when absent, only the
+names not already present are appended, and every existing key, entry and order
+stays in place. Both names present, or a file that does not parse, or a
+non-object top level, `permissions` or `allow`: the text is left unchanged.
+What the human observes: a host session stopped asking permission for the
+worktree tools bee's own worktree-first rule calls, without either the user's
+`~/.claude/settings.json` or a foreign settings entry being touched. Re-runs
+converge: a second apply plans nothing. (Decision 5fd24d1b.)
+
 ## Business Rules
 
 - **R13** — The assistant-instructions import artifact is created by default on
@@ -167,6 +180,16 @@ questions stay apart because a person who wanted proof their product works has
 not thereby agreed that every future commit should become slower.
 
 ## Pointers (implementation)
+
+- `.claude/settings.json` `permissions.allow` worktree-tool projection:
+  `WORKTREE_TOOL_ALLOW`, `worktree_tool_allow_missing` and
+  `merge_worktree_tool_allow` in
+  `packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs`; planned at the
+  `5b-worktree-tools` stage of `onboard/plan.rs` and applied by the
+  `merge_worktree_tool_allow` arm of `onboard/apply.rs`, re-checking the
+  missing condition at apply time and taking one `backup_once` before the
+  write. Tests: `plan_/apply` round trips in `onboard/tests.rs`.
+  Provenance: cell `oawt-1`, decision 5fd24d1b.
 
 - Windows shell section: template `packages/bee/AGENTS.windows.md`, appended by
   `render_agents_block` and resolved by `host_shell_is_powershell` (config key
