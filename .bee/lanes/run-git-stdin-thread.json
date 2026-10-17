@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "run-git-stdin-thread",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"run-git-stdin-thread\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bd0cb71; capture what settled, then bee close --feature run-git-stdin-thread.",
+  "next_action": "bee close --feature run-git-stdin-thread",
   "created_at": "2026-10-17T04:20:19.250Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "EnterWorktree",
+    "asked_at": "2026-10-17T04:22:37.440Z",
+    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
+  },
   "route": {
     "class": "bugfix",
     "lane": "tiny",
@@ -127,5 +132,14 @@
         }
       }
     ]
+  },
+  "last_scribing_run": {
+    "feature": "run-git-stdin-thread",
+    "date": "2026-10-17",
+    "at": "2026-10-17T04:27:28.743Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "bee close --feature run-git-stdin-thread"
   }
 }

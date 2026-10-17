@@ -1668,5 +1668,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-10-17T04:19:57.854Z"
+  },
+  "run-git-stdin-thread": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-17T04:27:44.731Z"
   }
 }
