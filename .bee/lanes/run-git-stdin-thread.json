@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tất cả đã đóng. Tôi commit sổ sách cuối và nhả session.",
-    "asked_at": "2026-10-17T04:28:07.104Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-17T04:29:11.436Z",
     "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   },
   "route": {
