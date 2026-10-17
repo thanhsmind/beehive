@@ -717,6 +717,8 @@
     "reflect",
     "bee-shaping",
     "contract:proof-carried",
-    "contract:effort-ladder"
+    "contract:effort-ladder",
+    "bee-swarming",
+    "bee-technical-writing"
   ]
 }

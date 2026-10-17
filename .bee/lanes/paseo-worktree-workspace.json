@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tôi đang tìm trong lịch sử các agent paseo cũ xem lần hỏi EnterWorktree trông như thế nào và mode của agent đó là gì.",
-    "asked_at": "2026-10-17T02:37:32.574Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-17T03:45:58.271Z",
     "session": "f70eff40-b292-4cc9-910d-1cb2a4c39157"
   }
 }
