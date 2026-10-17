@@ -170,8 +170,16 @@ This first runs a zero-mutation proof check over the feature's capped cells
 merge refuses before touching main. Past that check, it runs
 `git merge --no-ff <branch>`, then — on success — removes the worktree,
 deletes its branch, and drops its grant. No verify command runs at any point;
-CI runs the full declared suite against the merged main on every push. Read
-the result:
+CI runs the full declared suite against the merged main on every push.
+
+**A red CI: classify before any rerun.** A flake or infrastructure red earns
+ONE fresh run of the whole workflow, never a single-job retry — a lone job
+retried can pass on its own and hide a real red. An identical second failure
+is not a flake: read the child log, do not rerun. A failure in code the diff
+never touched means a stale base: rebase onto current main before anything
+else.
+
+Read the merge result:
 
 - **Merged and cleaned up.** Find the worktree's runtime pane by **label**,
   never by any other identity: `bee herding pane list --workspace <workspace_id>`

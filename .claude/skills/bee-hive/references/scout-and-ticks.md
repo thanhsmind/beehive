@@ -137,7 +137,7 @@ solo-`tiny` exemptions are AGENTS.md's).
 PR wiring); every other lane defaults to `draft-pr` when a GitHub remote and `gh`
 exist, else `push-only` when any remote exists, else `off`. An explicit config value
 overrides the lane default in every lane. Announced once at feature start, one line,
-no question.
+no question. The PR title and body take the shape in `bee-technical-writing`.
 
 - First capped cell of a feature → push the feature branch, open a **draft PR** titled
   from the feature, body linking the plan and listing acceptance criteria.
