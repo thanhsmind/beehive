@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"run-git-stdin-thread\" started at phase \"exploring\" (lane).",
-  "next_action": "execute rgs-1 inline",
+  "next_action": "Merged into main at bd0cb71; capture what settled, then bee close --feature run-git-stdin-thread.",
   "created_at": "2026-10-17T04:20:19.250Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "EnterWorktree",
-    "asked_at": "2026-10-17T04:22:37.440Z",
-    "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "tiny",
@@ -132,12 +127,5 @@
         }
       }
     ]
-  },
-  "merge_ready": {
-    "since": "2026-10-17T04:27:06.563Z",
-    "branch": "wt/run-git-stdin-thread",
-    "worktree_id": "beehive--wt--run-git-stdin-thread",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
