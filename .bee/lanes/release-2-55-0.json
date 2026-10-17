@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tôi commit sổ sách, lấy permit mới tại commit đó, rồi chạy release trong cùng một lệnh.",
-    "asked_at": "2026-10-17T04:32:12.150Z",
+    "subject": "Lần trước script dừng vì file heartbeat của bee làm cây bẩn. Tôi đã commit nó, lấy permit mới và chạy lại ngay trong cùng một lệnh. Chờ kết",
+    "asked_at": "2026-10-17T04:42:04.514Z",
     "session": "858d1a15-cfb6-415b-8dc2-d60635a62b9b"
   },
   "route": {
