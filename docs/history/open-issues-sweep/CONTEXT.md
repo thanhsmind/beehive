@@ -51,6 +51,12 @@ defects among them. Each decision below names the issue it closes.
   `--report-file <path>` as well as `--report`, so a report whose proof
   names `bash` can come from a file instead of a shell argument.
 
+- D13 (#116, filed during this feature): under `BEE_HERDING_WORKER`,
+  `bee hook write-guard` still runs the concurrent-worker whole-tree git
+  check (stash, reset, checkout, restore, clean, add, commit without
+  paths). Every other guard stays off for herded workers
+  (herding-worker-standalone D3 holds for the rest).
+
 ## Already fixed at HEAD (closed with evidence, no cell)
 
 - #104, #106: `worktree prune` keeps a queue only when it holds a stub
