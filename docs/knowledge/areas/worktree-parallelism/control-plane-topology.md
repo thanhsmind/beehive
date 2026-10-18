@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Worktree Parallelism — resolveContext, the control-plane/workspace-local split, and the single write owner per workspace"
-description: "The single topology resolver every store now goes through, the declared plane split that keeps coordination stores shared at main while cells/backlog/decisions stay per-checkout, the migrate-or-fail-loud door for worktree-local records stranded by the split, the workspace registry's single write owner, the write-policy default that auto-isolates a second write session instead of refusing it, and the issue-#56 acceptance suite proving the write guard's identity-mandatory checks."
+description: "The single topology resolver every store now goes through, the declared plane split that keeps coordination stores shared at main while cells stay per-checkout and decisions/backlog serve the control root, the migrate-or-fail-loud door for worktree-local records stranded by the split, the workspace registry's single write owner, the write-policy default that auto-isolates a second write session instead of refusing it, and the issue-#56 acceptance suite proving the write guard's identity-mandatory checks."
 timestamp: 2026-08-06
 bee:
   id: worktree-parallelism-control-plane-topology
@@ -17,7 +17,7 @@ bee:
 
 `the-trust-model.md` and `store-tiers-and-where-it-lives.md` describe a worktree
 as an island that gets its own store only when granted. That is still true for
-**workspace-local** state — cells, backlog, decisions — but it stopped being
+**workspace-local** state — cells — but it stopped being
 true for **coordination** state. This concept owns the resolver that draws that
 line, the migration door that closes the gap the line opened, and the two
 mechanisms that decide who may write into a shared checkout: the workspace
@@ -72,7 +72,7 @@ migration below). Only after `18d` closed did `multisession-native-19`
 (workspace registry) begin — every later cell in this concept depends on the
 sweep being complete, not partial.
 
-## Coordination stores are control-plane; cells/backlog/decisions stay workspace-local (declared plane split)
+## Coordination stores are control-plane; cells stay workspace-local (declared plane split)
 
 The split is a declared, tested boundary, not a inference from file location:
 
@@ -83,10 +83,17 @@ The split is a declared, tested boundary, not a inference from file location:
   handoff mailbox (`handoff.md`), and the workspace registry (below). A linked
   worktree — granted or not — reads and writes every one of these at main's
   real `.bee/` tree, never its own.
-- **Workspace-local (stays at `workspaceRoot`):** cells, backlog, decisions.
-  These are the surfaces `multisession-native-18b` deliberately left alone —
+- **Workspace-local (stays at `workspaceRoot`):** cells.
+  This is the surface `multisession-native-18b` deliberately left alone —
   `cells.mjs`'s own cell-file reads (`readCell`/`claimCell`/`readyCells`) are
   untouched by the re-root, on purpose.
+- **Decisions and backlog serve the control root from a granted worktree**
+  (open-issues-sweep D6, issues #97, #105, #110, #114, superseding
+  `fcb4118c`): `bee decisions *` and `bee backlog *` resolve through
+  `resolve_root_serving_granted` (`verbs/drivers/prepare.rs`), the door
+  `cells add` and `dispatch prepare` use. A decision logged in a worktree is
+  visible at once to the claim door's contract check. Known limit: the session
+  preamble and status decision reads still use the worktree's store root.
 - Solo checkouts and the main checkout itself are byte-identical under this
   split by construction: `controlRoot === workspaceRoot === projectRoot` when
   there is no linked worktree in play.

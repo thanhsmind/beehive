@@ -249,10 +249,15 @@ When the installed version of Paseo is older than version 0.10.3, the runner ref
 FIX: upgrade paseo to 0.10.3 or newer
 ```
 
-When `paseo run` fails because the daemon is down, the runner refuses with:
+When `paseo run` fails, the runner asks the daemon for the job's agent with `paseo ls`. When that call fails too, the daemon is down, and the runner refuses with:
 ```text
 FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)
 ```
+When that call answers, the daemon is up and the agent itself failed (for example `AGENT_CREATE_FAILED`, model not found), and the FIX names the provider and model that `herding.agents.<name>` sets in `.bee/config.json` (open-issues-sweep D4, issue #98).
+
+Two rules hold for every herded worker (open-issues-sweep D3 and D13, issues #103, #112, #116):
+- A worker started with a dispatch permit (`BEE_DISPATCH_ID` in the pane passthrough) keeps the passthrough `BEE_SESSION_ID`, so `bee dispatch authorize` matches the issuer session. Every other leader session variable is stripped. Inside a herded worker, `bee state session release` with no `--session-id` releases nothing.
+- Under `BEE_HERDING_WORKER`, every hook stays silent except `bee hook write-guard`, which still refuses a whole-tree git verb (stash, reset, checkout, restore, clean, add, commit without paths) while more than one worker is live in the checkout (`hooks/write_guard/worker_tree.rs`).
 
 On the `pi` runtime, `bee doctor` adds a report-only `paseo_ready` row when any `team.pi` slot configures a Paseo agent (paseo-pi-hardening D7, store `fb38df99`, contract store `28ffec0f`).
 The check verifies these conditions:
