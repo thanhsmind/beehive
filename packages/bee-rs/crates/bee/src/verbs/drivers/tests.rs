@@ -6531,6 +6531,41 @@ exit 0
     }
 
     #[test]
+    fn doc_deferral_door_scan_set_skips_a_frozen_plan_md_with_a_deferral_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","approved_gates":{"shape":true}}"#);
+        w(root, "docs/history/demo/plan.md", "# Plan\n\nThis is deferred for now.\n");
+        w(root, "docs/history/demo/CONTEXT.md", "# Demo\n\nLocked decisions only.\n");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_scan_set_skips_a_generated_knowledge_index_with_a_deferral_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        let generated = format!(
+            "---\nokf_version: 0.1\n---\n{}\n\n# Knowledge Bundle\n\n- This is deferred for now.\n",
+            crate::verbs::knowledge::KNOWLEDGE_INDEX_HEADER
+        );
+        w(root, "docs/knowledge/index.md", &generated);
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":false,"outcome":"did the thing","files_changed":["docs/knowledge/index.md","docs/knowledge/areas/demo/notes.md"],"capped_at":"2026-08-16T00:00:00.000Z"}}"#,
+        );
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(!door.detail.contains("docs/knowledge/index.md:"), "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
+    }
+
+    #[test]
     fn doc_deferral_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
