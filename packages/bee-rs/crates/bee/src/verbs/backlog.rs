@@ -51,9 +51,10 @@ use crate::fsutil::append_jsonl;
 use crate::jsjson;
 use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::registry::{check_manifest_drift, Drift};
-use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::roots::Roots;
 use crate::state::read_config_raw;
 use crate::textutil::char_len;
+use crate::verbs::drivers::resolve_root_serving_granted;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -625,12 +626,19 @@ struct Ctx {
 /// delegates.
 fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitCode> {
     let Ok(cwd) = std::env::current_dir() else { return Ok(None) };
-    let root = match resolve_store_root(&cwd) {
+    preamble_at(&cwd, cmd, pre_json, t0)
+}
+
+fn preamble_at(
+    cwd: &Path,
+    cmd: &str,
+    pre_json: bool,
+    t0: Instant,
+) -> Result<Option<Ctx>, ExitCode> {
+    let root = match resolve_root_serving_granted(cwd).0 {
         Roots::Ordinary(r) => r,
-        Roots::Unsupported(why) => {
-            return Err(emit_unsupported_root(&cwd, cmd, pre_json, t0, &why))
-        }
-        Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
+        Roots::Unsupported(why) => return Err(emit_unsupported_root(cwd, cmd, pre_json, t0, &why)),
+        Roots::None => return Err(emit_no_root_error(cwd, cmd, pre_json, t0)),
     };
     let drift = check_manifest_drift(&root);
     Ok(Some(Ctx { root, drift }))
@@ -1805,6 +1813,70 @@ mod tests {
     fn write_backlog(root: &Path, lines: &str) {
         std::fs::create_dir_all(root.join(".bee")).unwrap();
         std::fs::write(backlog_jsonl_path(root), lines).unwrap();
+    }
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn granted_worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let wt = tmp.join("wt-a");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/a"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-a\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::write(wt.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        (main, wt)
+    }
+
+    #[test]
+    fn backlog_resolves_the_main_checkouts_store_from_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = granted_worktree_fixture(tmp.path());
+
+        let ctx = match preamble_at(&wt, "backlog pbi add", false, Instant::now()) {
+            Ok(Some(c)) => c,
+            _ => panic!("backlog must resolve a store root from a granted worktree"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ctx.root).unwrap(),
+            dunce::canonicalize(&main).unwrap(),
+            "a granted worktree uses the control root's backlog store"
+        );
+        assert_eq!(backlog_jsonl_path(&ctx.root), main.join(".bee").join("backlog.jsonl"));
+
+        let ordinary = match preamble_at(&main, "backlog pbi add", false, Instant::now()) {
+            Ok(Some(c)) => c,
+            _ => panic!("an ordinary checkout must resolve a store root"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ordinary.root).unwrap(),
+            dunce::canonicalize(&main).unwrap()
+        );
     }
 
     // ── the shared finding-row surface (mistake-fix-at D2) ────────────────

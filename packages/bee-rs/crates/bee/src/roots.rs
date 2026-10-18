@@ -71,21 +71,10 @@
 //     used for ONE thing, the timings.jsonl append; every emitted byte comes
 //     from the embedded registry.
 //   * `status --brief` (verbs/status_brief.rs) — state/config/timings only.
-//   * `capture *` (.bee/capture-queue.jsonl), `backlog *` (.bee/backlog.jsonl),
+//   * `capture *` (.bee/capture-queue.jsonl),
 //     `feedback *`, `knowledge *`, `intent *`, `reviews *`, `tmp sweep`
 //     (.bee/tmp, .bee/spikes, .bee/lanes) — all data-plane files under the
 //     store root.
-//   * `decisions *` (log, active, search, redact, render, supersede, tag,
-//     archive — .bee/decisions.jsonl + archive) — verbs/decisions/*.rs. Was
-//     narrow only because it shared `reservations::prelude` with `cells *` /
-//     `state *` / `close`; it now has its own dedicated door,
-//     `verbs::decisions::decisions_prelude`, resolved through
-//     `resolve_store_root_any` instead. A granted worktree operates on its
-//     OWN workspace-local `.bee/decisions.jsonl`, matching the
-//     control-plane/data-plane split (docs/knowledge/areas/worktree-parallelism/
-//     control-plane-topology.md); an ordinary checkout and an ungranted
-//     worktree are unaffected (`resolve_store_root_any` answers the same root
-//     `resolve_store_root` would there).
 //   * `test` (verbs/test_runner.rs) — config read, .bee/logs write, and the
 //     child process's cwd, which is the store root in Node too.
 //   * `timings report` (verbs/timings.rs) — reads only

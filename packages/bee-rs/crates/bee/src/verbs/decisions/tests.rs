@@ -1700,14 +1700,12 @@ use std::time::Instant;
         assert!(refused.contains(TAG_PATTERN_DISPLAY));
     }
 
-    // ── dwd-1: the WIDE door — a granted worktree gets its OWN decisions
-    //    store instead of the narrow door's refusal ──────────────────────────
+    // ── ois-4: a granted worktree's decisions store is the control root ────
     //
     // `decisions_prelude_at` is the exact function `decisions_prelude` (the
     // real cwd-reading entry point every `run_*` in this family calls)
     // delegates to, parameterized on the start directory instead of
-    // `std::env::current_dir()` — see the doc comment on `decisions_prelude`
-    // in verbs_write.rs for why: mutating the test runner's own process-wide
+    // `std::env::current_dir()` — mutating the test runner's own process-wide
     // cwd is unsafe under `cargo test`'s default parallelism, the same
     // hazard `tests/workflow_verbs.rs` documents for this family of `prelude`
     // functions. This fixture is the reservations-module fixture shape
@@ -1754,11 +1752,12 @@ use std::time::Instant;
         (main, wt)
     }
 
-    /// `decisions log` and `decisions active` resolve the granted worktree's
-    /// OWN store through the wide door — a write lands in `wt-a/.bee/
-    /// decisions.jsonl`, never main's, and a subsequent read sees it there.
+    /// `decisions log` and `decisions active` resolve the CONTROL ROOT (the
+    /// main checkout) from inside a granted worktree — a write lands in
+    /// `main/.bee/decisions.jsonl`, never the worktree's own copy, and a
+    /// subsequent read sees it there.
     #[test]
-    fn decisions_log_and_active_succeed_against_a_granted_worktrees_own_store() {
+    fn decisions_log_and_active_land_in_the_main_checkouts_store_from_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, wt) = granted_worktree_fixture(tmp.path());
 
@@ -1768,13 +1767,13 @@ use std::time::Instant;
         };
         assert_eq!(
             dunce::canonicalize(&ctx.root).unwrap(),
-            dunce::canonicalize(&wt).unwrap(),
-            "a granted worktree gets its OWN store, not main's"
+            dunce::canonicalize(&main).unwrap(),
+            "a granted worktree writes decisions into the main checkout's store"
         );
 
         let p = LogParams {
-            decision: "Widen decisions to the wide door".into(),
-            rationale: "matches the control-plane/data-plane split".into(),
+            decision: "Route decisions to the control root".into(),
+            rationale: "one store for the whole control plane".into(),
             alternatives: None,
             scope: "repo".into(),
             source: "user".into(),
@@ -1786,28 +1785,30 @@ use std::time::Instant;
             rejected: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
-            panic!("expected decisions log to succeed against the worktree's own store");
+            panic!("expected decisions log to succeed against the control root");
         };
 
-        // The worktree's OWN copy carries the event; main's copy does not
-        // exist at all — the write never crossed into the other checkout.
-        let wt_events = read_jsonl(&decisions_path(&wt));
-        assert_eq!(wt_events.len(), 1, "{wt_events:?}");
-        assert!(!decisions_path(&main).exists());
+        let main_events = read_jsonl(&decisions_path(&main));
+        assert_eq!(main_events.len(), 1, "{main_events:?}");
+        assert!(!decisions_path(&wt).exists());
 
         let active_ctx = match decisions_prelude_at(&wt, "decisions active", false, Instant::now())
         {
             Some(Pre::Go(c)) => c,
             _ => panic!("decisions active must resolve a store root from a granted worktree"),
         };
+        assert_eq!(
+            dunce::canonicalize(&active_ctx.root).unwrap(),
+            dunce::canonicalize(&main).unwrap()
+        );
         let active = active_decisions(&active_ctx.root, false).ok().unwrap();
         assert_eq!(active.len(), 1, "{active:?}");
-        assert_eq!(active[0]["decision"], "Widen decisions to the wide door");
+        assert_eq!(active[0]["decision"], "Route decisions to the control root");
     }
 
-    /// The SAME fixture, through the NARROW door: a genuinely control-plane
-    /// verb still refuses, byte-identically to before this cell — the two
-    /// doors diverge on `decisions *` alone.
+    /// The SAME fixture, through the NARROW door: a control-plane verb that
+    /// still carries its own granted-worktree arm is untouched by the
+    /// decisions re-rooting.
     #[test]
     fn a_control_plane_verb_still_refuses_from_the_same_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1827,11 +1828,11 @@ use std::time::Instant;
         }
     }
 
-    /// An ordinary main checkout is unaffected by the widening: both the
-    /// dedicated decisions door and the narrow control-plane door resolve
-    /// to the SAME root they always did.
+    /// An ordinary main checkout is unaffected: both the dedicated decisions
+    /// door and the narrow control-plane door resolve to the SAME root they
+    /// always did.
     #[test]
-    fn main_checkout_behavior_is_unchanged_by_the_wide_door() {
+    fn main_checkout_behavior_is_unchanged_for_decisions() {
         let tmp = fixture_root();
         let main = tmp.path();
 
