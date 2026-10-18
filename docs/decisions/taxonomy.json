@@ -732,6 +732,7 @@
     "contract:cells-report-file",
     "contract:unclaim-claim-row",
     "open-issues-sweep",
-    "contract:herded-worker-tree-guard"
+    "contract:herded-worker-tree-guard",
+    "release-dirt"
   ]
 }
