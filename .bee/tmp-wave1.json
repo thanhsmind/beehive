@@ -1,0 +1,240 @@
+WARNING: .bee/logs/test-results.json is missing or not a recognized test-results record — cannot know whether the base is green or red; claim proceeding.
+WARNING: .bee/logs/test-results.json is missing or not a recognized test-results record — cannot know whether the base is green or red; claim proceeding.
+WARNING: .bee/logs/test-results.json is missing or not a recognized test-results record — cannot know whether the base is green or red; claim proceeding.
+WARNING: .bee/logs/test-results.json is missing or not a recognized test-results record — cannot know whether the base is green or red; claim proceeding.
+{
+  "wave": [
+    {
+      "tool": "Bash",
+      "payload": {
+        "command": ".bee/bin/bee herding run --task-file - --json --cwd \"/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\" --agent \"paseo-pi-flash\" --cell-id \"ois-1\" --ceiling 1800",
+        "stdin": "Nickname (reservation identity): w-ois-1\nAssigned cell id: ois-1\nFeature: open-issues-sweep\n\nLocation — work here, the store is in the other checkout:\n- Work in: /mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\n- The bee store (cells, claims, reservations) lives in: /mnt/data/Projects/goglbe/beehive\n\nCell (authoritative — do not re-fetch):\n{\n  \"id\": \"ois-1\",\n  \"feature\": \"open-issues-sweep\",\n  \"title\": \"Honour the escalate flag when the plan assigns a role\",\n  \"lane\": \"standard\",\n  \"role\": \"code\",\n  \"deps\": [],\n  \"decisions\": [\n    \"D1\",\n    \"9718c2d3-84b1-4b55-ad90-5f5db74493da\"\n  ],\n  \"files\": [\n    \"packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs\"\n  ],\n  \"read_first\": [\n    \"docs/history/open-issues-sweep/CONTEXT.md\",\n    \"packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/cells/validate.rs\"\n  ],\n  \"affects_skills\": [],\n  \"affects_specs\": [\n    \"docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md\"\n  ],\n  \"action\": \"Per D1 (issues 109, 111, 113). In verbs/drivers/prepare.rs the line `let escalated_cell = role.is_none()` (inside the role resolution block, just after the comment that starts `D5 (store 97ce5225)`) tests the `role` variable, but `let role = if role.is_some() { role } else { v2_effective_role.as_deref() };` earlier fills `role` with the approved plan's planned role, so on any v2-plan feature an escalated cell never escalates and gets the herding command. Make the check use the caller's own flag (`orig_role`, set by `let orig_role = role;`) instead of the role that the v2 plan filled, so an explicit --role still outranks the flag but a planned role does not. Make sure the v2 path does not then refuse the escalated dispatch as planned_role_mismatch and that the payload carries no herding command and no model param (Resolved::Inherit). Red first: in verbs/drivers/tests.rs add a test that builds a v2-plan feature (copy the fixture shape of an existing v2 planned_role test — rg -n planned_role verbs/drivers/tests.rs) whose cell role resolves to a herding slot, sets the cell `escalate: true`, runs prepare --kind cell, and asserts the payload is not a Bash herding command; watch it fail before the fix. Keep every existing prepare test green. No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file.\",\n  \"verify\": \"PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare\",\n  \"must_haves\": {\n    \"truths\": [\n      \"an escalated cell on a feature with a v2 role plan gets a session-model payload with no herding command\",\n      \"an explicit --role still outranks the escalate flag\"\n    ],\n    \"artifacts\": [\n      {\n        \"path\": \"packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs\",\n        \"substantive\": \"a v2-plan escalate test that failed before the fix\"\n      }\n    ],\n    \"key_links\": [\n      \"the escalate check reads the caller's original --role, not the v2-filled role\"\n    ],\n    \"prohibitions\": [\n      \"No change to non-escalated dispatch output\",\n      \"No code comments\"\n    ]\n  },\n  \"status\": \"claimed\",\n  \"trace\": {\n    \"worker\": \"w-ois-1\",\n    \"outcome\": null,\n    \"files_changed\": [],\n    \"deviations\": [],\n    \"friction\": null,\n    \"capped_at\": null,\n    \"behavior_change\": false,\n    \"verification_evidence\": null,\n    \"verify_output\": null,\n    \"verify_passed\": null,\n    \"claim_session\": \"33b80c7b-a699-4752-bb0a-0a47312d5c44\",\n    \"verify_command\": null,\n    \"claimed_at\": \"2026-10-18T01:05:03.681Z\"\n  }\n}\n\nInputs — read these; nothing else is provided:\n- AGENTS.md\n- docs/history/open-issues-sweep/CONTEXT.md\n- docs/history/open-issues-sweep/plan.md (when present)\n\nLearned context (machine-assembled — read before implementing; prefer it over re-deriving):\n- docs/history/open-issues-sweep/CONTEXT.md + docs/history/open-issues-sweep/plan.md — plan.md\n- docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md — Source that ships without reinstalling the binary the hooks call is inert\n- docs/knowledge/patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md — A dead worker has the code and is missing the last mechanical step\n- docs/knowledge/patterns/20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write.md — Probing a mutating verb against the default record is still a write\n- docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md — A pinned read-only worker type and a cell-execution dispatch are different jobs — never spawn one for the other\n- docs/knowledge/patterns/20260715-shipping-a-lib-file-means-shipping-the-manifest.md — Shipping a lib file means shipping the manifest: regen release-manifest inside the feature\n- docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — A green count is not evidence that your new test ran\n- docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md — Local green is worthless if suites inherit harness env — hermeticity must be structural, and the release gate is the exact-tag CI\n\nAdvisor: fable — consult via your own Agent tool, model param fable, description starting exactly \"advisor-consult ois-1: fable\" (fallback: headless claude -p --model fable)\n\nContract:\n- Execute only the assigned cell. Do not select or accept other work.\n- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.\n- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.\n- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: ois-1` (the words \"cell:\" then the id — a bare id alone fails the cap).\n- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.",
+        "transport_ready": true,
+        "transport_reason": "paseo agent paseo-pi-flash: /tmp/.mount_Paseo.C0veTi/resources/bin/paseo on PATH",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c"
+      },
+      "dispatch_id": "cc7a2d07-64ff-4072-ab79-2a0aa5599c5c",
+      "economics": {
+        "logical_tier": "code",
+        "requested_model": null,
+        "effective_model": null,
+        "effective_model_status": "unverified",
+        "channel": "herding-exec",
+        "enforcement": "herding-command",
+        "effort": null,
+        "effort_base": null,
+        "effort_step": 0,
+        "effort_reason": "none",
+        "tier_source": "cell",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+        "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112"
+      },
+      "worktree_root": "/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep",
+      "control_root": "/mnt/data/Projects/goglbe/beehive",
+      "claimed": true,
+      "reserved": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "worker_registered": true
+    },
+    {
+      "tool": "Bash",
+      "payload": {
+        "command": ".bee/bin/bee herding run --task-file - --json --cwd \"/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\" --agent \"paseo-pi-flash\" --cell-id \"ois-2\" --ceiling 1800",
+        "stdin": "Nickname (reservation identity): w-ois-2\nAssigned cell id: ois-2\nFeature: open-issues-sweep\n\nLocation — work here, the store is in the other checkout:\n- Work in: /mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\n- The bee store (cells, claims, reservations) lives in: /mnt/data/Projects/goglbe/beehive\n\nCell (authoritative — do not re-fetch):\n{\n  \"id\": \"ois-2\",\n  \"feature\": \"open-issues-sweep\",\n  \"title\": \"Break a stale claim gate so unclaim and reopen free the claim\",\n  \"lane\": \"standard\",\n  \"role\": \"code\",\n  \"deps\": [],\n  \"decisions\": [\n    \"D2\",\n    \"50894817-53b4-4f97-a4b9-b58967409fa0\"\n  ],\n  \"files\": [\n    \"packages/bee-rs/crates/bee/src/verbs/cells/claims.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/cells/tests.rs\"\n  ],\n  \"read_first\": [\n    \"docs/history/open-issues-sweep/CONTEXT.md\",\n    \"packages/bee-rs/crates/bee/src/verbs/cells/claims.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs\"\n  ],\n  \"affects_skills\": [],\n  \"affects_specs\": [\n    \"docs/knowledge/areas/workflow-state/dispatch.md\"\n  ],\n  \"action\": \"Per D2 (issue 108). `unclaim_cell`, `run_reopen` and `run_drop` in verbs/cells/handlers_close.rs already pass clear_claim_after=true to `mutate_cell`, which calls `release_claim_file_best_effort(root, id)` (verbs/cells/claims.rs). That helper returns silently when `acquire_gate` returns false (`return Ok(()); // GATE_HELD — best-effort caller never retries`). The gate is the create-new file `.bee/claims/<id>.adopting` holding `{\\\"pid\\\":…,\\\"at\\\":…}`; when a claiming process dies between acquire_gate and release_gate the file stays for ever (this repo has stale det-1/det-2/det-3/rel530-1/rel540-1/rel550-1 .adopting files, det-2's dated at the exact #108 claim time), so every later release skips and the claim row outlives the unclaim. Fix in claims.rs: when `acquire_gate` meets an existing gate file, treat it as stale and remove it (then try once more) when its `at` is older than 30 seconds, or its pid is not alive (on unix check /proc/<pid> or libc-free `std::path::Path::new(\\\"/proc\\\").join(pid)` existence; on other targets use age only), or the file does not parse. Make `release_claim_file_best_effort` use `acquire_gate_with_retry` so a briefly-held live gate is waited out. Never break a fresh gate held by a live pid. Red first in verbs/cells/tests.rs: claim a cell (use the existing claim fixture — rg -n \\\"fn .*claim\\\" verbs/cells/tests.rs), write a stale `<id>.adopting` (pid 999999999, at one hour ago), run unclaim, and assert the claim file under .bee/claims is gone and a second claim succeeds; watch it fail before the fix. Add a test that a fresh gate with the current pid is not broken. No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file.\",\n  \"verify\": \"PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee cells::\",\n  \"must_haves\": {\n    \"truths\": [\n      \"after cells unclaim the claim store row is gone even when a stale .adopting gate was left by a dead claimer\",\n      \"a second cells claim on the unclaimed cell succeeds\",\n      \"a fresh gate held by a live process is never broken\"\n    ],\n    \"artifacts\": [\n      {\n        \"path\": \"packages/bee-rs/crates/bee/src/verbs/cells/tests.rs\",\n        \"substantive\": \"stale-gate unclaim test that failed before the fix\"\n      }\n    ],\n    \"key_links\": [\n      \"acquire_gate breaks a stale gate; release_claim_file_best_effort retries\"\n    ],\n    \"prohibitions\": [\n      \"No change to the ownership guard\",\n      \"No code comments\"\n    ]\n  },\n  \"status\": \"claimed\",\n  \"trace\": {\n    \"worker\": \"w-ois-2\",\n    \"outcome\": null,\n    \"files_changed\": [],\n    \"deviations\": [],\n    \"friction\": null,\n    \"capped_at\": null,\n    \"behavior_change\": false,\n    \"verification_evidence\": null,\n    \"verify_output\": null,\n    \"verify_passed\": null,\n    \"claim_session\": \"33b80c7b-a699-4752-bb0a-0a47312d5c44\",\n    \"verify_command\": null,\n    \"claimed_at\": \"2026-10-18T01:05:03.935Z\"\n  }\n}\n\nInputs — read these; nothing else is provided:\n- AGENTS.md\n- docs/history/open-issues-sweep/CONTEXT.md\n- docs/history/open-issues-sweep/plan.md (when present)\n\nLearned context (machine-assembled — read before implementing; prefer it over re-deriving):\n- docs/history/open-issues-sweep/CONTEXT.md + docs/history/open-issues-sweep/plan.md — plan.md\n- docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md — Source that ships without reinstalling the binary the hooks call is inert\n- docs/knowledge/patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md — A dead worker has the code and is missing the last mechanical step\n- docs/knowledge/patterns/20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write.md — Probing a mutating verb against the default record is still a write\n- docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md — A pinned read-only worker type and a cell-execution dispatch are different jobs — never spawn one for the other\n- docs/knowledge/patterns/20260715-shipping-a-lib-file-means-shipping-the-manifest.md — Shipping a lib file means shipping the manifest: regen release-manifest inside the feature\n- docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — A green count is not evidence that your new test ran\n- docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md — Local green is worthless if suites inherit harness env — hermeticity must be structural, and the release gate is the exact-tag CI\n\nAdvisor: fable — consult via your own Agent tool, model param fable, description starting exactly \"advisor-consult ois-2: fable\" (fallback: headless claude -p --model fable)\n\nContract:\n- Execute only the assigned cell. Do not select or accept other work.\n- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.\n- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.\n- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: ois-2` (the words \"cell:\" then the id — a bare id alone fails the cap).\n- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.",
+        "transport_ready": true,
+        "transport_reason": "paseo agent paseo-pi-flash: /tmp/.mount_Paseo.C0veTi/resources/bin/paseo on PATH",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c"
+      },
+      "dispatch_id": "6decd1dc-57c4-4646-a3e9-5c33396fd49f",
+      "economics": {
+        "logical_tier": "code",
+        "requested_model": null,
+        "effective_model": null,
+        "effective_model_status": "unverified",
+        "channel": "herding-exec",
+        "enforcement": "herding-command",
+        "effort": null,
+        "effort_base": null,
+        "effort_step": 0,
+        "effort_reason": "none",
+        "tier_source": "cell",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+        "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112"
+      },
+      "worktree_root": "/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep",
+      "control_root": "/mnt/data/Projects/goglbe/beehive",
+      "claimed": true,
+      "reserved": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "worker_registered": true
+    },
+    {
+      "tool": "Bash",
+      "payload": {
+        "command": ".bee/bin/bee herding run --task-file - --json --cwd \"/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\" --agent \"paseo-pi-flash\" --cell-id \"ois-3\" --ceiling 1800",
+        "stdin": "Nickname (reservation identity): w-ois-3\nAssigned cell id: ois-3\nFeature: open-issues-sweep\n\nLocation — work here, the store is in the other checkout:\n- Work in: /mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\n- The bee store (cells, claims, reservations) lives in: /mnt/data/Projects/goglbe/beehive\n\nCell (authoritative — do not re-fetch):\n{\n  \"id\": \"ois-3\",\n  \"feature\": \"open-issues-sweep\",\n  \"title\": \"Keep the permit session for deploy workers, name the right Paseo FIX, gate the unix test helper\",\n  \"lane\": \"standard\",\n  \"role\": \"code\",\n  \"deps\": [],\n  \"decisions\": [\n    \"D3\",\n    \"D4\",\n    \"D5\",\n    \"8f1603db-6fb1-4948-b0e6-fe15afafbaf6\"\n  ],\n  \"files\": [\n    \"packages/bee-rs/crates/bee/src/herding/run.rs\",\n    \"packages/bee-rs/crates/bee/src/herding/tests.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs\"\n  ],\n  \"read_first\": [\n    \"docs/history/open-issues-sweep/CONTEXT.md\",\n    \"packages/bee-rs/crates/bee/src/herding/run.rs\",\n    \"packages/bee-rs/crates/bee/src/herding/paseo.rs\",\n    \"packages/bee-rs/crates/bee/src/session_identity.rs\"\n  ],\n  \"affects_skills\": [],\n  \"affects_specs\": [\n    \"docs/knowledge/areas/bee-herding/the-paseo-channel.md\"\n  ],\n  \"action\": \"Three fixes in herding/run.rs. (1) Per D3 (issues 103, 112): `pub(crate) fn build_child_env(` strips every SESSION_ENV_VARS entry after merging the passthrough (the loop after the line `// Strip leader session IDs even if present in passthrough or agent_env`), so a Paseo deploy worker never gets the issuer `BEE_SESSION_ID` and `bee dispatch authorize` refuses deploy_authorization_wrong_session. Keep the strip, then re-insert `BEE_SESSION_ID` from `passthrough` only when `passthrough` also holds a non-empty `BEE_DISPATCH_ID` (the herdr pane path already exports it — see PASSTHROUGH_ENV_VARS). CLAUDE_CODE_SESSION_ID and PI_SESSION_ID stay stripped always. In herding/tests.rs keep `child_env_construction_excludes_leader_session_and_sets_worker_marker` passing and add a test: passthrough with BEE_DISPATCH_ID and BEE_SESSION_ID gives the child BEE_SESSION_ID and no PI_SESSION_ID; passthrough with BEE_SESSION_ID but no BEE_DISPATCH_ID gives none. (2) Per D4 (issue 98): in `execute_paseo`, the `Err(e)` arm of `cli.call_as_caller(&argv)` always appends `— FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)`. Append that FIX only when the daemon does not answer. The same arm already makes a follow-up `cli.call(&paseo::ls_label_argv(&label))`; when that call returns Ok the daemon answered, so append instead a FIX that tells the user to check the agent's provider and model in the herding agent config (name the agent); when it returns Err keep the daemon-start FIX. Do not use paseo::daemon_reachable() (a real TCP probe). Tests use the existing fake PaseoCli, which controls the ls reply: follow the existing test that asserts the daemon FIX (rg -n \\\"FIX: start the daemon\\\" herding/run.rs) and add one where ls answers Ok. (2b) A deploy worker now carries the leader's BEE_SESSION_ID; `run_session_release` in verbs/state_group/sessions.rs must not release the leader from inside a herding worker: when BEE_HERDING_WORKER is \\\"1\\\" and no --session-id flag is given, return a typed no-op (released:false, reason herding_worker) without writing. Test it with crate::hooks::herding_env_lock() held. (3) Per D5 (issue 96): `fn seed_claude_guard(` in the test module uses `std::os::unix::fs::PermissionsExt` and breaks the Windows build; mark it and every test that calls it `#[cfg(unix)]`. Red first for (1) and (2). No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file.\",\n  \"verify\": \"PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::\",\n  \"must_haves\": {\n    \"truths\": [\n      \"a child env built with BEE_DISPATCH_ID and BEE_SESSION_ID in the passthrough carries BEE_SESSION_ID\",\n      \"without BEE_DISPATCH_ID no leader session variable reaches the child\",\n      \"a paseo run error from a live daemon does not name the daemon-start FIX\",\n      \"seed_claude_guard and its callers compile only on unix\",\n      \"bee state session release run inside a herding worker without --session-id releases nothing\"\n    ],\n    \"artifacts\": [\n      {\n        \"path\": \"packages/bee-rs/crates/bee/src/herding/tests.rs\",\n        \"substantive\": \"permit session env tests\"\n      }\n    ],\n    \"key_links\": [\n      \"build_child_env feeds both the paseo and the no-pane child\"\n    ],\n    \"prohibitions\": [\n      \"No real paseo call in tests\",\n      \"No code comments\"\n    ]\n  },\n  \"status\": \"claimed\",\n  \"trace\": {\n    \"worker\": \"w-ois-3\",\n    \"outcome\": null,\n    \"files_changed\": [],\n    \"deviations\": [],\n    \"friction\": null,\n    \"capped_at\": null,\n    \"behavior_change\": false,\n    \"verification_evidence\": null,\n    \"verify_output\": null,\n    \"verify_passed\": null,\n    \"claim_session\": \"33b80c7b-a699-4752-bb0a-0a47312d5c44\",\n    \"verify_command\": null,\n    \"claimed_at\": \"2026-10-18T01:05:04.222Z\"\n  }\n}\n\nInputs — read these; nothing else is provided:\n- AGENTS.md\n- docs/history/open-issues-sweep/CONTEXT.md\n- docs/history/open-issues-sweep/plan.md (when present)\n\nLearned context (machine-assembled — read before implementing; prefer it over re-deriving):\n- docs/history/open-issues-sweep/CONTEXT.md + docs/history/open-issues-sweep/plan.md — plan.md\n- docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md — Source that ships without reinstalling the binary the hooks call is inert\n- docs/knowledge/patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md — A dead worker has the code and is missing the last mechanical step\n- docs/knowledge/patterns/20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write.md — Probing a mutating verb against the default record is still a write\n- docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md — A pinned read-only worker type and a cell-execution dispatch are different jobs — never spawn one for the other\n- docs/knowledge/patterns/20260715-shipping-a-lib-file-means-shipping-the-manifest.md — Shipping a lib file means shipping the manifest: regen release-manifest inside the feature\n- docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — A green count is not evidence that your new test ran\n- docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md — Local green is worthless if suites inherit harness env — hermeticity must be structural, and the release gate is the exact-tag CI\n\nAdvisor: fable — consult via your own Agent tool, model param fable, description starting exactly \"advisor-consult ois-3: fable\" (fallback: headless claude -p --model fable)\n\nContract:\n- Execute only the assigned cell. Do not select or accept other work.\n- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.\n- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.\n- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: ois-3` (the words \"cell:\" then the id — a bare id alone fails the cap).\n- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.",
+        "transport_ready": true,
+        "transport_reason": "paseo agent paseo-pi-flash: /tmp/.mount_Paseo.C0veTi/resources/bin/paseo on PATH",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c"
+      },
+      "dispatch_id": "c62d509c-2828-43dc-adf1-f01e518ce467",
+      "economics": {
+        "logical_tier": "code",
+        "requested_model": null,
+        "effective_model": null,
+        "effective_model_status": "unverified",
+        "channel": "herding-exec",
+        "enforcement": "herding-command",
+        "effort": null,
+        "effort_base": null,
+        "effort_step": 0,
+        "effort_reason": "none",
+        "tier_source": "cell",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+        "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112"
+      },
+      "worktree_root": "/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep",
+      "control_root": "/mnt/data/Projects/goglbe/beehive",
+      "claimed": true,
+      "reserved": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs"
+      ],
+      "worker_registered": true
+    },
+    {
+      "tool": "Bash",
+      "payload": {
+        "command": ".bee/bin/bee herding run --task-file - --json --cwd \"/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\" --agent \"paseo-pi-flash\" --cell-id \"ois-4\" --ceiling 1800",
+        "stdin": "Nickname (reservation identity): w-ois-4\nAssigned cell id: ois-4\nFeature: open-issues-sweep\n\nLocation — work here, the store is in the other checkout:\n- Work in: /mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep\n- The bee store (cells, claims, reservations) lives in: /mnt/data/Projects/goglbe/beehive\n\nCell (authoritative — do not re-fetch):\n{\n  \"id\": \"ois-4\",\n  \"feature\": \"open-issues-sweep\",\n  \"title\": \"Route decisions and backlog to the control-root store in a granted worktree\",\n  \"lane\": \"standard\",\n  \"role\": \"code\",\n  \"deps\": [],\n  \"decisions\": [\n    \"D6\",\n    \"c0379e71-f6a9-45a0-b2fa-bf55197bd61c\"\n  ],\n  \"files\": [\n    \"packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/backlog.rs\",\n    \"packages/bee-rs/crates/bee/src/roots.rs\"\n  ],\n  \"read_first\": [\n    \"docs/history/open-issues-sweep/CONTEXT.md\",\n    \"packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs\",\n    \"packages/bee-rs/crates/bee/src/verbs/backlog.rs\"\n  ],\n  \"affects_skills\": [],\n  \"affects_specs\": [\n    \"docs/knowledge/areas/workflow-state/dispatch.md\",\n    \"docs/knowledge/areas/worktree-parallelism/control-plane-topology.md\"\n  ],\n  \"action\": \"Per D6 (issues 97, 105, 110, 114). Today `decisions_prelude_at` in verbs/decisions/verbs_write.rs resolves `crate::roots::resolve_store_root_any(start)` and backlog.rs imports `resolve_store_root_any as resolve_store_root`; for a GRANTED worktree that returns the worktree's own store, so decisions and PBIs logged there never reach the control-root store the claim door, dispatch and cells add read. `pub(crate) fn resolve_root_serving_granted(cwd: &Path) -> (Roots, Option<PathBuf>)` in verbs/drivers/prepare.rs already maps a granted worktree to `Roots::Ordinary(main_root)` and is the door cells add and dispatch prepare use. Call it (take `.0`) in `decisions_prelude_at` and in backlog.rs's `preamble` in place of the WIDE door; do not edit prepare.rs (a sibling cell owns it). Delete comment lines that are now false in those two files and in the roots.rs door audit (the lines that list decisions/backlog as WIDE-door, grant-local stores); add no new comments. Red first: in verbs/decisions/tests.rs, near the existing granted-worktree fixtures (rg -n \\\"granted\\\" verbs/decisions/tests.rs), add a test that runs decisions_prelude_at from a granted worktree and asserts the root is the main checkout; update any existing test that pinned the worktree-local store to the new contract. Add a matching backlog test in backlog.rs's test module if one exists for its preamble, else a test that backlog's root resolution from a granted worktree is the main checkout using the same fixture shape. No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file. The existing test `decisions_log_and_active_succeed_against_a_granted_worktrees_own_store` in verbs/decisions/tests.rs pins the old contract: invert it so it asserts the event lands in the main checkout's store. Known limit, do not fix here: the session preamble and status decision reads still use the worktree store root; record it in the report deviations.\",\n  \"verify\": \"PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee decisions && PATH=\\\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\\\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee backlog\",\n  \"must_haves\": {\n    \"truths\": [\n      \"decisions log from a granted worktree writes the main checkout's .bee/decisions.jsonl\",\n      \"backlog verbs from a granted worktree use the main checkout's .bee/backlog.jsonl\",\n      \"an ordinary checkout resolves exactly as before\"\n    ],\n    \"artifacts\": [\n      {\n        \"path\": \"packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs\",\n        \"substantive\": \"granted-worktree control-root test\"\n      }\n    ],\n    \"key_links\": [\n      \"decisions_prelude_at and backlog preamble call resolve_root_serving_granted\"\n    ],\n    \"prohibitions\": [\n      \"No change to other verbs on the WIDE door\",\n      \"No code comments\"\n    ]\n  },\n  \"status\": \"claimed\",\n  \"trace\": {\n    \"worker\": \"w-ois-4\",\n    \"outcome\": null,\n    \"files_changed\": [],\n    \"deviations\": [],\n    \"friction\": null,\n    \"capped_at\": null,\n    \"behavior_change\": false,\n    \"verification_evidence\": null,\n    \"verify_output\": null,\n    \"verify_passed\": null,\n    \"claim_session\": \"33b80c7b-a699-4752-bb0a-0a47312d5c44\",\n    \"verify_command\": null,\n    \"claimed_at\": \"2026-10-18T01:05:04.504Z\"\n  }\n}\n\nInputs — read these; nothing else is provided:\n- AGENTS.md\n- docs/history/open-issues-sweep/CONTEXT.md\n- docs/history/open-issues-sweep/plan.md (when present)\n\nLearned context (machine-assembled — read before implementing; prefer it over re-deriving):\n- docs/history/open-issues-sweep/CONTEXT.md + docs/history/open-issues-sweep/plan.md — plan.md\n- docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md — Source that ships without reinstalling the binary the hooks call is inert\n- docs/knowledge/patterns/20260827-a-dead-worker-has-the-code-and-is-missing-the-last-mechanical-step.md — A dead worker has the code and is missing the last mechanical step\n- docs/knowledge/patterns/20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write.md — Probing a mutating verb against the default record is still a write\n- docs/knowledge/patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md — A pinned read-only worker type and a cell-execution dispatch are different jobs — never spawn one for the other\n- docs/knowledge/patterns/20260715-shipping-a-lib-file-means-shipping-the-manifest.md — Shipping a lib file means shipping the manifest: regen release-manifest inside the feature\n- docs/knowledge/patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md — A green count is not evidence that your new test ran\n- docs/knowledge/patterns/20260721-local-green-is-worthless-if-suites-inherit-harness.md — Local green is worthless if suites inherit harness env — hermeticity must be structural, and the release gate is the exact-tag CI\n\nAdvisor: fable — consult via your own Agent tool, model param fable, description starting exactly \"advisor-consult ois-4: fable\" (fallback: headless claude -p --model fable)\n\nContract:\n- Execute only the assigned cell. Do not select or accept other work.\n- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.\n- Shape what you leave behind: prefer deletion to addition, write the smallest diff that solves it, and leave the base simpler than you found it. A signal threaded through several layers means stop and find the direct path. Nothing refuses these — craft, applied by judgment and surfaced at review, not by flags (`skills/bee-swarming/references/worker-details.md`). Write no comment in code, in any language — the why goes to a docs/knowledge concept whose Pointers name the file, or to bee decisions log, and a public item's description goes to the owning concept; where `no_code_comments` is on, the write guard refuses the rest.\n- Commit once: imperative-mood subject; the LAST line of the body is the literal trailer `cell: ois-4` (the words \"cell:\" then the id — a bare id alone fails the cap).\n- Run the narrowest proof for this change; put a three-part proof line `<command> — <green:unit|green:live|green:static> — <scope reason>` in the result file's proof field, and a one-line summary of the change that ends with the commit sha; if the work cannot be done, write the result file with status blocked and say why — never stop with only a text token; the leader checks the work and caps the cell.",
+        "transport_ready": true,
+        "transport_reason": "paseo agent paseo-pi-flash: /tmp/.mount_Paseo.C0veTi/resources/bin/paseo on PATH",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c"
+      },
+      "dispatch_id": "8b5e9269-0ca2-480d-855e-dfbb5fb4dba1",
+      "economics": {
+        "logical_tier": "code",
+        "requested_model": null,
+        "effective_model": null,
+        "effective_model_status": "unverified",
+        "channel": "herding-exec",
+        "enforcement": "herding-command",
+        "effort": null,
+        "effort_base": null,
+        "effort_step": 0,
+        "effort_reason": "none",
+        "tier_source": "cell",
+        "feature": "open-issues-sweep",
+        "planned_role": "code",
+        "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+        "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112"
+      },
+      "worktree_root": "/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep",
+      "control_root": "/mnt/data/Projects/goglbe/beehive",
+      "claimed": true,
+      "reserved": [
+        "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "packages/bee-rs/crates/bee/src/roots.rs"
+      ],
+      "worker_registered": true
+    }
+  ],
+  "skipped": [],
+  "economics": [
+    {
+      "logical_tier": "code",
+      "requested_model": null,
+      "effective_model": null,
+      "effective_model_status": "unverified",
+      "channel": "herding-exec",
+      "enforcement": "herding-command",
+      "effort": null,
+      "effort_base": null,
+      "effort_step": 0,
+      "effort_reason": "none",
+      "tier_source": "cell",
+      "feature": "open-issues-sweep",
+      "planned_role": "code",
+      "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "id": "ois-1"
+    },
+    {
+      "logical_tier": "code",
+      "requested_model": null,
+      "effective_model": null,
+      "effective_model_status": "unverified",
+      "channel": "herding-exec",
+      "enforcement": "herding-command",
+      "effort": null,
+      "effort_base": null,
+      "effort_step": 0,
+      "effort_reason": "none",
+      "tier_source": "cell",
+      "feature": "open-issues-sweep",
+      "planned_role": "code",
+      "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "id": "ois-2"
+    },
+    {
+      "logical_tier": "code",
+      "requested_model": null,
+      "effective_model": null,
+      "effective_model_status": "unverified",
+      "channel": "herding-exec",
+      "enforcement": "herding-command",
+      "effort": null,
+      "effort_base": null,
+      "effort_step": 0,
+      "effort_reason": "none",
+      "tier_source": "cell",
+      "feature": "open-issues-sweep",
+      "planned_role": "code",
+      "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "id": "ois-3"
+    },
+    {
+      "logical_tier": "code",
+      "requested_model": null,
+      "effective_model": null,
+      "effective_model_status": "unverified",
+      "channel": "herding-exec",
+      "enforcement": "herding-command",
+      "effort": null,
+      "effort_base": null,
+      "effort_step": 0,
+      "effort_reason": "none",
+      "tier_source": "cell",
+      "feature": "open-issues-sweep",
+      "planned_role": "code",
+      "plan_sha256": "f487c35f4143ded87b59b2f638a307d17b5e6db9ffba94c8a4a8ac123370419c",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "id": "ois-4"
+    }
+  ]
+}
+[bee] dispatch wave 1155ms

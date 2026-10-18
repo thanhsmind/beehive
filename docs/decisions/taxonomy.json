@@ -720,6 +720,18 @@
     "contract:effort-ladder",
     "bee-swarming",
     "bee-technical-writing",
-    "contract:worktree-tool-allow"
+    "contract:worktree-tool-allow",
+    "contract:escalate-dispatch",
+    "contract:herding-child-env",
+    "contract:control-root-stores",
+    "contract:triggers-add-decision",
+    "contract:plan-freeze-control-state",
+    "contract:doc-deferral-scan-set",
+    "contract:promote-reminder-clear",
+    "contract:onboard-verify-projection",
+    "contract:cells-report-file",
+    "contract:unclaim-claim-row",
+    "open-issues-sweep",
+    "contract:herded-worker-tree-guard"
   ]
 }
