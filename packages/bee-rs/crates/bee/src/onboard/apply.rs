@@ -707,7 +707,7 @@ pub fn apply_computed_plan(
                 ) {
                     Err(reason) => {
                         skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
-                        continue; // skipped loudly, not applied
+                        continue;
                     }
                     Ok(files) => {
                         let hashes: Map<String, Value> =

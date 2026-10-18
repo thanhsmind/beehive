@@ -469,8 +469,6 @@ fn verify_skill_drifted(source_walk: &Walk, target_walk: &Walk) -> bool {
         || source_walk.dirs.iter().any(|d| !target_walk.dirs.contains(d))
 }
 
-/// `managed.verify_skills` — the rendered per-file hashes bee itself last
-/// wrote into each runtime home, keyed by target-relative skill directory.
 fn verify_record(repo_root: &Path) -> Option<Map<String, Value>> {
     read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"))?
         .get("managed")?
