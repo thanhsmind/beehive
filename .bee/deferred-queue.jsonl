@@ -917,3 +917,5 @@
 {"ts":"2026-10-17T09:39:00.634Z","event":"complete","id":"f818c3c4-55dc-4920-9eb9-2f2c4e8f5f3c"}
 {"ts":"2026-10-17T09:39:05.872Z","event":"complete","id":"e9ddb950-eeb8-41c8-a4ad-aefcbc4698d1"}
 {"ts":"2026-10-17T09:39:10.963Z","event":"complete","id":"f7641fca-d218-4c30-8ec9-273cab910e6f"}
+{"ts":"2026-10-18T03:11:23.907Z","event":"add","id":"8494b541-7c39-483f-b384-9e99f3ba969c","kind":"worktree-cleanup","feature":"open-issues-sweep","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--open-issues-sweep"],"reason":"Worktree beehive--wt--open-issues-sweep (branch wt/open-issues-sweep) merged into main at 5ef7fb43dbf22ab353ea8597810a8f3ec3c092ca and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-10-18T03:53:32.872Z","event":"add","id":"db6c543e-c7a1-404c-997e-fa49cd32b437","kind":"promote","feature":"open-issues-sweep","cells":[],"areas":[],"files":["docs/history/open-issues-sweep/promote-proposals.md"],"reason":"Promote proposal for \"open-issues-sweep\" awaiting apply — docs/history/open-issues-sweep/promote-proposals.md."}

@@ -8,17 +8,17 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"open-issues-sweep\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 5ef7fb4; reload the product and test \"open-issues-sweep\", then either approve uat (\"bee gate --name uat --approved true --lane open-issues-sweep\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-18T00:48:11.595Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: open-issues-sweep",
-    "asked_at": "2026-10-18T03:11:23.818Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-18T03:38:28.602Z",
+    "session": "33b80c7b-a699-4752-bb0a-0a47312d5c44"
   },
   "route": {
     "class": "bugfix",

@@ -1678,5 +1678,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-17T04:53:02.376Z"
+  },
+  "open-issues-sweep": {
+    "capped": 11,
+    "dropped": 0,
+    "archived_at": "2026-10-18T03:53:32.871Z"
   }
 }

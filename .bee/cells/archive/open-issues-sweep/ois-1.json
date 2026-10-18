@@ -1,0 +1,108 @@
+{
+  "id": "ois-1",
+  "feature": "open-issues-sweep",
+  "title": "Honour the escalate flag when the plan assigns a role",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "9718c2d3-84b1-4b55-ad90-5f5db74493da"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/open-issues-sweep/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+  ],
+  "action": "Per D1 (issues 109, 111, 113). In verbs/drivers/prepare.rs the line `let escalated_cell = role.is_none()` (inside the role resolution block, just after the comment that starts `D5 (store 97ce5225)`) tests the `role` variable, but `let role = if role.is_some() { role } else { v2_effective_role.as_deref() };` earlier fills `role` with the approved plan's planned role, so on any v2-plan feature an escalated cell never escalates and gets the herding command. Make the check use the caller's own flag (`orig_role`, set by `let orig_role = role;`) instead of the role that the v2 plan filled, so an explicit --role still outranks the flag but a planned role does not. Make sure the v2 path does not then refuse the escalated dispatch as planned_role_mismatch and that the payload carries no herding command and no model param (Resolved::Inherit). Red first: in verbs/drivers/tests.rs add a test that builds a v2-plan feature (copy the fixture shape of an existing v2 planned_role test — rg -n planned_role verbs/drivers/tests.rs) whose cell role resolves to a herding slot, sets the cell `escalate: true`, runs prepare --kind cell, and asserts the payload is not a Bash herding command; watch it fail before the fix. Keep every existing prepare test green. No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+  "must_haves": {
+    "truths": [
+      "an escalated cell on a feature with a v2 role plan gets a session-model payload with no herding command",
+      "an explicit --role still outranks the escalate flag"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "a v2-plan escalate test that failed before the fix"
+      }
+    ],
+    "key_links": [
+      "the escalate check reads the caller's original --role, not the v2-filled role"
+    ],
+    "prohibitions": [
+      "No change to non-escalated dispatch output",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-ois-1",
+    "outcome": "Confirmed the rescue fix (escalate check reads orig_role), removed the stray doc comment, proved the new v2-plan test fails without the fix and passes with it, verify command green (69 prepare tests), committed 4f16ce195 path-scoped with trailer cell: ois-1.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-10-18T01:52:40.983Z",
+    "behavior_change": false,
+    "verification_evidence": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — every prepare-matching test (69 passed, 0 failed), which includes the new an_escalated_cell_under_a_v2_plan_gets_no_herding_command; red-first: with the fix line reverted the same test fails at tests.rs:10814 'an escalated v2 cell must not herd'.",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "33b80c7b-a699-4752-bb0a-0a47312d5c44",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare",
+    "claimed_at": "2026-10-18T01:05:03.681Z",
+    "mistakes": [
+      {
+        "wrong": "the first ois-1 worker ran in a tree shared with three siblings and hit the ceiling",
+        "better": "one worker per crate-building tree",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Confirmed the rescue fix (escalate check reads orig_role), removed the stray doc comment, proved the new v2-plan test fails without the fix and passes with it, verify command green (69 prepare tests), committed 4f16ce195 path-scoped with trailer cell: ois-1.",
+      "commit": "4f16ce1950234b8398c81fcd4a44a3a33f8de6d4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prepare — green:unit — every prepare-matching test (69 passed, 0 failed), which includes the new an_escalated_cell_under_a_v2_plan_gets_no_herding_command; red-first: with the fix line reverted the same test fails at tests.rs:10814 'an escalated v2 cell must not herd'.",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "an escalated cell on a feature with a v2 role plan gets a session-model payload with no herding command",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "an explicit --role still outranks the escalate flag",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the escalate check reads the caller's original --role, not the v2-filled role",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-10-18T01:52:47.027Z",
+        "recorded_by": "33b80c7b-a699-4752-bb0a-0a47312d5c44",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
