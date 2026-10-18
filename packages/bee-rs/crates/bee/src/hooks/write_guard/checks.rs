@@ -255,10 +255,10 @@ pub(crate) fn plan_freeze_feature(normalized: &str) -> Option<String> {
 
 /// Lane-aware gate read for the plan-freeze check: `.bee/lanes/<feature>.json`
 /// wins when it parses to an object, mirroring resolve_write_record's lane
-/// precedence over the default pipeline. Otherwise the default state (the
-/// `state` the caller already read) is consulted only when its own `feature`
-/// field names this same feature — a mismatched, absent, or corrupt-lane
-/// resolution is "no opinion", never a guess, so the caller allows.
+/// precedence over the default pipeline. Otherwise the control root's own
+/// `.bee/state.json` answers (D8, #101), and the `state` handed in answers
+/// only when that file is unusable or names another feature. A mismatched
+/// feature is "no opinion", never a guess, so the caller allows.
 pub(crate) fn plan_freeze_shape_approved(
     control_root: &str,
     state: &Map<String, Value>,
@@ -277,14 +277,19 @@ pub(crate) fn plan_freeze_shape_approved(
             .unwrap_or(false);
         return Ok(shape);
     }
-    let state_feature = match state.get("feature") {
+    let control_state = read_json_g(&Path::new(control_root).join(".bee").join("state.json"))?;
+    let effective = match &control_state {
+        Some(Value::Object(m)) if m.get("feature") == Some(&Value::String(feature.to_string())) => m,
+        _ => state,
+    };
+    let state_feature = match effective.get("feature") {
         Some(Value::String(s)) => Some(s.as_str()),
         _ => None,
     };
     if state_feature != Some(feature) {
         return Ok(false);
     }
-    let shape = state
+    let shape = effective
         .get("approved_gates")
         .and_then(|g| g.as_object())
         .and_then(|g| g.get("shape"))

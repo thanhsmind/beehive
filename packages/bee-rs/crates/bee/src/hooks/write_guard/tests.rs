@@ -5576,6 +5576,26 @@ use std::process::ExitCode;
     }
 
     #[test]
+    fn plan_freeze_shape_approved_follows_the_control_root_state_over_a_stale_handed_projection() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_state(&root, &json!(default_state_for("demo", false)));
+        let stale = default_state_for("demo", true);
+        assert!(!plan_freeze_shape_approved(&root.to_string_lossy(), &stale, "demo").unwrap());
+    }
+
+    #[test]
+    fn plan_freeze_shape_approved_handed_state_decides_when_the_control_root_names_another_feature() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_state(&root, &json!(default_state_for("other", false)));
+        let handed = default_state_for("demo", true);
+        assert!(plan_freeze_shape_approved(&root.to_string_lossy(), &handed, "demo").unwrap());
+    }
+
+    #[test]
     fn plan_freeze_shape_approved_is_no_opinion_when_default_state_names_another_feature() {
         let dir = tempfile::tempdir().unwrap();
         let root = dunce::canonicalize(dir.path()).unwrap();
