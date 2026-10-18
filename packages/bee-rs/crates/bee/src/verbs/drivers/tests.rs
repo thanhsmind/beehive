@@ -10724,6 +10724,111 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
     }
 
     #[test]
+    fn an_escalated_cell_under_a_v2_plan_gets_no_herding_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec![
+            serde_json::json!({"stage":"planning","classification":"required","role":"plan","reason":"p"}),
+            serde_json::json!({"stage":"implementation","classification":"required","role":"code","reason":"c"}),
+            serde_json::json!({"stage":"supervision","classification":"not-applicable","role":"supervisor","reason":"s"}),
+            serde_json::json!({"stage":"test-stage","classification":"required","role":"test","reason":"t"}),
+            serde_json::json!({"stage":"independent-review","classification":"conditional","role":"review","condition":"cond","reason":"r"}),
+        ];
+        let config = serde_json::json!({
+            "team": {
+                "claude": {
+                    "plan": "sonnet",
+                    "code": { "kind": "herding", "agent": "code-agent" },
+                    "test": "haiku",
+                    "review": "opus",
+                    "supervisor": "opus"
+                }
+            }
+        });
+        let root = repo(&tmp, &config.to_string());
+        let table_val = crate::verbs::models_group::team_table(&root, Some("claude")).unwrap();
+        let runtimes_arr = table_val["runtimes"].as_array().unwrap();
+        let rt_entry = runtimes_arr.iter().find(|r| r["runtime"] == "claude").unwrap();
+        let roles_arr = rt_entry["roles"].as_array().unwrap();
+        let (roster_sha, _) = crate::verbs::state_group::compute_canonical_roster_sha256(roles_arr);
+        let plan_sha = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000".to_string();
+        let role_plan = serde_json::json!({
+            "schema_version": "1.0",
+            "runtime": "claude",
+            "roster_sha256": roster_sha,
+            "stages": stages,
+        });
+        let cells = vec![
+            serde_json::json!({ "id": "c-1", "role": "code" }),
+            serde_json::json!({ "id": "c-2", "role": "code" }),
+        ];
+        let packet = serde_json::json!({
+            "feature": "feat-v2",
+            "plan_sha256": plan_sha,
+            "previewed_at": "2026-09-14T00:00:00Z",
+            "cells": cells,
+            "role_plan": role_plan,
+        });
+        w(
+            &root,
+            ".bee/lanes/feat-v2.json",
+            &serde_json::to_string_pretty(&serde_json::json!({
+                "feature": "feat-v2",
+                "approved_cell_packet": packet,
+            }))
+            .unwrap(),
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"feat-v2","title":"rescue ladder","role":"code","escalate":true,"status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","feature":"feat-v2","title":"ordinary work","role":"code","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let prep = |role: Option<&str>, id: &str| {
+            let Prepared::Value(v) = prepare_dispatch_wire(
+                &root, "claude", "cell", role, Some(id), Some("w"), false, None, None, false, None,
+                None, None, None, None, None,
+            )
+            .unwrap() else {
+                panic!("expected prepared dispatch value")
+            };
+            v
+        };
+
+        let unescalated = prep(None, "c-2");
+        assert_eq!(
+            unescalated.get("tool"),
+            Some(&json!("Bash")),
+            "control: an unescalated v2 cell still herds"
+        );
+        assert_eq!(
+            unescalated.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+
+        let v = prep(None, "c-1");
+        assert_ne!(v.get("tool"), Some(&json!("Bash")), "an escalated v2 cell must not herd");
+        let payload = v.get("payload").unwrap();
+        assert_eq!(payload.get("command"), None, "an escalated dispatch has no herding command");
+        assert_eq!(payload.get("model"), None, "an escalated dispatch has no model param");
+        assert_eq!(payload.get("planned_role"), Some(&json!("code")));
+        let econ = v.get("economics").unwrap();
+        assert_eq!(econ.get("channel"), Some(&json!("session-model")));
+        assert_eq!(econ.get("planned_role"), Some(&json!("code")));
+
+        let explicit = prep(Some("code"), "c-1");
+        assert_eq!(
+            explicit.get("tool"),
+            Some(&json!("Bash")),
+            "an explicit --role still outranks the escalate flag"
+        );
+    }
+
+    #[test]
     fn test_v2_non_cell_without_stage_refused() {
         let tmp = tempfile::tempdir().unwrap();
         let stages = vec![
