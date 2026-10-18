@@ -41,6 +41,7 @@ Playbook: `skills/bee-planning/playbooks/bugfix.md` — cited, not copied.
 - D10: the promote reminder and the idle `scribing-run` refusal name one command that clears the reminder, and it works from phase idle.
 - D11: onboard never overwrites a verify-app projection file newer than its source; it reports it blocked.
 - D12: `cells finish` and `cells cap` accept `--report-file <path>`.
+- D13: a herded worker's `write-guard` call still refuses whole-tree git verbs while more than one worker is live in the checkout.
 
 ## Load-bearing claims
 
@@ -51,6 +52,7 @@ Labels: `read` (file opened at that line), `ran` (command run, output held). Evi
 | 1 | The escalate check needs no role, but the v2 path fills the role | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2223 | let escalated_cell = role.is_none() |
 | 2 | The role is set from the v2 planned role before that check | read | packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:2016 | v2_effective_role.as_deref() |
 | 3 | the claim-row release skips silently when the gate file exists | read | packages/bee-rs/crates/bee/src/verbs/cells/claims.rs:213 | return Ok(()); // GATE_HELD — best-effort caller never retries |
+| 21 | herded workers skip write-guard entirely | read | packages/bee-rs/crates/bee/src/hooks/mod.rs:159 | if herding_worker_marker_set() && marker_short_circuits(&name) { |
 | 20 | the #108 cell left a stale gate | ran | cat .bee/claims/det-2.adopting | {"pid":3512015,"at":"2026-10-16T01:10:07.674Z"} |
 | 4 | A claim-row remover already exists for cap | read | packages/bee-rs/crates/bee/src/verbs/cells/claims.rs:206 | pub(crate) fn release_claim_file_best_effort(root: &Path, id: &str) { |
 | 5 | build_child_env strips session vars after the passthrough merge | read | packages/bee-rs/crates/bee/src/herding/run.rs:2906 | // Strip leader session IDs even if present in passthrough or agent_env |
@@ -158,6 +160,7 @@ One slice; every cell is current.
 | ois-7 | Skip a frozen plan.md and generated index files in the doc-deferral scan | verbs/drivers/close.rs, verbs/drivers/tests.rs, verbs/knowledge/mod.rs | ois-1 | `bee close --dry-run` no longer lists frozen plan.md or patterns/index.md lines | cargo test doc_deferral |
 | ois-8 | Give a closed feature's promote reminder a working clear command | verbs/status_full/mod.rs, verbs/status_full/tests.rs, verbs/status_full/orient.rs, hooks/session_preamble/render.rs, hooks/session_preamble/tests.rs, verbs/state_group/store.rs, verbs/state_group/tests.rs, verbs/deferred_queue.rs | — | the reminder names a command; running it from idle clears the line | cargo test promote, deferred_queue, scribing |
 | ois-9 | Never overwrite a host-edited verify-app projection in onboard | onboard/plan.rs, onboard/apply.rs, onboard/tests.rs | — | onboard plan shows `blocked_verify_skill` for a host-edited projection | cargo test onboard |
+| ois-11 | Keep the concurrent-worker git guard on inside a herded worker | hooks/mod.rs, hooks/write_guard/mod.rs, hooks/write_guard/worker_tree.rs (new), hooks/write_guard/tests.rs | ois-6 | a herded worker's `git stash` is refused while siblings work in the same tree | cargo test write_guard, hooks:: |
 | ois-10 | Accept the cap report from a file | verbs/cells/handlers_close.rs, verbs/cells/tests.rs, catalog.rs, generated/registry_payload.json | ois-2 | `cells finish --report-file r.json` caps like `--report` | cargo test cells:: |
 
 Paths are under `packages/bee-rs/crates/bee/src/`. The cell packet:
@@ -645,6 +648,58 @@ Paths are under `packages/bee-rs/crates/bee/src/`. The cell packet:
       ],
       "prohibitions": [
         "No change to report validation rules",
+        "No code comments"
+      ]
+    }
+  },
+  {
+    "id": "ois-11",
+    "feature": "open-issues-sweep",
+    "title": "Keep the concurrent-worker git guard on inside a herded worker",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ois-6"
+    ],
+    "decisions": [
+      "D13",
+      "72d85cbf-b44a-4160-af4a-7cdbd691a978"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "read_first": [
+      "docs/history/open-issues-sweep/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "action": "Per D13 (issue 116). In hooks/mod.rs `try_native` returns success for every hook but `activity` and `worker-guard` when BEE_HERDING_WORKER is set (`if herding_worker_marker_set() && marker_short_circuits(&name) {`, herding-worker-standalone D3: a herded worker gets no guards). The Pi bee-guard extension calls only `bee hook write-guard`, so a herded Pi worker runs `git stash`, `git reset`, `git checkout` and the other whole-tree verbs with no check, even while sibling workers hold uncommitted work in the same worktree (seen: a worker's `git stash push` swept three siblings' edits). Keep D3 for everything else, but under the marker let `write-guard` run ONE narrow check: for a Bash tool call, tokenize the command (tokenize_deep), find each git invocation (paths.rs `find_git_invocations`), classify it with `classify_concurrent_tree_verb` (paths.rs), and when a whole-tree verb is found resolve the live worker count with `resolve_live_worker_count` (paths.rs) for the worktree the payload cwd names; deny with the same `concurrent_tree_refusal` text and remedy the full guard uses when the count is above one (and when it cannot be resolved), else allow. Every other tool and every other check stays a silent success under the marker. Put the new function in a new file hooks/write_guard/worker_tree.rs declared in hooks/write_guard/mod.rs; do not edit checks.rs or paths.rs (read-only reuse; make a helper pub(crate) only if it is not yet reachable, and record that as a deviation). Red first in hooks/write_guard/tests.rs: with BEE_HERDING_WORKER=1 (hold crate::hooks::herding_env_lock()), a payload running `git stash push -q -m x` in a checkout with two live worker reservations is denied; `git status` and a path-scoped `git commit -m m -- a.rs` are allowed; with one live worker `git stash push` is allowed; an Edit tool call under the marker is still allowed. Use the existing fixtures that build live-worker reservations for the full guard's concurrent-tree tests (rg -n concurrent hooks/write_guard/tests.rs). No code comments. If cargo fails to compile in a file outside your files list, a sibling cell is mid-edit: wait 60 seconds and re-run; never edit that file.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee write_guard && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee hooks::",
+    "must_haves": {
+      "truths": [
+        "under BEE_HERDING_WORKER, write-guard denies git stash push when two workers are live in the checkout",
+        "under BEE_HERDING_WORKER, git status and a path-scoped git commit are allowed",
+        "under BEE_HERDING_WORKER, every non-git tool call is still allowed with no output"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/worker_tree.rs",
+          "substantive": "the narrow whole-tree git check for herded workers"
+        }
+      ],
+      "key_links": [
+        "hooks/mod.rs routes write-guard under the marker to the narrow check"
+      ],
+      "prohibitions": [
+        "No other guard runs under the marker",
         "No code comments"
       ]
     }
