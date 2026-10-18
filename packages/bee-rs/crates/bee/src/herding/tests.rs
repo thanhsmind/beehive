@@ -40,6 +40,34 @@ fn child_env_construction_excludes_leader_session_and_sets_worker_marker() {
 }
 
 #[test]
+fn child_env_keeps_the_passthrough_session_only_alongside_a_dispatch_permit() {
+    let mut agent_env = BTreeMap::new();
+    agent_env.insert("CUSTOM_AGENT_VAR".to_string(), "custom_val".to_string());
+
+    let mut permitted = BTreeMap::new();
+    permitted.insert("BEE_DISPATCH_ID".to_string(), "dispatch-77".to_string());
+    permitted.insert("BEE_SESSION_ID".to_string(), "issuer-sess-1".to_string());
+    permitted.insert("PI_SESSION_ID".to_string(), "attempted-leak".to_string());
+    permitted.insert("CLAUDE_CODE_SESSION_ID".to_string(), "attempted-leak-2".to_string());
+    let env = build_child_env(Vec::new(), &agent_env, &permitted, "job-test-123");
+    assert_eq!(env.get("BEE_SESSION_ID").map(String::as_str), Some("issuer-sess-1"));
+    assert_eq!(env.get("BEE_DISPATCH_ID").map(String::as_str), Some("dispatch-77"));
+    assert_eq!(env.get("PI_SESSION_ID"), None);
+    assert_eq!(env.get("CLAUDE_CODE_SESSION_ID"), None);
+
+    let mut unpermitted = BTreeMap::new();
+    unpermitted.insert("BEE_SESSION_ID".to_string(), "leader-sess-1".to_string());
+    let env = build_child_env(Vec::new(), &agent_env, &unpermitted, "job-test-123");
+    assert_eq!(env.get("BEE_SESSION_ID"), None);
+
+    let mut blank_permit = BTreeMap::new();
+    blank_permit.insert("BEE_DISPATCH_ID".to_string(), "   ".to_string());
+    blank_permit.insert("BEE_SESSION_ID".to_string(), "leader-sess-1".to_string());
+    let env = build_child_env(Vec::new(), &agent_env, &blank_permit, "job-test-123");
+    assert_eq!(env.get("BEE_SESSION_ID"), None);
+}
+
+#[test]
 fn child_argv_construction_matches_pi_subagent_pattern() {
     let agent_args = vec![
         "-a".to_string(),

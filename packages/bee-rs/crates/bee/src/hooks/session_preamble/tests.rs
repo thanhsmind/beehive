@@ -701,7 +701,7 @@ use crate::version::BEE_VERSION;
             .unwrap_or_default();
         assert_eq!(
             line,
-            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not."
+            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not. After you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f1; bee deferred-queue complete --kind promote --feature f2"
         );
         // ONE line total — no per-feature enumeration trails it.
         assert!(!text.contains("f1 (1 capped"), "{text}");

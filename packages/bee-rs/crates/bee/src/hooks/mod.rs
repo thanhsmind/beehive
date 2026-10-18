@@ -101,7 +101,7 @@ pub(crate) fn herding_worker_marker_set() -> bool {
 /// unknown name in a herded pane is still a hook invocation the pane must
 /// not answer.
 fn marker_short_circuits(name: &str) -> bool {
-    name != "activity" && name != "worker-guard"
+    name != "activity" && name != "worker-guard" && name != "write-guard"
 }
 
 fn print_hook_usage() {
@@ -130,6 +130,13 @@ pub(crate) fn herding_env_lock() -> std::sync::MutexGuard<'static, ()> {
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
 /// hook invocation at all.
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
+    try_native_with(args, &mut read_stdin_once)
+}
+
+pub(crate) fn try_native_with(
+    args: &[OsString],
+    read_stdin: &mut dyn FnMut() -> Vec<u8>,
+) -> Option<ExitCode> {
     if args.first()?.to_str()? != "hook" {
         return None;
     }
@@ -156,8 +163,18 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     // never prints, and always exits 0 — so the guard silence D3 buys is
     // untouched, and the pane gains the one thing the orchestrator needs
     // back: its own state, written into the job mailbox (D2).
-    if herding_worker_marker_set() && marker_short_circuits(&name) {
-        return Some(ExitCode::SUCCESS);
+    if herding_worker_marker_set() {
+        if name == "write-guard" {
+            let stdin = read_stdin();
+            let stdin_str = String::from_utf8_lossy(&stdin).into_owned();
+            return Some(match write_guard::run_herded(&[], &stdin_str) {
+                Outcome::Done(code) => code,
+                Outcome::Delegate => ExitCode::SUCCESS,
+            });
+        }
+        if marker_short_circuits(&name) {
+            return Some(ExitCode::SUCCESS);
+        }
     }
     // An unknown hook name is decided by argv alone, so it is refused
     // BEFORE the blocking stdin read below — `read_stdin_once` waits for
@@ -174,7 +191,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         .iter()
         .filter_map(|a| a.to_str().map(str::to_string))
         .collect();
-    let stdin = read_stdin_once();
+    let stdin = read_stdin();
     let stdin_str = String::from_utf8_lossy(&stdin).into_owned();
     let outcome = match name.as_str() {
         "tools-logger" => tools_logger::run(&rest, &stdin_str),
@@ -259,12 +276,12 @@ mod tests {
     }
 
     #[test]
-    fn under_the_marker_activity_and_worker_guard_reach_handlers_and_write_guard_short_circuits() {
+    fn under_the_marker_activity_and_worker_guard_reach_handlers_and_write_guard_runs_its_tree_check() {
         assert!(!marker_short_circuits("activity"));
         assert!(!marker_short_circuits("worker-guard"));
-        assert!(marker_short_circuits("write-guard"));
+        assert!(!marker_short_circuits("write-guard"));
         for hook_name in HOOK_NAMES {
-            if hook_name == "activity" || hook_name == "worker-guard" {
+            if hook_name == "activity" || hook_name == "worker-guard" || hook_name == "write-guard" {
                 continue;
             }
             assert!(marker_short_circuits(hook_name));
@@ -285,7 +302,7 @@ mod tests {
         // touches this var.
         unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
 
-        for hook_name in ["tools-logger", "write-guard", "model-guard"] {
+        for hook_name in ["tools-logger", "model-guard"] {
             let args = vec![OsString::from("hook"), OsString::from(hook_name)];
             let code = try_native(&args).expect("bee hook <name> is a hook invocation");
             assert_eq!(

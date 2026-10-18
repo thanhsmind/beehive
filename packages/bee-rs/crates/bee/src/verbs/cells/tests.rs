@@ -4784,6 +4784,127 @@ use std::time::Instant;
         assert!(!gate.exists());
     }
 
+    fn write_gate_fixture(root: &Path, id: &str, pid: Value, at: &str) {
+        let dir = claims_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut gate = Map::new();
+        if !pid.is_null() {
+            gate.insert("pid".into(), pid);
+        }
+        gate.insert("at".into(), json!(at));
+        std::fs::write(
+            dir.join(format!("{id}.adopting")),
+            format!("{}\n", jsjson::stringify(&Value::Object(gate))),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unclaim_breaks_a_stale_claim_gate_and_frees_the_claim() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sg");
+        write_cell_fixture(root, "sg-1", &cell("sg-1", "open", "sg", json!([])));
+
+        claim_cell_from_flags(root, "sg-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sg-1.json");
+        let gate = claim_gate_path(root, "sg-1").unwrap();
+        assert!(claim_file.exists());
+
+        let hour_ago = rsv::iso_from_ms(rsv::now_ms() - 3_600_000.0).ok().unwrap();
+        write_gate_fixture(root, "sg-1", json!(999_999_999u64), &hour_ago);
+
+        unclaim_cell(root, "sg-1", Some("sess-1"), false).unwrap();
+
+        assert!(
+            !claim_file.exists(),
+            "a stale gate must never outlive the unclaim — the claim row is gone"
+        );
+        assert!(!gate.exists(), "the broken gate is not left behind");
+
+        let again = claim_cell_from_flags(root, "sg-1", "w2", Some("sess-2"), None).unwrap();
+        assert_eq!(again.cell["status"], json!("claimed"), "the cell is claimable again");
+    }
+
+    #[test]
+    fn unclaim_breaks_a_dead_pid_gate_that_is_younger_than_the_age_window() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sp");
+        write_cell_fixture(root, "sp-1", &cell("sp-1", "open", "sp", json!([])));
+
+        claim_cell_from_flags(root, "sp-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sp-1.json");
+        let gate = claim_gate_path(root, "sp-1").unwrap();
+        write_gate_fixture(root, "sp-1", json!(999_999_999u64), &utc_now());
+
+        unclaim_cell(root, "sp-1", Some("sess-1"), false).unwrap();
+
+        assert!(!claim_file.exists(), "a dead pid frees the claim whatever the gate's age");
+        assert!(!gate.exists());
+    }
+
+    #[test]
+    fn unclaim_breaks_a_gate_that_does_not_parse_once_it_is_old() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "sn");
+        write_cell_fixture(root, "sn-1", &cell("sn-1", "open", "sn", json!([])));
+
+        claim_cell_from_flags(root, "sn-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("sn-1.json");
+        let gate = claim_gate_path(root, "sn-1").unwrap();
+        std::fs::write(&gate, "not json at all").unwrap();
+        let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(3_600);
+        std::fs::File::options()
+            .write(true)
+            .open(&gate)
+            .unwrap()
+            .set_modified(aged)
+            .unwrap();
+
+        unclaim_cell(root, "sn-1", Some("sess-1"), false).unwrap();
+
+        assert!(!claim_file.exists(), "an old unparseable gate is stale");
+        assert!(!gate.exists());
+
+        write_cell_fixture(root, "sn-2", &cell("sn-2", "open", "sn", json!([])));
+        claim_cell_from_flags(root, "sn-2", "w1", Some("sess-1"), None).unwrap();
+        let claim2 = claims_dir(root).join("sn-2.json");
+        let gate2 = claim_gate_path(root, "sn-2").unwrap();
+        std::fs::write(&gate2, "not json").unwrap();
+
+        unclaim_cell(root, "sn-2", Some("sess-1"), false).unwrap();
+
+        assert!(claim2.exists(), "a just-created gate may be mid-write: never broken while young");
+        assert_eq!(std::fs::read_to_string(&gate2).unwrap(), "not json");
+    }
+
+    #[test]
+    fn a_fresh_gate_held_by_a_live_pid_is_never_broken() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "fg");
+        write_cell_fixture(root, "fg-1", &cell("fg-1", "open", "fg", json!([])));
+
+        claim_cell_from_flags(root, "fg-1", "w1", Some("sess-1"), None).unwrap();
+        let claim_file = claims_dir(root).join("fg-1.json");
+        let gate = claim_gate_path(root, "fg-1").unwrap();
+        write_gate_fixture(root, "fg-1", json!(std::process::id()), &utc_now());
+        let held = std::fs::read_to_string(&gate).unwrap();
+
+        assert!(!acquire_gate(root, "fg-1").unwrap(), "a live fresh gate still refuses");
+        assert_eq!(
+            std::fs::read_to_string(&gate).unwrap(),
+            held,
+            "the live holder's gate is left exactly as found"
+        );
+
+        unclaim_cell(root, "fg-1", Some("sess-1"), false).unwrap();
+        assert!(claim_file.exists(), "a live gate is never waited out by the best-effort release");
+        assert_eq!(std::fs::read_to_string(&gate).unwrap(), held);
+    }
+
     // ── claims D5 (R5): the Codex session bridge ──────────────────────────
     // Oracle: test_claims.mjs "claimCellFile (hardening-1-7-10 D5 — Codex
     // session bridge): a sessionless claim with EXACTLY ONE fresh live session
@@ -6202,6 +6323,85 @@ use std::time::Instant;
             after_norm.get("status"),
             Some(&json!("claimed")),
             "a refused --report caps nothing"
+        );
+    }
+
+    fn cap_flags_report_file(id: &str, report_file: Option<&str>) -> CapFlags {
+        cap_flags_with_report_file(cap_flags_report(id, None), report_file, false)
+            .expect("a readable report file fills the cap's report")
+    }
+
+    #[test]
+    fn report_file_caps_with_the_files_report_exactly_as_report_would() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf1", &cell("ois-rf1", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+        let path = path.to_str().unwrap();
+
+        let (parsed, _) = rsv::parse_flags(&["--id", "ois-rf1", "--report-file", path]).unwrap();
+        assert!(
+            rsv::keys_known(&parsed, &CAP_FLAGS) && rsv::keys_known(&parsed, &FINISH_FLAGS),
+            "--report-file is a declared flag on both cap and finish"
+        );
+        let from_flags = cap_flags_from(&parsed).expect("the parsed flags reach the cap door");
+        assert!(from_flags.report.is_none(), "the parse site leaves --report unset");
+
+        let flags = cap_flags_report_file("ois-rf1", Some(path));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"],
+            serde_json::from_str::<Value>(VALID_REPORT).unwrap(),
+            "the file's report lands on trace.report exactly as --report's own bytes would"
+        );
+    }
+
+    #[test]
+    fn report_file_and_report_together_are_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf2", &cell("ois-rf2", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf2", Some(VALID_REPORT)),
+            Some(path.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains("--report and --report-file are exclusive"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "ois-rf2").ok().unwrap().unwrap();
+        assert_eq!(
+            after_norm.get("status"),
+            Some(&json!("claimed")),
+            "a refused cap writes nothing"
+        );
+    }
+
+    #[test]
+    fn report_file_that_cannot_be_read_refuses_naming_the_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf3", &cell("ois-rf3", "claimed", "f", json!([])));
+
+        let missing = root.join("no-such-report.json");
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf3", None),
+            Some(missing.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains(missing.to_str().unwrap()),
+            "the refusal names the unreadable path: {refusal}"
         );
     }
 

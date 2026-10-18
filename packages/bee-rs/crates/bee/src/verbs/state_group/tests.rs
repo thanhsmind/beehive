@@ -469,6 +469,9 @@ use std::time::Instant;
         let refuse = check_scribing_run_phase(Some(&json!("idle"))).unwrap();
         assert!(refuse.contains("refused from phase \"idle\""));
         assert!(refuse.contains("Legal from: swarming, reviewing, scribing."));
+        assert!(refuse.contains(
+            "bee deferred-queue complete --kind promote --feature <feature>"
+        ));
         assert!(check_compounding_run_phase(Some(&json!("compounding"))).is_none());
         let refuse2 = check_compounding_run_phase(Some(&json!("swarming"))).unwrap();
         assert!(refuse2.contains("compounding-run: refused from phase \"swarming\""));

@@ -129,25 +129,25 @@ fn apply_copy_verify_skill(
     name: &str,
     target_dir: &Path,
     runtime: &str,
-) -> Option<String> {
+) -> Result<Vec<(String, String)>, String> {
     if let Some(reason) = verify_root_refusal(repo_root) {
-        return Some(format!("{reason} - {name} skipped"));
+        return Err(format!("{reason} - {name} skipped"));
     }
     let source_dir = verify_source_root(repo_root).join(name);
     if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
-        return Some(format!("source .bee/verify/{name} is not a plain directory - skipped"));
+        return Err(format!("source .bee/verify/{name} is not a plain directory - skipped"));
     }
     let render = |buf: &[u8]| render_skill_bytes(buf, runtime);
     let source_walk = walk_skill_tree(&source_dir, Some(&render));
     if let Some(b) = &source_walk.blocked {
-        return Some(format!(
+        return Err(format!(
             "source .bee/verify/{name} contains a {} at {} - skipped",
             b.reason, b.path
         ));
     }
     let marker_errors = verify_marker_errors(&source_dir);
     if !marker_errors.is_empty() {
-        return Some(format!(
+        return Err(format!(
             "source .bee/verify/{name} has malformed bee:only markers - skipped, nothing rendered: {}",
             marker_errors.join("; ")
         ));
@@ -155,20 +155,17 @@ fn apply_copy_verify_skill(
     let mut target_walk = super::render::Walk::default();
     match lstat_if_exists(target_dir) {
         Some(st) if st.is_symlink => {
-            return Some(format!(
+            return Err(format!(
                 "installed {name} is a symlink (plausibly a live checkout) - skipped, never written through"
             ));
         }
         Some(st) if !st.is_dir => {
-            // A non-directory occupant is NOT cleared out of the way. The
-            // `bee-*` sync unlinks it and writes the source shape; here the
-            // occupant is the host's file and the answer is to leave it alone.
-            return Some(format!("installed {name} is not a directory - skipped, never removed"));
+            return Err(format!("installed {name} is not a directory - skipped, never removed"));
         }
         Some(_) => {
             let walked = walk_skill_tree(target_dir, None);
             if let Some(b) = &walked.blocked {
-                return Some(format!(
+                return Err(format!(
                     "installed {name} contains a {} at {} - skipped, nothing inside it written",
                     b.reason, b.path
                 ));
@@ -178,19 +175,19 @@ fn apply_copy_verify_skill(
         None => {}
     }
     if std::fs::create_dir_all(target_dir).is_err() {
-        return Some(format!("installed {name} could not be created - skipped"));
+        return Err(format!("installed {name} could not be created - skipped"));
     }
     for rel in &source_walk.dirs {
         let _ = std::fs::create_dir_all(join_rel(target_dir, rel));
     }
     for (rel, hash) in &source_walk.files {
         if target_walk.file_hash(rel) == Some(hash.as_str()) {
-            continue; // already byte-identical
+            continue;
         }
         let raw = std::fs::read(join_rel(&source_dir, rel)).unwrap_or_default();
         let _ = write_file_atomic(&join_rel(target_dir, rel), &render(&raw));
     }
-    None
+    Ok(source_walk.files)
 }
 
 /// utcNow(): `new Date().toISOString()`.
@@ -335,6 +332,7 @@ pub fn apply_computed_plan(
 
     let mut applied: Vec<Value> = Vec::new();
     let mut skipped_skills: Vec<Value> = Vec::new();
+    let mut recorded_verify: Map<String, Value> = Map::new();
 
     // BACKUP ONCE PER FILE PER RUN (4cac0774).
     //
@@ -701,14 +699,21 @@ pub fn apply_computed_plan(
             "copy_verify_skill" => {
                 let kind = item["target"].as_str().unwrap_or("");
                 let skill = item["skill"].as_str().unwrap_or("");
-                if let Some(reason) = apply_copy_verify_skill(
+                match apply_copy_verify_skill(
                     repo_root,
                     skill,
                     &target,
                     runtime_for_target_kind(kind),
                 ) {
-                    skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
-                    continue; // skipped loudly, not applied
+                    Err(reason) => {
+                        skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
+                        continue;
+                    }
+                    Ok(files) => {
+                        let hashes: Map<String, Value> =
+                            files.into_iter().map(|(rel, h)| (rel, json!(h))).collect();
+                        recorded_verify.insert(rel.to_string(), Value::Object(hashes));
+                    }
                 }
             }
             "blocked_symlink" | "blocked_alias" | "blocked_verify_skill" => {
@@ -759,6 +764,19 @@ pub fn apply_computed_plan(
     let onboarding_path = repo_root.join(".bee").join("onboarding.json");
     let previous = read_json_if_exists(&onboarding_path).unwrap_or(json!({}));
     let mut managed = desired_managed.as_object().cloned().unwrap_or_default();
+    let prior_verify = previous
+        .get("managed")
+        .and_then(|m| m.get("verify_skills"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut verify_skills = prior_verify;
+    for (rel, hashes) in recorded_verify {
+        verify_skills.insert(rel, hashes);
+    }
+    if !verify_skills.is_empty() {
+        managed.insert("verify_skills".into(), Value::Object(verify_skills));
+    }
     // Advisor R6 / point 6: a --plugin-source apply lets a prior
     // --repo-hooks record LAPSE rather than silently carrying it forward.
     if !opts.repo_hooks && !opts.plugin_source {

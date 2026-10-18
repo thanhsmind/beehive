@@ -1298,7 +1298,28 @@ pub(crate) fn doc_deferral_scan_files(root: &Path, feature: &str) -> D<Vec<Strin
             }
         }
     }
+    let control = crate::hooks::session_init::control_root_for(root);
+    let plan_frozen = crate::hooks::write_guard::plan_freeze_shape_approved(
+        &control.to_string_lossy(),
+        &read_state(&control)?,
+        feature,
+    )
+    .map_err(|_| Delegate)?;
+    let frozen_plan = format!("docs/history/{feature}/plan.md");
+    files.retain(|rel| !(plan_frozen && rel == &frozen_plan) && !is_generated_knowledge_index(&docs_root, rel));
     Ok(files)
+}
+
+fn is_generated_knowledge_index(docs_root: &Path, rel: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(docs_root.join(rel)) else { return false };
+    let rest = match text.strip_prefix("---\n") {
+        Some(after) => match after.find("\n---\n") {
+            Some(end) => &after[end + 5..],
+            None => return false,
+        },
+        None => text.as_str(),
+    };
+    rest.starts_with(crate::verbs::knowledge::KNOWLEDGE_INDEX_HEADER)
 }
 
 /// Every trigger-id candidate cited on one line: a backtick span (`` `<id>`

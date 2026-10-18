@@ -1243,7 +1243,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(blockers.len(), 1, "{blockers:?}");
         assert!(
             blockers[0]
-                == "promote proposal unapplied: 1 feature(s) — f3 (2 capped cell(s), docs/history/f3/promote-proposals.md)",
+                == "promote proposal unapplied: 1 feature(s) — f3 (2 capped cell(s), docs/history/f3/promote-proposals.md) — after you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f3",
             "{blockers:?}"
         );
 
@@ -1320,6 +1320,38 @@ use crate::version::BEE_VERSION;
         let blockers = orient_blockers(root);
         assert_eq!(blockers.len(), 1, "{blockers:?}");
         assert!(blockers[0].contains("f5"), "{blockers:?}");
+    }
+
+    #[test]
+    fn the_reminder_names_the_command_that_clears_a_pre_queue_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f6/promote-proposals.md",
+            "promote proposal for work item \"f6\" (docs/history/f6/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/f6/CONTEXT.md\n",
+        );
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(
+            blockers[0].ends_with(
+                "after you apply or decide to skip the proposals: bee deferred-queue complete --kind promote --feature f6"
+            ),
+            "{blockers:?}"
+        );
+        assert!(
+            crate::verbs::deferred_queue::items_for(root, "promote", "f6").is_empty(),
+            "the fixture starts with no queue item at all — a pre-queue feature"
+        );
+
+        crate::verbs::deferred_queue::complete_by_kind_feature(
+            root,
+            "promote",
+            "f6",
+            "deferred-queue complete",
+        )
+        .unwrap();
+        assert_eq!(orient_blockers(root), Vec::<String>::new());
     }
 
     // ── sweep-at-every-door (D1/D6): bee orient's sweep door ────────────────

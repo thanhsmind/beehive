@@ -494,6 +494,13 @@ fn add_record(
     predicate: Option<&str>,
 ) -> Result<TriggerRecord, String> {
     let cmd = "triggers add";
+    let Some(decision_id) = known_decision_id(control, decision) else {
+        return Err(format!(
+            "bee {cmd}: --decision {decision} names no decision in the store. FIX: pass the \
+             decision's store event id (8+ characters), not a CONTEXT D-label; find it with bee \
+             decisions search --text <words>."
+        ));
+    };
     if let Some(p) = predicate {
         if !is_valid_predicate(p) {
             return Err(format!(
@@ -516,7 +523,7 @@ fn add_record(
         _ => None,
     };
     let tier = if predicate.is_some() { "predicate" } else { "manual" };
-    let short8 = truncate_chars_head(decision, 8);
+    let short8 = truncate_chars_head(&decision_id, 8);
     let dir = triggers_dir(control);
     let path = trigger_path_new(&dir, &slug_from_text(condition), &short8);
     let id = path
@@ -543,6 +550,14 @@ fn add_record(
     // The next prompt must evaluate the new trigger even if HEAD is still.
     let _ = std::fs::remove_file(eval_head_cache(control));
     Ok(rec)
+}
+
+fn known_decision_id(control: &Path, raw: &str) -> Option<String> {
+    let ids: Vec<String> = crate::verbs::decisions::decision_target_candidates(control)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    crate::verbs::decisions::resolve_store_citation(&ids, raw)
 }
 
 fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -694,6 +709,54 @@ mod tests {
 
     fn n(p: &Path) -> String {
         dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().into_owned()
+    }
+
+    const DEC_ID: &str = "60768791-01dd-4bc3-a67d-0c7407a05471";
+
+    fn seed_decision(root: &Path, id: &str) {
+        let event = json!({
+            "id": id,
+            "type": "decide",
+            "date": "2026-08-16T00:00:00.000Z",
+            "decision": "seeded decision",
+            "rationale": "seeded for the trigger fixture",
+        });
+        write(root, ".bee/decisions.jsonl", &format!("{event}\n"));
+    }
+
+    #[test]
+    fn add_refuses_a_decision_id_the_store_does_not_know() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        seed_decision(root, DEC_ID);
+        for unknown in ["null", "deadbeef00", &DEC_ID[..7]] {
+            let err = add_record(root, root, unknown, "revisit later", None).err().expect("refused");
+            assert_eq!(
+                err,
+                format!(
+                    "bee triggers add: --decision {unknown} names no decision in the store. FIX: pass \
+                     the decision's store event id (8+ characters), not a CONTEXT D-label; find it \
+                     with bee decisions search --text <words>."
+                )
+            );
+            assert!(!triggers_dir(root).exists());
+        }
+    }
+
+    #[test]
+    fn add_accepts_a_seeded_decision_id_or_its_unique_prefix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        seed_decision(root, DEC_ID);
+        let full = add_record(root, root, DEC_ID, "revisit later", None).unwrap();
+        assert_eq!(full.decision, "60768791");
+        let by_prefix = add_record(root, root, &DEC_ID[..8], "revisit now", None).unwrap();
+        assert_eq!(by_prefix.decision, "60768791");
+        let ReadJson::Parsed(v) = read_json(&triggers_dir(root).join(format!("{}.json", by_prefix.id)))
+        else {
+            panic!("expected Parsed")
+        };
+        assert_eq!(v["decision"], json!("60768791"));
     }
 
     #[test]
@@ -905,8 +968,9 @@ mod tests {
     fn add_refuses_bad_path_changed_specs_and_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = change_repo(tmp.path());
+        seed_decision(&root, DEC_ID);
         for bad in ["path-changed:", "path-changed:a.txt,,b.txt", "path-changed:/abs.txt"] {
-            let err = add_record(&root, &root, "deadbeef00", "x", Some(bad)).err().expect("refused");
+            let err = add_record(&root, &root, DEC_ID, "x", Some(bad)).err().expect("refused");
             assert!(err.contains("path-changed:<path>[,<path>...]"), "{err}");
             assert!(err.contains("path-exists:<path>") && err.contains("path-missing:<path>"), "{err}");
             assert!(err.contains("comma cannot be watched"), "{err}");
@@ -918,7 +982,8 @@ mod tests {
     fn add_anchors_path_changed_on_the_tree_head() {
         let tmp = tempfile::tempdir().unwrap();
         let root = change_repo(tmp.path());
-        let rec = add_record(&root, &root, "deadbeef00", "a changes", Some("path-changed:a.txt")).unwrap();
+        seed_decision(&root, DEC_ID);
+        let rec = add_record(&root, &root, DEC_ID, "a changes", Some("path-changed:a.txt")).unwrap();
         assert_eq!(rec.anchored_at, head_sha(&root));
         assert!(rec.anchored_at.is_some());
         let ReadJson::Parsed(v) = read_json(&triggers_dir(&root).join(format!("{}.json", rec.id))) else {
@@ -926,7 +991,7 @@ mod tests {
         };
         assert_eq!(v["anchored_at"], json!(head_sha(&root).unwrap()));
         // path-exists records keep their old shape: no anchored_at key.
-        let plain = add_record(&root, &root, "deadbeef00", "b lands", Some("path-exists:b.txt")).unwrap();
+        let plain = add_record(&root, &root, DEC_ID, "b lands", Some("path-exists:b.txt")).unwrap();
         assert!(plain.to_value().get("anchored_at").is_none());
     }
 
@@ -934,7 +999,8 @@ mod tests {
     fn add_outside_a_git_repo_refuses_and_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let err = add_record(root, root, "deadbeef00", "x", Some("path-changed:a.txt")).err().expect("refused");
+        seed_decision(root, DEC_ID);
+        let err = add_record(root, root, DEC_ID, "x", Some("path-changed:a.txt")).err().expect("refused");
         assert_eq!(
             err,
             format!("bee triggers add: --predicate path-changed needs a git HEAD at {} to anchor on.", root.display())
@@ -946,7 +1012,8 @@ mod tests {
     fn path_changed_waits_until_a_commit_touches_a_watched_path() {
         let tmp = tempfile::tempdir().unwrap();
         let root = change_repo(tmp.path());
-        let rec = add_record(&root, &root, "deadbeef00", "a changes", Some("path-changed:c.txt, a.txt")).unwrap();
+        seed_decision(&root, DEC_ID);
+        let rec = add_record(&root, &root, DEC_ID, "a changes", Some("path-changed:c.txt, a.txt")).unwrap();
         // No commit since the anchor.
         assert_eq!(due_and_manual_counts(&root), (0, 0));
         assert_eq!(stored_status(&root, &rec), "waiting");
@@ -975,9 +1042,10 @@ mod tests {
     fn path_changed_added_in_a_feature_worktree_stays_waiting_after_its_merge() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, wt) = worktree_fixture(tmp.path());
+        seed_decision(&main, DEC_ID);
         // The feature branch's own commits touch the watched path.
         commit_edit(&wt, "f.txt", "feature edit");
-        let rec = add_record(&wt, &control_root_path(&wt), "deadbeef00", "f changes", Some("path-changed:f.txt"))
+        let rec = add_record(&wt, &control_root_path(&wt), DEC_ID, "f changes", Some("path-changed:f.txt"))
             .unwrap();
         assert_eq!(rec.anchored_at, head_sha(&wt));
         // An unrelated commit on main, then a real merge commit.
@@ -997,7 +1065,8 @@ mod tests {
         // No store yet: zero, nothing written.
         assert_eq!(due_count_for_prompt(&root), 0);
         assert!(!triggers_dir(&root).exists());
-        let rec = add_record(&root, &root, "deadbeef00", "c lands", Some("path-exists:c.txt")).unwrap();
+        seed_decision(&root, DEC_ID);
+        let rec = add_record(&root, &root, DEC_ID, "c lands", Some("path-exists:c.txt")).unwrap();
         let cache = root.join(".bee").join("cache").join("triggers-last-eval-head");
         assert_eq!(due_count_for_prompt(&root), 0);
         assert_eq!(std::fs::read_to_string(&cache).unwrap(), head_sha(&root).unwrap());
@@ -1013,7 +1082,7 @@ mod tests {
         assert_eq!(stored_status(&root, &rec), "due");
         assert_eq!(std::fs::read_to_string(&cache).unwrap(), head_sha(&root).unwrap());
         // A new add drops the cache so the next prompt evaluates it.
-        add_record(&root, &root, "deadbeef00", "d lands", Some("path-exists:d.txt")).unwrap();
+        add_record(&root, &root, DEC_ID, "d lands", Some("path-exists:d.txt")).unwrap();
         assert!(!cache.exists());
     }
 

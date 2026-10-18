@@ -2220,7 +2220,7 @@ pub(crate) fn prepare_dispatch_wire(
     // behind it (a gather or a reviewer run on the session model). The flag
     // is read only on a `--kind cell` dispatch with no `--role`, which is
     // exactly the shape that used to read the cell's recorded `tier`.
-    let escalated_cell = role.is_none()
+    let escalated_cell = orig_role.is_none()
         && kind == "cell"
         && cell.as_ref().map(crate::verbs::cells::cell_is_escalated).unwrap_or(false);
     // REVIEW P1-A — the escalation word is read off the CALLER or the FLAG,

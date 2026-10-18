@@ -290,7 +290,7 @@ pub(crate) fn check_scribing_run_phase(from: Option<&Value>) -> Option<String> {
     }
     let current = disp_or_idle(from);
     Some(format!(
-        "scribing-run: refused from phase \"{current}\" — a scribing run records the spec sync for work that has been EXECUTED. Legal from: swarming, reviewing, scribing. FIX: if execution really is done, the phase should say so; if it is not, there is nothing to scribe yet."
+        "scribing-run: refused from phase \"{current}\" — a scribing run records the spec sync for work that has been EXECUTED. Legal from: swarming, reviewing, scribing. FIX: if execution really is done, the phase should say so; if it is not, there is nothing to scribe yet. A closed feature's promote reminder is cleared with `bee deferred-queue complete --kind promote --feature <feature>`."
     ))
 }
 
