@@ -351,7 +351,9 @@ pub fn subset_managed(
 /// coreChangesNeeded (l. 3389): the legacy-global refresh never drives
 /// up_to_date/changes_needed.
 pub fn core_changes_needed(plan: &[Value]) -> bool {
-    plan.iter().any(|i| i["action"] != "refresh_legacy_global_skill")
+    plan.iter().any(|i| {
+        i["action"] != "refresh_legacy_global_skill" && i["action"] != "blocked_verify_skill"
+    })
 }
 
 // ── .bee/verify/ → every runtime skill home (verification-ships-to-hosts D3) ──
@@ -467,6 +469,59 @@ fn verify_skill_drifted(source_walk: &Walk, target_walk: &Walk) -> bool {
         || source_walk.dirs.iter().any(|d| !target_walk.dirs.contains(d))
 }
 
+/// `managed.verify_skills` — the rendered per-file hashes bee itself last
+/// wrote into each runtime home, keyed by target-relative skill directory.
+fn verify_record(repo_root: &Path) -> Option<Map<String, Value>> {
+    read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"))?
+        .get("managed")?
+        .get("verify_skills")?
+        .as_object()
+        .cloned()
+}
+
+fn mtime_of(p: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(p).ok()?.modified().ok()
+}
+
+fn verify_host_edit(
+    source_dir: &Path,
+    target_dir: &Path,
+    source_walk: &Walk,
+    target_walk: &Walk,
+    record: Option<&Value>,
+) -> Option<String> {
+    let record = record.and_then(Value::as_object);
+    for (rel, source_hash) in &source_walk.files {
+        let Some(installed_hash) = target_walk.file_hash(rel) else {
+            continue;
+        };
+        if installed_hash == source_hash {
+            continue;
+        }
+        match record.and_then(|r| r.get(rel)).and_then(Value::as_str) {
+            Some(written) => {
+                if written != installed_hash {
+                    return Some(rel.clone());
+                }
+            }
+            None => {
+                let (Some(installed), Some(source)) =
+                    (mtime_of(&join_rel(target_dir, rel)), mtime_of(&join_rel(source_dir, rel)))
+                else {
+                    continue;
+                };
+                let Some(gap) = installed.duration_since(source).ok() else {
+                    continue;
+                };
+                if gap > std::time::Duration::from_secs(2) {
+                    return Some(rel.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn verify_item(action: &str, skill: &str, path: &str, scope: &str, target: &str) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), json!(action));
@@ -500,6 +555,7 @@ pub fn compute_verify_skill_items(repo_root: &Path) -> Vec<Value> {
         return items;
     };
     let targets = verify_render_targets(repo_root);
+    let recorded = verify_record(repo_root);
     for entry in entries {
         // Enumeration is the WHOLE root, deliberately not
         // `list_bee_skill_entries` — that helper filters on the `bee-` prefix,
@@ -572,8 +628,29 @@ pub fn compute_verify_skill_items(repo_root: &Path) -> Vec<Value> {
                         ));
                         continue;
                     }
-                    if verify_skill_drifted(&source_walk, &target_walk) {
-                        items.push(verify_item("copy_verify_skill", name, &rel, "installed", kind));
+                    if !verify_skill_drifted(&source_walk, &target_walk) {
+                        continue;
+                    }
+                    let host_edit = verify_host_edit(
+                        &source_dir,
+                        &target_dir,
+                        &source_walk,
+                        &target_walk,
+                        recorded.as_ref().and_then(|r| r.get(&rel)),
+                    );
+                    match host_edit {
+                        None => {
+                            items.push(verify_item("copy_verify_skill", name, &rel, "installed", kind))
+                        }
+                        Some(file) => items.push(verify_blocked_item(
+                            name,
+                            &rel,
+                            "installed",
+                            kind,
+                            format!(
+                                "installed {rel} has edits bee did not write ({file}) - skipped, never overwritten. FIX: copy the edits into .bee/verify/{name}, then re-run bee onboard --apply"
+                            ),
+                        )),
                     }
                 }
             }

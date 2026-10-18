@@ -1532,6 +1532,126 @@ fn an_updated_source_rewrites_the_render_and_never_deletes_what_it_did_not_write
 }
 
 #[test]
+fn a_host_edited_projection_is_reported_blocked_and_never_overwritten() {
+    let fx = fixture();
+    let src = fx.repo.join(".bee").join("verify").join("verify-app");
+    write(&src.join("SKILL.md"), "drive app v1\n");
+    apply(&fx, &[]);
+
+    let ledger = read_json(&fx.repo.join(".bee").join("onboarding.json"));
+    assert!(
+        ledger["managed"]["verify_skills"][".claude/skills/verify-app"]["SKILL.md"].is_string(),
+        "apply records the rendered hash it wrote: {ledger}"
+    );
+
+    let claude = fx.repo.join(".claude").join("skills").join("verify-app");
+    write(&claude.join("SKILL.md"), "drive app v1\nhost note\n");
+    write(&src.join("SKILL.md"), "drive app v2\n");
+
+    let p = plan(&fx, &[]);
+    let blocked = verify_actions(&p, "plan", "blocked_verify_skill");
+    assert_eq!(blocked.len(), 1, "only the edited home is blocked: {blocked:?}");
+    assert_eq!(blocked[0]["skill"], "verify-app");
+    assert_eq!(blocked[0]["path"], ".claude/skills/verify-app");
+    let reason = blocked[0]["reason"].as_str().unwrap();
+    assert!(reason.contains("edits bee did not write (SKILL.md)"), "{reason}");
+    assert!(reason.contains("FIX: copy the edits into .bee/verify/verify-app"), "{reason}");
+    assert!(
+        !paths_for(&p, "plan", "copy_verify_skill").contains(&".claude/skills/verify-app".into()),
+        "the edited projection is never planned for a write: {:?}",
+        p["plan"]
+    );
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(
+        std::fs::read_to_string(claude.join("SKILL.md")).unwrap(),
+        "drive app v1\nhost note\n",
+        "the host's edit survives the apply"
+    );
+    assert_eq!(a["recheck"], "up_to_date", "a blocked item never fails install.sh");
+    let recheck = verify_actions(&a, "recheck_plan", "blocked_verify_skill");
+    assert_eq!(recheck.len(), 1, "the recheck still reports the edit: {recheck:?}");
+    for (rel_root, root) in skill_homes(&fx.repo) {
+        if rel_root == ".claude/skills" {
+            continue;
+        }
+        assert_eq!(
+            std::fs::read_to_string(root.join("verify-app").join("SKILL.md")).unwrap(),
+            "drive app v2\n",
+            "{rel_root} carries no host edit and is still refreshed"
+        );
+    }
+}
+
+#[test]
+fn an_untouched_projection_is_still_refreshed_after_a_source_change() {
+    let fx = fixture();
+    let src = fx.repo.join(".bee").join("verify").join("verify-app");
+    write(&src.join("SKILL.md"), "drive app v1\n");
+    apply(&fx, &[]);
+
+    write(&src.join("SKILL.md"), "drive app v2\n");
+    let p = plan(&fx, &[]);
+    assert!(verify_actions(&p, "plan", "blocked_verify_skill").is_empty(), "{:?}", p["plan"]);
+    assert_eq!(
+        paths_for(&p, "plan", "copy_verify_skill").len(),
+        skill_homes(&fx.repo).len(),
+        "every home is refreshed: {:?}",
+        p["plan"]
+    );
+
+    apply(&fx, &[]);
+    for (rel_root, root) in skill_homes(&fx.repo) {
+        assert_eq!(
+            std::fs::read_to_string(root.join("verify-app").join("SKILL.md")).unwrap(),
+            "drive app v2\n",
+            "{rel_root}"
+        );
+    }
+}
+
+#[test]
+fn a_blocked_verify_skill_item_alone_never_asks_for_changes() {
+    let only_blocked = [json!({
+        "action": "blocked_verify_skill",
+        "skill": "verify-app",
+        "path": ".claude/skills/verify-app",
+        "scope": "installed",
+        "target": "repo-claude",
+        "reason": "installed .claude/skills/verify-app has edits bee did not write (SKILL.md)"
+    })];
+    assert!(!super::plan::core_changes_needed(&only_blocked));
+    assert!(!super::plan::core_changes_needed(&[]));
+}
+
+#[test]
+fn with_no_record_a_projection_newer_than_its_source_is_blocked() {
+    let fx = fixture();
+    let src = fx.repo.join(".bee").join("verify").join("verify-app");
+    write(&src.join("SKILL.md"), "drive app v1\n");
+    apply(&fx, &[]);
+
+    let ledger_path = fx.repo.join(".bee").join("onboarding.json");
+    let mut ledger = read_json(&ledger_path);
+    ledger["managed"].as_object_mut().unwrap().remove("verify_skills");
+    write(&ledger_path, &format!("{}\n", jsjson::stringify_pretty(&ledger)));
+
+    let claude = fx.repo.join(".claude").join("skills").join("verify-app");
+    write(&claude.join("SKILL.md"), "drive app v1\nhost note\n");
+    let ahead = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    filetime::set_file_mtime(
+        claude.join("SKILL.md"),
+        filetime::FileTime::from_system_time(ahead),
+    )
+    .unwrap();
+
+    write(&src.join("SKILL.md"), "drive app v2\n");
+    let blocked = verify_actions(&plan(&fx, &[]), "plan", "blocked_verify_skill");
+    assert_eq!(blocked.len(), 1, "the mtime fallback blocks: {blocked:?}");
+    assert_eq!(blocked[0]["path"], ".claude/skills/verify-app");
+}
+
+#[test]
 fn a_malformed_generated_skill_reports_only_its_own_item_and_bee_still_syncs() {
     let fx = fixture();
     let root = fx.repo.join(".bee").join("verify");
