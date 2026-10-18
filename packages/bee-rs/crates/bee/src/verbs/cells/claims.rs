@@ -39,6 +39,8 @@ pub(crate) const GATE_RETRY_ATTEMPTS: u32 = 15;
 
 pub(crate) const GATE_RETRY_DELAY_MS: u64 = 20;
 
+pub(crate) const GATE_STALE_SECONDS: f64 = 30.0;
+
 pub(crate) fn control_root(root: &Path) -> MR<PathBuf> {
     let s = root.to_str().ok_or(Fail::Delegate)?;
     Ok(PathBuf::from(rsv::control_root_for(s).map_err(|_| Fail::Delegate)?))
@@ -162,20 +164,102 @@ pub(crate) fn acquire_gate(control: &Path, cell_id: &str) -> MR<bool> {
         "{}\n",
         jsjson::stringify(&json!({ "pid": std::process::id(), "at": utc_now() }))
     );
-    let result = transient_fs_retry(|| {
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&file) {
-            Ok(mut f) => {
-                use std::io::Write;
-                f.write_all(body.as_bytes())
+    for attempt in 0..2 {
+        let result = transient_fs_retry(|| {
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(&file) {
+                Ok(mut f) => {
+                    use std::io::Write;
+                    f.write_all(body.as_bytes())
+                }
+                Err(e) => Err(e),
             }
-            Err(e) => Err(e),
+        });
+        match result {
+            Ok(()) => return Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                if attempt == 0 && break_stale_gate(control, cell_id, &file)? {
+                    continue;
+                }
+                return Ok(false);
+            }
+            Err(e) => return Err(Fail::Thrown(format!("{e}"))),
         }
-    });
-    match result {
-        Ok(()) => Ok(true),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-        Err(e) => Err(Fail::Thrown(format!("{e}"))),
     }
+    Ok(false)
+}
+
+fn gate_pid_dead(pid: Option<&Value>) -> bool {
+    let Some(Value::Number(n)) = pid else { return false };
+    let Some(v) = n.as_f64() else { return false };
+    if !v.is_finite() || v.fract() != 0.0 || v <= 0.0 {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        let proc_root = Path::new("/proc");
+        if proc_root.is_dir() {
+            return !proc_root.join(format!("{}", v as u64)).exists();
+        }
+        false
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = v;
+        false
+    }
+}
+
+fn gate_bytes_stale(raw: &str, now: f64, file_age_ms: Option<f64>) -> bool {
+    let too_old = file_age_ms.is_some_and(|age| age > GATE_STALE_SECONDS * 1000.0);
+    let parsed = match serde_json::from_str::<Value>(js_trim(raw)) {
+        Ok(v) => v,
+        Err(_) => return too_old,
+    };
+    let Value::Object(gate) = parsed else { return too_old };
+    if gate_pid_dead(gate.get("pid")) {
+        return true;
+    }
+    match rsv::date_parse_val(gate.get("at")) {
+        Ok(Some(ms)) => now - ms > GATE_STALE_SECONDS * 1000.0,
+        _ => too_old,
+    }
+}
+
+fn gate_aside_path(control: &Path, cell_id: &str) -> MR<PathBuf> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let id = require_id(cell_id, "cell id")?;
+    Ok(claims_dir(control).join(format!(
+        "{id}.adopting.stale-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )))
+}
+
+fn break_stale_gate(control: &Path, cell_id: &str, file: &Path) -> MR<bool> {
+    let seen = match std::fs::read_to_string(file) {
+        Ok(raw) => raw,
+        Err(_) => return Ok(false),
+    };
+    let age_ms = std::fs::metadata(file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| rsv::now_ms() - d.as_millis() as f64);
+    if !gate_bytes_stale(&seen, rsv::now_ms(), age_ms) {
+        return Ok(false);
+    }
+    let aside = gate_aside_path(control, cell_id)?;
+    if std::fs::rename(file, &aside).is_err() {
+        return Ok(false);
+    }
+    let moved = std::fs::read_to_string(&aside).unwrap_or_default();
+    if moved == seen {
+        let _ = std::fs::remove_file(&aside);
+        return Ok(true);
+    }
+    let _ = std::fs::rename(&aside, file);
+    Ok(false)
 }
 
 pub(crate) fn release_gate(control: &Path, cell_id: &str) {
@@ -209,8 +293,8 @@ pub(crate) fn release_claim_file_best_effort(root: &Path, id: &str) {
         if read_claim(&control, id)?.is_none() {
             return Ok(());
         }
-        if !acquire_gate(&control, id)? {
-            return Ok(()); // GATE_HELD — best-effort caller never retries
+        if !acquire_gate_with_retry(&control, id)? {
+            return Ok(());
         }
         let still_there = read_claim(&control, id);
         if let Ok(Some(_)) = still_there {
