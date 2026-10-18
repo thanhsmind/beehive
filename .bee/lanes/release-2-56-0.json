@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Giấy phép deploy là OK. Bây giờ tôi chạy đúng lệnh mà bee trả về. Một worker chạy `scripts/release.sh 2.56.0`.",
-    "asked_at": "2026-10-18T04:06:23.170Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-18T04:25:58.589Z",
     "session": "4eca85ce-39bc-44f7-b2dc-e9e31aa4eeca"
   },
   "route": {
