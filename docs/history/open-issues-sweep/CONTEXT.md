@@ -11,14 +11,16 @@ defects among them. Each decision below names the issue it closes.
   role. An escalated cell resolves to the session model (no herding
   command), with or without a v2 role plan. Only an explicit `--role` on
   the command line still outranks the flag.
-- D2 (#108): `bee cells unclaim` and `bee cells reopen` remove the claim
-  store row for the cell, the same way cap already does. After an
-  unclaim, `cells claim` and `dispatch prepare --claim` both succeed.
+- D2 (#108): the claim gate (`.bee/claims/<id>.adopting`) left by a
+  dead claimer is broken as stale, so `cells unclaim` and `cells reopen`
+  remove the claim store row. After an unclaim, `cells claim` and
+  `dispatch prepare --claim` both succeed. A live gate is never broken.
 - D3 (#103, #112): a herding child started with a dispatch permit
   (`BEE_DISPATCH_ID` in the pane passthrough) keeps the passthrough
   `BEE_SESSION_ID`. Every other leader session variable
   (`CLAUDE_CODE_SESSION_ID`, `PI_SESSION_ID`, and `BEE_SESSION_ID`
-  without a permit) is still stripped.
+  without a permit) is still stripped. A herding worker's
+  `bee state session release` without `--session-id` releases nothing.
 - D4 (#98): `herding run` adds the "start the daemon" FIX only when the
   Paseo daemon does not answer. When the daemon answered with an error,
   the FIX names the agent's provider and model configuration instead.
@@ -41,8 +43,10 @@ defects among them. Each decision below names the issue it closes.
   both name the one command that clears it, and that command works from
   phase idle.
 - D11 (#100): `bee onboard --apply` never overwrites a verify-app
-  projection file that is newer than its canonical source in
-  `.bee/verify/`; it reports that item blocked, with a FIX.
+  projection file that carries edits bee did not write (hash differs
+  from bee's recorded last write; mtime newer than the source when no
+  record exists yet); it reports that item blocked, with a FIX, and a
+  blocked item does not keep onboard at changes_needed.
 - D12 (#102): `bee cells finish` and `bee cells cap` accept
   `--report-file <path>` as well as `--report`, so a report whose proof
   names `bash` can come from a file instead of a shell argument.
