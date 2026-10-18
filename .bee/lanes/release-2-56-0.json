@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-56-0",
   "mode": "tiny",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-56-0\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"release-2-56-0\" (lane).",
+  "next_action": "bee close finished \"release-2-56-0\" — feature is closed.",
   "created_at": "2026-10-18T04:04:34.198Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-18T04:25:58.589Z",
-    "session": "4eca85ce-39bc-44f7-b2dc-e9e31aa4eeca"
-  },
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
