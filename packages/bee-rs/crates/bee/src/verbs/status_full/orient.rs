@@ -511,8 +511,13 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             .collect::<Vec<_>>()
             .join("; ");
         blockers.push(json!(format!(
-            "promote proposal unapplied: {} feature(s) — {named}",
-            proposals.len()
+            "promote proposal unapplied: {} feature(s) — {named} — after you apply or decide to skip the proposals: {}",
+            proposals.len(),
+            proposals
+                .iter()
+                .map(|p| p.clear_command.clone())
+                .collect::<Vec<_>>()
+                .join("; ")
         )));
     }
     // D4 (D4a): a granted worktree `bee worktree merge` never reached and

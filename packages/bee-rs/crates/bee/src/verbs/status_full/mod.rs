@@ -243,6 +243,7 @@ pub(crate) struct UnappliedPromoteProposal {
     pub(crate) feature: String,
     pub(crate) counts: String,
     pub(crate) path: String,
+    pub(crate) clear_command: String,
 }
 
 /// The proposal file's own opening line already carries its count
@@ -306,6 +307,9 @@ pub(crate) fn unapplied_promote_proposals(root: &Path) -> Vec<UnappliedPromotePr
         out.push(UnappliedPromoteProposal {
             counts: promote_proposal_counts(&text),
             path: format!("docs/history/{feature}/promote-proposals.md"),
+            clear_command: format!(
+                "bee deferred-queue complete --kind promote --feature {feature}"
+            ),
             feature,
         });
     }
