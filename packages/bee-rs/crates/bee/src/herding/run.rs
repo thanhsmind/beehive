@@ -2908,6 +2908,18 @@ pub(crate) fn build_child_env(
         env.remove(var);
     }
 
+    let permitted = passthrough
+        .get("BEE_DISPATCH_ID")
+        .is_some_and(|v| !v.trim().is_empty());
+    if permitted {
+        if let Some(session) = passthrough.get("BEE_SESSION_ID") {
+            let trimmed = session.trim();
+            if !trimmed.is_empty() {
+                env.insert("BEE_SESSION_ID".to_string(), trimmed.to_string());
+            }
+        }
+    }
+
     env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
     env.insert("BEE_HERDING_JOB_ID".to_string(), job_id.to_string());
 
@@ -3631,19 +3643,26 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         Ok(out) => out,
         Err(e) => {
             let label = format!("bee_job={}", opts.job_id);
-            let agent_msg = cli
-                .call(&paseo::ls_label_argv(&label))
+            let agents_reply = cli.call(&paseo::ls_label_argv(&label));
+            let agent_id = agents_reply
+                .as_ref()
                 .ok()
-                .and_then(|out| paseo::parse_ls_agents_checked(&out).or_else(|| Some(paseo::parse_ls_agents(&out))))
+                .and_then(|out| paseo::parse_ls_agents_checked(out).or_else(|| Some(paseo::parse_ls_agents(out))))
                 .and_then(|agents| {
                     agents.into_iter().find(|(id, j, _)| !id.is_empty() && (j == &opts.job_id || j.is_empty() || j == &label))
                 })
-                .map(|(id, _, _)| format!(" — agent {id}"))
-                .unwrap_or_default();
+                .map(|(id, _, _)| id);
+            let agent_msg = agent_id.map(|id| format!(" — agent {id}")).unwrap_or_default();
+            let fix = match agents_reply {
+                Ok(_) => format!(
+                    "check the provider and model that herding.agents.{agent_name} names in .bee/config.json"
+                ),
+                Err(_) => {
+                    "start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)".to_string()
+                }
+            };
             return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!(
-                    "{e}{agent_msg} — FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"
-                )),
+                outcome: RunOutcome::SpawnFailed(format!("{e}{agent_msg} — FIX: {fix}")),
                 pane_id: None,
                 closed_pane: false,
             };
@@ -12227,6 +12246,7 @@ mod tests {
         assert!(!mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id).exists());
     }
 
+    #[cfg(unix)]
     fn seed_claude_guard(main_root: &Path, help: &str, settings_command: &str) {
         use std::os::unix::fs::PermissionsExt;
         let bin = main_root.join(".bee").join("bin");
@@ -12243,6 +12263,7 @@ mod tests {
         std::fs::write(claude.join("settings.json"), settings.to_string()).unwrap();
     }
 
+    #[cfg(unix)]
     fn run_read_only_claude(main_root: &Path) -> (ExecResult, Vec<Vec<String>>) {
         let mut opts = test_options(main_root, false);
         opts.read_only = true;
@@ -12271,6 +12292,7 @@ mod tests {
         (res, calls)
     }
 
+    #[cfg(unix)]
     #[test]
     fn execute_paseo_read_only_claude_spawns_with_the_env_and_configured_mode() {
         let tmp = tempfile::tempdir().unwrap();
@@ -12282,6 +12304,7 @@ mod tests {
         assert!(run.windows(2).any(|w| w[0] == "--mode" && w[1] == "bypassPermissions"), "{run:?}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn execute_paseo_read_only_claude_refuses_a_binary_without_worker_guard() {
         let tmp = tempfile::tempdir().unwrap();
@@ -12294,6 +12317,7 @@ mod tests {
         assert!(calls.is_empty());
     }
 
+    #[cfg(unix)]
     #[test]
     fn execute_paseo_read_only_claude_refuses_settings_without_the_entry() {
         let tmp = tempfile::tempdir().unwrap();
@@ -12478,7 +12502,8 @@ mod tests {
             Err("daemon unreachable".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
-        );
+        )
+        .with_ls(Err("daemon unreachable".to_string()));
 
         let res = execute_paseo(&opts, &spec, &fake);
         match res.outcome {
@@ -12488,6 +12513,41 @@ mod tests {
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
         assert!(!res.closed_pane);
+    }
+
+    #[test]
+    fn execute_paseo_failed_run_on_a_live_daemon_names_the_agent_config_fix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+
+        let spec = PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        };
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("provider not configured".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_ls(Ok("[]\n".to_string()));
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(!msg.contains("FIX: start the daemon"), "{msg}");
+                assert!(msg.contains("provider") && msg.contains("model"), "{msg}");
+                assert!(msg.contains("herding"), "{msg}");
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(!res.closed_pane);
+        assert!(fake.calls.lock().unwrap().iter().any(|c| c[0] == "ls"), "the daemon probe must run");
     }
 
     fn pi_spec() -> PaseoSpec {

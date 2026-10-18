@@ -364,6 +364,14 @@ pub(crate) fn run_session_release(flags: Flags, use_json: bool, t0: Instant) -> 
     };
     let out = (|| -> R2<Out> {
         let session_id_flag = flag_value(&flags, "session-id");
+        if session_id_flag.is_none() && crate::hooks::herding_worker_marker_set() {
+            return Ok(Out::Emit(
+                json!({"released": false, "reason": "herding_worker"}),
+                "Session release skipped: a herding worker never releases the session it inherited."
+                    .to_string(),
+                0,
+            ));
+        }
         let Some(session_raw) = resolve_release_session_id(session_id_flag.as_deref()) else {
             return Ok(Out::Thrown(
                 "state session release: no session id resolved — pass --session-id, or run \
@@ -819,6 +827,48 @@ mod tests {
         }
     }
 
+    struct CwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter() -> Self {
+            let lock = crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    struct HerdingWorkerEnv {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl HerdingWorkerEnv {
+        fn on() -> Self {
+            let lock = crate::hooks::herding_env_lock();
+            let prior = std::env::var_os("BEE_HERDING_WORKER");
+            unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+            Self { _lock: lock, prior }
+        }
+    }
+
+    impl Drop for HerdingWorkerEnv {
+        fn drop(&mut self) {
+            match &self.prior {
+                Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+                None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+            }
+        }
+    }
+
     fn with_activity_age(age_secs: f64) -> Map<String, Value> {
         let at = iso(NOW_MS - age_secs * 1000.0);
         record(&format!(
@@ -846,6 +896,31 @@ mod tests {
     fn session_signal_reads_no_signal_without_an_activity_object() {
         let plain = record("{\"id\":\"s1\",\"last_heartbeat\":\"2026-08-22T00:00:00.000Z\"}");
         assert_eq!(session_signal(&plain, NOW_MS), Some("no_signal"));
+    }
+
+    #[test]
+    fn session_release_from_a_herding_worker_without_a_flag_releases_nothing() {
+        let _cwd = CwdGuard::enter();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(tmp.path().join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        let dir = sessions_dir(tmp.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("leader-1.json"),
+            "{\"id\":\"leader-1\",\"status\":\"open\"}\n",
+        )
+        .unwrap();
+
+        let env = HerdingWorkerEnv::on();
+        let code = run_session_release(Flags(Vec::new()), true, Instant::now());
+        drop(env);
+
+        assert_eq!(code.map(|c| format!("{c:?}")), Some(format!("{:?}", ExitCode::SUCCESS)));
+        let record = std::fs::read_to_string(dir.join("leader-1.json")).unwrap();
+        assert!(!record.contains("released"), "the leader record must stay untouched: {record}");
+        assert!(!record.contains("closed"), "the leader record must stay untouched: {record}");
     }
 
     /// A finished session carries NO signal — `None`, so callers emit null
