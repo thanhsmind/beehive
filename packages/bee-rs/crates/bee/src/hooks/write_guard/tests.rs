@@ -6208,3 +6208,98 @@ use std::process::ExitCode;
         assert!(!e_sib.stderr.contains("open a session"), "{}", e_sib.stderr);
         assert!(!e_sib.stderr.contains("bee worktree merge"), "{}", e_sib.stderr);
     }
+
+    fn herded(payload: Value, cwd: &Path) -> Emit {
+        let mut body = match payload {
+            Value::Object(m) => m,
+            _ => panic!("payload must be an object"),
+        };
+        body.insert("cwd".into(), Value::String(cwd.to_string_lossy().into_owned()));
+        let stdin = jsjson::stringify(&Value::Object(body));
+        with_worker_env(Some("1"), || {
+            let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
+            emit_for(&ctx)
+        })
+    }
+
+    fn seed_herded_siblings(root: &Path, count: usize) {
+        for n in 0..count {
+            add_live_session(root, &format!("sib-{n}"));
+        }
+    }
+
+    #[test]
+    fn herded_worker_guard_denies_git_stash_with_two_live_workers() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let e = herded(bash("git stash push -q -m x"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee concurrent-worker git guard"), "{}", e.stderr);
+        assert!(e.stderr.contains("`git stash` is refused"), "{}", e.stderr);
+        assert!(e.stderr.contains("2 workers are live in this checkout"), "{}", e.stderr);
+        assert!(e.stderr.contains("FIX:"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_allows_readonly_and_path_scoped_commits() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        for cmd in ["git status", "git diff", "git log --oneline -3"] {
+            let e = herded(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        let scoped = herded(bash("git commit -m m -- a.rs"), &fx.root);
+        assert_eq!(scoped.code, 0, "{}", scoped.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_allows_a_solo_worker_to_stash() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 1);
+        let e = herded(bash("git stash push -q -m x"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_runs_no_check_but_the_whole_tree_one() {
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let e = herded(edit(".bee/state.json"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        assert!(e.stderr.is_empty(), "{}", e.stderr);
+        assert!(e.stdout.is_empty(), "{}", e.stdout);
+        let shell = herded(bash("printf x > .bee/state.json"), &fx.root);
+        assert_eq!(shell.code, 0, "{}", shell.stderr);
+    }
+
+    #[test]
+    fn herded_worker_guard_deny_reaches_the_real_hook_entry_point() {
+        use std::ffi::OsString;
+        let fx = build_git_fixture("swarming");
+        seed_herded_siblings(&fx.root, 2);
+        let stdin = |payload: Value| {
+            let mut body = match payload {
+                Value::Object(m) => m,
+                _ => panic!("payload must be an object"),
+            };
+            body.insert(
+                "cwd".into(),
+                Value::String(fx.root.to_string_lossy().into_owned()),
+            );
+            jsjson::stringify(&Value::Object(body))
+        };
+        with_worker_env(Some("1"), || {
+            let args = vec![OsString::from("hook"), OsString::from("write-guard")];
+            let payload = stdin(bash("git stash push -q -m x"));
+            let mut feed = || payload.clone().into_bytes();
+            let code = crate::hooks::try_native_with(&args, &mut feed)
+                .expect("bee hook write-guard is a hook invocation");
+            assert_eq!(code, ExitCode::from(2), "stash must be refused");
+
+            let allow = stdin(edit("src/app.rs"));
+            let mut feed = || allow.clone().into_bytes();
+            let code = crate::hooks::try_native_with(&args, &mut feed)
+                .expect("bee hook write-guard is a hook invocation");
+            assert_ne!(code, ExitCode::from(2), "an Edit call must stay allowed");
+        });
+    }
