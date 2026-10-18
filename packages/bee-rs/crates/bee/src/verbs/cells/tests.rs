@@ -6326,6 +6326,85 @@ use std::time::Instant;
         );
     }
 
+    fn cap_flags_report_file(id: &str, report_file: Option<&str>) -> CapFlags {
+        cap_flags_with_report_file(cap_flags_report(id, None), report_file, false)
+            .expect("a readable report file fills the cap's report")
+    }
+
+    #[test]
+    fn report_file_caps_with_the_files_report_exactly_as_report_would() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf1", &cell("ois-rf1", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+        let path = path.to_str().unwrap();
+
+        let (parsed, _) = rsv::parse_flags(&["--id", "ois-rf1", "--report-file", path]).unwrap();
+        assert!(
+            rsv::keys_known(&parsed, &CAP_FLAGS) && rsv::keys_known(&parsed, &FINISH_FLAGS),
+            "--report-file is a declared flag on both cap and finish"
+        );
+        let from_flags = cap_flags_from(&parsed).expect("the parsed flags reach the cap door");
+        assert!(from_flags.report.is_none(), "the parse site leaves --report unset");
+
+        let flags = cap_flags_report_file("ois-rf1", Some(path));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"],
+            serde_json::from_str::<Value>(VALID_REPORT).unwrap(),
+            "the file's report lands on trace.report exactly as --report's own bytes would"
+        );
+    }
+
+    #[test]
+    fn report_file_and_report_together_are_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf2", &cell("ois-rf2", "claimed", "f", json!([])));
+
+        let path = root.join("report.json");
+        std::fs::write(&path, VALID_REPORT).unwrap();
+
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf2", Some(VALID_REPORT)),
+            Some(path.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains("--report and --report-file are exclusive"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "ois-rf2").ok().unwrap().unwrap();
+        assert_eq!(
+            after_norm.get("status"),
+            Some(&json!("claimed")),
+            "a refused cap writes nothing"
+        );
+    }
+
+    #[test]
+    fn report_file_that_cannot_be_read_refuses_naming_the_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "ois-rf3", &cell("ois-rf3", "claimed", "f", json!([])));
+
+        let missing = root.join("no-such-report.json");
+        let refusal = thrown(cap_flags_with_report_file(
+            cap_flags_report("ois-rf3", None),
+            Some(missing.to_str().unwrap()),
+            false,
+        ));
+        assert!(
+            refusal.contains(missing.to_str().unwrap()),
+            "the refusal names the unreadable path: {refusal}"
+        );
+    }
+
     // ══ proof-honesty D4 (decision f4261145) — optional baseline on cap report ══
 
     /// Decision 7bd47edd: the baseline is verify evidence, so releasing a cell

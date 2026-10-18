@@ -32,7 +32,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 16] = [
+pub(crate) const CAP_FLAGS: [&str; 17] = [
     "id",
     "outcome",
     "files",
@@ -45,13 +45,14 @@ pub(crate) const CAP_FLAGS: [&str; 16] = [
     "commit-pending",
     "inline-reason",
     "report",
+    "report-file",
     "sync-ack",
     "mistake",
     "no-mistakes",
     "fix-at",
 ];
 
-pub(crate) const FINISH_FLAGS: [&str; 19] = [
+pub(crate) const FINISH_FLAGS: [&str; 20] = [
     "id",
     "outcome",
     "files",
@@ -64,6 +65,7 @@ pub(crate) const FINISH_FLAGS: [&str; 19] = [
     "commit-pending",
     "inline-reason",
     "report",
+    "report-file",
     "sync-ack",
     "mistake",
     "no-mistakes",
@@ -193,6 +195,22 @@ pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&
             && matches!(w.get("nickname"), Some(Value::String(n)) if n == worker)
             && matches!(w.get("cell"), Some(Value::String(c)) if c == id)
     }))
+}
+
+pub(crate) fn cap_flags_with_report_file(
+    mut cap_flags: CapFlags,
+    file: Option<&str>,
+    finish: bool,
+) -> MR<CapFlags> {
+    let Some(file) = file else { return Ok(cap_flags) };
+    if cap_flags.report.is_some() {
+        return Err(Fail::Thrown(format!(
+            "{}: --report and --report-file are exclusive (FIX: pass one of them)",
+            if finish { "cells finish" } else { "cells cap" }
+        )));
+    }
+    cap_flags.report = Some(read_file_text(file, "report")?);
+    Ok(cap_flags)
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
@@ -1223,14 +1241,23 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
     }
     let cap_flags = cap_flags_from(&flags)?;
     let deviations_file = opt_string_flag(&flags, "deviations-file")?;
+    let report_file = opt_string_flag(&flags, "report-file")?;
     let cap_flags_owned = cap_flags;
 
     if finish {
-        return run_finish("cells finish", use_json, t0, cap_flags_owned, deviations_file);
+        return run_finish(
+            "cells finish",
+            use_json,
+            t0,
+            cap_flags_owned,
+            deviations_file,
+            report_file,
+        );
     }
 
     dispatch("cells cap", use_json, t0, move |ctx| {
-        let mut cap_flags = cap_flags_owned;
+        let mut cap_flags =
+            cap_flags_with_report_file(cap_flags_owned, report_file.as_deref(), false)?;
         let root = ctx.root.clone();
         if let Some(file) = &deviations_file {
             if !file.is_empty() {
@@ -1271,6 +1298,7 @@ fn run_finish(
     t0: Instant,
     cap_flags_owned: CapFlags,
     deviations_file: Option<String>,
+    report_file: Option<String>,
 ) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let roots = match resolve_store_root_worktree(&cwd) {
@@ -1291,7 +1319,10 @@ fn run_finish(
         drift_hint: drift.hint,
     };
     let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-    let out = finish_cap_and_release(&ctx.root, topo_ref, cap_flags_owned, deviations_file.as_deref());
+    let out = cap_flags_with_report_file(cap_flags_owned, report_file.as_deref(), true)
+        .and_then(|cap_flags| {
+            finish_cap_and_release(&ctx.root, topo_ref, cap_flags, deviations_file.as_deref())
+        });
     rsv::finish(&ctx, to_r2(out))
 }
 

@@ -816,7 +816,16 @@ mod tests {
         // the same reflection — what to have done instead — and a layer is
         // not an instead. `--severity` and `--type` (backlog.add) rank and
         // shape a row; neither says where a fix belongs.
-        const PINNED_FLAG_COUNT: usize = 227;
+        // 227 -> 228 (open-issues-sweep ois-10, D12 #102): `cells.cap` and
+        // `cells.finish` gained `--report-file`, a PATH to a file holding the
+        // same raw report string `--report` carries. Checked first:
+        // `--deviations-file` also names a path, but to a list of deviations
+        // (JSON array or newline text), never to the five-key worker Result
+        // form; `--report` names the report itself as an inline argument, and
+        // the whole point of this spelling is that the value never rides an
+        // argument (a host worktree guard refuses the word bash). Neither is
+        // "the report, read from a path" — `--report-file` is new.
+        const PINNED_FLAG_COUNT: usize = 228;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
