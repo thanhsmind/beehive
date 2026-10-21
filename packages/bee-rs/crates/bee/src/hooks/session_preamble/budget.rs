@@ -46,12 +46,14 @@ use crate::verbs::state_group::session_binding;
 // never a list that grows. Everything past the cap is named as a count and
 // left where it can be fetched. `the_preamble_stays_inside_its_budget` pins
 // the whole block against a deliberately pathological store.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;
+
 /// Every section switched on at once, over a pathological store, must fit
-/// here. Measured: 11,390 bytes before the caps on this repo, 4,841 after.
-/// csc-1 then added the `### Command surface` section — fixed-size (bounded
-/// on its own by `COMMAND_SURFACE_BUDGET_CHARS`, never by the store) rather
-/// than store-shaped, but always on, so the ceiling below rose with it: the
-/// same pathological fixture now measures ~12,666 bytes.
+/// here: the whole session-start stdout, belt line and intent anchor included.
+/// Claude Code moves hook output over HOST_INLINE_LIMIT_CHARS out of context,
+/// so the budget sits below it and `build_session_preamble_within` drops the
+/// optional sections in DROPPABLE order until the render fits (token-thrift).
 ///
 /// NOT the law decision `8f63adb4` (budget-fence-removal D1) abolished. That
 /// one forbids a standing size ceiling on bee's AUTHORED INSTRUCTION TEXT —
@@ -61,8 +63,7 @@ use crate::verbs::state_group::session_binding;
 /// `knowledge context --budget`, which that feature's own boundary listed as
 /// out of scope and explicitly kept. Nobody edits prose to satisfy it; it
 /// bounds how much of the STORE the renderer is allowed to paste.
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const PREAMBLE_BUDGET_BYTES: usize = 14336;
+pub(crate) const PREAMBLE_BUDGET_BYTES: usize = 9500;
 
 pub(crate) const ORPHAN_FEATURES_SHOWN: usize = 3;
 
@@ -443,12 +444,12 @@ fn active_record(
 }
 
 /// D4 (wayfinding-flow, docs/history/wayfinding-flow/CONTEXT.md): open
-/// discovery maps under `docs/discovery/` — one line per effort naming its
-/// frontier ticket count, plus one line per MAP.md this scan could not
-/// read. Same "empty means silent" shape as `promote_proposal_lines` /
+/// discovery maps under `docs/discovery/` — one line per effort that has a
+/// frontier ticket, one count line folding every effort that has none
+/// (token-thrift D3), plus one line per MAP.md this scan could not read.
+/// Same "empty means silent" shape as `promote_proposal_lines` /
 /// `reclaimable_worktree_lines` just above: no `docs/discovery/` at all, or
-/// every effort directory empty of both efforts and unreadable maps, prints
-/// nothing.
+/// every effort directory empty of both, prints nothing.
 fn open_maps_lines(root: &Path) -> Vec<String> {
     let (efforts, unreadable) = crate::verbs::discovery::scan_discovery(root);
     if efforts.is_empty() && unreadable.is_empty() {
@@ -456,9 +457,17 @@ fn open_maps_lines(root: &Path) -> Vec<String> {
     }
     let mut lines = Vec::new();
     for e in &efforts {
+        if e.frontier > 0 {
+            lines.push(format!(
+                "### Open discovery map(s): {} — {} frontier ticket(s)",
+                e.name, e.frontier
+            ));
+        }
+    }
+    let folded = efforts.iter().filter(|e| e.frontier == 0).count();
+    if folded > 0 {
         lines.push(format!(
-            "### Open discovery map(s): {} — {} frontier ticket(s)",
-            e.name, e.frontier
+            "### Open discovery map(s): {folded} with no frontier ticket — bee discovery list"
         ));
     }
     for p in &unreadable {
@@ -485,6 +494,90 @@ pub fn build_session_preamble_with_runtime(
     handoff_outcome: Option<&HandoffOutcome>,
     runtime: &str,
 ) -> String {
+    build_session_preamble_within(
+        root,
+        session_id,
+        handoff_outcome,
+        runtime,
+        PREAMBLE_BUDGET_BYTES,
+    )
+}
+
+const TRAILER_LINE: &str = "Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive.";
+
+const DROPPABLE: [(&str, &str); 4] = [
+    ("Recent decisions", ".bee/bin/bee status --json"),
+    ("Critical patterns (digest)", "docs/knowledge/index.md"),
+    ("Command surface", ".bee/bin/bee --help --names"),
+    ("Project map", "docs/knowledge/index.md"),
+];
+
+fn fit_blocks(
+    lines: &[String],
+    blocks: &[(&str, usize, usize)],
+    split_at: usize,
+    budget_bytes: usize,
+) -> String {
+    let mut dropped: Vec<&str> = Vec::new();
+    loop {
+        let text = compose_with_drops(lines, blocks, &dropped, split_at);
+        if text.len() <= budget_bytes {
+            return text;
+        }
+        let Some((name, _)) = DROPPABLE.iter().find(|(name, _)| !dropped.contains(name)) else {
+            return text;
+        };
+        dropped.push(name);
+    }
+}
+
+fn compose_with_drops(
+    lines: &[String],
+    blocks: &[(&str, usize, usize)],
+    dropped: &[&str],
+    split_at: usize,
+) -> String {
+    let mut skip = vec![false; lines.len()];
+    for (name, start, end) in blocks {
+        if dropped.contains(name) {
+            for slot in skip.iter_mut().take(*end).skip(*start) {
+                *slot = true;
+            }
+        }
+    }
+    let mut out: Vec<&str> = Vec::new();
+    for (i, line) in lines.iter().enumerate().take(split_at) {
+        if !skip[i] {
+            out.push(line);
+        }
+    }
+    let omitted = if dropped.is_empty() {
+        None
+    } else {
+        let named: Vec<String> = DROPPABLE
+            .iter()
+            .filter(|(name, _)| dropped.contains(name))
+            .map(|(name, fetch)| format!("{name} → {fetch}"))
+            .collect();
+        Some(format!("### Omitted to fit the host limit: {}", named.join("; ")))
+    };
+    if let Some(omitted) = omitted.as_deref() {
+        out.push("");
+        out.push(omitted);
+    }
+    for line in lines.iter().skip(split_at) {
+        out.push(line);
+    }
+    out.join("\n")
+}
+
+pub fn build_session_preamble_within(
+    root: &Path,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+    budget_bytes: usize,
+) -> String {
     let runtime = if crate::verbs::drivers::DISPATCH_RUNTIMES.contains(&runtime) {
         runtime
     } else {
@@ -504,6 +597,7 @@ pub fn build_session_preamble_with_runtime(
     // is the legacy branch — orientation never fails a session.
     let bundle = bundle_mode(root);
     let mut lines: Vec<String> = Vec::new();
+    let mut blocks: Vec<(&'static str, usize, usize)> = Vec::new();
 
     lines.push(format!("## bee v{BEE_VERSION}"));
     lines.push(onboarding_line(onboarding.as_ref()));
@@ -678,8 +772,10 @@ pub fn build_session_preamble_with_runtime(
     // after Standard commands and before Doc links, never appended at the
     // end: the closing trailer's exact bytes are pinned by
     // session_preamble/tests.rs (`ends_with`).
+    let surface_start = lines.len();
     lines.push(String::new());
     lines.extend(command_surface_section());
+    blocks.push(("Command surface", surface_start, lines.len()));
 
     // doc-viewer-links (decision 4205835b): rendered only when the key
     // resolves — an unset doc_viewer leaves the preamble byte-identical to
@@ -702,8 +798,10 @@ pub fn build_session_preamble_with_runtime(
         lines.extend(knowledge);
     }
 
+    let project_map_start = lines.len();
     lines.push(String::new());
     lines.extend(project_map_lines(root, bundle));
+    blocks.push(("Project map", project_map_start, lines.len()));
 
     // D11: capture-mode spine. okf-integration-close-f4 D3: the nudge names
     // the RESOLVED target rather than hardcoding docs/specs/.
@@ -815,13 +913,16 @@ pub fn build_session_preamble_with_runtime(
     // record's feature unconditionally.
     let bound_feature = active.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty());
     if let Some(digest) = critical_patterns_digest(root, PATTERN_DIGEST_LINES, bundle, bound_feature) {
+        let digest_start = lines.len();
         lines.push(String::new());
         lines.push("### Critical patterns (digest)".to_string());
         lines.extend(digest);
+        blocks.push(("Critical patterns (digest)", digest_start, lines.len()));
     }
 
     let decisions = active_decisions(root, Some(3));
     if !decisions.is_empty() {
+        let decisions_start = lines.len();
         lines.push(String::new());
         lines.push("### Recent decisions".to_string());
         for event in &decisions {
@@ -840,11 +941,13 @@ pub fn build_session_preamble_with_runtime(
                 tpl(vget(event, "date"))
             ));
         }
+        blocks.push(("Recent decisions", decisions_start, lines.len()));
     }
 
+    let split_at = lines.len();
     lines.push(String::new());
     // CUTOVER wording divergence: inject.mjs:583 spelled the command
     // `node .bee/bin/bee.mjs status --json`. Everything else is unchanged.
-    lines.push("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive.".to_string());
-    lines.join("\n")
+    lines.push(TRAILER_LINE.to_string());
+    fit_blocks(&lines, &blocks, split_at, budget_bytes)
 }
