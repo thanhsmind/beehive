@@ -735,6 +735,9 @@
     "contract:herded-worker-tree-guard",
     "release-dirt",
     "token-thrift",
+    "contract:session-preamble-budget",
+    "contract:dispatch-door-lines",
+    "contract:orient-promote-blocker",
     "contract:preamble-promote-section"
   ]
 }
