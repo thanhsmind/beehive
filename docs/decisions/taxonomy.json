@@ -733,6 +733,8 @@
     "contract:unclaim-claim-row",
     "open-issues-sweep",
     "contract:herded-worker-tree-guard",
-    "release-dirt"
+    "release-dirt",
+    "token-thrift",
+    "contract:preamble-promote-section"
   ]
 }
