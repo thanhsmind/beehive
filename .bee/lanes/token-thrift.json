@@ -1,0 +1,714 @@
+{
+  "schema_version": "1.0",
+  "feature": "token-thrift",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"token-thrift\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-21T04:45:31.821Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Tôi đang lấy lại lệnh giao việc cho hai phần việc đầu tiên.",
+    "asked_at": "2026-10-21T04:51:48.933Z",
+    "session": "48772102-7614-4853-aa3b-034ee7a935a1"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 7,
+    "rationale": null,
+    "updated_at": "2026-10-21T04:46:04.770Z",
+    "feature": "token-thrift"
+  },
+  "gate_preview": {
+    "feature": "token-thrift",
+    "plan_sha256": "4563f6090b01a1d98d4c63ef25d78c3e312a93542e55deec51dafe6d0af95092",
+    "previewed_at": "2026-10-21T04:50:25.433Z",
+    "cells": [
+      {
+        "id": "tt-1",
+        "feature": "token-thrift",
+        "title": "Fit the session preamble under the host inline limit",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Step 0, before any other change: in a scratch test, render the pathological fixture of `the_preamble_stays_inside_its_budget_however_big_the_store_gets` with Recent decisions, Critical patterns (digest), Command surface and Project map removed and print its byte length; if it is over 9500, stop and return [BLOCKED] with the measured size per section. Remove the scratch test after. In budget.rs: (1) D1: add `pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;` and set `PREAMBLE_BUDGET_BYTES` to 9500; update the doc lines above the constant to state the Claude Code inline limit (hook output over 10,000 characters is moved to a file with a 2 KB preview) and drop the old measured numbers that no longer hold. Doc lines are `///` on items only where the file already uses them; add no new `//` comments. Make PREAMBLE_BUDGET_BYTES used outside tests (remove its `cfg_attr(not(test), allow(dead_code))`) because the guard below reads it. (2) D3: change `open_maps_lines` so efforts with `frontier > 0` keep today's line `### Open discovery map(s): {name} — {frontier} frontier ticket(s)`, and all efforts with frontier 0 fold into ONE line `### Open discovery map(s): {n} with no frontier ticket — bee discovery list`; the unreadable lines stay as they are. (3) D2: in `build_session_preamble_with_runtime`, build the sections Recent decisions, Critical patterns (digest), Command surface and Project map as separately removable blocks (each block = its blank separator line plus its lines), keep today's order in the output, and after assembly, while the joined text (including the final trailer line) is longer than PREAMBLE_BUDGET_BYTES bytes, remove the next block in this order: Recent decisions, Critical patterns (digest), Command surface, Project map. When at least one block was removed, insert, right before the blank line that precedes the closing trailer, a blank line and the line `### Omitted to fit the host limit: ` followed by one entry per dropped section, joined by `; `, each naming where to fetch it: `Recent decisions → .bee/bin/bee status --json`, `Critical patterns → docs/knowledge/index.md`, `Command surface → .bee/bin/bee --help --names`, `Project map → docs/knowledge/index.md`. A dropped block takes its blank separator line with it. Never remove any other section (Doc links, knowledge context and discovery maps stay). When nothing is over budget the output must be byte-identical to today except for the D3 change. (4) The budget bounds the WHOLE hook stdout, not only the preamble: add `pub fn build_session_preamble_within(root, session_id, handoff_outcome, runtime, budget_bytes: usize)` that holds the logic, and make `build_session_preamble_with_runtime` call it with PREAMBLE_BUDGET_BYTES. In session_init.rs, compute the belt line (`belt_contract_line`) and the intent anchor (`intent_lead_block`) BEFORE the body, and call the preamble builder with `PREAMBLE_BUDGET_BYTES.saturating_sub(<belt bytes + anchor bytes + the \"\\n\\n\" separators actually used>)`; the output order (belt, anchor, body) and bytes stay the same as today when nothing is over budget. The compact capsule path (`build_compact_capsule_with_runtime`) is unchanged. In tests.rs: keep `the_preamble_stays_inside_its_budget_however_big_the_store_gets` and its content asserts; add asserts that the text contains `### Omitted to fit the host limit:` and that `PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS`. Add tests: over-budget drops follow the order (with a budget that forces exactly one drop, only Recent decisions is gone and named; with a tighter one, Recent decisions and Critical patterns are gone and Command surface stays); a dropped section's heading is absent from the text; the composed session-init output for a `resume` start with an intent anchor of about 1500 characters on the pathological store is at most 9500 bytes; a quiet repo renders no Omitted line; the existing tests that assert Command surface, Critical patterns or Recent decisions are present (tests.rs near 340-345, 468-469, 1394) stay green; three discovery maps with 0 frontier and one with 2 render one fold line `### Open discovery map(s): 3 with no frontier ticket — bee discovery list` plus the one map's own line; the existing discovery-map tests near lines 1420-1430 stay green. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_init",
+        "must_haves": {
+          "truths": [
+            "PREAMBLE_BUDGET_BYTES is 9500 and a test asserts it is below HOST_INLINE_LIMIT_CHARS",
+            "the pathological store renders at most 9500 bytes and still names HANDOFF, both debt counts and doc links",
+            "an over-budget render names every dropped section in one Omitted line before the trailer",
+            "a quiet repo renders no Omitted line",
+            "the whole session-init stdout on a resume with a long intent anchor stays at most 9500 bytes",
+            "each Omitted entry names its own fetch path",
+            "zero-frontier maps fold into one count line; a map with frontier tickets keeps its own line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+              "substantive": "budget constants, drop guard, map fold"
+            }
+          ],
+          "key_links": [
+            "build_session_preamble_with_runtime applies the drop guard before it returns"
+          ],
+          "prohibitions": [
+            "No section other than the four named may be dropped",
+            "No change to the closing trailer text",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-2",
+        "feature": "token-thrift",
+        "title": "Group dispatch door roles by target",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tt-1"
+        ],
+        "decisions": [
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "In model_guard.rs `dispatch_door_lines` (near line 542): keep the first line and the last `- open set:` line unchanged. Replace the per-role lines with one line per distinct rendered target from `role_slot_display`, in the order each target first appears, shaped `- {rendered}: {role1}, {role2}, ...` with roles in their existing order, and remove the 60-character truncation. `- none configured` stays when there are no roles. Update every test that pins the old shape: model_guard.rs `assert_eq!` pins near 3692-3695 and 3745 and the list near 3730; rewrite `dispatch_door_renders_all_18_roles_under_60_chars` (near 4122; it checks `- {expected} → ` at 4169 and the 60-char cap at 4175) so it asserts every one of the 18 roles appears in exactly one grouped line and no line carries `…`, and rename it to match; compaction.rs pins near 1762-1764; session_preamble/tests.rs pins near 1460 (the cut text `(herding: agy-flas…`), 1461, 1497-1509, 1524-1527, 1542-1545, 1564-1566, 1584, 1585, 1599 and 1632. Run `rg -n ' → ' packages/bee-rs/crates/bee/src/hooks` after the change and fix any remaining pin of the old door shape. Assert the new grouped line, for example `- opus (native): review` or a line that starts with `- opus (native): ` and contains `design`. Add one test where two roles share a target and one long herding target renders in full on one line with both role names and no `…`. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee compaction && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "the dispatch door prints one line per distinct target listing all its roles",
+            "no dispatch door line is cut with an ellipsis",
+            "the compaction re-inject prints the same grouped lines"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+              "substantive": "grouped dispatch_door_lines and its tests"
+            }
+          ],
+          "key_links": [
+            "compaction and the session preamble both call dispatch_door_lines"
+          ],
+          "prohibitions": [
+            "No change to the prepare command line or the open set line",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-3",
+        "feature": "token-thrift",
+        "title": "Cap the promote-proposal blocker in orient",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "In orient.rs, the promote-proposal blocker (near line 506): add `const PROMOTE_PROPOSALS_SHOWN: usize = 3;`. Name only the first PROMOTE_PROPOSALS_SHOWN proposals (same order as today) in the `{named}` part and in the clear-command part; when more exist, append `; +N more` to the named part (N = total - shown). The count `{} feature(s)` stays the total. With 3 or fewer proposals the line is byte-identical to today, so the existing test near tests.rs:1246 stays green. Add a test with 5 proposals: the line starts with `promote proposal unapplied: 5 feature(s) — `, names exactly 3 features, contains `+2 more`, and carries exactly 3 clear commands. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full",
+        "must_haves": {
+          "truths": [
+            "orient names at most 3 promote proposals and states +N more",
+            "the feature count stays the total",
+            "3 or fewer proposals render exactly as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+              "substantive": "capped promote blocker"
+            }
+          ],
+          "key_links": [
+            "the blocker reads unapplied_promote_proposals once"
+          ],
+          "prohibitions": [
+            "No change to other blocker lines",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-4",
+        "feature": "token-thrift",
+        "title": "Document the token economy of injected context",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "tt-1",
+          "tt-2",
+          "tt-3"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Write a new concept in the frontmatter shape and style of the other files in docs/knowledge/areas/hook-runtime/ (ASD-STE100, short sentences). Content: bee does not own the host request, so it saves tokens by what it injects and prints; the Claude Code inline limit (10,000 characters; larger hook output goes to a file with a 2 KB preview) and why PREAMBLE_BUDGET_BYTES is 9500; the drop order and the Omitted line; zero-frontier map fold; the grouped dispatch door; the capped orient promote blocker; what was already in place (per-turn reminder deduped by hash with a 30-minute re-inject in hooks/prompt_context.rs, append-only per-turn text keeps the cached prefix, each cell runs in a fresh dispatched worker); and the boundary: budgets bind generated payloads only, never authored instruction text (decision 8f63adb4-de70-424e-b082-1f4c5ec4b693). State that the budget binds the whole session-start hook stdout (belt line, intent anchor and preamble) on every runtime, because the builder is shared and the smallest host limit sets it; the compact capsule is not budgeted yet. Each Omitted entry names its own fetch path. In model-roles-and-escalation.md, replace the statement that door lines are at most 60 characters per line (near line 161) with the grouped shape: one line per target, roles in full. Out of scope: trimming host history, wait timing tuned to cache TTL. Pointers: hooks/session_preamble/budget.rs, hooks/model_guard.rs, hooks/prompt_context.rs, verbs/status_full/orient.rs, docs/history/token-thrift/CONTEXT.md. Run `.bee/bin/bee knowledge check` if it exists and fix what it reports for this file.",
+        "verify": "rg -n 'HOST_INLINE_LIMIT_CHARS|9500|Omitted to fit|8f63adb4|should_inject' docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "must_haves": {
+          "truths": [
+            "the concept names the host limit, the budget, the drop order and the decision boundary",
+            "Pointers list budget.rs, model_guard.rs, prompt_context.rs and orient.rs"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+              "substantive": "the concept"
+            }
+          ],
+          "key_links": [
+            "the concept cites decision 8f63adb4"
+          ],
+          "prohibitions": [
+            "No code comments added anywhere"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tt-1 to tt-3 change Rust renderers and their tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tt-4 writes the knowledge concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-21T04:50:29.776Z",
+    "feature": "token-thrift",
+    "newest_decision_id": "a87285d7-ccaf-4d7a-92de-98b736fb8529",
+    "plan_sha256": "4563f6090b01a1d98d4c63ef25d78c3e312a93542e55deec51dafe6d0af95092",
+    "advisor": "hat wave: hat-facts-gaps, hat-alternatives, hat-user-impact (opus)",
+    "digest_head": "# Hat wave synthesis — token-thrift\n\nThree seats on standard work: hat-facts-gaps, hat-alternatives,\nhat-user-impact (opus each). The leader made the synthesis.\n\n## Findings taken into the plan\n\n| # | Seat | Finding | Change to plan |\n|---|------|---------|----------------|\n| 1 | alternatives | The host counts the whole session-start stdout (belt line + intent anchor + preamble). On `resume` the anchor has no cap (`hooks/session_init.rs:118-131`, `:186-191`). A 9,500-byte preamble alone does not"
+  },
+  "approved_cell_packet": {
+    "feature": "token-thrift",
+    "plan_sha256": "4563f6090b01a1d98d4c63ef25d78c3e312a93542e55deec51dafe6d0af95092",
+    "previewed_at": "2026-10-21T04:50:25.433Z",
+    "cells": [
+      {
+        "id": "tt-1",
+        "feature": "token-thrift",
+        "title": "Fit the session preamble under the host inline limit",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Step 0, before any other change: in a scratch test, render the pathological fixture of `the_preamble_stays_inside_its_budget_however_big_the_store_gets` with Recent decisions, Critical patterns (digest), Command surface and Project map removed and print its byte length; if it is over 9500, stop and return [BLOCKED] with the measured size per section. Remove the scratch test after. In budget.rs: (1) D1: add `pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;` and set `PREAMBLE_BUDGET_BYTES` to 9500; update the doc lines above the constant to state the Claude Code inline limit (hook output over 10,000 characters is moved to a file with a 2 KB preview) and drop the old measured numbers that no longer hold. Doc lines are `///` on items only where the file already uses them; add no new `//` comments. Make PREAMBLE_BUDGET_BYTES used outside tests (remove its `cfg_attr(not(test), allow(dead_code))`) because the guard below reads it. (2) D3: change `open_maps_lines` so efforts with `frontier > 0` keep today's line `### Open discovery map(s): {name} — {frontier} frontier ticket(s)`, and all efforts with frontier 0 fold into ONE line `### Open discovery map(s): {n} with no frontier ticket — bee discovery list`; the unreadable lines stay as they are. (3) D2: in `build_session_preamble_with_runtime`, build the sections Recent decisions, Critical patterns (digest), Command surface and Project map as separately removable blocks (each block = its blank separator line plus its lines), keep today's order in the output, and after assembly, while the joined text (including the final trailer line) is longer than PREAMBLE_BUDGET_BYTES bytes, remove the next block in this order: Recent decisions, Critical patterns (digest), Command surface, Project map. When at least one block was removed, insert, right before the blank line that precedes the closing trailer, a blank line and the line `### Omitted to fit the host limit: ` followed by one entry per dropped section, joined by `; `, each naming where to fetch it: `Recent decisions → .bee/bin/bee status --json`, `Critical patterns → docs/knowledge/index.md`, `Command surface → .bee/bin/bee --help --names`, `Project map → docs/knowledge/index.md`. A dropped block takes its blank separator line with it. Never remove any other section (Doc links, knowledge context and discovery maps stay). When nothing is over budget the output must be byte-identical to today except for the D3 change. (4) The budget bounds the WHOLE hook stdout, not only the preamble: add `pub fn build_session_preamble_within(root, session_id, handoff_outcome, runtime, budget_bytes: usize)` that holds the logic, and make `build_session_preamble_with_runtime` call it with PREAMBLE_BUDGET_BYTES. In session_init.rs, compute the belt line (`belt_contract_line`) and the intent anchor (`intent_lead_block`) BEFORE the body, and call the preamble builder with `PREAMBLE_BUDGET_BYTES.saturating_sub(<belt bytes + anchor bytes + the \"\\n\\n\" separators actually used>)`; the output order (belt, anchor, body) and bytes stay the same as today when nothing is over budget. The compact capsule path (`build_compact_capsule_with_runtime`) is unchanged. In tests.rs: keep `the_preamble_stays_inside_its_budget_however_big_the_store_gets` and its content asserts; add asserts that the text contains `### Omitted to fit the host limit:` and that `PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS`. Add tests: over-budget drops follow the order (with a budget that forces exactly one drop, only Recent decisions is gone and named; with a tighter one, Recent decisions and Critical patterns are gone and Command surface stays); a dropped section's heading is absent from the text; the composed session-init output for a `resume` start with an intent anchor of about 1500 characters on the pathological store is at most 9500 bytes; a quiet repo renders no Omitted line; the existing tests that assert Command surface, Critical patterns or Recent decisions are present (tests.rs near 340-345, 468-469, 1394) stay green; three discovery maps with 0 frontier and one with 2 render one fold line `### Open discovery map(s): 3 with no frontier ticket — bee discovery list` plus the one map's own line; the existing discovery-map tests near lines 1420-1430 stay green. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_init",
+        "must_haves": {
+          "truths": [
+            "PREAMBLE_BUDGET_BYTES is 9500 and a test asserts it is below HOST_INLINE_LIMIT_CHARS",
+            "the pathological store renders at most 9500 bytes and still names HANDOFF, both debt counts and doc links",
+            "an over-budget render names every dropped section in one Omitted line before the trailer",
+            "a quiet repo renders no Omitted line",
+            "the whole session-init stdout on a resume with a long intent anchor stays at most 9500 bytes",
+            "each Omitted entry names its own fetch path",
+            "zero-frontier maps fold into one count line; a map with frontier tickets keeps its own line"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+              "substantive": "budget constants, drop guard, map fold"
+            }
+          ],
+          "key_links": [
+            "build_session_preamble_with_runtime applies the drop guard before it returns"
+          ],
+          "prohibitions": [
+            "No section other than the four named may be dropped",
+            "No change to the closing trailer text",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-2",
+        "feature": "token-thrift",
+        "title": "Group dispatch door roles by target",
+        "lane": "standard",
+        "role": "code",
+        "deps": [
+          "tt-1"
+        ],
+        "decisions": [
+          "D4"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+          "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "In model_guard.rs `dispatch_door_lines` (near line 542): keep the first line and the last `- open set:` line unchanged. Replace the per-role lines with one line per distinct rendered target from `role_slot_display`, in the order each target first appears, shaped `- {rendered}: {role1}, {role2}, ...` with roles in their existing order, and remove the 60-character truncation. `- none configured` stays when there are no roles. Update every test that pins the old shape: model_guard.rs `assert_eq!` pins near 3692-3695 and 3745 and the list near 3730; rewrite `dispatch_door_renders_all_18_roles_under_60_chars` (near 4122; it checks `- {expected} → ` at 4169 and the 60-char cap at 4175) so it asserts every one of the 18 roles appears in exactly one grouped line and no line carries `…`, and rename it to match; compaction.rs pins near 1762-1764; session_preamble/tests.rs pins near 1460 (the cut text `(herding: agy-flas…`), 1461, 1497-1509, 1524-1527, 1542-1545, 1564-1566, 1584, 1585, 1599 and 1632. Run `rg -n ' → ' packages/bee-rs/crates/bee/src/hooks` after the change and fix any remaining pin of the old door shape. Assert the new grouped line, for example `- opus (native): review` or a line that starts with `- opus (native): ` and contains `design`. Add one test where two roles share a target and one long herding target renders in full on one line with both role names and no `…`. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee model_guard && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee compaction && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble",
+        "must_haves": {
+          "truths": [
+            "the dispatch door prints one line per distinct target listing all its roles",
+            "no dispatch door line is cut with an ellipsis",
+            "the compaction re-inject prints the same grouped lines"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+              "substantive": "grouped dispatch_door_lines and its tests"
+            }
+          ],
+          "key_links": [
+            "compaction and the session preamble both call dispatch_door_lines"
+          ],
+          "prohibitions": [
+            "No change to the prepare command line or the open set line",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-3",
+        "feature": "token-thrift",
+        "title": "Cap the promote-proposal blocker in orient",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D5"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "In orient.rs, the promote-proposal blocker (near line 506): add `const PROMOTE_PROPOSALS_SHOWN: usize = 3;`. Name only the first PROMOTE_PROPOSALS_SHOWN proposals (same order as today) in the `{named}` part and in the clear-command part; when more exist, append `; +N more` to the named part (N = total - shown). The count `{} feature(s)` stays the total. With 3 or fewer proposals the line is byte-identical to today, so the existing test near tests.rs:1246 stays green. Add a test with 5 proposals: the line starts with `promote proposal unapplied: 5 feature(s) — `, names exactly 3 features, contains `+2 more`, and carries exactly 3 clear commands. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee status_full",
+        "must_haves": {
+          "truths": [
+            "orient names at most 3 promote proposals and states +N more",
+            "the feature count stays the total",
+            "3 or fewer proposals render exactly as before"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+              "substantive": "capped promote blocker"
+            }
+          ],
+          "key_links": [
+            "the blocker reads unapplied_promote_proposals once"
+          ],
+          "prohibitions": [
+            "No change to other blocker lines",
+            "No code comments"
+          ]
+        }
+      },
+      {
+        "id": "tt-4",
+        "feature": "token-thrift",
+        "title": "Document the token economy of injected context",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [
+          "tt-1",
+          "tt-2",
+          "tt-3"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6"
+        ],
+        "files": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "read_first": [
+          "docs/history/token-thrift/CONTEXT.md",
+          "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+          "docs/knowledge/areas/hook-runtime/write-guard-request-shapes.md",
+          "docs/knowledge/areas/doctrine-layer/model-roles-and-escalation.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+        ],
+        "action": "Write a new concept in the frontmatter shape and style of the other files in docs/knowledge/areas/hook-runtime/ (ASD-STE100, short sentences). Content: bee does not own the host request, so it saves tokens by what it injects and prints; the Claude Code inline limit (10,000 characters; larger hook output goes to a file with a 2 KB preview) and why PREAMBLE_BUDGET_BYTES is 9500; the drop order and the Omitted line; zero-frontier map fold; the grouped dispatch door; the capped orient promote blocker; what was already in place (per-turn reminder deduped by hash with a 30-minute re-inject in hooks/prompt_context.rs, append-only per-turn text keeps the cached prefix, each cell runs in a fresh dispatched worker); and the boundary: budgets bind generated payloads only, never authored instruction text (decision 8f63adb4-de70-424e-b082-1f4c5ec4b693). State that the budget binds the whole session-start hook stdout (belt line, intent anchor and preamble) on every runtime, because the builder is shared and the smallest host limit sets it; the compact capsule is not budgeted yet. Each Omitted entry names its own fetch path. In model-roles-and-escalation.md, replace the statement that door lines are at most 60 characters per line (near line 161) with the grouped shape: one line per target, roles in full. Out of scope: trimming host history, wait timing tuned to cache TTL. Pointers: hooks/session_preamble/budget.rs, hooks/model_guard.rs, hooks/prompt_context.rs, verbs/status_full/orient.rs, docs/history/token-thrift/CONTEXT.md. Run `.bee/bin/bee knowledge check` if it exists and fix what it reports for this file.",
+        "verify": "rg -n 'HOST_INLINE_LIMIT_CHARS|9500|Omitted to fit|8f63adb4|should_inject' docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+        "must_haves": {
+          "truths": [
+            "the concept names the host limit, the budget, the drop order and the decision boundary",
+            "Pointers list budget.rs, model_guard.rs, prompt_context.rs and orient.rs"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md",
+              "substantive": "the concept"
+            }
+          ],
+          "key_links": [
+            "the concept cites decision 8f63adb4"
+          ],
+          "prohibitions": [
+            "No code comments added anywhere"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "tt-1 to tt-3 change Rust renderers and their tests."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride each code cell; the live proof is the leader's."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "tt-4 writes the knowledge concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-21T05:55:39.897Z",
+    "branch": "wt/token-thrift",
+    "worktree_id": "beehive--wt--token-thrift",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
