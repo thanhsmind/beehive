@@ -90,7 +90,10 @@ blocker names three features with their clear commands, then `+N more`. The
 count stays the total. Three or fewer features render the same bytes as
 before. Before, the line named every feature (74 on this repo). The
 preamble's `### Unapplied promote proposal(s)` line has the same cap: it keeps
-the count and the newest path, names at most 3 `bee deferred-queue complete`
+the count and the newest path, names at most 3
+<!-- bee:not-a-deferral: names the clear command, promises no later action -->
+`bee deferred-queue complete`
+<!-- /bee:not-a-deferral -->
 clear commands, then `; +N more` (token-thrift D7).
 
 **Already in place, before this feature:**

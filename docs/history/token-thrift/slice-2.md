@@ -12,7 +12,10 @@ bee hook session-init | wc -c  →  11444
 
 All four droppable sections were gone and the output was still over the
 9,500-byte budget. The `### Unapplied promote proposal(s)` line carried 74
-`bee deferred-queue complete` commands (about 5 KB). D5 capped the same list in
+<!-- bee:not-a-deferral: names the clear command, promises no later action -->
+`bee deferred-queue complete`
+<!-- /bee:not-a-deferral -->
+commands (about 5 KB). D5 capped the same list in
 `bee orient` only; the plan did not see the preamble copy, because the scout
 measured the line with the installed 2.55 plugin, which printed no commands.
 
