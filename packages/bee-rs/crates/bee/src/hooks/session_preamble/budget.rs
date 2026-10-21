@@ -49,12 +49,6 @@ use crate::verbs::state_group::session_binding;
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;
 
-/// Every section switched on at once, over a pathological store, must fit
-/// here: the whole session-start stdout, belt line and intent anchor included.
-/// Claude Code moves hook output over HOST_INLINE_LIMIT_CHARS out of context,
-/// so the budget sits below it and `build_session_preamble_within` drops the
-/// optional sections in DROPPABLE order until the render fits (token-thrift).
-///
 /// NOT the law decision `8f63adb4` (budget-fence-removal D1) abolished. That
 /// one forbids a standing size ceiling on bee's AUTHORED INSTRUCTION TEXT —
 /// skill bodies, AGENTS.md — because a number there makes people trim for
@@ -63,6 +57,12 @@ pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;
 /// `knowledge context --budget`, which that feature's own boundary listed as
 /// out of scope and explicitly kept. Nobody edits prose to satisfy it; it
 /// bounds how much of the STORE the renderer is allowed to paste.
+///
+/// Every section switched on at once, over a pathological store, must fit
+/// here: the whole session-start stdout, belt line and intent anchor included.
+/// Claude Code moves hook output over HOST_INLINE_LIMIT_CHARS out of context,
+/// so the budget sits below it and `build_session_preamble_within` drops the
+/// optional sections in DROPPABLE order until the render fits (token-thrift).
 pub(crate) const PREAMBLE_BUDGET_BYTES: usize = 9500;
 
 pub(crate) const ORPHAN_FEATURES_SHOWN: usize = 3;
