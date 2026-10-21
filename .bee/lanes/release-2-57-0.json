@@ -14,7 +14,12 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-21T07:34:28.037Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Cây làm việc giờ đã sạch. Theo tiền lệ của 2.56.0, tôi tạm đặt skip-worktree cho `broker-heartbeat.json`, rồi chạy release lại với một quyền",
+    "asked_at": "2026-10-21T08:22:46.070Z",
+    "session": "48772102-7614-4853-aa3b-034ee7a935a1"
+  },
   "route": {
     "class": "release",
     "lane": "tiny",
