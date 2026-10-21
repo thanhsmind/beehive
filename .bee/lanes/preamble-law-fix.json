@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"preamble-law-fix\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 91800fd; capture what settled, then bee close --feature preamble-law-fix.",
   "created_at": "2026-10-21T07:38:39.157Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -360,12 +360,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-21T07:38:59.755Z"
-  },
-  "merge_ready": {
-    "since": "2026-10-21T07:42:15.660Z",
-    "branch": "wt/preamble-law-fix",
-    "worktree_id": "beehive--wt--preamble-law-fix",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
