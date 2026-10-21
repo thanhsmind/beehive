@@ -707,6 +707,27 @@ use crate::version::BEE_VERSION;
         assert!(!text.contains("f1 (1 capped"), "{text}");
     }
 
+    #[test]
+    fn five_unapplied_promote_proposals_name_three_clear_commands_and_the_rest_as_a_count() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for f in ["f1", "f2", "f3", "f4", "f5"] {
+            write(
+                root,
+                &format!("docs/history/{f}/promote-proposals.md"),
+                &format!("promote proposal for work item \"{f}\" (docs/history/{f}/CONTEXT.md) — 1 capped cell(s): a-1\nanchor: history — docs/history/{f}/CONTEXT.md\n"),
+            );
+        }
+        let text = render(root);
+        let line = text
+            .lines()
+            .find(|l| l.contains("Unapplied promote proposal"))
+            .unwrap_or_default();
+        assert!(line.starts_with("### Unapplied promote proposal(s): 5 — newest: "), "{line}");
+        assert_eq!(line.matches("bee deferred-queue complete").count(), 3, "{line}");
+        assert!(line.ends_with("; +2 more"), "{line}");
+    }
+
     /// D4/D4a: a granted worktree `bee worktree merge` never reached and
     /// nobody pruned announces itself once the count of reclaimable ids is
     /// MORE than one — "one stale worktree is not news" (plan.md). The line
