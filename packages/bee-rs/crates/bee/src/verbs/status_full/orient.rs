@@ -192,6 +192,8 @@ pub(crate) fn orient_worktree_context(ctx: &mut Ctx, status: &JMap) -> R<Option<
 const CAPTURE_QUEUE_BLOCKER_MIN_PENDING: u64 = 10;
 const CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS: f64 = 7.0;
 
+const PROMOTE_PROPOSALS_SHOWN: usize = 3;
+
 /// The oldest pending stub's `at`, in epoch ms, or NaN when there is none
 /// or it can't be resolved. `cq`'s `ids` array is already sorted
 /// oldest-first by `capture_queue_summary` (records.rs) — this looks the
@@ -505,15 +507,20 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // just above — never gates a phase or changes an exit code.
     let proposals = unapplied_promote_proposals(&ctx.root);
     if !proposals.is_empty() {
-        let named = proposals
+        let shown = &proposals[..proposals.len().min(PROMOTE_PROPOSALS_SHOWN)];
+        let mut named = shown
             .iter()
             .map(|p| format!("{} ({}, {})", p.feature, p.counts, p.path))
             .collect::<Vec<_>>()
             .join("; ");
+        let hidden = proposals.len() - shown.len();
+        if hidden > 0 {
+            named.push_str(&format!("; +{hidden} more"));
+        }
         blockers.push(json!(format!(
             "promote proposal unapplied: {} feature(s) — {named} — after you apply or decide to skip the proposals: {}",
             proposals.len(),
-            proposals
+            shown
                 .iter()
                 .map(|p| p.clear_command.clone())
                 .collect::<Vec<_>>()
