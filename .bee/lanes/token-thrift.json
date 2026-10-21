@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"token-thrift\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at c08e911; reload the product and test \"token-thrift\", then either approve uat (\"bee gate --name uat --approved true --lane token-thrift\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-21T04:45:31.821Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: token-thrift",
-    "asked_at": "2026-10-21T05:57:57.644Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",

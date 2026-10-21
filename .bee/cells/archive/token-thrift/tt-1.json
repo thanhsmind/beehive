@@ -1,0 +1,196 @@
+{
+  "id": "tt-1",
+  "feature": "token-thrift",
+  "title": "Fit the session preamble under the host inline limit",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "da4ccfeb-495d-471d-af2f-80f8cec4d3c0"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+  ],
+  "read_first": [
+    "docs/history/token-thrift/CONTEXT.md",
+    "docs/history/token-thrift/reports/hat-wave-synthesis.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/token-economy-of-injected-context.md"
+  ],
+  "action": "Step 0, before any other change: in a scratch test, render the pathological fixture of `the_preamble_stays_inside_its_budget_however_big_the_store_gets` with Recent decisions, Critical patterns (digest), Command surface and Project map removed and print its byte length; if it is over 9500, stop and return [BLOCKED] with the measured size per section. Remove the scratch test after. In budget.rs: (1) D1: add `pub(crate) const HOST_INLINE_LIMIT_CHARS: usize = 10_000;` and set `PREAMBLE_BUDGET_BYTES` to 9500; update the doc lines above the constant to state the Claude Code inline limit (hook output over 10,000 characters is moved to a file with a 2 KB preview) and drop the old measured numbers that no longer hold. Doc lines are `///` on items only where the file already uses them; add no new `//` comments. Make PREAMBLE_BUDGET_BYTES used outside tests (remove its `cfg_attr(not(test), allow(dead_code))`) because the guard below reads it. (2) D3: change `open_maps_lines` so efforts with `frontier > 0` keep today's line `### Open discovery map(s): {name} — {frontier} frontier ticket(s)`, and all efforts with frontier 0 fold into ONE line `### Open discovery map(s): {n} with no frontier ticket — bee discovery list`; the unreadable lines stay as they are. (3) D2: in `build_session_preamble_with_runtime`, build the sections Recent decisions, Critical patterns (digest), Command surface and Project map as separately removable blocks (each block = its blank separator line plus its lines), keep today's order in the output, and after assembly, while the joined text (including the final trailer line) is longer than PREAMBLE_BUDGET_BYTES bytes, remove the next block in this order: Recent decisions, Critical patterns (digest), Command surface, Project map. When at least one block was removed, insert, right before the blank line that precedes the closing trailer, a blank line and the line `### Omitted to fit the host limit: ` followed by one entry per dropped section, joined by `; `, each naming where to fetch it: `Recent decisions → .bee/bin/bee status --json`, `Critical patterns → docs/knowledge/index.md`, `Command surface → .bee/bin/bee --help --names`, `Project map → docs/knowledge/index.md`. A dropped block takes its blank separator line with it. Never remove any other section (Doc links, knowledge context and discovery maps stay). When nothing is over budget the output must be byte-identical to today except for the D3 change. (4) The budget bounds the WHOLE hook stdout, not only the preamble: add `pub fn build_session_preamble_within(root, session_id, handoff_outcome, runtime, budget_bytes: usize)` that holds the logic, and make `build_session_preamble_with_runtime` call it with PREAMBLE_BUDGET_BYTES. In session_init.rs, compute the belt line (`belt_contract_line`) and the intent anchor (`intent_lead_block`) BEFORE the body, and call the preamble builder with `PREAMBLE_BUDGET_BYTES.saturating_sub(<belt bytes + anchor bytes + the \"\\n\\n\" separators actually used>)`; the output order (belt, anchor, body) and bytes stay the same as today when nothing is over budget. The compact capsule path (`build_compact_capsule_with_runtime`) is unchanged. In tests.rs: keep `the_preamble_stays_inside_its_budget_however_big_the_store_gets` and its content asserts; add asserts that the text contains `### Omitted to fit the host limit:` and that `PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS`. Add tests: over-budget drops follow the order (with a budget that forces exactly one drop, only Recent decisions is gone and named; with a tighter one, Recent decisions and Critical patterns are gone and Command surface stays); a dropped section's heading is absent from the text; the composed session-init output for a `resume` start with an intent anchor of about 1500 characters on the pathological store is at most 9500 bytes; a quiet repo renders no Omitted line; the existing tests that assert Command surface, Critical patterns or Recent decisions are present (tests.rs near 340-345, 468-469, 1394) stay green; three discovery maps with 0 frontier and one with 2 render one fold line `### Open discovery map(s): 3 with no frontier ticket — bee discovery list` plus the one map's own line; the existing discovery-map tests near lines 1420-1430 stay green. No code comments.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_init",
+  "must_haves": {
+    "truths": [
+      "PREAMBLE_BUDGET_BYTES is 9500 and a test asserts it is below HOST_INLINE_LIMIT_CHARS",
+      "the pathological store renders at most 9500 bytes and still names HANDOFF, both debt counts and doc links",
+      "an over-budget render names every dropped section in one Omitted line before the trailer",
+      "a quiet repo renders no Omitted line",
+      "the whole session-init stdout on a resume with a long intent anchor stays at most 9500 bytes",
+      "each Omitted entry names its own fetch path",
+      "zero-frontier maps fold into one count line; a map with frontier tickets keeps its own line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "budget constants, drop guard, map fold"
+      }
+    ],
+    "key_links": [
+      "build_session_preamble_with_runtime applies the drop guard before it returns"
+    ],
+    "prohibitions": [
+      "No section other than the four named may be dropped",
+      "No change to the closing trailer text",
+      "No code comments"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-tt-1",
+    "outcome": "Session-start stdout fits 9500 bytes: named drop guard, folded zero-frontier maps, and the preamble promote line capped at 3 clear commands (live 9224 bytes on this repo)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+    ],
+    "deviations": [
+      "removed the dead #[allow(dead_code)] session_body wrapper in session_init.rs, superseded by session_body_within — found a better route",
+      "escalated onto the session model after the herded worker hit its 30-min ceiling; kept its code and restored the older comments it had rewritten — hit an unforeseen obstacle",
+      "added PROMOTE_CLEAR_COMMANDS_SHOWN = 3 in hooks/session_preamble/render.rs (D7 691fcac4) after the live render measured 11444 bytes: the promote line carried 74 clear commands — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-21T05:55:39.874Z",
+    "behavior_change": false,
+    "verification_evidence": "67 and 24 passed; branch binary rendered bee hook session-init on this repo at 9224 bytes (main before: 11161), Omitted line names Recent decisions and Critical patterns with fetch paths; evidence /mnt/data/Projects/goglbe/beehive/.bee/tmp/evidence/tt-1-live-preamble.txt",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "48772102-7614-4853-aa3b-034ee7a935a1",
+    "verify_command": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_init",
+    "claimed_at": "2026-10-21T05:55:17.772Z",
+    "mistakes": [
+      {
+        "wrong": "the herded worker rewrote older comments to offset the comment baseline and ran out its 30-min ceiling",
+        "better": "the cell action should say: add zero comment lines and leave existing ones as they are",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Session-start stdout fits 9500 bytes: named drop guard, folded zero-frontier maps, and the preamble promote line capped at 3 clear commands (live 9224 bytes on this repo)",
+      "commit": "14456197d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_preamble && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee session_init — green:live — 67 and 24 passed; branch binary rendered bee hook session-init on this repo at 9224 bytes (main before: 11161), Omitted line names Recent decisions and Critical patterns with fetch paths; evidence /mnt/data/Projects/goglbe/beehive/.bee/tmp/evidence/tt-1-live-preamble.txt",
+      "deviations": [
+        "removed the dead #[allow(dead_code)] session_body wrapper in session_init.rs, superseded by session_body_within — found a better route",
+        "escalated onto the session model after the herded worker hit its 30-min ceiling; kept its code and restored the older comments it had rewritten — hit an unforeseen obstacle",
+        "added PROMOTE_CLEAR_COMMANDS_SHOWN = 3 in hooks/session_preamble/render.rs (D7 691fcac4) after the live render measured 11444 bytes: the promote line carried 74 clear commands — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "the herded worker rewrote older comments to offset the comment baseline and ran out its 30-min ceiling — the cell action should say: add zero comment lines and leave existing ones as they are — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "PREAMBLE_BUDGET_BYTES is 9500 and a test asserts it is below HOST_INLINE_LIMIT_CHARS",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "the pathological store renders at most 9500 bytes and still names HANDOFF, both debt counts and doc links",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "an over-budget render names every dropped section in one Omitted line before the trailer",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "a quiet repo renders no Omitted line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "the whole session-init stdout on a resume with a long intent anchor stays at most 9500 bytes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "each Omitted entry names its own fetch path",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "zero-frontier maps fold into one count line; a map with frontier tickets keeps its own line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          }
+        ],
+        "recorded_at": "2026-10-21T05:26:01.919Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      },
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "PREAMBLE_BUDGET_BYTES is 9500 and a test asserts it is below HOST_INLINE_LIMIT_CHARS",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "the pathological store renders at most 9500 bytes and still names HANDOFF, both debt counts and doc links",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "an over-budget render names every dropped section in one Omitted line before the trailer",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "a quiet repo renders no Omitted line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+          },
+          {
+            "requirement": "the whole session-init stdout on a resume with a long intent anchor stays at most 9500 bytes",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_init.rs"
+          },
+          {
+            "requirement": "each Omitted entry names its own fetch path",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "zero-frontier maps fold into one count line; a map with frontier tickets keeps its own line",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          }
+        ],
+        "recorded_at": "2026-10-21T05:55:45.062Z",
+        "recorded_by": "48772102-7614-4853-aa3b-034ee7a935a1",
+        "commit_diff": "checked"
+      }
+    ],
+    "verified_at": null,
+    "baseline": null,
+    "reaction": null,
+    "skipped": null,
+    "unknowns": null,
+    "found": null,
+    "stopped": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-10-21T05:55:17.624Z",
+    "reopened_reason": "Live render on this repo measured 11444 bytes with all four droppable sections gone: the preamble promote-proposal line carried 74 clear commands; tt-1's outcome (fit the host limit) was not met. Decision D7 691fcac4."
+  },
+  "escalate": true
+}

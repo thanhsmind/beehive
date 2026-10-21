@@ -1688,5 +1688,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-18T04:32:52.390Z"
+  },
+  "token-thrift": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-21T07:33:41.277Z"
   }
 }

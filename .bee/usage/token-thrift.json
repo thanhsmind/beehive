@@ -1,0 +1,58 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "token-thrift",
+  "closed_at": "2026-10-21T07:33:41.355Z",
+  "sessions": [
+    {
+      "session_id": "48772102-7614-4853-aa3b-034ee7a935a1",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 498,
+          "output": 127059,
+          "cache_write": 704985,
+          "cache_read": 56332773,
+          "new": 832542,
+          "cached": 56332773,
+          "total": 57165315
+        }
+      },
+      "subagent_models": {
+        "claude-opus-5-5": {
+          "input": 126,
+          "output": 35360,
+          "cache_write": 267581,
+          "cache_read": 3411129,
+          "new": 303067,
+          "cached": 3411129,
+          "total": 3714196
+        }
+      },
+      "subagent_count": 4,
+      "started_ms": 1792555524952,
+      "ended_ms": 1792568018481,
+      "totals": {
+        "new": 1135609,
+        "cached": 59743902,
+        "total": 60879511
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 832542,
+      "cached": 56332773,
+      "total": 57165315
+    },
+    "subagents": {
+      "new": 303067,
+      "cached": 3411129,
+      "total": 3714196
+    },
+    "total": {
+      "new": 1135609,
+      "cached": 59743902,
+      "total": 60879511
+    }
+  }
+}
