@@ -810,7 +810,7 @@ use crate::version::BEE_VERSION;
         // Every optional section ON at once, with the longest real shapes:
         // the two-paragraph bypass banner and this repo's own PATH-prefixed
         // command strings. A budget proved only on a quiet repo is not one.
-        let team = (0..16)
+        let team = (0..40)
             .map(|i| format!("\"role-{i}\":{{\"kind\":\"native\",\"model\":\"opus\"}}"))
             .collect::<Vec<_>>()
             .join(",");
@@ -1670,9 +1670,12 @@ use crate::version::BEE_VERSION;
             ),
             "{text}"
         );
-        assert!(text.contains("- generation → model chosen by the agent (herding: agy-flas…"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(
+            text.contains("- model chosen by the agent (herding: agy-flash): generation"),
+            "{text}"
+        );
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
                 "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
@@ -1707,19 +1710,19 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(
-            text.contains("- generation → claude-3-5-sonnet-20241022 (native)"),
+            text.contains("- claude-3-5-sonnet-20241022 (native): generation"),
             "{text}"
         );
         assert!(
-            text.contains("- review → claude-3-opus-20240229 (native)"),
+            text.contains("- claude-3-opus-20240229 (native): review"),
             "{text}"
         );
         assert!(
-            text.contains("- advisor → claude-3-7-sonnet-20250219 (native)"),
+            text.contains("- claude-3-7-sonnet-20250219 (native): advisor"),
             "{text}"
         );
         assert!(
-            text.contains("- extraction → claude-3-5-haiku-20241022 (native)"),
+            text.contains("- claude-3-5-haiku-20241022 (native): extraction"),
             "{text}"
         );
     }
@@ -1734,10 +1737,9 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet","description":"build and edit code"},"review":"opus","design":{"model":"opus","description":"shape the thing before it is built"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
-        assert!(text.contains("- design → opus (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(!text.contains("build and edit code"), "{text}");
         assert!(!text.contains("shape the thing before it is built"), "{text}");
     }
@@ -1752,10 +1754,9 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet"},"review":"opus","design":{"model":"opus"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
-        assert!(text.contains("- design → opus (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
                 "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
@@ -1774,9 +1775,9 @@ use crate::version::BEE_VERSION;
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(!text.contains("advisor=none"), "an unconfigured role is dropped:\n{text}");
         assert!(!text.contains("Tier slots"), "the retired tier list is gone:\n{text}");
     }
@@ -1794,8 +1795,8 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → opus (native)"), "{text}");
-        assert!(text.contains("- test → haiku (native)"), "{text}");
+        assert!(text.contains("- opus (native): generation, review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction, test"), "{text}");
     }
 
     /// leader-sees-team D4: every configured role is listed; DOOR_ROLES_SHOWN cap is retired.
@@ -1809,7 +1810,11 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(!text.contains("more —"), "{text}");
-        assert!(text.contains("- triage → haiku (native)"), "the 8th role is listed:\n{text}");
+        assert!(
+            text.contains("- haiku (native): extraction, test, docs, migrate, triage"),
+            "the 8th role is listed:\n{text}"
+        );
+        assert!(text.contains("- opus (native): generation, review, design"), "{text}");
     }
 
     /// model-role-split records `effort` as a known NON-delivery, so the door
@@ -1842,7 +1847,7 @@ use crate::version::BEE_VERSION;
         );
 
         let text = render(tmp.path());
-        assert!(text.contains("- generation → opus (native)"), "{text}");
+        assert!(text.contains("- opus (native): generation"), "{text}");
         assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
         assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
     }

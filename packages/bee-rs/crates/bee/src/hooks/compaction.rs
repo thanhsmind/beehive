@@ -1759,9 +1759,9 @@ mod tests {
             ),
             "{text}"
         );
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
                 "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
