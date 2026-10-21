@@ -536,9 +536,8 @@ pub(crate) fn role_slot_display(
 
 /// The dispatch door block — both lines, in ONE place.
 ///
-/// leader-sees-team D1/D4: prints one line per role — `- <role> → <render_role>` —
-/// for EVERY role, no descriptions, each line ≤ 60 characters (truncating the
-/// transport tail with `…` if needed, never the role or model).
+/// token-thrift D4: prints one line per distinct rendered target — `- <render_role>: <role>, <role>`
+/// — in first-appearance order, in full and never cut with `…`, no descriptions.
 pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: &str) -> Vec<String> {
     let roles = role_slot_display(config, runtime);
     let mut lines = vec![
@@ -549,14 +548,15 @@ pub(crate) fn dispatch_door_lines(config: Option<&Map<String, Value>>, runtime: 
     if roles.is_empty() {
         lines.push("- none configured".to_string());
     } else {
+        let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
         for (role, rendered) in roles {
-            let line = format!("- {role} → {rendered}");
-            let line = if line.chars().count() > 60 {
-                format!("{}…", truncate_chars_head(&line, 59))
-            } else {
-                line
-            };
-            lines.push(line);
+            match grouped.iter_mut().find(|(target, _)| *target == rendered) {
+                Some((_, names)) => names.push(role),
+                None => grouped.push((rendered, vec![role])),
+            }
+        }
+        for (rendered, names) in grouped {
+            lines.push(format!("- {rendered}: {}", names.join(", ")));
         }
     }
     lines.push(format!(
@@ -3671,9 +3671,9 @@ mod tests {
     /// never invented. A slot may carry the operator's own sentence, and the
     /// door prints it beside the model. Both halves are asserted on the SAME
     /// leader-sees-team D4: descriptions are omitted at the door and move to team show.
-    /// The door prints one role per line, leading with the role name.
+    /// The door prints one line per distinct target, listing its roles.
     #[test]
-    fn the_door_prints_one_line_per_role() {
+    fn the_door_prints_one_line_per_target() {
         let described_team = json!({"claude": {
             "generation": {"model": "sonnet", "description": "build and edit code"},
             "review": "opus",
@@ -3689,10 +3689,13 @@ mod tests {
         let with_desc = dispatch_door_lines(described.as_object(), "claude");
         let without = dispatch_door_lines(bare.as_object(), "claude");
         assert_eq!(with_desc, without);
-        assert_eq!(with_desc[1], "- generation → sonnet (native)");
-        assert_eq!(with_desc[2], "- review → opus (native)");
-        assert_eq!(with_desc[3], "- extraction → haiku (native)");
-        assert_eq!(with_desc[4], "- design → model chosen by the agent (herding: agy-flash)");
+        assert_eq!(with_desc[1], "- sonnet (native): generation");
+        assert_eq!(with_desc[2], "- opus (native): review");
+        assert_eq!(with_desc[3], "- haiku (native): extraction");
+        assert_eq!(
+            with_desc[4],
+            "- model chosen by the agent (herding: agy-flash): design"
+        );
         assert_eq!(
             with_desc[5],
             "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
@@ -3722,17 +3725,17 @@ mod tests {
             let lines = dispatch_door_lines(config.as_object(), "claude");
             assert_eq!(
                 lines[1],
-                "- generation → sonnet (native)",
+                "- sonnet (native): generation",
                 "{slot} must render generation line"
             );
             assert_eq!(
                 lines[2],
-                "- review → opus (native)",
+                "- opus (native): review",
                 "{slot} must render review line"
             );
             assert_eq!(
                 lines[3],
-                "- extraction → haiku (native)",
+                "- haiku (native): extraction",
                 "{slot} must render extraction line"
             );
             assert_eq!(
@@ -3742,7 +3745,7 @@ mod tests {
         }
         // No models key at all: the seeded defaults, with nothing quoted.
         let default_lines = dispatch_door_lines(None, "claude");
-        assert_eq!(default_lines[1], "- generation → sonnet (native)");
+        assert_eq!(default_lines[1], "- sonnet (native): generation");
         assert!(!default_lines.iter().any(|l| l.contains('"')));
     }
 
@@ -4116,10 +4119,10 @@ mod tests {
         assert_eq!(prep_econ.get("effective_model_status"), Some(&json!("declared")));
     }
 
-    /// leader-sees-team D1/D4: all 18 roles appear in the preamble roster, one per line,
-    /// each line ≤ 60 characters, with role then model then transport.
+    /// token-thrift D4: all 18 roles appear in the preamble roster, each on
+    /// exactly one grouped line, and no line is cut with an ellipsis.
     #[test]
-    fn dispatch_door_renders_all_18_roles_under_60_chars() {
+    fn dispatch_door_groups_all_18_roles_by_target_in_full() {
         let fixture = json!({
             "herding": {
                 "agents": {
@@ -4157,26 +4160,61 @@ mod tests {
         assert!(last.starts_with("- open set:"));
 
         let roster_lines = &lines[1..lines.len() - 1];
-        assert_eq!(roster_lines.len(), 18, "all 18 roles must appear in the roster");
+        let herding = "gemini-3.8-flash-high (herding: agy-flash)";
+        assert_eq!(
+            roster_lines,
+            &[
+                format!(
+                    "- {herding}: generation, read, extraction, code, test, docs, lane-3, hat-value, hat-user-impact"
+                ),
+                "- opus (native): review, plan, lane-2, hat-facts-gaps, hat-alternatives".to_string(),
+                "- fable (native): advisor, lane-1, hat-risks".to_string(),
+                "- haiku (native): supervisor".to_string(),
+            ]
+        );
 
         let expected_roles = [
             "code", "read", "test", "docs", "plan", "extraction", "generation",
             "review", "advisor", "supervisor", "lane-1", "lane-2", "lane-3",
             "hat-facts-gaps", "hat-risks", "hat-value", "hat-alternatives", "hat-user-impact"
         ];
+        let grouped: String = roster_lines.join("\n");
         for expected in expected_roles {
-            assert!(
-                roster_lines.iter().any(|l| l.starts_with(&format!("- {expected} → "))),
-                "missing role {expected} in roster lines: {roster_lines:#?}"
-            );
+            let seen = roster_lines
+                .iter()
+                .filter(|line| line.contains(&format!(": {expected}")) || line.contains(&format!(", {expected}")))
+                .count();
+            assert_eq!(seen, 1, "role {expected} must appear on exactly one line: {grouped}");
         }
         for line in roster_lines {
-            assert!(
-                line.chars().count() <= 60,
-                "line exceeds 60 chars ({len} chars): {line}",
-                len = line.chars().count()
-            );
+            assert!(!line.contains('…'), "a dispatch door line was cut: {line}");
         }
+    }
+
+    /// Two roles sharing a target share one line, and a long herding target
+    /// renders in full — both role names, no ellipsis.
+    #[test]
+    fn two_roles_sharing_a_target_render_on_one_uncut_line() {
+        let fixture = json!({
+            "herding": {
+                "agents": {
+                    "agy-flash-very-long-agent-name-for-the-token-thrift-cell": {
+                        "argv": ["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]
+                    }
+                }
+            },
+            "team": {
+                "claude": {
+                    "code": {"kind": "herding", "agent": "agy-flash-very-long-agent-name-for-the-token-thrift-cell"},
+                    "test": {"kind": "herding", "agent": "agy-flash-very-long-agent-name-for-the-token-thrift-cell"}
+                }
+            }
+        });
+        let lines = dispatch_door_lines(fixture.as_object(), "claude");
+        let target = "gemini-3.8-flash-high (herding: agy-flash-very-long-agent-name-for-the-token-thrift-cell)";
+        let grouped = format!("- {target}: code, test");
+        assert!(lines.contains(&grouped), "missing grouped line `{grouped}`: {lines:#?}");
+        assert!(lines.iter().all(|l| !l.contains('…')), "{lines:#?}");
     }
 
     fn effort_fixture() -> tempfile::TempDir {

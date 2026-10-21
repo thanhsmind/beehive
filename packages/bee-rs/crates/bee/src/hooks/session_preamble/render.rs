@@ -335,6 +335,8 @@ pub(crate) fn spec_project_map_lines(root: &Path) -> Vec<String> {
 /// one sitting. `bee orient` (verbs/status_full/orient.rs) reads the exact
 /// same scan (`unapplied_promote_proposals`), never a second hand-rolled walk
 /// of the same directory.
+const PROMOTE_CLEAR_COMMANDS_SHOWN: usize = 3;
+
 pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
     let proposals = crate::verbs::status_full::unapplied_promote_proposals(root);
     if proposals.is_empty() {
@@ -353,11 +355,16 @@ pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
                 .unwrap_or(std::time::UNIX_EPOCH)
         });
     let newest_path = newest.map(|p| p.path.clone()).unwrap_or_default();
-    let clear_command = proposals
+    let mut clear_command = proposals
         .iter()
+        .take(PROMOTE_CLEAR_COMMANDS_SHOWN)
         .map(|p| p.clear_command.clone())
         .collect::<Vec<_>>()
         .join("; ");
+    let hidden = proposals.len().saturating_sub(PROMOTE_CLEAR_COMMANDS_SHOWN);
+    if hidden > 0 {
+        clear_command.push_str(&format!("; +{hidden} more"));
+    }
     vec![format!(
         "### Unapplied promote proposal(s): {} — newest: {newest_path} — review the proposal, then apply what belongs to docs/knowledge/ or record why not. After you apply or decide to skip the proposals: {clear_command}",
         proposals.len()

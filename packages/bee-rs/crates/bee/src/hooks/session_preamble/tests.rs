@@ -707,6 +707,27 @@ use crate::version::BEE_VERSION;
         assert!(!text.contains("f1 (1 capped"), "{text}");
     }
 
+    #[test]
+    fn five_unapplied_promote_proposals_name_three_clear_commands_and_the_rest_as_a_count() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for f in ["f1", "f2", "f3", "f4", "f5"] {
+            write(
+                root,
+                &format!("docs/history/{f}/promote-proposals.md"),
+                &format!("promote proposal for work item \"{f}\" (docs/history/{f}/CONTEXT.md) — 1 capped cell(s): a-1\nanchor: history — docs/history/{f}/CONTEXT.md\n"),
+            );
+        }
+        let text = render(root);
+        let line = text
+            .lines()
+            .find(|l| l.contains("Unapplied promote proposal"))
+            .unwrap_or_default();
+        assert!(line.starts_with("### Unapplied promote proposal(s): 5 — newest: "), "{line}");
+        assert_eq!(line.matches("bee deferred-queue complete").count(), 3, "{line}");
+        assert!(line.ends_with("; +2 more"), "{line}");
+    }
+
     /// D4/D4a: a granted worktree `bee worktree merge` never reached and
     /// nobody pruned announces itself once the count of reclaimable ids is
     /// MORE than one — "one stale worktree is not news" (plan.md). The line
@@ -777,20 +798,49 @@ use crate::version::BEE_VERSION;
     ///
     /// This builds a store far worse than the real one — 400 orphaned cells
     /// across 200 features, 60 capped cells owed capture, 40 patterns, three
-    /// paragraph-length decisions, a 2 KB handoff — and asserts the rendered
-    /// block still fits. A cap that only holds for today's data is not a cap.
-    #[test]
-    fn the_preamble_stays_inside_its_budget_however_big_the_store_gets() {
-        let tmp = minimal_repo();
-        let root = tmp.path();
-        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f0"}"#);
+    /// paragraph-length decisions, a 2 KB handoff — for the budget tests to
+    /// share. A cap that only holds for today's data is not a cap.
+    fn pathological_store(root: &Path) {
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f0","mode":"standard","route":{"class":"feature","lane":"standard","flags":["a","b"],"product_files":12}}"#,
+        );
+        let mut lanes = String::new();
+        for i in 0..6 {
+            write(
+                root,
+                &format!(".bee/lanes/other-lane-{i}.json"),
+                &format!(r#"{{"feature":"other-feature-{i}","phase":"swarming","mode":"standard"}}"#),
+            );
+            lanes.push_str(&format!("other-feature-{i}"));
+        }
+        let _ = lanes;
+        for i in 0..9 {
+            write(
+                root,
+                &format!("docs/discovery/effort-{i}/MAP.md"),
+                "# effort\n\n## Destination\n\nA spec for the new flow.\n",
+            );
+            write(
+                root,
+                &format!("docs/discovery/effort-{i}/tickets/001-a.md"),
+                "status: open\nclaimed-by: session-1\n",
+            );
+        }
         // Every optional section ON at once, with the longest real shapes:
         // the two-paragraph bypass banner and this repo's own PATH-prefixed
         // command strings. A budget proved only on a quiet repo is not one.
+        let team = (0..40)
+            .map(|i| format!("\"role-{i}\":{{\"kind\":\"native\",\"model\":\"opus\"}}"))
+            .collect::<Vec<_>>()
+            .join(",");
         write(
             root,
             ".bee/config.json",
-            r#"{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{"test":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"},"doc_viewer":{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}}"#,
+            &format!(
+                r#"{{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{{"test":"PATH=\"${{CARGO_HOME:-$HOME/.cargo}}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${{CARGO_HOME:-$HOME/.cargo}}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"}},"doc_viewer":{{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}},"team":{{"claude":{{{team}}}}}}}"#
+            ),
         );
         write(
             root,
@@ -833,6 +883,18 @@ use crate::version::BEE_VERSION;
             &format!("{CRITICAL_PATTERNS_HEADING}\n{patterns}\n## Next\n"),
         );
         write(root, "docs/knowledge/areas/a/c.md", "---\ntype: bee.area\n---\nx\n");
+        write(root, "docs/history/f0/CONTEXT.md", "# f0\n\nThe active feature's own context document.\n");
+        let mut principles = String::from("# Doctrine\n\n## Principle homes\n\n");
+        for i in 0..8 {
+            principles.push_str(&format!(
+                "- `bee-principle-row-{i}` (expertise/tests.md § Row {i}):\n  spoken: the spoken line a reader can say out loud to redirect the work, row {i}\n  classes: feature, bugfix, refactor\n  - applied_at:\n    - `skills/bee-principle-row-{i}/SKILL.md`\n\n"
+            ));
+        }
+        write(
+            root,
+            "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+            &principles,
+        );
         let decisions: String = (0..3)
             .map(|i| {
                 format!(
@@ -848,6 +910,14 @@ use crate::version::BEE_VERSION;
             ".bee/capture-queue.jsonl",
             "{\"kind\":\"stub\",\"id\":\"s1\",\"at\":\"2026-01-01T00:00:00.000Z\"}\n",
         );
+
+    }
+
+    #[test]
+    fn the_preamble_stays_inside_its_budget_however_big_the_store_gets() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
 
         let text = render(root);
         assert!(
@@ -870,6 +940,170 @@ use crate::version::BEE_VERSION;
             text.contains("### Doc links\n- Doc viewer: http://10.255.255.254:7700/p/beedashboard"),
             "{text}"
         );
+        assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
+        assert!(
+            PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS,
+            "a budget at or above the host limit measures text the agent never reads"
+        );
+    }
+
+    #[test]
+    fn the_preamble_budget_sits_below_the_host_inline_limit() {
+        assert!(
+            PREAMBLE_BUDGET_BYTES < HOST_INLINE_LIMIT_CHARS,
+            "the budget ({PREAMBLE_BUDGET_BYTES}) must stay under the host's \
+             {HOST_INLINE_LIMIT_CHARS}-character inline limit"
+        );
+        assert_eq!(PREAMBLE_BUDGET_BYTES, 9500);
+    }
+
+    #[test]
+    fn an_over_budget_render_drops_recent_decisions_first_and_names_where_to_fetch_it() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", PREAMBLE_BUDGET_BYTES);
+        assert!(text.len() <= PREAMBLE_BUDGET_BYTES, "{} bytes", text.len());
+        assert!(!text.contains("### Recent decisions"), "{text}");
+        assert!(text.contains("### Critical patterns (digest)"), "{text}");
+        assert!(text.contains("### Command surface"), "{text}");
+        assert!(text.contains("### Project map"), "{text}");
+        assert!(
+            text.contains(
+                "### Omitted to fit the host limit: Recent decisions → .bee/bin/bee status --json"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("Critical patterns (digest) → "), "{text}");
+    }
+
+    #[test]
+    fn a_tighter_budget_drops_the_digest_next_and_keeps_the_command_surface() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", 8700);
+        assert!(text.len() <= 8700, "{} bytes", text.len());
+        assert!(!text.contains("### Recent decisions"), "{text}");
+        assert!(!text.contains("### Critical patterns (digest)"), "{text}");
+        assert!(text.contains("### Command surface"), "{text}");
+        assert!(
+            text.contains(
+                "### Omitted to fit the host limit: Recent decisions → .bee/bin/bee status --json; \
+                 Critical patterns (digest) → docs/knowledge/index.md"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_forced_full_drop_keeps_the_sections_that_are_never_optional() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+
+        let text = build_session_preamble_within(root, None, None, "claude", 0);
+        for kept in [
+            "### Orphaned scribing debt: 460 cell(s)",
+            "### Scribing debt: 60 behavior_change cell(s)",
+            "### HANDOFF present",
+            "### Doc links",
+            "### Knowledge context",
+            "### Open discovery map(s): 9 with no frontier ticket — bee discovery list",
+        ] {
+            assert!(text.contains(kept), "{kept} is never optional:\n{text}");
+        }
+        assert!(text.contains("### Omitted to fit the host limit:"), "{text}");
+        assert!(
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            "the closing trailer is never dropped:\n{text}"
+        );
+        assert!(text.find("### Omitted").unwrap() < text.find("Everything above is already read").unwrap());
+        for dropped in ["### Recent decisions", "### Critical patterns (digest)"] {
+            assert!(!text.contains(dropped), "{dropped} survived a zero budget:\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_quiet_repo_renders_no_omitted_line() {
+        let tmp = minimal_repo();
+        let text = render(tmp.path());
+        assert!(!text.contains("Omitted to fit the host limit"), "{text}");
+        assert!(text.contains("### Project map"), "{text}");
+    }
+
+    #[test]
+    fn a_resume_with_a_long_anchor_keeps_the_whole_session_init_output_inside_the_budget() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        pathological_store(root);
+        let request: String = "port the hook to Rust and keep every byte it prints under the host limit ".repeat(21);
+        assert!((1400..1700).contains(&request.len()), "{} bytes", request.len());
+        write(
+            root,
+            ".bee/intent/default.json",
+            &json!({ "request": request, "acceptance": "done" }).to_string(),
+        );
+        let belt = "bee belt contract: claude 3 reports a stale belt version. Fix: run `.bee/bin/bee doctor`.";
+        let prefix = belt.len() + 2;
+        let anchor = crate::hooks::session_init::intent_lead_block(root, "resume", Some("s1"));
+        assert!(anchor.starts_with("## INTENT ANCHOR"), "{anchor}");
+        let body = crate::hooks::session_init::compose_output_budgeted(
+            root,
+            "resume",
+            Some("s1"),
+            None,
+            "claude",
+            prefix,
+        );
+        let stdout = format!("{belt}\n\n{body}");
+        assert!(
+            stdout.len() <= PREAMBLE_BUDGET_BYTES,
+            "the whole session-start stdout is {} bytes, over the {PREAMBLE_BUDGET_BYTES}-byte \n\
+             budget. The anchor alone is {} bytes.",
+            stdout.len(),
+            anchor.len()
+        );
+        assert!(stdout.starts_with(belt), "{stdout}");
+        assert!(stdout.contains("## INTENT ANCHOR"), "{stdout}");
+        assert!(stdout.contains("### Omitted to fit the host limit:"), "{stdout}");
+    }
+
+    #[test]
+    fn zero_frontier_discovery_maps_fold_into_one_count_line() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for i in 0..3 {
+            write(
+                root,
+                &format!("docs/discovery/idle-{i}/MAP.md"),
+                "# idle\n\n## Destination\n\nNothing left to resume.\n",
+            );
+            write(
+                root,
+                &format!("docs/discovery/idle-{i}/tickets/001-a.md"),
+                "status: open\nclaimed-by: session-1\n",
+            );
+        }
+        write(
+            root,
+            "docs/discovery/live/MAP.md",
+            "# live\n\n## Destination\n\nTwo questions open.\n",
+        );
+        for id in ["001-a", "002-b"] {
+            write(root, &format!("docs/discovery/live/tickets/{id}.md"), "status: open\n");
+        }
+        let text = render(root);
+        assert!(
+            text.contains("### Open discovery map(s): 3 with no frontier ticket — bee discovery list"),
+            "{text}"
+        );
+        assert!(text.contains("### Open discovery map(s): live — 2 frontier ticket(s)"), "{text}");
+        for i in 0..3 {
+            assert!(!text.contains(&format!("idle-{i}")), "idle-{i} kept its own line:\n{text}");
+        }
     }
 
     #[test]
@@ -1457,9 +1691,12 @@ use crate::version::BEE_VERSION;
             ),
             "{text}"
         );
-        assert!(text.contains("- generation → model chosen by the agent (herding: agy-flas…"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(
+            text.contains("- model chosen by the agent (herding: agy-flash): generation"),
+            "{text}"
+        );
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
                 "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
@@ -1494,19 +1731,19 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(
-            text.contains("- generation → claude-3-5-sonnet-20241022 (native)"),
+            text.contains("- claude-3-5-sonnet-20241022 (native): generation"),
             "{text}"
         );
         assert!(
-            text.contains("- review → claude-3-opus-20240229 (native)"),
+            text.contains("- claude-3-opus-20240229 (native): review"),
             "{text}"
         );
         assert!(
-            text.contains("- advisor → claude-3-7-sonnet-20250219 (native)"),
+            text.contains("- claude-3-7-sonnet-20250219 (native): advisor"),
             "{text}"
         );
         assert!(
-            text.contains("- extraction → claude-3-5-haiku-20241022 (native)"),
+            text.contains("- claude-3-5-haiku-20241022 (native): extraction"),
             "{text}"
         );
     }
@@ -1521,10 +1758,9 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet","description":"build and edit code"},"review":"opus","design":{"model":"opus","description":"shape the thing before it is built"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
-        assert!(text.contains("- design → opus (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(!text.contains("build and edit code"), "{text}");
         assert!(!text.contains("shape the thing before it is built"), "{text}");
     }
@@ -1539,10 +1775,9 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":{"model":"sonnet"},"review":"opus","design":{"model":"opus"}}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
-        assert!(text.contains("- design → opus (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review, design"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(
             text.contains(
                 "- open set: any name team.claude configures is legal; one nothing configures refuses by name."
@@ -1561,9 +1796,9 @@ use crate::version::BEE_VERSION;
         let tmp = minimal_repo();
         let text = render(tmp.path());
         assert!(text.contains("### Dispatch door"), "{text}");
-        assert!(text.contains("- generation → sonnet (native)"), "{text}");
-        assert!(text.contains("- review → opus (native)"), "{text}");
-        assert!(text.contains("- extraction → haiku (native)"), "{text}");
+        assert!(text.contains("- sonnet (native): generation"), "{text}");
+        assert!(text.contains("- opus (native): review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction"), "{text}");
         assert!(!text.contains("advisor=none"), "an unconfigured role is dropped:\n{text}");
         assert!(!text.contains("Tier slots"), "the retired tier list is gone:\n{text}");
     }
@@ -1581,8 +1816,8 @@ use crate::version::BEE_VERSION;
             r#"{"models":{"claude":{"generation":"opus","test":"haiku"}}}"#,
         );
         let text = render(tmp.path());
-        assert!(text.contains("- generation → opus (native)"), "{text}");
-        assert!(text.contains("- test → haiku (native)"), "{text}");
+        assert!(text.contains("- opus (native): generation, review"), "{text}");
+        assert!(text.contains("- haiku (native): extraction, test"), "{text}");
     }
 
     /// leader-sees-team D4: every configured role is listed; DOOR_ROLES_SHOWN cap is retired.
@@ -1596,7 +1831,11 @@ use crate::version::BEE_VERSION;
         );
         let text = render(tmp.path());
         assert!(!text.contains("more —"), "{text}");
-        assert!(text.contains("- triage → haiku (native)"), "the 8th role is listed:\n{text}");
+        assert!(
+            text.contains("- haiku (native): extraction, test, docs, migrate, triage"),
+            "the 8th role is listed:\n{text}"
+        );
+        assert!(text.contains("- opus (native): generation, review, design"), "{text}");
     }
 
     /// model-role-split records `effort` as a known NON-delivery, so the door
@@ -1629,7 +1868,7 @@ use crate::version::BEE_VERSION;
         );
 
         let text = render(tmp.path());
-        assert!(text.contains("- generation → opus (native)"), "{text}");
+        assert!(text.contains("- opus (native): generation"), "{text}");
         assert!(!text.contains("opus:high"), "the door published a dropped effort:\n{text}");
         assert!(!text.contains(":high"), "the door published a dropped effort:\n{text}");
     }

@@ -157,9 +157,12 @@ normalizer drops the field, which is what keeps resolution, the model
 guard, and dispatch prepare blind to it — a display string can never
 steer a dispatch. The validator already tolerated unknown keys; that
 tolerance is now pinned by test. Amended by leader-sees-team D4
-(2026-09-09): the dispatch-door roster prints every role one per line
-with no descriptions (≤ 60 characters per line, no six-role cap);
-descriptions appear only in `bee team show`.
+(2026-09-09): the dispatch-door roster prints every role with no
+descriptions and no six-role cap; descriptions appear only in `bee team
+show`. Amended by token-thrift D4 (2026-10-21): the roster prints one line
+per distinct rendered target, `- <target>: <role>, <role>`, with every role
+in full and no 60-character cut
+(`areas/hook-runtime/token-economy-of-injected-context.md`).
 
 **B13 — `bee team show` is the one read door for the role table**
 (models-show-verb, cells ms-1/ms-2/ms-3, PBI p-0a5e6c44; the rule that the

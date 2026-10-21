@@ -1266,6 +1266,37 @@ use crate::version::BEE_VERSION;
         assert_eq!(orient_blockers(root), Vec::<String>::new());
     }
 
+    #[test]
+    fn orient_caps_the_promote_proposal_blocker_at_three_features() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for f in ["p1", "p2", "p3", "p4", "p5"] {
+            write(
+                root,
+                &format!("docs/history/{f}/promote-proposals.md"),
+                &format!(
+                    "promote proposal for work item \"{f}\" (docs/history/{f}/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/{f}/CONTEXT.md\n"
+                ),
+            );
+        }
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        let line = &blockers[0];
+        assert!(
+            line.starts_with("promote proposal unapplied: 5 feature(s) — "),
+            "{line}"
+        );
+        let (named, tail) = line.split_once(" — after you apply or decide to skip the proposals: ").unwrap();
+        for f in ["p1", "p2", "p3"] {
+            assert!(named.contains(&format!("{f} (1 capped cell(s), docs/history/{f}/promote-proposals.md)")), "{named}");
+        }
+        for f in ["p4", "p5"] {
+            assert!(!named.contains(f), "{named}");
+        }
+        assert!(named.contains("; +2 more"), "{named}");
+        assert_eq!(tail.split("; ").count(), 3, "{tail}");
+    }
+
     /// trun-9 (D5): the SAME proposal, cleared through the deferred-queue
     /// half of `unapplied_promote_proposals` instead of the legacy mtime
     /// scan above — a completed `promote` record (the shape

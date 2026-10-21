@@ -50,7 +50,7 @@ use crate::hooks::compaction::{
     read_config_failopen, read_intent, read_session_record, resume_block, well_formed_id,
 };
 use crate::hooks::session_preamble::{
-    build_session_preamble_with_runtime, read_handoff, HandoffOutcome,
+    build_session_preamble_within, read_handoff, HandoffOutcome, PREAMBLE_BUDGET_BYTES,
 };
 use crate::hooks::Outcome;
 use crate::roots::{resolve_roots_core, Resolution};
@@ -115,14 +115,16 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         None => None,
     };
 
-    let output = compose_output_with_runtime(
+    let belt = belt_contract_line(&root, &ctx.payload);
+    let output = compose_output_budgeted(
         &root,
         &event_source,
         session_id.as_deref(),
         handoff_outcome.as_ref(),
         runtime,
+        belt.as_ref().map_or(0, |line| line.len() + 2),
     );
-    let output = match belt_contract_line(&root, &ctx.payload) {
+    let output = match belt {
         Some(line) => format!("{line}\n\n{output}"),
         None => output,
     };
@@ -182,8 +184,23 @@ pub(crate) fn compose_output_with_runtime(
     handoff_outcome: Option<&HandoffOutcome>,
     runtime: &str,
 ) -> String {
-    let body = session_body_with_runtime(root, event_source, session_id, handoff_outcome, runtime);
+    compose_output_budgeted(root, event_source, session_id, handoff_outcome, runtime, 0)
+}
+
+pub(crate) fn compose_output_budgeted(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+    prefix_bytes: usize,
+) -> String {
     let anchor = intent_lead_block(root, event_source, session_id);
+    let reserved = prefix_bytes
+        + if anchor.is_empty() { 0 } else { anchor.len() + 2 };
+    let budget = PREAMBLE_BUDGET_BYTES.saturating_sub(reserved);
+    let body =
+        session_body_within(root, event_source, session_id, handoff_outcome, runtime, budget);
     if anchor.is_empty() {
         body
     } else {
@@ -218,27 +235,30 @@ pub(crate) fn intent_lead_block(
 /// `handoff_outcome` must be carried into the capsule too (D27), because a
 /// compacted session holding a planned-next handoff otherwise silently loses
 /// the `- Adoption not applied:` line that says WHY it is being told to wait.
-///
-/// The .mjs wrapped the capsule branch in a try/catch for a repo vendored
-/// before compaction.mjs shipped. There is no dynamic import left to fail:
-/// both calls below are fail-open inside hooks/compaction.rs itself, so the
-/// catch has no reachable trigger and is not reproduced.
-#[allow(dead_code)]
-fn session_body(
-    root: &Path,
-    event_source: &str,
-    session_id: Option<&str>,
-    handoff_outcome: Option<&HandoffOutcome>,
-) -> String {
-    session_body_with_runtime(root, event_source, session_id, handoff_outcome, "claude")
-}
-
 fn session_body_with_runtime(
     root: &Path,
     event_source: &str,
     session_id: Option<&str>,
     handoff_outcome: Option<&HandoffOutcome>,
     runtime: &str,
+) -> String {
+    session_body_within(
+        root,
+        event_source,
+        session_id,
+        handoff_outcome,
+        runtime,
+        PREAMBLE_BUDGET_BYTES,
+    )
+}
+
+fn session_body_within(
+    root: &Path,
+    event_source: &str,
+    session_id: Option<&str>,
+    handoff_outcome: Option<&HandoffOutcome>,
+    runtime: &str,
+    budget_bytes: usize,
 ) -> String {
     if event_source == CAPSULE_SOURCE {
         // D5: SessionStart(compact) IS the `resume` event — the other half of
@@ -247,7 +267,7 @@ fn session_body_with_runtime(
         append_compaction_record(root, "resume", session_id);
         return build_compact_capsule_with_runtime(root, session_id, handoff_outcome, runtime);
     }
-    build_session_preamble_with_runtime(root, session_id, handoff_outcome, runtime)
+    build_session_preamble_within(root, session_id, handoff_outcome, runtime, budget_bytes)
 }
 
 // ───────────────────────── handoff adoption ────────────────────────────────
