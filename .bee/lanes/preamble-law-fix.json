@@ -1,0 +1,371 @@
+{
+  "schema_version": "1.0",
+  "feature": "preamble-law-fix",
+  "mode": "tiny",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"preamble-law-fix\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-21T07:38:39.157Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "tiny",
+    "flags": [],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-10-21T07:38:39.223Z",
+    "feature": "preamble-law-fix"
+  },
+  "gate_preview": {
+    "feature": "preamble-law-fix",
+    "plan_sha256": "aab88f9d13bed8e2afee667a3936c71eba6b273d85de0f664a8dcfb7da4269ab",
+    "previewed_at": "2026-10-21T07:39:00.158Z",
+    "cells": [
+      {
+        "id": "plf-1",
+        "feature": "preamble-law-fix",
+        "title": "Keep the preamble budget doc outside the instruction-law scan window",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "read_first": [
+          "docs/history/preamble-law-fix/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In budget.rs, move the 8-line `/// NOT the law decision 8f63adb4 ...` paragraph above the 5-line `/// Every section switched on at once ...` paragraph, keeping one `///` separator line between them, so the line right above PREAMBLE_BUDGET_BYTES is the generated-payload paragraph. Add or remove no comment line.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee comment_baseline",
+        "must_haves": {
+          "truths": [
+            "instruction_laws is green",
+            "the comment count of budget.rs is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+              "substantive": "reordered doc paragraphs"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No change to PREAMBLE_BUDGET_BYTES",
+            "No new comment lines"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "doc-paragraph reorder only, no code or guard behavior changes; the independent instruction_laws test is the proof"
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "One doc reorder in budget.rs; tiny runs inline."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release is its own lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "This page is the plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "The law test is the proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "No docs change."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Nothing to survey."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No lookup."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "User-invoked only."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Tiny."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Tiny lane: no hat wave."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "preamble-law-fix",
+    "plan_sha256": "aab88f9d13bed8e2afee667a3936c71eba6b273d85de0f664a8dcfb7da4269ab",
+    "previewed_at": "2026-10-21T07:39:00.158Z",
+    "cells": [
+      {
+        "id": "plf-1",
+        "feature": "preamble-law-fix",
+        "title": "Keep the preamble budget doc outside the instruction-law scan window",
+        "lane": "tiny",
+        "role": "code",
+        "deps": [],
+        "decisions": [],
+        "files": [
+          "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+        ],
+        "read_first": [
+          "docs/history/preamble-law-fix/CONTEXT.md",
+          "packages/bee-rs/crates/bee/tests/instruction_laws.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "In budget.rs, move the 8-line `/// NOT the law decision 8f63adb4 ...` paragraph above the 5-line `/// Every section switched on at once ...` paragraph, keeping one `///` separator line between them, so the line right above PREAMBLE_BUDGET_BYTES is the generated-payload paragraph. Add or remove no comment line.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test instruction_laws && cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee comment_baseline",
+        "must_haves": {
+          "truths": [
+            "instruction_laws is green",
+            "the comment count of budget.rs is unchanged"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+              "substantive": "reordered doc paragraphs"
+            }
+          ],
+          "key_links": [],
+          "prohibitions": [
+            "No change to PREAMBLE_BUDGET_BYTES",
+            "No new comment lines"
+          ]
+        },
+        "behavior_change": false,
+        "judge_obligation_ack": "doc-paragraph reorder only, no code or guard behavior changes; the independent instruction_laws test is the proof"
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "One doc reorder in budget.rs; tiny runs inline."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release is its own lane."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "This page is the plan."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "The law test is the proof."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "No docs change."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Nothing to survey."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "No lookup."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "User-invoked only."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Tiny."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No loop."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Tiny lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Tiny lane: no hat wave."
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-10-21T07:38:59.755Z"
+  },
+  "merge_ready": {
+    "since": "2026-10-21T07:42:15.660Z",
+    "branch": "wt/preamble-law-fix",
+    "worktree_id": "beehive--wt--preamble-law-fix",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

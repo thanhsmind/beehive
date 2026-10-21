@@ -738,6 +738,8 @@
     "contract:session-preamble-budget",
     "contract:dispatch-door-lines",
     "contract:orient-promote-blocker",
-    "contract:preamble-promote-section"
+    "contract:preamble-promote-section",
+    "release-2-57-0",
+    "preamble-law-fix"
   ]
 }
