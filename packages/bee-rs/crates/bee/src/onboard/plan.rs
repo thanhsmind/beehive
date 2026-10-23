@@ -16,7 +16,8 @@ use super::hooks_wiring as hw;
 use super::merge::{
     agents_block_present, claude_md_imports_agents, extract_agents_block,
     extract_gitignore_block, gitignore_block_present, host_shell_is_powershell,
-    normalize_gitignore_for_compare, render_agents_block, render_gitignore_block,
+    normalize_gitignore_for_compare, render_agents_block, render_gitattributes_block,
+    render_gitignore_block,
 };
 use super::migration::{detect_worktree_migration, WorktreeMigration};
 use super::notices::has_prose_outside_block;
@@ -55,6 +56,7 @@ pub struct ComputedPlan {
     pub bee_version: Option<String>,
     pub rendered_block: String,
     pub rendered_gitignore_block: String,
+    pub rendered_gitattributes_block: String,
     pub desired_managed: Value,
     pub skill_sync: SkillSync,
     pub codex_hybrid: bool,
@@ -213,11 +215,11 @@ fn build_hook_versions(engine: &Engine) -> Value {
 
 /// Every managed-ledger group, paired with the HOST directory whose contents
 /// it fingerprints — i.e. every tree whose hand-edit makes `.bee/onboarding.json`
-/// a lie until onboarding re-runs. The two hash-a-string groups
-/// (`agents_block`, `gitignore_block`) carry `None`: they cover rendered blocks
-/// inside AGENTS.md / .gitignore, not a directory, and a hand-edit of those is
-/// caught by onboarding's own block comparison rather than by a path-scoped
-/// obligation.
+/// a lie until onboarding re-runs. The hash-a-string groups (`agents_block`,
+/// `gitignore_block`, `gitattributes_block`) carry `None`: they cover rendered
+/// blocks inside AGENTS.md / .gitignore / .gitattributes, not a directory, and a
+/// hand-edit of those is caught by onboarding's own block comparison rather
+/// than by a path-scoped obligation.
 ///
 /// `ledger_covered_roots()` projects this to the directory set that
 /// `verbs/cells.rs`'s regen obligation guards.
@@ -238,6 +240,7 @@ fn build_hook_versions(engine: &Engine) -> Value {
 const LEDGER_GROUPS: &[(&str, Option<&str>)] = &[
     ("agents_block", None),
     ("gitignore_block", None),
+    ("gitattributes_block", None),
     ("helpers", Some(".bee/bin")),
     ("lib", Some(".bee/bin/lib")),
     ("expertise", Some(".bee/expertise")),
@@ -264,6 +267,7 @@ pub fn build_managed_versions(
     engine: &Engine,
     rendered_block: &str,
     rendered_gitignore_block: &str,
+    rendered_gitattributes_block: &str,
     repo_hooks: bool,
     statusline: bool,
     codex_hybrid: bool,
@@ -278,6 +282,8 @@ pub fn build_managed_versions(
     let mut managed = Map::new();
     managed.insert("agents_block".into(), json!(sha256_str(rendered_block)));
     managed.insert("gitignore_block".into(), json!(sha256_str(rendered_gitignore_block)));
+    managed
+        .insert("gitattributes_block".into(), json!(sha256_str(rendered_gitattributes_block)));
     managed.insert(
         "helpers".into(),
         hash_map(&engine.templates_dir, list_template_helpers(engine)),
@@ -333,6 +339,10 @@ pub fn subset_managed(
     let mut out = Map::new();
     out.insert("agents_block".into(), js_or(get("agents_block"), Value::Null));
     out.insert("gitignore_block".into(), js_or(get("gitignore_block"), Value::Null));
+    out.insert(
+        "gitattributes_block".into(),
+        js_or(get("gitattributes_block"), Value::Null),
+    );
     out.insert("helpers".into(), js_or(get("helpers"), json!({})));
     out.insert("lib".into(), js_or(get("lib"), json!({})));
     out.insert("expertise".into(), js_or(get("expertise"), json!({})));
@@ -717,6 +727,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             bee_version: None,
             rendered_block: String::new(),
             rendered_gitignore_block: String::new(),
+            rendered_gitattributes_block: String::new(),
             desired_managed: json!({}),
             skill_sync: blocked_source_identity_skill_sync(
                 engine,
@@ -735,6 +746,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         host_shell_is_powershell(repo_root).then_some(engine.agents_windows_template.as_path()),
     );
     let rendered_gitignore_block = render_gitignore_block();
+    let rendered_gitattributes_block = render_gitattributes_block();
 
     // 1. AGENTS.md BEE block
     let agents_path = repo_root.join("AGENTS.md");
@@ -1000,6 +1012,18 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         plan.push(plan_item("update_gitignore_block", ".gitignore"));
     }
 
+    let gitattributes_text = read_text_if_exists(&repo_root.join(".gitattributes"));
+    if gitattributes_text.trim().is_empty() {
+        plan.push(plan_item("create_gitattributes_block", ".gitattributes"));
+    } else if !gitignore_block_present(&gitattributes_text) {
+        plan.push(plan_item("append_gitattributes_block", ".gitattributes"));
+    } else if normalize_gitignore_for_compare(
+        extract_gitignore_block(&gitattributes_text).as_deref().unwrap_or(""),
+    ) != rendered_gitattributes_block
+    {
+        plan.push(plan_item("update_gitattributes_block", ".gitattributes"));
+    }
+
     // 5-pre. STALE VENDORED HOOKS (R6 cutover — new action).
     //
     // Section 3c has always removed a lib module that left the source
@@ -1130,6 +1154,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         engine,
         &rendered_block,
         &rendered_gitignore_block,
+        &rendered_gitattributes_block,
         opts.repo_hooks,
         statusline,
         codex_hybrid,
@@ -1189,6 +1214,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         bee_version,
         rendered_block,
         rendered_gitignore_block,
+        rendered_gitattributes_block,
         desired_managed,
         skill_sync,
         codex_hybrid,
@@ -1207,7 +1233,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let engine = super::Engine::from_plugin_root(dir.path().to_path_buf());
         // Every optional group ON, so the builder emits its widest key set.
-        let managed = super::build_managed_versions(&engine, "block", "gitignore", true, true, true);
+        let managed =
+            super::build_managed_versions(&engine, "block", "gitignore", "attrs", true, true, true);
         let built: Vec<&String> = managed.as_object().unwrap().keys().collect();
         let classified: Vec<&str> = super::LEDGER_GROUPS.iter().map(|(k, _)| *k).collect();
 
@@ -1234,13 +1261,16 @@ mod tests {
     #[test]
     fn subset_managed_ignores_prompts_and_optional_maps() {
         let managed = json!({
-            "agents_block": "a", "gitignore_block": "g",
+            "agents_block": "a", "gitignore_block": "g", "gitattributes_block": "ga",
             "helpers": {"x":"1"}, "lib": {}, "expertise": {}, "prompts": {"p":"9"},
             "repo_hooks": {"h":"1"}, "statusline": {"s":"1"}, "codex_hooks": {"c":"1"}
         });
         let bare = subset_managed(Some(&managed), false, false, false);
         let keys: Vec<&str> = bare.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        assert_eq!(keys, vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise"]);
+        assert_eq!(
+            keys,
+            vec!["agents_block", "gitignore_block", "gitattributes_block", "helpers", "lib", "expertise"]
+        );
         let full = subset_managed(Some(&managed), true, true, true);
         let keys: Vec<&str> = full.as_object().unwrap().keys().map(|k| k.as_str()).collect();
         assert_eq!(
@@ -1248,6 +1278,7 @@ mod tests {
             vec![
                 "agents_block",
                 "gitignore_block",
+                "gitattributes_block",
                 "helpers",
                 "lib",
                 "expertise",

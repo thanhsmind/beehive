@@ -211,6 +211,7 @@ pub fn apply_computed_plan(
         bee_version,
         rendered_block,
         rendered_gitignore_block,
+        rendered_gitattributes_block,
         desired_managed,
         skill_sync,
         codex_hybrid,
@@ -389,6 +390,15 @@ pub fn apply_computed_plan(
             "create_gitignore_block" | "append_gitignore_block" | "update_gitignore_block" => {
                 let merged =
                     merge_gitignore_content(&read_text_if_exists(&target), &rendered_gitignore_block);
+                let _ = write_file_atomic(&target, merged.text.as_bytes());
+            }
+            "create_gitattributes_block"
+            | "append_gitattributes_block"
+            | "update_gitattributes_block" => {
+                let merged = merge_gitignore_content(
+                    &read_text_if_exists(&target),
+                    &rendered_gitattributes_block,
+                );
                 let _ = write_file_atomic(&target, merged.text.as_bytes());
             }
             "create_runtime_file" => {
