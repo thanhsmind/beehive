@@ -11891,6 +11891,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(!cmd_deploy_wt.contains(&granted.to_string_lossy().into_owned()) && !cmd_deploy_wt.contains(&norm_granted), "deployment command cwd must not be worktree: {cmd_deploy_wt}");
         assert!(cmd_deploy_wt.contains("export BEE_DISPATCH_ID="), "deployment command must export BEE_DISPATCH_ID: {cmd_deploy_wt}");
         assert!(cmd_deploy_wt.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "deployment command must export BEE_RELEASE_VERSION: {cmd_deploy_wt}");
+        assert!(!cmd_deploy_wt.contains("--read-only"), "deployment command must stay writable, no --read-only (D5, issue 126): {cmd_deploy_wt}");
 
         // 2. Ordinary gather WITH granted feature worktree:
         // Cwd MUST be the granted worktree; stdin MUST be read-only gather template.
@@ -11909,6 +11910,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             cmd_gather_wt.contains(&format!("--cwd \"{}\"", granted.to_string_lossy())) || cmd_gather_wt.contains(&format!("--cwd \"{}\"", norm_granted)),
             "ordinary gather command cwd must be worktree: {cmd_gather_wt}"
         );
+        assert!(cmd_gather_wt.contains("--read-only"), "ordinary gather command must stay read-only: {cmd_gather_wt}");
 
         // Revoke the worktree grant to test without worktree
         w(&main, ".bee/runtime/worktree-grants.json", "{}\n");

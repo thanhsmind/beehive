@@ -2616,7 +2616,7 @@ pub(crate) fn prepare_dispatch_wire(
                         command.push('"');
                     }
                 }
-                if kind == "gather" || kind == "advisor" {
+                if (kind == "gather" || kind == "advisor") && !is_deployment {
                     command.push_str(" --read-only");
                 }
                 // pi-native-stage-driver D1, D3, D11: on runtime pi, when the configured
