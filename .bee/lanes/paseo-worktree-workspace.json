@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Script giờ tăng số phiên bản, commit, tag, đẩy lên, rồi chờ CI dựng các bản cài đặt. Release chỉ xong khi script in dòng `OK` cuối cùng. Khi",
-    "asked_at": "2026-10-23T03:22:16.176Z",
-    "session": "2e30c1e1-71d5-43d9-b0fe-57a13aafbbbb"
+    "subject": "The 3 helpers still read the code. I wait for their results, then I write the plan.",
+    "asked_at": "2026-10-23T04:07:55.316Z",
+    "session": "12e63a51-afd1-4a10-b86b-3b25db7b7739"
   }
 }

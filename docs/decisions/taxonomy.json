@@ -741,6 +741,9 @@
     "contract:preamble-promote-section",
     "release-2-57-0",
     "preamble-law-fix",
-    "release-2-58-0"
+    "release-2-58-0",
+    "issues-sweep-1023",
+    "issues",
+    "contract:windows-test-fixtures"
   ]
 }
