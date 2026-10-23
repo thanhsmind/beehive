@@ -11231,8 +11231,8 @@ mod tests {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let mut found_job_id = None;
             for line in stdout.lines() {
-                if let Some(rest) = line.strip_prefix("JOB_ID:") {
-                    found_job_id = Some(rest.trim().to_string());
+                if let Some(pos) = line.find("JOB_ID:") {
+                    found_job_id = Some(line[pos + "JOB_ID:".len()..].trim().to_string());
                     break;
                 }
             }
