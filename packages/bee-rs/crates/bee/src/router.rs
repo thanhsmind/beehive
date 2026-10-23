@@ -62,6 +62,7 @@ pub const PORTED: &[&str] = &[
     "backlog pbi amend",
     "backlog pbi list",
     "feedback count",
+    "report usage --transcript <path>|--session <id> [--corr <t-hex>] [--since/--until] [--task] [--json]",
     // R3 wave 2
     "--help (all forms, incl. group-scoped)",
     "test",
