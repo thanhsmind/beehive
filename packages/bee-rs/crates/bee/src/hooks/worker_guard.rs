@@ -293,7 +293,7 @@ fn settle(path: &Path) -> PathBuf {
 
 fn in_mailbox(target: &str, cwd: Option<&Path>, mailbox: Option<&Path>) -> bool {
     let Some(mailbox) = mailbox else { return false };
-    if target.is_empty() || target.contains(['$', '~', '*', '?', '[']) {
+    if target.is_empty() || target.starts_with('~') || target.contains(['$', '*', '?', '[']) {
         return false;
     }
     let raw = Path::new(target);
@@ -606,6 +606,31 @@ mod tests {
         assert!(write("Edit", &format!("{mb}/../job-2/result-1.json")).is_some());
         assert!(write("Write", "").is_some());
         assert!(evaluate_read_only("Write", serde_json::json!({ "file_path": format!("{mb}/r") }).as_object(), cwd, None).is_some());
+    }
+
+    #[test]
+    fn read_only_judges_a_middle_tilde_mailbox_path_by_where_it_points() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path();
+        let short = cwd.join("RUN~1");
+        std::fs::create_dir_all(&short).unwrap();
+        let mailbox = short.join(".bee").join("mailbox").join("job-1");
+        let mb = mailbox.display().to_string();
+        let bash = |command: &str| {
+            let input = serde_json::json!({ "command": command });
+            evaluate_read_only("Bash", input.as_object(), cwd, Some(&mailbox))
+        };
+        let write = |tool: &str, path: &str| {
+            let input = serde_json::json!({ "file_path": path, "content": "x" });
+            evaluate_read_only(tool, input.as_object(), cwd, Some(&mailbox))
+        };
+
+        let moved = format!("mv '{mb}/result-1.json.tmp' '{mb}/result-1.json'");
+        assert!(bash(&moved).is_none(), "expected allow: {moved} -> {:?}", bash(&moved));
+        assert!(write("Write", &format!("{mb}/report-1.md")).is_none());
+
+        let home_move = format!("mv ~/a '{mb}/b'");
+        assert!(bash(&home_move).is_some(), "expected deny: {home_move}");
     }
 
     #[test]
