@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Gần có quyền deploy. bee cần thêm số phiên bản.",
-    "asked_at": "2026-10-23T02:39:41.509Z",
+    "kind": "question",
+    "subject": "release 2.58.0: skip the release-script test gate (suite proven green per target) or fix the two mode-dependent tests first",
+    "asked_at": "2026-10-23T03:19:11.234Z",
     "session": "2e30c1e1-71d5-43d9-b0fe-57a13aafbbbb"
   }
 }
