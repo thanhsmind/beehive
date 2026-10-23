@@ -114,9 +114,6 @@ AUTH_VERSION="${ARG_VERSION:-$VERSION}"
 [ -x "$BEE_BIN" ] \
   || fail "$BEE_BIN not found or not executable — cannot verify release authorization; nothing was changed"
 
-# The deploy permit is one-time. Spend it only once every refusing check has
-# passed, so a dirty tree, a wrong branch or a taken tag costs nothing: a
-# burned permit locks out the retry that would have been the fix.
 AUTHORIZED=0
 authorize_release() {
   if [ "$AUTHORIZED" -eq 1 ]; then

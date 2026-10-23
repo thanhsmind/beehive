@@ -3,8 +3,7 @@
 #
 # Reads `git status --porcelain -z` and prints the NUL-separated porcelain
 # entries (keeping rename/copy pairs together) whose path is NOT one of the
-# bee paths below: `.bee/wave-ledger.jsonl`, `.bee/supervisor/broker-heartbeat.json`
-# or `.bee/lanes/*.json`.
+# bee paths that `is_allowlisted` below names.
 set -euo pipefail
 
 is_allowlisted() {
