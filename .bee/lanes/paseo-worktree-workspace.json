@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-21T04:36:06.720Z",
-    "session": "48772102-7614-4853-aa3b-034ee7a935a1"
+    "subject": "The prompt is for `bee orient`. It only reads. I'll set Bypass and accept this one prompt.",
+    "asked_at": "2026-10-23T01:17:07.568Z",
+    "session": "3a827e83-25eb-448b-9112-c541b126563e"
   }
 }
