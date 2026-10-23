@@ -174,15 +174,22 @@ pub(crate) fn require_flags(
     Err(Err2::Msg(format!("{}. Example: {example}", parts.join("; "))))
 }
 
-/// optionalLaneFlag: `--lane` bare/empty is a malformed call, never "no lane".
 pub(crate) fn optional_lane_flag(flags: &Flags, verb: &str) -> Result<Option<String>, Err2> {
-    match flags.get("lane") {
+    optional_lane_selector(flags, verb, "lane")
+}
+
+pub(crate) fn optional_lane_selector(
+    flags: &Flags,
+    verb: &str,
+    key: &str,
+) -> Result<Option<String>, Err2> {
+    match flags.get(key) {
         None => Ok(None),
         Some(FlagV::Present) => Err(Err2::Msg(format!(
-            "{verb}: --lane requires a value (the lane's feature name)."
+            "{verb}: --{key} requires a value (the lane's feature name)."
         ))),
         Some(FlagV::S(s)) if s.is_empty() => Err(Err2::Msg(format!(
-            "{verb}: --lane requires a value (the lane's feature name)."
+            "{verb}: --{key} requires a value (the lane's feature name)."
         ))),
         Some(FlagV::S(s)) => Ok(Some(s.clone())),
     }
@@ -190,11 +197,19 @@ pub(crate) fn optional_lane_flag(flags: &Flags, verb: &str) -> Result<Option<Str
 
 /// mutationLaneSelector (i54-closeout-7 D7).
 pub(crate) fn mutation_lane_selector(flags: &Flags, verb: &str) -> Result<(Option<String>, bool), Err2> {
-    let lane_feature = optional_lane_flag(flags, verb)?;
+    mutation_lane_selector_at(flags, verb, "lane")
+}
+
+pub(crate) fn mutation_lane_selector_at(
+    flags: &Flags,
+    verb: &str,
+    key: &str,
+) -> Result<(Option<String>, bool), Err2> {
+    let lane_feature = optional_lane_selector(flags, verb, key)?;
     let no_lane = flags.get("no-lane").is_some();
     if no_lane && lane_feature.is_some() {
         return Err(Err2::Msg(format!(
-            "{verb}: --no-lane cannot be combined with --lane — --no-lane forces the default record, --lane names a lane record. Pick one."
+            "{verb}: --no-lane cannot be combined with --{key} — --no-lane forces the default record, --{key} names a lane record. Pick one."
         )));
     }
     Ok((lane_feature, no_lane))
