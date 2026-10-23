@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["close-usage-summary D1 (2d3abd12)", "close-usage-record D1 (e97cc9d4)", "usage-in-bee-store D1 (62331863)"]
-  sources: ["docs/knowledge/work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs"]
+  decisions: ["close-usage-summary D1 (2d3abd12)", "close-usage-record D1 (e97cc9d4)", "usage-in-bee-store D1 (62331863)", "report-usage-verb (af457159)"]
+  sources: ["docs/knowledge/work/usage-in-bee-store/delivery.md", "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs", "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs", "packages/bee-rs/crates/bee/src/verbs/mailbox.rs", "packages/bee-rs/crates/bee/src/verbs/report.rs"]
   authoritative_for: "workflow-state: the close usage record — accounting, home, and persistence"
 ---
 
@@ -47,6 +47,13 @@ tool can read it back.
   bookkeeping commit stages `.bee` only, the same as promote-proposals.
   It is the **merge-time auto-commit** that actually lands the file in
   history, when the feature's worktree merges back.
+- **Per-task report (report-usage-verb · af457159).** `bee report usage
+  --corr <t-hex>` prints the waggledance COMPLETION-REPORT header and
+  per-model token table for one task window, read from the session
+  transcript and its `subagents/*.jsonl` through `aggregate_usage`.
+  Input = fresh + cache write + cache read, Cache = the cached part,
+  Total = Input + Output; a missing transcript is a typed error, never
+  zeros. AGENTS.md names it the first token source.
 
 ## Edge Cases Settled
 
@@ -71,4 +78,6 @@ tool can read it back.
   `hooks/session_close/perf.rs` (`rollup_transcript`).
 - Record write, schema `bee-usage/v1`, and the letter line:
   `verbs/drivers/close.rs`, `verbs/mailbox.rs`.
+- Per-task report (`bee report usage`): `verbs/report.rs`, over
+  `aggregate_usage` in `hooks/session_close/perf.rs`.
 - Delivery trace: `docs/knowledge/work/usage-in-bee-store/delivery.md`.
