@@ -968,6 +968,7 @@ fn two_branches_appending_to_the_decision_log_merge_cleanly_after_onboarding() {
     let fx = fixture();
     apply(&fx, &[]);
     git_ok(&fx.repo, &["init", "-q", "-b", "main", "."]);
+    git_ok(&fx.repo, &["config", "core.autocrlf", "false"]);
     git_ok(&fx.repo, &["config", "user.email", "bee@example.com"]);
     git_ok(&fx.repo, &["config", "user.name", "bee"]);
     git_ok(&fx.repo, &["add", "-A"]);
