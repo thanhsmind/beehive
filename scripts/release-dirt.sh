@@ -2,13 +2,17 @@
 # release-dirt.sh — print un-allowlisted git porcelain status entries.
 #
 # Reads `git status --porcelain -z` and prints the NUL-separated porcelain
-# entries (keeping rename/copy pairs together) whose path is NOT exactly
-# `.bee/wave-ledger.jsonl` and NOT matching `.bee/lanes/*.json`.
+# entries (keeping rename/copy pairs together) whose path is NOT one of the
+# bee paths below: `.bee/wave-ledger.jsonl`, `.bee/supervisor/broker-heartbeat.json`
+# or `.bee/lanes/*.json`.
 set -euo pipefail
 
 is_allowlisted() {
   local p="$1"
   if [ "$p" = ".bee/wave-ledger.jsonl" ]; then
+    return 0
+  fi
+  if [ "$p" = ".bee/supervisor/broker-heartbeat.json" ]; then
     return 0
   fi
   # shellcheck disable=SC2053

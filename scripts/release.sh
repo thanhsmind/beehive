@@ -113,8 +113,19 @@ AUTH_VERSION="${ARG_VERSION:-$VERSION}"
   || fail "release authorization required — BEE_DISPATCH_ID is unset (dispatch with deployment stage under deploy role required); nothing was changed"
 [ -x "$BEE_BIN" ] \
   || fail "$BEE_BIN not found or not executable — cannot verify release authorization; nothing was changed"
-"$BEE_BIN" dispatch authorize --id "$BEE_DISPATCH_ID" --release-version "$AUTH_VERSION" \
-  || fail "release authorization denied for version $AUTH_VERSION; nothing was changed"
+
+# The deploy permit is one-time. Spend it only once every refusing check has
+# passed, so a dirty tree, a wrong branch or a taken tag costs nothing: a
+# burned permit locks out the retry that would have been the fix.
+AUTHORIZED=0
+authorize_release() {
+  if [ "$AUTHORIZED" -eq 1 ]; then
+    return 0
+  fi
+  "$BEE_BIN" dispatch authorize --id "$BEE_DISPATCH_ID" --release-version "$AUTH_VERSION" \
+    || fail "release authorization denied for version $AUTH_VERSION; nothing was changed"
+  AUTHORIZED=1
+}
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = "main" ] || fail "on branch $BRANCH — releases cut from main only"
@@ -126,6 +137,7 @@ if [ -n "$ARG_VERSION" ] && [ "$ARG_VERSION" = "$HEAD_VERSION" ]; then
   # Idempotent re-run: the release commit already exists. Never re-bump, never
   # re-commit — just resume the tail (this is the path a failed CI wait takes).
   log "version  $ARG_VERSION is already committed at HEAD — skipping bump, resuming the release tail"
+  authorize_release
 elif [ -n "$ARG_VERSION" ]; then
   # Every check below refuses with zero mutations. Nothing is written until
   # all of them have passed.
@@ -178,6 +190,8 @@ elif [ -n "$ARG_VERSION" ]; then
 
   [ -f "$BEE_CONFIG" ] || fail "$BEE_CONFIG not found — cannot read the declared test command; nothing was changed"
   [ -x "$BEE_BIN" ] || fail "$BEE_BIN not found or not executable — cannot run the regen chain; nothing was changed"
+
+  authorize_release
 
   # ----- from here on the tree gets written; put it back on any abort -----
   BACKUP_DIR="$(mktemp -d)"
@@ -307,6 +321,8 @@ git show "HEAD:$PLUGIN_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$V
 if [ -n "$(git status --porcelain)" ]; then
   log "warn: working tree has uncommitted changes — they are NOT part of $TAG (tag points at HEAD)"
 fi
+
+authorize_release
 
 # ---------- 4. tag (idempotent) ----------
 HEAD_SHA="$(git rev-parse HEAD)"
