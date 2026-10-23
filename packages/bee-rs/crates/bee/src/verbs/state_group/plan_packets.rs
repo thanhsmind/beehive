@@ -787,15 +787,31 @@ pub(crate) fn check_batch_matches_approved_preview(
     let Some(approved_cells) = get_approved_preview_cells(root, feature) else {
         return Ok(());
     };
-    if cells.len() != approved_cells.len() {
-        return Err(format!(
-            "addCells: batch contains {} cell(s), but approved gate preview packet declared {} cell(s).",
-            cells.len(),
-            approved_cells.len()
-        ));
-    }
     for cell in cells {
         check_cell_matches_approved_preview(root, feature, cell)?;
+    }
+    let batched: HashSet<&str> = cells
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Value::as_str))
+        .collect();
+    let mut missing: Vec<&str> = Vec::new();
+    for id in approved_cells
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Value::as_str))
+        .filter(|id| !batched.contains(id))
+    {
+        if crate::verbs::cells::read_cell(root, id).map_err(|_| {
+            format!("addCells: could not read stored cell \"{id}\" while checking the approved gate preview packet.")
+        })?.is_none()
+        {
+            missing.push(id);
+        }
+    }
+    if !missing.is_empty() {
+        return Err(format!(
+            "addCells: approved gate preview packet cell(s) {} are neither in this batch nor already in the cell store. FIX: include every packet cell that is not stored yet in this batch, or add it in its own batch first.",
+            missing.join(", ")
+        ));
     }
     Ok(())
 }
@@ -939,6 +955,71 @@ mod tests {
         for i in 0..7 {
             assert_eq!(val["cells"][i]["id"], format!("c{}", i + 1));
         }
+    }
+
+    fn write_lane_packet(root: &Path, feature: &str, cells: &Value) {
+        let dir = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let lane = json!({
+            "feature": feature,
+            "phase": "swarming",
+            "mode": "standard",
+            "approved_gates": { "shape": true, "execution": true },
+            "approved_cell_packet": { "feature": feature, "cells": cells }
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), serde_json::to_string(&lane).unwrap()).unwrap();
+    }
+
+    fn write_stored_cell(root: &Path, cell: &Value) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        let id = cell["id"].as_str().unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), serde_json::to_string(cell).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn pihp_gate_packet_batch_accepts_only_the_new_cells_of_a_revised_packet() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let cell = |i: u32| {
+            json!({
+                "id": format!("c{i}"),
+                "feature": "feat-rev",
+                "title": format!("Title {i}"),
+                "lane": "standard",
+                "role": "code",
+                "action": format!("Action {i}"),
+                "files": [format!("src/f{i}.rs")],
+                "read_first": [],
+                "must_haves": { "truths": [format!("truth {i}")] },
+                "verify": format!("cargo test -p bee t{i}")
+            })
+        };
+        let packet = json!([cell(1), cell(2), cell(3)]);
+        write_lane_packet(root, "feat-rev", &packet);
+        write_stored_cell(root, &cell(1));
+
+        check_batch_matches_approved_preview(root, "feat-rev", &[cell(2), cell(3)])
+            .expect("only the not-yet-stored packet cells must be accepted");
+        check_batch_matches_approved_preview(root, "feat-rev", &[cell(1), cell(2), cell(3)])
+            .expect("the whole packet must still be accepted");
+
+        let err = check_batch_matches_approved_preview(root, "feat-rev", &[cell(3)])
+            .expect_err("omitting an unstored packet cell must refuse");
+        assert!(err.contains("c2"), "refusal must name the missing cell: {err}");
+        assert!(!err.contains("c1"), "a stored packet cell is not missing: {err}");
+
+        let mut undeclared = cell(4);
+        undeclared["action"] = json!("Action 4");
+        let err = check_batch_matches_approved_preview(root, "feat-rev", &[cell(2), cell(3), undeclared])
+            .expect_err("an undeclared cell must still refuse");
+        assert!(err.contains("was not declared in the approved gate preview packet"), "{err}");
+
+        let mut mismatched = cell(2);
+        mismatched["verify"] = json!("cargo test -p bee other");
+        let err = check_batch_matches_approved_preview(root, "feat-rev", &[mismatched, cell(3)])
+            .expect_err("a mismatched packet cell must still refuse");
+        assert!(err.contains("verify mismatch"), "{err}");
     }
 
     #[test]
