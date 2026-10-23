@@ -444,13 +444,15 @@ report carries the four parts the task asks for (`Done:`, `Proof:`,
 The rules for the numbers:
 
 - **Tokens come from telemetry only.** Never estimate, never average,
-  never round a guess. The sources, in order: the feature's
-  `.bee/usage/<feature>.json` (`bee-usage/v1`, written by a green
-  `bee close`); the session's latest `bee-perf/v1` row in
+  never round a guess. The first source is `bee report usage --corr
+  <t-hex>`: it prints the header and the per-model table for the task
+  window, and the leader pastes its output. The fallbacks, in order:
+  the feature's `.bee/usage/<feature>.json` (`bee-usage/v1`, written by
+  a green `bee close`); the session's latest `bee-perf/v1` row in
   `~/.config/beehive/performance.jsonl` (written at each turn end, main
   and `subagent_models` apart); or the `message.usage` fields of the
-  session transcript and its `subagents/*.jsonl`, summed per model.
-  Name the source in the table's last column.
+  session transcript and its `subagents/*.jsonl`. Name the source in
+  the table's last column.
 - **One meaning per number.** Input = every prompt token (fresh +
   cache write + cache read). Cache = the cache write + cache read part
   of Input. Total = Input + Output. One row per model; a model used by
