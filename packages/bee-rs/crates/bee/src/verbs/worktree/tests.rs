@@ -2947,6 +2947,54 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn an_untracked_history_file_the_branch_also_adds_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        let on_branch = created
+            .worktree_root
+            .join("docs")
+            .join("history")
+            .join("demo")
+            .join("CONTEXT.md");
+        std::fs::create_dir_all(on_branch.parent().unwrap()).unwrap();
+        std::fs::write(&on_branch, "the branch's own context\n").unwrap();
+        git_ok(&created.worktree_root, &["add", "-A"]);
+        git_ok(&created.worktree_root, &["commit", "-qm", "the branch adds CONTEXT.md"]);
+
+        let collides = main.join("docs").join("history").join("demo").join("CONTEXT.md");
+        std::fs::create_dir_all(collides.parent().unwrap()).unwrap();
+        std::fs::write(&collides, "already sitting in main, untracked\n").unwrap();
+        let head_before = git_stdout(&main, &["rev-parse", "HEAD"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("an untracked history file the branch also writes must refuse up front")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("docs/history/demo/CONTEXT.md"), "{msg}");
+
+        assert_eq!(
+            git_stdout(&main, &["rev-parse", "HEAD"]),
+            head_before,
+            "a refusal must not move main's HEAD"
+        );
+        let status = git_status_untracked_all_str(&main);
+        assert!(
+            status.lines().all(|line| line.starts_with("??")),
+            "nothing may be staged or committed by a refused merge: {status}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&collides).unwrap(),
+            "already sitting in main, untracked\n",
+            "the untracked file must be left byte-untouched"
+        );
+    }
+
     /// mdp-1's sharp edge: the changed-file set is read against the branch's
     /// MERGE BASE with main, never against main's HEAD. This fixture is the
     /// one where the two spellings DISAGREE — main has moved on since the
