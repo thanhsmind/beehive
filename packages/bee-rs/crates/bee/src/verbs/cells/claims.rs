@@ -202,7 +202,11 @@ fn gate_pid_dead(pid: Option<&Value>) -> bool {
         }
         false
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        !lock::is_pid_alive(Some(v))
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = v;
         false
