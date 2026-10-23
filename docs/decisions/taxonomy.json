@@ -740,6 +740,7 @@
     "contract:orient-promote-blocker",
     "contract:preamble-promote-section",
     "release-2-57-0",
-    "preamble-law-fix"
+    "preamble-law-fix",
+    "release-2-58-0"
   ]
 }

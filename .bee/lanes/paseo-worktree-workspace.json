@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đang gửi báo cáo về wd.",
-    "asked_at": "2026-10-23T01:18:54.206Z",
+    "subject": "Gần có quyền deploy. bee cần thêm số phiên bản.",
+    "asked_at": "2026-10-23T02:39:41.509Z",
     "session": "2e30c1e1-71d5-43d9-b0fe-57a13aafbbbb"
   }
 }
