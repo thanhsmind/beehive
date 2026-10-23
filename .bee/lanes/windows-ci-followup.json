@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"windows-ci-followup\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at b5e111e; capture what settled, then bee close --feature windows-ci-followup.",
   "created_at": "2026-10-23T08:01:26.085Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Đã dọn 3 worktree, lấy lại khoảng 300 MB ✓. Giờ tôi soạn hồ sơ phát hành bản 2.59.0.",
-    "asked_at": "2026-10-23T08:03:22.587Z",
-    "session": "12e63a51-afd1-4a10-b86b-3b25db7b7739"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "small",
@@ -380,12 +375,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-23T08:11:04.386Z",
-    "branch": "wt/windows-ci-followup",
-    "worktree_id": "beehive--wt--windows-ci-followup",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
