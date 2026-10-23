@@ -744,6 +744,9 @@
     "release-2-58-0",
     "issues-sweep-1023",
     "issues",
-    "contract:windows-test-fixtures"
+    "contract:windows-test-fixtures",
+    "windows-ci-followup",
+    "contract:mailbox-tilde",
+    "release-2-59-0"
   ]
 }

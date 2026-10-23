@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"issues-sweep-1023\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at bcba44d; reload the product and test \"issues-sweep-1023\", then either approve uat (\"bee gate --name uat --approved true --lane issues-sweep-1023\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-23T04:22:23.006Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: issues-sweep-1023",
-    "asked_at": "2026-10-23T06:36:42.996Z",
-    "session": "bee-worktree-merge-sessionless"
+    "kind": "turn-end",
+    "subject": "Đã đóng 13 issue ✓. Giờ tôi theo dõi CI, nhất là CI Windows cho #96.",
+    "asked_at": "2026-10-23T07:17:07.548Z",
+    "session": "12e63a51-afd1-4a10-b86b-3b25db7b7739"
   },
   "route": {
     "class": "bugfix",
