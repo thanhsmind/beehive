@@ -905,6 +905,19 @@ for (const call of spec.calls) {
       results.push(step({ switches_seen: switches.length }));
       continue;
     }
+    case "await_notification": {
+      const deadline = Date.now() + (call.timeout_ms ?? 10000);
+      const seen = () => notifications.some((n) => String(n.message ?? "").includes(call.contains ?? ""));
+      while (!seen() && Date.now() < deadline) await sleep(25);
+      results.push(step({ notification_seen: seen() }));
+      continue;
+    }
+    case "await_order_entry": {
+      const deadline = Date.now() + (call.timeout_ms ?? 10000);
+      while (!orderLog.includes(call.entry) && Date.now() < deadline) await sleep(25);
+      results.push(step({ order_entry_seen: orderLog.includes(call.entry) }));
+      continue;
+    }
     case "reload_fresh": {
       const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), "bee-pi-reload-"));
       fs.cpSync(path.dirname(extensionPath), freshDir, { recursive: true });
@@ -1148,7 +1161,7 @@ const HARNESS_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// One node process, one ordered list of calls. Every call is either an event
 /// (`{event, event_arg, cwd, session_id, installFrom?}`) or one of the
-/// timer-facing steps `{kind: "sleep"|"await_messages"|"snapshot", …}`.
+/// timer-facing steps `{kind: "sleep"|"await_messages"|"await_switches"|"await_notification"|"await_order_entry"|"snapshot", …}`.
 fn run_harness(harness: &Path, calls: Vec<Value>) -> HarnessRun {
     run_harness_spec(harness, json!({ "calls": calls }))
 }
@@ -1433,6 +1446,14 @@ fn await_switches_step(count: usize) -> Value {
 
 fn sleep_step(ms: u64) -> Value {
     json!({"kind": "sleep", "ms": ms})
+}
+
+fn await_notification_step(contains: &str) -> Value {
+    json!({"kind": "await_notification", "contains": contains, "timeout_ms": positive_wait_ms()})
+}
+
+fn await_order_entry_step(entry: &str) -> Value {
+    json!({"kind": "await_order_entry", "entry": entry, "timeout_ms": positive_wait_ms()})
 }
 
 /// Read the inbox directory at a defined point in the call order.
@@ -6041,7 +6062,7 @@ fn deferred_transition_rejects_forged_marker() {
                 }),
             ),
             advisory_call("agent_settled", &main_path, "sess-spoof-1", json!({})),
-            sleep_step(50),
+            await_notification_step("deferred transition intent failed authenticity validation"),
         ],
     );
 
@@ -7372,7 +7393,7 @@ fn deferred_exit_ordering_settled_fork_switch_replacement_merge() {
                 }),
             ),
             advisory_call("agent_settled", &wt_path, "sess-defer-exit-1", json!({})),
-            sleep_step(300),
+            await_order_entry_step("withSession_end"),
         ],
     );
 
@@ -7491,7 +7512,7 @@ fn exit_worktree_marker_relocates_and_no_merge_command_runs() {
                 }),
             ),
             advisory_call("agent_settled", &wt_path, "sess-exit-marker-1", json!({})),
-            sleep_step(300),
+            await_notification_step("worktree was kept"),
         ],
     );
 
