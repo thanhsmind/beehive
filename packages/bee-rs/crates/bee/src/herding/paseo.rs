@@ -1735,7 +1735,7 @@ mod tests {
         let link_s = link.to_string_lossy().into_owned();
         let cli = ScriptedCli::new(move |args: &[String]| {
             if args == workspace_ls_argv().as_slice() {
-                Ok(format!("[{{\"workspaceId\":\"wks_link\",\"cwd\":\"{link_s}\"}}]"))
+                Ok(json!([{ "workspaceId": "wks_link", "cwd": link_s }]).to_string())
             } else {
                 Err("unexpected".to_string())
             }
@@ -1757,9 +1757,11 @@ mod tests {
             if args == workspace_ls_argv().as_slice() {
                 Ok("[]".to_string())
             } else if args == project_ls_argv().as_slice() {
-                Ok(format!(
-                    "[{{\"projectId\":\"prj_other\",\"path\":\"{other_s}\"}},{{\"projectId\":\"prj_main\",\"path\":\"{main_s}\"}}]"
-                ))
+                Ok(json!([
+                    { "projectId": "prj_other", "path": other_s },
+                    { "projectId": "prj_main", "path": main_s }
+                ])
+                .to_string())
             } else {
                 Ok("noise line\n{\"workspaceId\":\"wks_new\"}".to_string())
             }
