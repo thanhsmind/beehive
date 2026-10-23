@@ -3724,7 +3724,8 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => {
-            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling; pane kept for inspection".to_string()));
+            stop_after_ceiling(cli, &agent_id);
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling, so the agent was stopped; pane kept for inspection".to_string()));
             RunOutcome::TimedOutCeiling
         }
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
@@ -4052,7 +4053,8 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
             RunOutcome::TimedOutIdle(diagnose_giveup_paseo(cli, &agent_id, generic))
         }
         PollDecision::TimedOutCeiling => {
-            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling; pane kept for inspection".to_string()));
+            stop_after_ceiling(cli, &agent_id);
+            eprintln!("{}", diagnose_giveup_paseo(cli, &agent_id, "bee herding run: paseo worker hit the ceiling, so the agent was stopped; pane kept for inspection".to_string()));
             RunOutcome::TimedOutCeiling
         }
         PollDecision::PausedLimit => RunOutcome::PausedLimit,
@@ -4165,6 +4167,12 @@ fn model_mismatch_refusal(bee_dir: &Path, job_id: &str, agent_id: &str) -> Strin
         at("configured", "model"),
         at("configured", "thinking"),
     )
+}
+
+fn stop_after_ceiling(cli: &dyn PaseoCli, agent_id: &str) {
+    if let Err(e) = cli.call(&paseo::stop_argv(agent_id)) {
+        eprintln!("herding: could not stop paseo agent {agent_id} after it hit the ceiling: {e}");
+    }
 }
 
 fn stop_for_model_mismatch(cli: &dyn PaseoCli, agent_id: &str) -> PollTick {
@@ -12810,6 +12818,63 @@ mod tests {
     }
 
     #[test]
+    fn execute_continue_paseo_ceiling_timeout_stops_agent_without_archiving() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.is_continue = true;
+        opts.job_id = "job-c-ceiling".to_string();
+        opts.ceiling_secs = 0;
+
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": "job-c-ceiling",
+            "task": "round 1 task",
+            "cwd": main_root.join("work").display().to_string(),
+            "round": 1,
+            "idle_timeout_secs": 3_600,
+            "ceiling_secs": 3_600,
+            "close_always": false,
+            "created_at": "2026-01-01T00:00:00Z",
+            "transport": "paseo",
+            "paseo_agent_id": "agent-ceiling-1",
+        });
+        std::fs::write(
+            mailbox::job_path(&bee_dir, &opts.job_id),
+            serde_json::to_string(&job).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            mailbox::result_path(&bee_dir, &opts.job_id, 1),
+            r#"{"status":"question","summary":"q1","files_changed":[],"proof":"n/a","question":{"text":"which way?","kind":"technical"}}"#,
+        )
+        .unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("".to_string()),
+            Ok("{\"Status\":\"idle\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_continue_paseo(&opts, &fake);
+        assert!(matches!(res.outcome, RunOutcome::TimedOutCeiling), "{:?}", res.outcome);
+        assert!(!res.closed_pane);
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(
+            calls.iter().any(|c| c == &["stop", "agent-ceiling-1"]),
+            "expected a stop call, got {calls:?}"
+        );
+        assert!(
+            !calls.iter().any(|c| c.first().map(|s| s.as_str()) == Some("archive")),
+            "ceiling timeout must not archive the agent, got {calls:?}"
+        );
+    }
+
+    #[test]
     fn execute_continue_paseo_on_working_agent_refuses_with_no_send() {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
@@ -13101,6 +13166,37 @@ mod tests {
             }
             ref other => panic!("expected TimedOutIdle, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn execute_paseo_ceiling_timeout_stops_agent_without_archiving() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.ceiling_secs = 0;
+
+        let spec = pi_spec();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Ok("{\"agentId\":\"paseo-agent-ceiling\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        assert!(matches!(res.outcome, RunOutcome::TimedOutCeiling), "{:?}", res.outcome);
+        assert!(!res.closed_pane);
+
+        let calls = fake.calls.lock().unwrap();
+        assert!(
+            calls.iter().any(|c| c == &["stop", "paseo-agent-ceiling"]),
+            "expected a stop call, got {calls:?}"
+        );
+        assert!(
+            !calls.iter().any(|c| c.first().map(|s| s.as_str()) == Some("archive")),
+            "ceiling timeout must not archive the agent, got {calls:?}"
+        );
     }
 
     #[test]
