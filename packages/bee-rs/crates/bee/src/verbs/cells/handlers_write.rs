@@ -1887,6 +1887,11 @@ pub(crate) fn claim_cell_cross_session_ex(
         }
         ClaimFileOutcome::Ok { claim } => claim,
     };
+    let claim_session: Option<String> = match file_claim.get("session") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let session = claim_session.as_deref();
     // Budget check inside the O_EXCL window.
     if let Some(Value::Object(cell_map)) = cell_for_budget {
         match check_cell_budgets(cell_map) {

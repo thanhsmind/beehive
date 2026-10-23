@@ -2855,10 +2855,8 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
         .expect("normal systemPrompt must be present");
 
     let run_session_init = |payload: Value| -> String {
-        let mut child = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        let mut child = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
             .args(["hook", "session-init"])
-            .env_remove("BEE_HERDING_WORKER")
-            .env_remove("BEE_HERDING_JOB_ID")
             .current_dir(dir.path())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -2894,7 +2892,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
     // Verify both normal and compact Pi injection publish --runtime pi and execute team.pi herding
     for (label, injected_text) in [("normal", normal_system_prompt), ("compact", compact_text.as_str())] {
         let args = extract_args(label, injected_text, "pi");
-        let out = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        let out = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
             .args(&args)
             .current_dir(dir.path())
             .output()
@@ -2922,7 +2920,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
         "session_id": "sess-default-claude"
     }));
     let args_default = extract_args("default-claude", &default_claude_text, "claude");
-    let out_default = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+    let out_default = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
         .args(&args_default)
         .current_dir(dir.path())
         .output()
@@ -2940,7 +2938,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
         "runtime": "claude"
     }));
     let args_claude = extract_args("explicit-claude", &explicit_claude_text, "claude");
-    let out_claude = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+    let out_claude = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
         .args(&args_claude)
         .current_dir(dir.path())
         .output()
@@ -2958,7 +2956,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
         "runtime": "codex"
     }));
     let args_codex = extract_args("explicit-codex", &explicit_codex_text, "codex");
-    let out_codex = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+    let out_codex = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
         .args(&args_codex)
         .current_dir(dir.path())
         .output()
@@ -2980,7 +2978,7 @@ fn injected_dispatch_guidance_extracts_and_executes_pi_runtime_herding() {
             "runtime": malformed_val
         }));
         let args_malformed = extract_args("malformed", &malformed_text, "claude");
-        let out_malformed = Command::new(dir.path().join(".bee").join("bin").join("bee"))
+        let out_malformed = real_bee(&dir.path().join(".bee").join("bin").join("bee"))
             .args(&args_malformed)
             .current_dir(dir.path())
             .output()
@@ -3030,7 +3028,7 @@ fn injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_rou
         "deps": [], "action": "demo action", "verify": "true", "trace": {}
     });
     std::fs::write(cells_dir.join("demo-1.json"), cell.to_string()).expect("write cell");
-    let claim = Command::new(&bee)
+    let claim = real_bee(&bee)
         .args(["cells", "claim", "--id", "demo-1", "--worker", "w-demo", "--session-id", "sess-claim", "--json"])
         .current_dir(dir.path())
         .output()
@@ -3057,7 +3055,7 @@ fn injected_pi_dispatch_covers_advisor_hat_reviewer_and_cell_with_a_detached_rou
     let prepare = |label: &str, kind: &str, role: &str, extra: &[&str]| -> Value {
         let mut args = injected_dispatch_args(label, preamble, "pi", kind, role);
         args.extend(extra.iter().map(|s| s.to_string()));
-        let out = Command::new(&bee).args(&args).current_dir(dir.path()).output().expect("dispatch prepare");
+        let out = real_bee(&bee).args(&args).current_dir(dir.path()).output().expect("dispatch prepare");
         assert!(
             out.status.success(),
             "{label}: dispatch prepare {args:?} failed: stdout={} stderr={}",
@@ -4054,6 +4052,13 @@ fn the_drain_never_throws_on_a_missing_inbox_or_a_malformed_marker_or_result() {
 
 fn bee_bin() -> PathBuf {
     assert_cmd::cargo::cargo_bin("bee")
+}
+
+fn real_bee(bin: &Path) -> Command {
+    let mut cmd = Command::new(bin);
+    cmd.env_remove("BEE_HERDING_WORKER");
+    cmd.env_remove("BEE_HERDING_JOB_ID");
+    cmd
 }
 
 fn write_real_bee(root: &Path) {
@@ -7856,7 +7861,7 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
     let bee = bee_bin();
 
     // Onboard repo with --apply
-    let onboard_out = Command::new(&bee)
+    let onboard_out = real_bee(&bee)
         .args(["onboard", "--repo-root", repo_path.to_str().unwrap(), "--apply", "--json"])
         .output()
         .expect("bee onboard --apply");
@@ -7916,7 +7921,7 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
     assert_eq!(sess_val["activity"]["event"], "UserPromptSubmit");
     assert!(sess_val["work"]["text"].as_str().unwrap_or("").contains("implement parity"));
 
-    let release_out = Command::new(&bee_target)
+    let release_out = real_bee(&bee_target)
         .args(["state", "session", "release", "--json"])
         .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
@@ -7930,7 +7935,7 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
     assert_eq!(rel_val["released"], true);
 
     // 3. Early write denial: start feature, set route, attempt write on main before gate approval
-    let start_out = Command::new(&bee_target)
+    let start_out = real_bee(&bee_target)
         .args(["state", "start-feature", "--feature", "feat-parity", "--mode", "standard", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -7938,7 +7943,7 @@ fn pi_lifecycle_end_to_end_onboarded_repo_parity() {
         .expect("start-feature");
     assert!(start_out.status.success(), "start-feature failed: {}", String::from_utf8_lossy(&start_out.stderr));
 
-    let route_out = Command::new(&bee_target)
+    let route_out = real_bee(&bee_target)
         .args(["route", "--set", "--class", "feature", "--lane", "standard", "--flags", "", "--files", "1", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8009,7 +8014,7 @@ Parity test plan.
     std::fs::write(plan_dir.join("plan.md"), plan_content).expect("write plan.md");
 
     // Shape/merged approval without preview is REFUSED
-    let unpreviewed_gate = Command::new(&bee_target)
+    let unpreviewed_gate = real_bee(&bee_target)
         .args(["gate", "--merge", "--approved", "true", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8020,7 +8025,7 @@ Parity test plan.
     assert!(unpreviewed_err.contains("cell packet preview") || unpreviewed_err.contains("preview"), "must cite missing preview: {unpreviewed_err}");
 
     // Run preview
-    let preview_out = Command::new(&bee_target)
+    let preview_out = real_bee(&bee_target)
         .args(["state", "gate", "preview", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8040,7 +8045,7 @@ Parity test plan.
     assert_eq!(preview_val["cells"].as_array().unwrap().len(), 1);
 
     // Now merged gate approval succeeds
-    let approved_gate = Command::new(&bee_target)
+    let approved_gate = real_bee(&bee_target)
         .args(["gate", "--merge", "--approved", "true", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8071,7 +8076,7 @@ Parity test plan.
         },
         "behavior_change": true
     }]);
-    let mut add_differing = Command::new(&bee_target)
+    let mut add_differing = real_bee(&bee_target)
         .args(["cells", "add", "--stdin", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8107,7 +8112,7 @@ Parity test plan.
         },
         "behavior_change": true
     }]);
-    let mut add_matching = Command::new(&bee_target)
+    let mut add_matching = real_bee(&bee_target)
         .args(["cells", "add", "--stdin", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8121,7 +8126,7 @@ Parity test plan.
     assert!(add_match_out.status.success(), "cells add with matching packet failed: {}", String::from_utf8_lossy(&add_match_out.stderr));
 
     // 5. Intent and Purpose:
-    let intent_set = Command::new(&bee_target)
+    let intent_set = real_bee(&bee_target)
         .args([
             "intent", "set",
             "--feature", "feat-parity",
@@ -8135,7 +8140,7 @@ Parity test plan.
         .expect("intent set");
     assert!(intent_set.status.success(), "intent set failed: {}", String::from_utf8_lossy(&intent_set.stderr));
 
-    let intent_absent = Command::new(&bee_target)
+    let intent_absent = real_bee(&bee_target)
         .args(["intent", "show", "--feature", "other-feature-without-anchor", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8145,7 +8150,7 @@ Parity test plan.
     assert!(absent_val.is_null() || absent_val.get("error").is_some() || absent_val.get("request").is_none(),
         "unrelated feature intent must not resolve to active feature anchor: {absent_val:?}");
 
-    let prep_out = Command::new(&bee_target)
+    let prep_out = real_bee(&bee_target)
         .args(["dispatch", "prepare", "--runtime", "pi", "--kind", "gather", "--purpose", "Inspect Pi plugin execution contract", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8165,7 +8170,7 @@ Parity test plan.
     assert!(prompt_text.contains("Inspect Pi plugin execution contract"), "prompt must include purpose verbatim: {prompt_text}");
 
     // 6. Replayable proof:
-    let worker_add = Command::new(&bee_target)
+    let worker_add = real_bee(&bee_target)
         .args(["state", "worker", "add", "--nickname", "pi-worker-1", "--cell", "feat-parity-1", "--tier", "generation", "--status", "working", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8173,7 +8178,7 @@ Parity test plan.
         .expect("worker add");
     assert!(worker_add.status.success(), "worker add failed");
 
-    let claim_out = Command::new(&bee_target)
+    let claim_out = real_bee(&bee_target)
         .args(["cells", "claim", "--id", "feat-parity-1", "--worker", "pi-worker-1", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8222,7 +8227,7 @@ Parity test plan.
         "tests": "manual inspection — green:live — checked, evidence /tmp/x/evidence/r1",
         "deviations": []
     });
-    let mismatched_cap = Command::new(&bee_target)
+    let mismatched_cap = real_bee(&bee_target)
         .args([
             "cells", "cap", "--id", "feat-parity-1", "--files", "src/parity.rs",
             "--report", &mismatched_cap_report.to_string(),
@@ -8244,7 +8249,7 @@ Parity test plan.
         "tests": "test -f src/parity.rs — green:live — parity file verified on disk, evidence /tmp/x/evidence/r1",
         "deviations": []
     });
-    let matching_cap = Command::new(&bee_target)
+    let matching_cap = real_bee(&bee_target)
         .args([
             "cells", "cap", "--id", "feat-parity-1", "--files", "src/parity.rs",
             "--report", &matching_cap_report.to_string(),
@@ -8262,7 +8267,7 @@ Parity test plan.
         String::from_utf8_lossy(&matching_cap.stderr)
     );
 
-    let show_out = Command::new(&bee_target)
+    let show_out = real_bee(&bee_target)
         .args(["cells", "show", "--id", "feat-parity-1", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8303,7 +8308,7 @@ Parity test plan.
         let repo_clone = repo_path.to_path_buf();
         let set = std::sync::Arc::clone(&job_ids);
         thread_handles.push(std::thread::spawn(move || {
-            let out = Command::new(&bee_clone)
+            let out = real_bee(&bee_clone)
                 .args(["herding", "run", "--task", &format!("concurrent test task thread {i}"), "--json", "--dry-run", "--ceiling", "60"])
                 .current_dir(&repo_clone)
                 .output()
@@ -8329,7 +8334,7 @@ Parity test plan.
     let process_count = 3;
     let mut child_processes = Vec::new();
     for i in 0..process_count {
-        let child = Command::new(&bee_target)
+        let child = real_bee(&bee_target)
             .args(["herding", "run", "--task", &format!("concurrent test task process {i}"), "--json", "--dry-run", "--ceiling", "60"])
             .current_dir(repo_path)
             .stdout(Stdio::piped())
@@ -8370,7 +8375,7 @@ Parity test plan.
     let initial_claim_str = format!("{}\n", serde_json::to_string_pretty(&initial_claim_val).unwrap());
     std::fs::write(&next_claim_path, &initial_claim_str).expect("write next cell claim");
 
-    let pn_write = Command::new(&bee_target)
+    let pn_write = real_bee(&bee_target)
         .args([
             "state", "handoff", "write",
             "--kind", "planned-next",
@@ -8404,7 +8409,7 @@ Parity test plan.
     let claim_before_str = std::fs::read_to_string(&next_claim_path).expect("read claim before dismiss");
 
     // Attempting to dismiss planned-next handoff MUST be refused
-    let pn_dismiss = Command::new(&bee_target)
+    let pn_dismiss = real_bee(&bee_target)
         .args(["state", "handoff", "dismiss", "--lane", "feat-parity", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8426,7 +8431,7 @@ Parity test plan.
     assert_eq!(mb_after_val["status"], "open", "mailbox record status must remain open");
 
     // Close workflow while planned-next authority is open MUST be refused
-    let premature_close = Command::new(&bee_target)
+    let premature_close = real_bee(&bee_target)
         .args(["state", "workflows", "close", "--id", wf_id_str, "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8441,7 +8446,7 @@ Parity test plan.
 
     // Adopt planned-next handoff through installed CLI
     let adopt_session = "pi-session-next";
-    let adopt_out = Command::new(&bee_target)
+    let adopt_out = real_bee(&bee_target)
         .args([
             "state", "handoff", "adopt",
             "--lane", "feat-parity",
@@ -8481,7 +8486,7 @@ Parity test plan.
     assert_eq!(mb_adopted_val["claim_epoch"].as_u64().unwrap_or(0), 2);
 
     // 8b. Write pause handoff and prove it is projected to .bee/HANDOFF.json
-    let pause_write = Command::new(&bee_target)
+    let pause_write = real_bee(&bee_target)
         .args(["state", "handoff", "write", "--kind", "pause", "--lane", "feat-parity", "--cell", "feat-parity-1", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8502,7 +8507,7 @@ Parity test plan.
     assert_eq!(proj_val["cell"], "feat-parity-1", "projected handoff cell must match");
 
     // 8c. Dismiss pause handoff through CLI
-    let pause_dismiss = Command::new(&bee_target)
+    let pause_dismiss = real_bee(&bee_target)
         .args(["state", "handoff", "dismiss", "--lane", "feat-parity", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8532,7 +8537,7 @@ Parity test plan.
     assert_eq!(pause_mb_val["status"], "cleared");
 
     // 8d. Close workflow through CLI
-    let close_out = Command::new(&bee_target)
+    let close_out = real_bee(&bee_target)
         .args(["state", "workflows", "close", "--id", wf_id_str, "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -8547,7 +8552,7 @@ Parity test plan.
     );
 
     // 8e. Run bee orient --json and assert no handoff blocker and .bee/HANDOFF.json is absent
-    let orient_out = Command::new(&bee_target)
+    let orient_out = real_bee(&bee_target)
         .args(["orient", "--json"])
         .env("PI_SESSION_ID", PI_SESSION)
         .current_dir(repo_path)
@@ -9120,9 +9125,8 @@ fn real_bee_hook_stage_tools_end_to_end() {
 
     // 1. Direct real CLI execution test: prove bee hook stage-tools returns a verdict JSON
     use std::io::Write;
-    let mut child = std::process::Command::new(bee_bin())
+    let mut child = real_bee(&bee_bin())
         .args(["hook", "stage-tools"])
-        .env_remove("BEE_HERDING_WORKER")
         .current_dir(dir.path())
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -9210,9 +9214,8 @@ fn real_bee_hook_stage_tools_end_to_end() {
 #[cfg(unix)]
 fn real_stage_tools_verdict(root: &Path, state: &Value) -> Value {
     std::fs::write(root.join(".bee").join("state.json"), state.to_string()).expect("write state.json");
-    let output = Command::new(bee_bin())
+    let output = real_bee(&bee_bin())
         .args(["hook", "stage-tools"])
-        .env_remove("BEE_HERDING_WORKER")
         .current_dir(root)
         .stdin(Stdio::null())
         .output()
@@ -9545,9 +9548,8 @@ fn every_advisory_hook_the_pi_belt_calls_is_a_hook_bee_serves() {
 
     let mut unknown: Vec<String> = Vec::new();
     for name in &names {
-        let mut child = std::process::Command::new(bee_bin())
+        let mut child = real_bee(&bee_bin())
             .args(["hook", name.as_str()])
-            .env_remove("BEE_HERDING_WORKER")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())

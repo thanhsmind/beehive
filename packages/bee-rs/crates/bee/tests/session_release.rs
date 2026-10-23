@@ -36,6 +36,13 @@ fn write_session(root: &Path, id: &str) {
     .unwrap();
 }
 
+fn bee() -> Command {
+    let mut cmd = Command::cargo_bin("bee").unwrap();
+    cmd.env_remove("BEE_HERDING_WORKER");
+    cmd.env_remove("BEE_HERDING_JOB_ID");
+    cmd
+}
+
 fn read_session(root: &Path, id: &str) -> Value {
     let raw = std::fs::read_to_string(root.join(".bee").join("sessions").join(format!("{id}.json")))
         .unwrap();
@@ -48,8 +55,7 @@ fn release_marks_status_closed_and_released_via_the_session_id_flag() {
     let repo = scratch_repo(tmp.path(), "flag");
     write_session(&repo, "sess-flag");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--session-id", "sess-flag", "--json"])
         .current_dir(&repo)
         .output()
@@ -72,8 +78,7 @@ fn release_resolves_the_session_id_from_bee_session_id_env() {
     let repo = scratch_repo(tmp.path(), "env-bee");
     write_session(&repo, "sess-env-bee");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--json"])
         .env("BEE_SESSION_ID", "sess-env-bee")
         .current_dir(&repo)
@@ -95,8 +100,7 @@ fn release_resolves_the_session_id_from_claude_code_session_id_env_when_bee_sess
     let repo = scratch_repo(tmp.path(), "env-claude");
     write_session(&repo, "sess-env-claude");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--json"])
         .env_remove("BEE_SESSION_ID")
         .env("CLAUDE_CODE_SESSION_ID", "sess-env-claude")
@@ -118,8 +122,7 @@ fn release_flag_outranks_the_env_chain() {
     write_session(&repo, "sess-flag-wins");
     write_session(&repo, "sess-env-loses");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--session-id", "sess-flag-wins", "--json"])
         .env("BEE_SESSION_ID", "sess-env-loses")
         .current_dir(&repo)
@@ -141,8 +144,7 @@ fn release_of_a_missing_session_record_is_a_typed_noop_not_a_refusal() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = scratch_repo(tmp.path(), "missing");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--session-id", "ghost", "--json"])
         .current_dir(&repo)
         .output()
@@ -160,8 +162,7 @@ fn pi_session_identity_release_resolves_from_pi_session_id_env() {
     let repo = scratch_repo(tmp.path(), "pi-env");
     write_session(&repo, "sess-env-pi");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--json"])
         .env_remove("BEE_SESSION_ID")
         .env_remove("CLAUDE_CODE_SESSION_ID")
@@ -182,8 +183,7 @@ fn pi_session_identity_release_precedence_claude_beats_pi() {
     write_session(&repo, "sess-claude");
     write_session(&repo, "sess-pi");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--json"])
         .env_remove("BEE_SESSION_ID")
         .env("CLAUDE_CODE_SESSION_ID", "sess-claude")
@@ -207,8 +207,7 @@ fn pi_session_identity_release_precedence_bee_beats_pi() {
     write_session(&repo, "sess-bee");
     write_session(&repo, "sess-pi");
 
-    let out = Command::cargo_bin("bee")
-        .unwrap()
+    let out = bee()
         .args(["state", "session", "release", "--json"])
         .env("BEE_SESSION_ID", "sess-bee")
         .env_remove("CLAUDE_CODE_SESSION_ID")

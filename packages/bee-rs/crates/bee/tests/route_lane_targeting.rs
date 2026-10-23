@@ -182,6 +182,86 @@ fn no_lane_makes_writing_the_default_record_an_explicit_allowed_act() {
     }
 }
 
+fn lane_record(repo: &Path, lane: &str) -> String {
+    std::fs::read_to_string(repo.join(".bee/lanes").join(format!("{lane}.json"))).unwrap()
+}
+
+#[test]
+fn an_unbound_state_route_set_writes_the_lane_record_it_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path(), &[("lane-a", "shaping"), ("lane-b", "planning")]);
+    let before = state_json(&repo);
+
+    let mut args = vec!["state"];
+    args.extend(set_args());
+    args.extend(["--lane-record", "lane-b"]);
+    let (code, out) = run(&repo, &args, None);
+
+    assert_eq!(code, 0, "naming the lane record must be enough from an unbound session: {out}");
+    assert!(out.contains("(lane \"lane-b\")"), "the write must name the lane record: {out}");
+    let lane_b = lane_record(&repo, "lane-b");
+    assert!(lane_b.contains("\"route\""), "the route lands on lane-b: {lane_b}");
+    assert!(
+        lane_b.contains("\"feature\": \"lane-b\""),
+        "the route is stamped for the lane's own feature: {lane_b}"
+    );
+    assert_eq!(state_json(&repo), before, "the default record must stay untouched");
+    assert!(!lane_record(&repo, "lane-a").contains("route"), "lane-a must stay untouched");
+}
+
+#[test]
+fn the_flow_spelling_also_writes_the_lane_record_it_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path(), &[("lane-a", "shaping"), ("lane-b", "planning")]);
+    let before = state_json(&repo);
+
+    let mut args = set_args();
+    args.extend(["--lane-record", "lane-a"]);
+    let (code, out) = run(&repo, &args, None);
+
+    assert_eq!(code, 0, "`bee route` shares run_route, so it must accept the flag too: {out}");
+    assert!(out.contains("(lane \"lane-a\")"), "{out}");
+    assert!(lane_record(&repo, "lane-a").contains("\"route\""), "{out}");
+    assert_eq!(state_json(&repo), before, "the default record must stay untouched");
+}
+
+#[test]
+fn lane_record_refuses_together_with_no_lane() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path(), &[("lane-a", "shaping")]);
+    let before = state_json(&repo);
+
+    let mut args = set_args();
+    args.extend(["--lane-record", "lane-a", "--no-lane"]);
+    let (code, out) = run(&repo, &args, None);
+
+    assert_ne!(code, 0, "the pair is a contradictory target: {out}");
+    assert!(
+        out.contains("--no-lane cannot be combined with --lane-record"),
+        "the refusal must name the collision: {out}"
+    );
+    assert_eq!(state_json(&repo), before, "a refused pair writes nothing");
+    assert!(!lane_record(&repo, "lane-a").contains("route"), "and nothing on the lane");
+}
+
+#[test]
+fn an_unknown_lane_record_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path(), &[("lane-a", "shaping")]);
+    let before = state_json(&repo);
+
+    let mut args = set_args();
+    args.extend(["--lane-record", "no-such-lane"]);
+    let (code, out) = run(&repo, &args, None);
+
+    assert_ne!(code, 0, "a lane that does not exist cannot be targeted: {out}");
+    assert!(
+        out.contains("lane \"no-such-lane\" does not exist"),
+        "the refusal must name the missing lane: {out}"
+    );
+    assert_eq!(state_json(&repo), before, "a refused target writes nothing");
+}
+
 #[test]
 fn a_bound_session_still_writes_its_own_lane_record_and_is_never_refused() {
     let tmp = tempfile::tempdir().unwrap();

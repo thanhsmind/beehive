@@ -159,6 +159,15 @@ pub(crate) fn main_dirt_excluding(cwd: &Path, exclude_paths: &[String]) -> Resul
         .iter()
         .map(|p| format!(":(exclude){}", p.replace('\\', "/")))
         .collect();
+    porcelain_dirt(cwd, &pathspecs)
+}
+
+pub(crate) fn main_untracked_under(cwd: &Path, roots: &[String]) -> Result<Vec<String>, String> {
+    let pathspecs: Vec<String> = roots.iter().map(|r| r.replace('\\', "/")).collect();
+    Ok(porcelain_dirt(cwd, &pathspecs)?.untracked)
+}
+
+fn porcelain_dirt(cwd: &Path, pathspecs: &[String]) -> Result<MainDirt, String> {
     let mut args: Vec<&str> = vec!["status", "--porcelain", "--untracked-files=all", "-z", "--"];
     args.extend(pathspecs.iter().map(String::as_str));
     let r = run_git(cwd, &args);
@@ -400,19 +409,25 @@ pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs
     // ever reaches `add`/`commit` — `.bee` alone is never dropped this way in
     // practice (bootstrap always creates it), so this only ever narrows the
     // optional docs/history root.
-    let specs: Vec<&str> = pathspecs
-        .iter()
-        .map(String::as_str)
-        .filter(|spec| {
-            main_root.join(spec).exists() || {
-                let tracked = run_git(main_root, &["ls-files", "--", spec]);
-                !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
-            }
-        })
-        .collect();
-    if specs.is_empty() {
+    let mut includes: Vec<&str> = Vec::new();
+    let mut excludes: Vec<&str> = Vec::new();
+    for spec in pathspecs.iter().map(String::as_str) {
+        if spec.starts_with(':') {
+            excludes.push(spec);
+            continue;
+        }
+        if main_root.join(spec).exists() || {
+            let tracked = run_git(main_root, &["ls-files", "--", spec]);
+            !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
+        } {
+            includes.push(spec);
+        }
+    }
+    if includes.is_empty() {
         return MainBookkeepingCommit::skipped("clean");
     }
+    let mut specs: Vec<&str> = includes;
+    specs.extend(excludes);
 
     let mut status_args: Vec<&str> = vec!["status", "--porcelain", "--"];
     status_args.extend_from_slice(&specs);

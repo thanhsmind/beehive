@@ -487,23 +487,20 @@ pub(crate) fn merge_stage(
         // never touch; refusing on it made the steady state with several
         // live sessions "nobody merges until everybody commits" — a
         // coordination cost paid daily, four refusals in two days, for a
-        // collision that cannot happen. Exempting it from the REFUSAL is
-        // not exempting it from anything else: `main_bookkeeping_roots` is
-        // untouched below, so no untracked path is ever swept into the
-        // auto-commit, and git's own "untracked working tree file would be
-        // overwritten by merge" stays the backstop for whatever the branch
-        // does touch.
-        let blocking_untracked: Vec<String> = if dirt.untracked.is_empty() {
-            Vec::new()
-        } else {
-            match current_branch(&worktree_root).and_then(|b| branch_changed_files(main_root, &b)) {
-                Some(changed) => dirt.untracked.iter().filter(|u| changed.contains(*u)).cloned().collect(),
-                // Fail closed: a detached HEAD or an unresolvable merge base
-                // leaves the collision question unanswerable, so every
-                // untracked path blocks, exactly as before the narrowing.
-                None => dirt.untracked.clone(),
-            }
-        };
+        // collision that cannot happen. A detached HEAD or an unresolvable
+        // merge base leaves the collision question unanswerable, so every
+        // untracked path blocks, exactly as before the narrowing.
+        let branch_changed = current_branch(&worktree_root)
+            .and_then(|b| branch_changed_files(main_root, &b));
+        let collides = |path: &String| branch_changed.as_ref().map_or(true, |c| c.contains(path));
+        let unsweepable: Vec<String> = main_untracked_under(main_root, &roots)
+            .map_err(MErr::Thrown)?
+            .into_iter()
+            .filter(|u| collides(u))
+            .collect();
+        let mut blocking_untracked: Vec<String> =
+            dirt.untracked.iter().filter(|u| collides(u)).cloned().collect();
+        blocking_untracked.extend(unsweepable.iter().cloned());
         if !dirt.tracked.is_empty() || !blocking_untracked.is_empty() {
             let offending = dirt
                 .tracked
@@ -534,7 +531,9 @@ pub(crate) fn merge_stage(
             ),
             None => format!("Auto-commit .bee and docs/decisions bookkeeping before merging worktree {id}"),
         };
-        bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &roots).value());
+        let mut specs = roots.clone();
+        specs.extend(unsweepable.iter().map(|u| format!(":(exclude){u}")));
+        bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &specs).value());
     }
     // A present companion mount AND its marker file are both untracked (and
     // the marker, unlike the rest of a bootstrapped `.bee` store, is not

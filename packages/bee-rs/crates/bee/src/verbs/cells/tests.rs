@@ -1701,6 +1701,58 @@ use std::time::Instant;
         assert!(!refusal.contains("RED_BASE"), "{refusal}");
     }
 
+    fn fresh_session(root: &Path, id: &str) {
+        let now = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_session_fixture(root, id, &now, None);
+    }
+
+    #[test]
+    fn a_refused_claim_leaves_no_lease_behind_when_the_lease_adopted_a_session() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(None, None, None, None);
+
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "ad");
+        write_cell_fixture(root, "ad-1", &cell("ad-1", "open", "ad", json!([])));
+        fresh_session(root, "adopted-1");
+        write_test_results_fixture(root, false, &[("cargo test", false)]);
+
+        let refusal = thrown(claim_cell_from_flags(root, "ad-1", "w1", None, None));
+        assert!(refusal.starts_with("claim: RED_BASE"), "{refusal}");
+        assert!(
+            !claims_dir(root).join("ad-1.json").exists(),
+            "a refused claim outlived its own lease"
+        );
+        let untouched = read_cell_norm(root, "ad-1").ok().unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        let door = claim_cell_from_flags(root, "ad-1", "w1", None, None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    #[test]
+    fn claim_without_session_sets_status_claimed_and_trace_worker() {
+        let _lock = TEST_CLAIM_ENV_LOCK.lock().unwrap();
+        let _env = ClaimTestEnvGuard::set(None, None, None, None);
+
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "ns");
+        write_cell_fixture(root, "ns-1", &cell("ns-1", "open", "ns", json!([])));
+        fresh_session(root, "adopted-2");
+
+        let door = claim_cell_from_flags(root, "ns-1", "w1", None, None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(door.cell["trace"]["worker"], json!("w1"));
+        assert_eq!(door.cell["trace"]["claim_session"], json!("adopted-2"));
+        let file: Value =
+            serde_json::from_str(&std::fs::read_to_string(claims_dir(root).join("ns-1.json")).unwrap())
+                .unwrap();
+        assert_eq!(file["session"], json!("adopted-2"));
+    }
+
     // ══ slp-contract S4 — the contract-citation tripwire at the CLAIM door ══
     //
     // Coverage audit before authoring (`.bee/expertise/tests.md`):

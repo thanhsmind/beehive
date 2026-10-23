@@ -13,8 +13,8 @@
 // through byte-for-byte, never re-normalized.
 
 use super::templates::{
-    GITIGNORE_BLOCK_PATTERNS, GITIGNORE_MARKER_END, GITIGNORE_MARKER_START, MARKER_END,
-    MARKER_START,
+    GITATTRIBUTES_BLOCK_PATTERNS, GITIGNORE_BLOCK_PATTERNS, GITIGNORE_MARKER_END,
+    GITIGNORE_MARKER_START, MARKER_END, MARKER_START,
 };
 use super::util::{read_text_if_exists, trim_trailing_ws};
 use std::path::Path;
@@ -62,6 +62,13 @@ pub fn render_gitignore_block() -> String {
     format!(
         "{GITIGNORE_MARKER_START}\n{}\n{GITIGNORE_MARKER_END}\n",
         GITIGNORE_BLOCK_PATTERNS.join("\n")
+    )
+}
+
+pub fn render_gitattributes_block() -> String {
+    format!(
+        "{GITIGNORE_MARKER_START}\n{}\n{GITIGNORE_MARKER_END}\n",
+        GITATTRIBUTES_BLOCK_PATTERNS.join("\n")
     )
 }
 

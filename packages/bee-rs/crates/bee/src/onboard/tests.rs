@@ -370,6 +370,7 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
     ];
     assert_eq!(acts[..expected_head.len()], expected_head[..]);
     assert!(acts.contains(&"create_gitignore_block".to_string()));
+    assert!(acts.contains(&"create_gitattributes_block".to_string()));
     assert!(acts.contains(&"create_claude_md".to_string()));
     assert!(acts.contains(&"write_onboarding".to_string()));
     assert!(acts.contains(&"sync_skill".to_string()));
@@ -440,6 +441,20 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     let gi = std::fs::read_to_string(fx.repo.join(".gitignore")).unwrap();
     assert!(gi.starts_with("# BEE:START\n.bee/state.json\n"));
     assert!(gi.ends_with("# BEE:END\n"));
+
+    let ga = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert!(ga.starts_with("# BEE:START\n"));
+    assert!(ga.ends_with("# BEE:END\n"));
+    for log in [
+        "decisions.jsonl",
+        "decisions-archive.jsonl",
+        "backlog.jsonl",
+        "review-candidates.jsonl",
+        "deferred-queue.jsonl",
+        "wave-ledger.jsonl",
+    ] {
+        assert!(ga.contains(&format!(".bee/{log} merge=union\n")), "{log} missing from .gitattributes");
+    }
     assert!(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs").exists());
     assert!(fx.repo.join(".bee").join("bin").join("prompts").join("worker-cell.md").exists());
 
@@ -523,7 +538,15 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     // entry, vendors the script, and therefore OWNS the pair — the managed
     // ledger records its hashes from the first apply. Under the old opt-in this
     // key was absent here. A PowerShell host skips the pair, so owns nothing.
-    let mut expected = vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise", "prompts"];
+    let mut expected = vec![
+        "agents_block",
+        "gitignore_block",
+        "gitattributes_block",
+        "helpers",
+        "lib",
+        "expertise",
+        "prompts",
+    ];
     if statusline {
         expected.push("statusline");
     }
@@ -851,6 +874,7 @@ fn a_partially_onboarded_repo_only_fills_the_gaps() {
     write(&fx.repo.join("AGENTS.md"), "# repo\n\nMy own project prose.\n");
     write(&fx.repo.join("CLAUDE.md"), "# Rules\n\n@AGENTS.md\n");
     write(&fx.repo.join(".gitignore"), "node_modules/\n");
+    write(&fx.repo.join(".gitattributes"), "*.png binary\n");
 
     let p = plan(&fx, &[]);
     let acts = actions(&p, "plan");
@@ -859,13 +883,111 @@ fn a_partially_onboarded_repo_only_fills_the_gaps() {
     assert!(!acts.contains(&"create_claude_md".to_string()));
     assert!(!acts.contains(&"append_claude_md_import".to_string()));
     assert!(acts.contains(&"append_gitignore_block".to_string()));
+    assert!(acts.contains(&"append_gitattributes_block".to_string()));
 
     apply(&fx, &[]);
     let agents = std::fs::read_to_string(fx.repo.join("AGENTS.md")).unwrap();
     assert!(agents.starts_with("# repo\n\nMy own project prose.\n\n<!-- BEE:START -->"));
     let gi = std::fs::read_to_string(fx.repo.join(".gitignore")).unwrap();
     assert!(gi.starts_with("node_modules/\n\n# BEE:START\n"));
+    let ga = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert!(ga.starts_with("*.png binary\n\n# BEE:START\n.bee/decisions.jsonl merge=union\n"));
     assert_eq!(plan(&fx, &[])["plan"].as_array().unwrap().len(), 0);
+}
+
+fn gitattributes_block() -> String {
+    super::merge::render_gitattributes_block()
+}
+
+#[test]
+fn onboarding_writes_the_gitattributes_block_once_and_keeps_host_lines() {
+    let fx = fixture();
+    write(&fx.repo.join(".gitattributes"), "*.png binary\n");
+
+    let p = plan(&fx, &[]);
+    assert_eq!(paths_for(&p, "plan", "append_gitattributes_block"), vec![".gitattributes"]);
+    apply(&fx, &[]);
+
+    let ga = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert_eq!(ga, format!("*.png binary\n\n{}\n", gitattributes_block().trim_end_matches('\n')));
+
+    assert_eq!(plan(&fx, &[])["plan"].as_array().unwrap().len(), 0);
+    let ga2 = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert!(ga2.starts_with("*.png binary\n"));
+    assert_eq!(ga2, ga);
+
+    write(&fx.repo.join(".gitattributes"), &format!("{ga}*.zip binary\n"));
+    let p3 = plan(&fx, &[]);
+    assert_eq!(p3["plan"].as_array().unwrap().len(), 0, "a host line after the block is not drift");
+}
+
+#[test]
+fn a_drifted_gitattributes_block_is_rewritten_and_only_inside_the_markers() {
+    let fx = fixture();
+    write(&fx.repo.join(".gitattributes"), "*.png binary\n");
+    apply(&fx, &[]);
+
+    let ga = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    write(&fx.repo.join(".gitattributes"), &ga.replace("merge=union", "merge=ours"));
+
+    let p = plan(&fx, &[]);
+    assert_eq!(paths_for(&p, "plan", "update_gitattributes_block"), vec![".gitattributes"]);
+    apply(&fx, &[]);
+    let repaired = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert!(repaired.starts_with("*.png binary\n"));
+    assert!(!repaired.contains("merge=ours"));
+}
+
+#[test]
+fn a_decoy_gitattributes_marker_line_is_never_adopted() {
+    let fx = fixture();
+    write(&fx.repo.join(".gitattributes"), "# BEE:START custom notes\n*.png binary\n");
+    let p = plan(&fx, &[]);
+    assert_eq!(paths_for(&p, "plan", "append_gitattributes_block"), vec![".gitattributes"]);
+    apply(&fx, &[]);
+    let ga = std::fs::read_to_string(fx.repo.join(".gitattributes")).unwrap();
+    assert!(ga.starts_with("# BEE:START custom notes\n*.png binary\n\n# BEE:START\n"));
+}
+
+fn git_ok(cwd: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("git must be on PATH for the gitattributes merge fixture");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn two_branches_appending_to_the_decision_log_merge_cleanly_after_onboarding() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    git_ok(&fx.repo, &["init", "-q", "-b", "main", "."]);
+    git_ok(&fx.repo, &["config", "user.email", "bee@example.com"]);
+    git_ok(&fx.repo, &["config", "user.name", "bee"]);
+    git_ok(&fx.repo, &["add", "-A"]);
+    git_ok(&fx.repo, &["commit", "-qm", "onboard"]);
+
+    write(&fx.repo.join(".bee").join("decisions.jsonl"), "{\"id\":\"main\"}\n");
+    git_ok(&fx.repo, &["add", ".bee/decisions.jsonl"]);
+    git_ok(&fx.repo, &["commit", "-qm", "main append"]);
+
+    git_ok(&fx.repo, &["checkout", "-q", "-b", "side", "HEAD~1"]);
+    write(&fx.repo.join(".bee").join("decisions.jsonl"), "{\"id\":\"side\"}\n");
+    git_ok(&fx.repo, &["add", ".bee/decisions.jsonl"]);
+    git_ok(&fx.repo, &["commit", "-qm", "side append"]);
+
+    git_ok(&fx.repo, &["checkout", "-q", "main"]);
+    git_ok(&fx.repo, &["merge", "--no-edit", "side"]);
+
+    let merged = std::fs::read_to_string(fx.repo.join(".bee").join("decisions.jsonl")).unwrap();
+    assert_eq!(merged, "{\"id\":\"main\"}\n{\"id\":\"side\"}\n");
+    assert_eq!(git_ok(&fx.repo, &["status", "--porcelain"]), "", "a union merge leaves nothing staged");
 }
 
 // ── --repo-hooks and foreign settings preservation ─────────────────────────

@@ -22,6 +22,15 @@ pub const MARKER_END: &str = "<!-- BEE:END -->";
 pub const GITIGNORE_MARKER_START: &str = "# BEE:START";
 pub const GITIGNORE_MARKER_END: &str = "# BEE:END";
 
+pub const GITATTRIBUTES_BLOCK_PATTERNS: &[&str] = &[
+    ".bee/decisions.jsonl merge=union",
+    ".bee/decisions-archive.jsonl merge=union",
+    ".bee/backlog.jsonl merge=union",
+    ".bee/review-candidates.jsonl merge=union",
+    ".bee/deferred-queue.jsonl merge=union",
+    ".bee/wave-ledger.jsonl merge=union",
+];
+
 /// onboard_bee.mjs GITIGNORE_BLOCK_PATTERNS (l. 139–223) — order is
 /// load-bearing (the block is rendered by `join("\n")` and hashed).
 pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[

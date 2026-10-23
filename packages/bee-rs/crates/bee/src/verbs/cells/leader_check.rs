@@ -309,7 +309,7 @@ pub(crate) fn record_leader_check(
                     let untouched: Vec<String> = files_changed
                         .iter()
                         .map(|f| normalize_cell_path(f))
-                        .filter(|f| !paths.contains(f))
+                        .filter(|f| !paths.iter().any(|p| path_under_root(p, f)))
                         .collect();
                     if !untouched.is_empty() {
                         return Err(Fail::Thrown(format!(
@@ -899,6 +899,46 @@ mod tests {
         let updated = record_leader_check(root, "c-1", "ok", &a_payload(), None, false).unwrap();
         assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("checked"));
         assert_eq!(updated["status"], json!("capped"));
+    }
+
+    #[test]
+    fn directory_entry_in_files_changed_passes_when_commit_touched_a_file_under_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        std::fs::create_dir_all(root.join("d/sub")).unwrap();
+        std::fs::write(root.join("d/a.txt"), "a").unwrap();
+        std::fs::write(root.join("d/sub/b.txt"), "b").unwrap();
+        commit_paths(root, &["d/a.txt", "d/sub/b.txt"], "Add d\n\ncell: c-1");
+        write_cell_fixture(root, "c-1", &make_capped_cell("c-1", &["Truth A"], &["d"], None));
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "d"}]
+        });
+
+        let updated = record_leader_check(root, "c-1", "ok", &payload, None, false).unwrap();
+        assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("checked"));
+        assert_eq!(updated["status"], json!("capped"));
+    }
+
+    #[test]
+    fn string_prefix_of_a_touched_path_is_still_refused_naming_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        std::fs::create_dir_all(root.join("d")).unwrap();
+        std::fs::write(root.join("d/a.txt"), "a").unwrap();
+        commit_paths(root, &["d/a.txt"], "Add d/a\n\ncell: c-1");
+        std::fs::create_dir_all(root.join("dx")).unwrap();
+        write_cell_fixture(root, "c-1", &make_capped_cell("c-1", &["Truth A"], &["dx"], None));
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "dx"}]
+        });
+
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &payload, None, false));
+        assert!(msg.contains("files_changed names path(s) the cell's commit(s) never touched: dx."), "{msg}");
+        assert_eq!(read_cell_fixture(root, "c-1")["status"], json!("capped"));
     }
 
     #[test]

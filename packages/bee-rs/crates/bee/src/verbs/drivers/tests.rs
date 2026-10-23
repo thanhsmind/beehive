@@ -11702,9 +11702,11 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         run_git(&["config", "user.name", "test"]);
 
         std::fs::create_dir_all(td.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(td.join(".bee").join("supervisor")).unwrap();
         std::fs::write(td.join("a.txt"), "a\n").unwrap();
         std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave\n").unwrap();
         std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{}\n").unwrap();
+        std::fs::write(td.join(".bee").join("supervisor").join("broker-heartbeat.json"), "{}\n").unwrap();
 
         run_git(&["add", "."]);
         run_git(&["commit", "-m", "init", "-q"]);
@@ -11712,6 +11714,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         std::fs::write(td.join("a.txt"), "a dirty\n").unwrap();
         std::fs::write(td.join(".bee").join("wave-ledger.jsonl"), "wave dirty\n").unwrap();
         std::fs::write(td.join(".bee").join("lanes").join("x.json"), "{\"dirty\":true}\n").unwrap();
+        std::fs::write(td.join(".bee").join("supervisor").join("broker-heartbeat.json"), "{\"beat\":1}\n").unwrap();
         std::fs::write(td.join("b.txt"), "b untracked\n").unwrap();
 
         // On Windows use crate::shell::command() to reach a real Win32 bash (see shell.rs); elsewhere use Command::new("bash") because shell::command() returns /bin/sh.
@@ -11740,6 +11743,23 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(stdout.contains("b.txt"), "output should contain b.txt: {stdout:?}");
         assert!(!stdout.contains(".bee/wave-ledger.jsonl"), "output should not contain wave-ledger: {stdout:?}");
         assert!(!stdout.contains(".bee/lanes/x.json"), "output should not contain lanes/x.json: {stdout:?}");
+        assert!(
+            !stdout.contains(".bee/supervisor/broker-heartbeat.json"),
+            "output should not contain the broker heartbeat: {stdout:?}"
+        );
+
+        std::fs::write(td.join(".bee").join("supervisor").join("other.json"), "{}\n").unwrap();
+        let out_sibling = bash_cmd()
+            .arg(&script)
+            .current_dir(td)
+            .output()
+            .unwrap();
+        let stdout_sibling = String::from_utf8_lossy(&out_sibling.stdout);
+        assert!(
+            stdout_sibling.contains(".bee/supervisor/other.json"),
+            "the heartbeat allowlist must be the exact path, not its directory: {stdout_sibling:?}"
+        );
+        std::fs::remove_file(td.join(".bee").join("supervisor").join("other.json")).unwrap();
 
         run_git(&["checkout", "--", "a.txt"]);
         std::fs::remove_file(td.join("b.txt")).unwrap();
@@ -11758,6 +11778,73 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         );
         let stdout_clean = String::from_utf8_lossy(&out_clean.stdout);
         assert!(stdout_clean.is_empty(), "expected empty output when only bee paths dirty, got: {stdout_clean:?}");
+    }
+
+    #[test]
+    fn test_release_sh_authorizes_after_cheap_checks_on_every_path() {
+        let mut root = Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf();
+        let script = loop {
+            let candidate = root.join("scripts").join("release.sh");
+            if candidate.exists() {
+                break Some(candidate);
+            }
+            if !root.pop() {
+                break None;
+            }
+        };
+        let script = match script {
+            Some(s) => s,
+            None => return,
+        };
+        let text = std::fs::read_to_string(&script).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let find = |needle: &str| -> Option<usize> { lines.iter().position(|l| l.contains(needle)) };
+        let authorize_calls: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.trim() == "authorize_release")
+            .map(|(i, _)| i)
+            .collect();
+
+        let first_dirt = find("done < <(\"$ROOT/scripts/release-dirt.sh\")")
+            .expect("release.sh must collect the dirt through scripts/release-dirt.sh");
+        let bump = find("bump_version_field \"$PLUGIN_JSON\"")
+            .expect("release.sh must bump the version field once section 3 runs");
+        let head_version_check = find("git show \"HEAD:$PLUGIN_JSON\"")
+            .expect("release.sh must check the version at HEAD before it tags");
+        let tag = find("git tag \"$TAG\"").expect("release.sh must create the tag");
+        let push = find("git push origin main").expect("release.sh must push main");
+
+        assert!(
+            authorize_calls.len() == 3,
+            "release.sh must call authorize_release once on each of its three paths: {authorize_calls:?}"
+        );
+
+        let fresh = authorize_calls.iter().copied().find(|i| *i > first_dirt);
+        let fresh = fresh.expect("the fresh-release path must authorize after its dirt check");
+        assert!(
+            fresh < bump,
+            "authorization must come after the zero-mutation checks and before the bump (dirt at {first_dirt}, authorize at {fresh}, bump at {bump})"
+        );
+
+        assert!(
+            authorize_calls.iter().any(|i| *i < first_dirt),
+            "the idempotent re-run path must authorize before its tail: {authorize_calls:?}"
+        );
+
+        assert!(
+            authorize_calls
+                .iter()
+                .any(|i| *i > head_version_check && *i < tag),
+            "the tail (no version argument, and the resumed re-run) must authorize after its last zero-mutation check and before any tag: {authorize_calls:?}"
+        );
+
+        for i in &authorize_calls {
+            assert!(
+                *i < tag && *i < push,
+                "every path reaching `git tag` or `git push` must pass authorize_release first (call at {i}, tag at {tag}, push at {push})"
+            );
+        }
     }
 
     #[test]
@@ -11891,6 +11978,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
         assert!(!cmd_deploy_wt.contains(&granted.to_string_lossy().into_owned()) && !cmd_deploy_wt.contains(&norm_granted), "deployment command cwd must not be worktree: {cmd_deploy_wt}");
         assert!(cmd_deploy_wt.contains("export BEE_DISPATCH_ID="), "deployment command must export BEE_DISPATCH_ID: {cmd_deploy_wt}");
         assert!(cmd_deploy_wt.contains("BEE_RELEASE_VERSION=\"2.38.0\""), "deployment command must export BEE_RELEASE_VERSION: {cmd_deploy_wt}");
+        assert!(!cmd_deploy_wt.contains("--read-only"), "deployment command must stay writable, no --read-only (D5, issue 126): {cmd_deploy_wt}");
 
         // 2. Ordinary gather WITH granted feature worktree:
         // Cwd MUST be the granted worktree; stdin MUST be read-only gather template.
@@ -11909,6 +11997,7 @@ Finish with: .bee/bin/bee cells finish --id c-golden --outcome "<one line>" --fi
             cmd_gather_wt.contains(&format!("--cwd \"{}\"", granted.to_string_lossy())) || cmd_gather_wt.contains(&format!("--cwd \"{}\"", norm_granted)),
             "ordinary gather command cwd must be worktree: {cmd_gather_wt}"
         );
+        assert!(cmd_gather_wt.contains("--read-only"), "ordinary gather command must stay read-only: {cmd_gather_wt}");
 
         // Revoke the worktree grant to test without worktree
         w(&main, ".bee/runtime/worktree-grants.json", "{}\n");

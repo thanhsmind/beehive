@@ -828,7 +828,7 @@ pub(crate) fn unbound_default_route_refusal(
         None => "the default record (.bee/state.json) holds no active feature at all, so this route would have no feature to belong to.".to_string(),
     };
     Some(format!(
-        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.",
+        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), pass --lane-record <feature> to name the lane record to write, or pass --no-lane to write the default record on purpose.",
         live_lanes.len()
     ))
 }
@@ -836,7 +836,7 @@ pub(crate) fn unbound_default_route_refusal(
 pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(
         &flags,
-        &["set", "show", "class", "lane", "flags", "files", "rationale", "no-lane"],
+        &["set", "show", "class", "lane", "lane-record", "flags", "files", "rationale", "no-lane"],
     ) {
         return None;
     }
@@ -845,26 +845,21 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             return None;
         }
     }
-    // srg-1: `no-lane` is read DIRECTLY here, never through
-    // `mutation_lane_selector` — that helper exists to reconcile `--lane`
-    // (a lane RECORD selector on set/gate/scribing-run) with `--no-lane`,
-    // and route's `--lane` is a different flag wearing the same name: the
-    // triage class (ROUTE_LANE_VALUES). Feeding route's `--lane` to the
-    // selector would refuse `route --set --lane standard --no-lane` as a
-    // "cannot combine" collision that does not exist.
-    // Presence is the value, exactly as `mutation_lane_selector` reads it for
-    // every other lane-targeting verb — `bool_flag_ok` above has already
-    // rejected anything that is not bare / "true" / "false".
-    let no_lane = flags.get("no-lane").is_some();
-    let show = matches!(flags.get("show"), Some(FlagV::Present));
-    let set = matches!(flags.get("set"), Some(FlagV::Present));
     let ctx = match go("state route", use_json, t0)? {
         Ok(c) => c,
         Err(code) => return Some(code),
     };
     let out = (|| -> R2<Out> {
+        let (lane_feature, no_lane) = match mutation_lane_selector_at(&flags, "route", "lane-record") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let show = matches!(flags.get("show"), Some(FlagV::Present));
+        let set = matches!(flags.get("set"), Some(FlagV::Present));
         if show {
-            let target = resolve_mutation_target(&ctx.root, None, "route show", no_lane)?;
+            let target =
+                resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "route show", no_lane)?;
             // `target.record.route ?? null`, then `if (!route)`.
             let route = match target.record().get("route") {
                 Some(v) if truthy(v) => v.clone(),
@@ -904,10 +899,10 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         };
         let lane_class = js_disp_opt(route_object.get("lane"));
 
-        let scope = resolve_mutation_lock_scope(&ctx.root, None, no_lane)?;
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
         let workflows = list_workflows(&ctx.root)?;
         let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
-        let mut target = resolve_mutation_target(&ctx.root, None, "route", no_lane)?;
+        let mut target = resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "route", no_lane)?;
         // srg-1: the unbound-session guard. It lands BEFORE the no-active-
         // feature check and before any field is set, so a refusal mutates
         // nothing (the lock above is transient and released on drop).
