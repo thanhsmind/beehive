@@ -1,0 +1,387 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-test-flakes",
+  "mode": "small",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-test-flakes\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-23T09:41:15.867Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Bộ chờ CI cũ đã bị dừng vì hết giờ. Không sao: tôi đã tự xem CI đó xanh trước đó. Giờ tôi giao việc cho worker.",
+    "asked_at": "2026-10-23T09:42:06.853Z",
+    "session": "12e63a51-afd1-4a10-b86b-3b25db7b7739"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-10-23T09:41:15.981Z",
+    "feature": "release-test-flakes"
+  },
+  "gate_preview": {
+    "feature": "release-test-flakes",
+    "plan_sha256": "5d560a52218be478d0dc1f851262b7cec1d9c22d126e03ec258c0bf5faa75bb8",
+    "previewed_at": "2026-10-23T09:41:49.412Z",
+    "cells": [
+      {
+        "id": "rtf-1",
+        "feature": "release-test-flakes",
+        "title": "Wait for the real condition in the four release-gate flaky tests",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "91105ed2-ab78-44b9-968d-95c8b5798a70"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/release-test-flakes/plan.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Tests only; no product code. (1) Per D2: in herding/run.rs test `pihp_unique_job_id_concurrent_cli_processes_cannot_share_default_id`, the loop `if let Some(rest) = line.strip_prefix(\"JOB_ID:\")` misses the id when tests run single-threaded, because libtest prints `test <name> ... ` on the same line before the child's `JOB_ID:<id>`. Find `JOB_ID:` anywhere in the line (e.g. `line.find(\"JOB_ID:\")` and take the rest after it, trimmed). (2) Per D1: in tests/pi_plugin_contracts.rs the node harness has polling steps `await_messages` and `await_switches` (each loops `while (<array>.length < want && Date.now() < deadline) await sleep(25)` and pushes a step result). Add two steps the same way: `await_notification` with `contains` (poll until some entry of `notifications` has a `message` that includes the string) and `await_order_entry` with `entry` (poll until `orderLog` includes that exact entry); both take `timeout_ms` (default 10000) and push a result step like `{notification_seen: bool}` / `{order_entry_seen: bool}`. Add Rust helpers next to `fn sleep_step` (e.g. `fn await_notification_step(contains: &str) -> Value` and `fn await_order_entry_step(entry: &str) -> Value`) that pass `\"timeout_ms\": positive_wait_ms()`. Then: in `deferred_transition_rejects_forged_marker` case 1 replace `sleep_step(50)` with `await_notification_step(\"deferred transition intent failed authenticity validation\")`; in `deferred_exit_ordering_settled_fork_switch_replacement_merge` replace `sleep_step(300)` with `await_order_entry_step(\"withSession_end\")`; in `exit_worktree_marker_relocates_and_no_merge_command_runs` replace `sleep_step(300)` with `await_notification_step(\"worktree was kept\")`. Keep every assertion unchanged. Update the doc line above run_harness that lists the timer-facing step kinds only if it is a doc comment you must keep true; add no new comments. Proof: run the verify (it runs both modes); run the Pi target three times in parallel mode to show it no longer flakes. No code comments.",
+        "verify": "RUST_TEST_THREADS=1 PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee pihp_unique_job_id && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && RUST_TEST_THREADS=1 PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "the job-id test passes with RUST_TEST_THREADS=1 and in parallel",
+            "the three Pi tests wait for their condition instead of a fixed sleep",
+            "pi_plugin_contracts passes in parallel and single-threaded"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "await_notification and await_order_entry harness steps and their use"
+            }
+          ],
+          "key_links": [
+            "the new steps poll the same notifications and orderLog arrays the assertions read"
+          ],
+          "prohibitions": [
+            "No assertion is weakened or removed",
+            "No product code change",
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "rtf-1 changes two test files."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests are the change; the leader runs both modes."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader queues the capture stub."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release is its own lane."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane: no consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "release-test-flakes",
+    "plan_sha256": "5d560a52218be478d0dc1f851262b7cec1d9c22d126e03ec258c0bf5faa75bb8",
+    "previewed_at": "2026-10-23T09:41:49.412Z",
+    "cells": [
+      {
+        "id": "rtf-1",
+        "feature": "release-test-flakes",
+        "title": "Wait for the real condition in the four release-gate flaky tests",
+        "lane": "small",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "91105ed2-ab78-44b9-968d-95c8b5798a70"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs"
+        ],
+        "read_first": [
+          "docs/history/release-test-flakes/plan.md",
+          "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Tests only; no product code. (1) Per D2: in herding/run.rs test `pihp_unique_job_id_concurrent_cli_processes_cannot_share_default_id`, the loop `if let Some(rest) = line.strip_prefix(\"JOB_ID:\")` misses the id when tests run single-threaded, because libtest prints `test <name> ... ` on the same line before the child's `JOB_ID:<id>`. Find `JOB_ID:` anywhere in the line (e.g. `line.find(\"JOB_ID:\")` and take the rest after it, trimmed). (2) Per D1: in tests/pi_plugin_contracts.rs the node harness has polling steps `await_messages` and `await_switches` (each loops `while (<array>.length < want && Date.now() < deadline) await sleep(25)` and pushes a step result). Add two steps the same way: `await_notification` with `contains` (poll until some entry of `notifications` has a `message` that includes the string) and `await_order_entry` with `entry` (poll until `orderLog` includes that exact entry); both take `timeout_ms` (default 10000) and push a result step like `{notification_seen: bool}` / `{order_entry_seen: bool}`. Add Rust helpers next to `fn sleep_step` (e.g. `fn await_notification_step(contains: &str) -> Value` and `fn await_order_entry_step(entry: &str) -> Value`) that pass `\"timeout_ms\": positive_wait_ms()`. Then: in `deferred_transition_rejects_forged_marker` case 1 replace `sleep_step(50)` with `await_notification_step(\"deferred transition intent failed authenticity validation\")`; in `deferred_exit_ordering_settled_fork_switch_replacement_merge` replace `sleep_step(300)` with `await_order_entry_step(\"withSession_end\")`; in `exit_worktree_marker_relocates_and_no_merge_command_runs` replace `sleep_step(300)` with `await_notification_step(\"worktree was kept\")`. Keep every assertion unchanged. Update the doc line above run_harness that lists the timer-facing step kinds only if it is a doc comment you must keep true; add no new comments. Proof: run the verify (it runs both modes); run the Pi target three times in parallel mode to show it no longer flakes. No code comments.",
+        "verify": "RUST_TEST_THREADS=1 PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee pihp_unique_job_id && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts && RUST_TEST_THREADS=1 PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test pi_plugin_contracts",
+        "must_haves": {
+          "truths": [
+            "the job-id test passes with RUST_TEST_THREADS=1 and in parallel",
+            "the three Pi tests wait for their condition instead of a fixed sleep",
+            "pi_plugin_contracts passes in parallel and single-threaded"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+              "substantive": "await_notification and await_order_entry harness steps and their use"
+            }
+          ],
+          "key_links": [
+            "the new steps poll the same notifications and orderLog arrays the assertions read"
+          ],
+          "prohibitions": [
+            "No assertion is weakened or removed",
+            "No product code change",
+            "No code comments"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "30ff876890293b1cea96673b722ea95a7b27780259af61e6c3b2be09a0c2b112",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "rtf-1 changes two test files."
+        },
+        {
+          "stage": "test-and-live-proof",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests are the change; the leader runs both modes."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "The leader queues the capture stub."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "The release is its own lane."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "Small lane: no consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "Small lane: no hat wave."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "Small lane: no hat wave."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-23T09:55:16.917Z",
+    "branch": "wt/release-test-flakes",
+    "worktree_id": "beehive--wt--release-test-flakes",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

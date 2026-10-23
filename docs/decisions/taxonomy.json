@@ -747,6 +747,8 @@
     "contract:windows-test-fixtures",
     "windows-ci-followup",
     "contract:mailbox-tilde",
-    "release-2-59-0"
+    "release-2-59-0",
+    "release-test-flakes",
+    "contract:pi-harness-await-steps"
   ]
 }
