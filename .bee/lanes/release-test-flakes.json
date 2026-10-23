@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-test-flakes\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 2c1cec3; capture what settled, then bee close --feature release-test-flakes.",
   "created_at": "2026-10-23T09:41:15.867Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Bộ chờ CI cũ đã bị dừng vì hết giờ. Không sao: tôi đã tự xem CI đó xanh trước đó. Giờ tôi giao việc cho worker.",
-    "asked_at": "2026-10-23T09:42:06.853Z",
-    "session": "12e63a51-afd1-4a10-b86b-3b25db7b7739"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "small",
@@ -376,12 +371,5 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-23T09:55:16.917Z",
-    "branch": "wt/release-test-flakes",
-    "worktree_id": "beehive--wt--release-test-flakes",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
