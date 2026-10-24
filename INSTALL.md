@@ -4,19 +4,19 @@ Source: **https://github.com/thanhsmind/beehive**
 
 ## Quick install (recommended): the install script
 
-One command does everything below — fetches bee, installs the skills for the chosen runtimes, and onboards the target repo (greenfield or brownfield). **The current directory is the target by default** — `cd` into your project first. It always shows the exact plan and asks before writing (skip prompts with `-y`/`-Yes`).
+One command does everything below — fetches bee, installs the skills for the chosen runtimes, and onboards the target repo (greenfield or brownfield). **The current directory is the target by default** — `cd` into your project first. It always shows the exact plan and asks before writing. In a project with interface files it also asks which design skill packs to add. Add `-y`/`-Yes` only for an unattended run: it skips every question, and installs no design pack unless you pass `--design-packs`/`-DesignPacks`.
 
 macOS / Linux / Git Bash:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Yes
+.\install-bee.ps1
 ```
 
 To target another directory instead, add `-d /path/to/project` (bash) / `-Directory C:\path\to\project` (PowerShell).
@@ -33,11 +33,11 @@ Useful flags (same semantics in both scripts):
 | `--no-claude-md`              | `-NoClaudeMd`   | Skip writing/extending CLAUDE.md with the`@AGENTS.md` import (written by default)                                                        |
 | `--claude-md`                 | `-ClaudeMd`     | Accepted for compatibility; a no-op alias of the default (CLAUDE.md is written unless`--no-claude-md`/`-NoClaudeMd` is passed)         |
 | `--no-statusline`             | `-NoStatusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                            |
-| `--design-packs <list\|none>` | `-DesignPacks …` | Design skill packs to install: a comma list of `web`, `charts`, `motion`, `apple`, `figma`, or `none`. Without it, a project with UI files is offered the packs at the end of the install |
+| `--design-packs <list\|none>` | `-DesignPacks …` | Design skill packs to install: a comma list of `web`, `charts`, `motion`, `apple`, `figma`, or `none`. Without it, an interactive install in a project with UI files asks which packs to add; with `-y`/`-Yes` it prints one line naming this flag |
 | `--no-hooks`                  | `-NoHooks`      | Skip repo-local hook wiring for Claude Code                                                                                                |
 | `--no-git-init`               | `-NoGitInit`    | Greenfield: don't offer`git init`                                                                                                        |
 | `--source <path>`             | `-Source …`    | Use a local bee checkout instead of cloning                                                                                                |
-| `-y`                          | `-Yes`          | Non-interactive                                                                                                                            |
+| `-y`                          | `-Yes`          | Non-interactive: skips every question, including the design-pack question                                                                 |
 
 **Greenfield** (new/empty directory): the script creates the directory, offers `git init`, and installs everything fresh. **Brownfield** (existing repo): existing `AGENTS.md`/`CLAUDE.md` content is preserved byte-for-byte outside the managed BEE markers; `.bee/` state, decisions, and cells are never overwritten; `.claude/settings.json` merges get a `.bak` backup; re-running is idempotent (`up_to_date`). Run `--dry-run` first if you want to see the plan before anything is written.
 

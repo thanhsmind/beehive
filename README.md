@@ -519,7 +519,7 @@ macOS / Linux / WSL / Git Bash — run from inside the project:
 
 ```bash
 cd /path/to/your-project
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
@@ -527,22 +527,22 @@ Windows PowerShell:
 ```powershell
 cd C:\path\to\your-project
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Yes
+.\install-bee.ps1
 ```
 
-Safe on existing repos: content outside the managed `BEE:START/END` markers in `AGENTS.md`/`CLAUDE.md` is preserved byte-for-byte, `.bee/` state (`state.json`, `decisions.jsonl`, `cells/`) is never overwritten, the `.claude/settings.json` hook merge keeps a `.bak`, and re-running is idempotent (`up_to_date`). Want to see the plan first? Add `--dry-run` / `-DryRun` — it writes nothing.
+Safe on existing repos: content outside the managed `BEE:START/END` markers in `AGENTS.md`/`CLAUDE.md` is preserved byte-for-byte, `.bee/` state (`state.json`, `decisions.jsonl`, `cells/`) is never overwritten, the `.claude/settings.json` hook merge keeps a `.bak`, and re-running is idempotent (`up_to_date`). Want to see the plan first? Add `--dry-run` / `-DryRun` — it writes nothing. The installer asks before it writes, and in a project with interface files it asks which design skill packs to add; `-y` / `-Yes` skips every question.
 
 ### Greenfield — brand-new project
 
 Point the installer at a directory that doesn't exist yet (it creates it and offers `git init`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app
 ```
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
-.\install-bee.ps1 -Directory C:\projects\my-new-app -Yes
+.\install-bee.ps1 -Directory C:\projects\my-new-app
 ```
 
 ### Verify / update
