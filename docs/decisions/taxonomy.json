@@ -756,6 +756,7 @@
     "licensing",
     "packaging",
     "contract:design-cell-pin",
-    "contract:design-gate"
+    "contract:design-gate",
+    "design-packs"
   ]
 }

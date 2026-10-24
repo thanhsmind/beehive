@@ -1,0 +1,564 @@
+{
+  "schema_version": "1.0",
+  "feature": "design-packs-install-prompt",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"design-packs-install-prompt\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-24T12:31:20.246Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "cross-platform"
+    ],
+    "product_files": 6,
+    "rationale": "installer prompt in install.sh and install.ps1, onboard plan JSON field, registry help",
+    "updated_at": "2026-10-24T12:31:26.829Z",
+    "feature": "design-packs-install-prompt"
+  },
+  "gate_preview": {
+    "feature": "design-packs-install-prompt",
+    "plan_sha256": "c2617cd213c10f825cf33213fd09edd7ceb83734c99667997fb674b24e4488a8",
+    "previewed_at": "2026-10-24T12:33:51.818Z",
+    "cells": [
+      {
+        "id": "dpi-1",
+        "feature": "design-packs-install-prompt",
+        "title": "Report the design offer in onboarding JSON and list --design-packs in onboard help",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "7cbfad00-3f49-41e5-a0db-2d203e595774"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+          "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+          "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `design_offer` in it so one filter covers the cell. (1) In onboard/notices.rs, lift the predicate at lines 250-253 (`!picked && has_ui_file(repo_root)`, where picked means .bee/config.json has design.packs) into one `pub fn design_offer_due(repo_root: &Path) -> bool`, and make the existing notice code call it, so the DESIGN_PACKS_OFFER notice and the new field can never disagree. (2) In onboard/mod.rs, insert `design_offer` (a JSON boolean from design_offer_due) into the plan-mode payload beside `notices` (around line 496) and into the apply payload where it builds notices (around line 559). (3) In generated/registry_payload.json, add a `design-packs` string parameter to the `onboard` command's parameters.properties, described as: Design skill packs to install: a comma list of web, charts, motion, apple, figma, or none. Installs bee-design with the picked packs and records the pick; none removes them and stops the offer. Keep the file's existing formatting (one-line JSON) and check whether any test or `bee dev regen` derives or checks this file; if regen owns it, change the owner instead. Tests: design_offer is true for a repo with an index.html and no design pick; false for the same repo once .bee/config.json records design.packs (including an empty list or none); false for a repo with no UI file; and `bee onboard --help` output lists `--design-packs`. Do not change the DESIGN_PACKS_OFFER wording, the UI scan, or any existing assertion. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_offer",
+        "must_haves": {
+          "truths": [
+            "bee onboard --json reports design_offer true on a repo with a UI file and no recorded pick",
+            "design_offer is false once a pick is recorded, and false with no UI file",
+            "bee onboard --help lists --design-packs"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+              "substantive": "pub fn design_offer_due used by the notice; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "onboard parameters include design-packs"
+            }
+          ],
+          "key_links": [
+            "the notice and the payload field both call design_offer_due"
+          ],
+          "prohibitions": [
+            "No change to DESIGN_PACKS_OFFER wording or the UI scan",
+            "No change to scripts/install.sh or scripts/install.ps1",
+            "No edit to any existing assertion",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "dpi-2",
+        "feature": "design-packs-install-prompt",
+        "title": "Ask for design packs in both installers when onboarding offers them",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "dpi-1"
+        ],
+        "decisions": [
+          "7cbfad00-3f49-41e5-a0db-2d203e595774"
+        ],
+        "files": [
+          "scripts/install.sh",
+          "scripts/install.ps1",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "scripts/install.sh",
+          "scripts/install.ps1",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `design` in it (the cell filter is `--test installer_contracts design`). dpi-1 adds a boolean `design_offer` to the `bee onboard --json` preview payload. In scripts/install.sh, right after the preview status check (around line 667-672) and BEFORE the dry-run exit: when DESIGN_PACKS is empty and `plan_field \"$PREVIEW_JSON\" design_offer` prints `true`: if ASSUME_YES is 0, DRY_RUN is 0 and can_prompt succeeds, print to /dev/tty one short plain question that names the five packs (web, charts, motion, apple, figma), says `none` stops the question, and that Enter skips; read the answer from /dev/tty. A non-empty answer sets DESIGN_PACKS, appends `--design-packs <answer>` to ONBOARD_FLAGS, and re-runs the preview with the same status check (onboarding refuses an unknown name before anything is written). Otherwise (--yes, no TTY, dry run, or Enter) log one plain line in the installer's `log` style, for a person, e.g. `design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills`. Never pick a pack for the user. Mirror the same behaviour in scripts/install.ps1: run the preview once with --json to read design_offer (keep the existing human preview output), ask with Read-Host only when not -Yes, not -DryRun and the console is interactive (reuse the test Confirm-Step already uses), otherwise Write-Host the plain line; keep install.ps1 pure ASCII. Tests in tests/installer_contracts.rs using run_install_sh: a sandbox host with an index.html and `-y` prints the plain line and installs no bee-design skill; with `--design-packs web` no line is printed; an interactive run under `script -qec` (skip the test when `script` is absent) answering `web` installs bee-design and bee-design-web and records the pick; a static test that install.ps1 reads design_offer and gates Read-Host on -Yes. Do not change other installer behaviour or any existing assertion. No code comments in the Rust test; shell and ps1 files keep their existing comment style. After the script edits, run the regen chain inside this cell (.bee/bin/bee dev regen) so the release manifest hashes the new install.sh and install.ps1.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test installer_contracts design && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "An interactive install on a UI repo with no pick asks once and installs the answered packs",
+            "--yes, no TTY, or a dry run prints one plain line naming --design-packs and never blocks",
+            "A given --design-packs flag means no question and no line"
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/install.sh",
+              "substantive": "reads design_offer from the preview, asks or prints the line"
+            },
+            {
+              "path": "scripts/install.ps1",
+              "substantive": "same behaviour, pure ASCII"
+            }
+          ],
+          "key_links": [
+            "both installers read design_offer from onboarding rather than scanning for UI files"
+          ],
+          "prohibitions": [
+            "No pack chosen without the user's answer",
+            "No read from the terminal under --yes, without a TTY, or on a dry run",
+            "No change to onboarding Rust code",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust and installer script changes with their tests"
+        },
+        {
+          "stage": "tests",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "each code cell writes its own tests red-first"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the reads were done at plan time; evidence is claims 1-13"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers it"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "two small cells, thirteen recorded claims"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the onboarding design-packs concept needs the installer ask recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "two serial cells"
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "no rendered UI changes"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: a reproduced bug with a user-picked fix and recorded claims"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "approved_cell_packet": {
+    "feature": "design-packs-install-prompt",
+    "plan_sha256": "c2617cd213c10f825cf33213fd09edd7ceb83734c99667997fb674b24e4488a8",
+    "previewed_at": "2026-10-24T12:33:51.818Z",
+    "cells": [
+      {
+        "id": "dpi-1",
+        "feature": "design-packs-install-prompt",
+        "title": "Report the design offer in onboarding JSON and list --design-packs in onboard help",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [],
+        "decisions": [
+          "7cbfad00-3f49-41e5-a0db-2d203e595774"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+          "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+          "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+        ],
+        "read_first": [
+          "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+          "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `design_offer` in it so one filter covers the cell. (1) In onboard/notices.rs, lift the predicate at lines 250-253 (`!picked && has_ui_file(repo_root)`, where picked means .bee/config.json has design.packs) into one `pub fn design_offer_due(repo_root: &Path) -> bool`, and make the existing notice code call it, so the DESIGN_PACKS_OFFER notice and the new field can never disagree. (2) In onboard/mod.rs, insert `design_offer` (a JSON boolean from design_offer_due) into the plan-mode payload beside `notices` (around line 496) and into the apply payload where it builds notices (around line 559). (3) In generated/registry_payload.json, add a `design-packs` string parameter to the `onboard` command's parameters.properties, described as: Design skill packs to install: a comma list of web, charts, motion, apple, figma, or none. Installs bee-design with the picked packs and records the pick; none removes them and stops the offer. Keep the file's existing formatting (one-line JSON) and check whether any test or `bee dev regen` derives or checks this file; if regen owns it, change the owner instead. Tests: design_offer is true for a repo with an index.html and no design pick; false for the same repo once .bee/config.json records design.packs (including an empty list or none); false for a repo with no UI file; and `bee onboard --help` output lists `--design-packs`. Do not change the DESIGN_PACKS_OFFER wording, the UI scan, or any existing assertion. No code comments.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_offer",
+        "must_haves": {
+          "truths": [
+            "bee onboard --json reports design_offer true on a repo with a UI file and no recorded pick",
+            "design_offer is false once a pick is recorded, and false with no UI file",
+            "bee onboard --help lists --design-packs"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/onboard/notices.rs",
+              "substantive": "pub fn design_offer_due used by the notice; no TODO stubs"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+              "substantive": "onboard parameters include design-packs"
+            }
+          ],
+          "key_links": [
+            "the notice and the payload field both call design_offer_due"
+          ],
+          "prohibitions": [
+            "No change to DESIGN_PACKS_OFFER wording or the UI scan",
+            "No change to scripts/install.sh or scripts/install.ps1",
+            "No edit to any existing assertion",
+            "No code comments"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "dpi-2",
+        "feature": "design-packs-install-prompt",
+        "title": "Ask for design packs in both installers when onboarding offers them",
+        "lane": "standard",
+        "role": "code",
+        "status": "open",
+        "deps": [
+          "dpi-1"
+        ],
+        "decisions": [
+          "7cbfad00-3f49-41e5-a0db-2d203e595774"
+        ],
+        "files": [
+          "scripts/install.sh",
+          "scripts/install.ps1",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs",
+          "docs/history/codex-harness-hardening/release-manifest.json"
+        ],
+        "read_first": [
+          "scripts/install.sh",
+          "scripts/install.ps1",
+          "packages/bee-rs/crates/bee/tests/installer_contracts.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [],
+        "action": "Red first, and name EVERY new test with `design` in it (the cell filter is `--test installer_contracts design`). dpi-1 adds a boolean `design_offer` to the `bee onboard --json` preview payload. In scripts/install.sh, right after the preview status check (around line 667-672) and BEFORE the dry-run exit: when DESIGN_PACKS is empty and `plan_field \"$PREVIEW_JSON\" design_offer` prints `true`: if ASSUME_YES is 0, DRY_RUN is 0 and can_prompt succeeds, print to /dev/tty one short plain question that names the five packs (web, charts, motion, apple, figma), says `none` stops the question, and that Enter skips; read the answer from /dev/tty. A non-empty answer sets DESIGN_PACKS, appends `--design-packs <answer>` to ONBOARD_FLAGS, and re-runs the preview with the same status check (onboarding refuses an unknown name before anything is written). Otherwise (--yes, no TTY, dry run, or Enter) log one plain line in the installer's `log` style, for a person, e.g. `design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills`. Never pick a pack for the user. Mirror the same behaviour in scripts/install.ps1: run the preview once with --json to read design_offer (keep the existing human preview output), ask with Read-Host only when not -Yes, not -DryRun and the console is interactive (reuse the test Confirm-Step already uses), otherwise Write-Host the plain line; keep install.ps1 pure ASCII. Tests in tests/installer_contracts.rs using run_install_sh: a sandbox host with an index.html and `-y` prints the plain line and installs no bee-design skill; with `--design-packs web` no line is printed; an interactive run under `script -qec` (skip the test when `script` is absent) answering `web` installs bee-design and bee-design-web and records the pick; a static test that install.ps1 reads design_offer and gates Read-Host on -Yes. Do not change other installer behaviour or any existing assertion. No code comments in the Rust test; shell and ps1 files keep their existing comment style. After the script edits, run the regen chain inside this cell (.bee/bin/bee dev regen) so the release manifest hashes the new install.sh and install.ps1.",
+        "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test installer_contracts design && .bee/bin/bee dev release-manifest --check",
+        "must_haves": {
+          "truths": [
+            "An interactive install on a UI repo with no pick asks once and installs the answered packs",
+            "--yes, no TTY, or a dry run prints one plain line naming --design-packs and never blocks",
+            "A given --design-packs flag means no question and no line"
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/install.sh",
+              "substantive": "reads design_offer from the preview, asks or prints the line"
+            },
+            {
+              "path": "scripts/install.ps1",
+              "substantive": "same behaviour, pure ASCII"
+            }
+          ],
+          "key_links": [
+            "both installers read design_offer from onboarding rather than scanning for UI files"
+          ],
+          "prohibitions": [
+            "No pack chosen without the user's answer",
+            "No read from the terminal under --yes, without a TTY, or on a dry run",
+            "No change to onboarding Rust code",
+            "No edit to any existing assertion"
+          ]
+        },
+        "trace": {
+          "worker": null,
+          "outcome": null,
+          "files_changed": [],
+          "deviations": [],
+          "friction": null,
+          "capped_at": null,
+          "behavior_change": true
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implement",
+          "classification": "required",
+          "role": "code",
+          "reason": "Rust and installer script changes with their tests"
+        },
+        {
+          "stage": "tests",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "each code cell writes its own tests red-first"
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "the reads were done at plan time; evidence is claims 1-13"
+        },
+        {
+          "stage": "extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "no lookup remains"
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "code covers it"
+        },
+        {
+          "stage": "plan",
+          "classification": "required",
+          "role": "plan",
+          "reason": "this plan"
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "the user invokes an independent review",
+          "reason": "review is user-invoked"
+        },
+        {
+          "stage": "advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "two small cells, thirteen recorded claims"
+        },
+        {
+          "stage": "docs",
+          "classification": "conditional",
+          "role": "docs",
+          "condition": "the onboarding design-packs concept needs the installer ask recorded",
+          "reason": "capture runs at close"
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "no release in this feature"
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "two serial cells"
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "no rendered UI changes"
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "not-applicable",
+          "role": "hat-facts-gaps",
+          "reason": "no hat wave: a reproduced bug with a user-picked fix and recorded claims"
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "as above"
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "not-applicable",
+          "role": "hat-alternatives",
+          "reason": "the smaller-path check is inline in Approach"
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "not-applicable",
+          "role": "hat-user-impact",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "no blind lanes"
+        },
+        {
+          "stage": "lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "as above"
+        },
+        {
+          "stage": "lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "as above"
+        }
+      ]
+    }
+  },
+  "gate_revoked_at": {
+    "execution": "2026-10-24T12:33:42.311Z"
+  },
+  "merge_ready": {
+    "since": "2026-10-24T13:04:10.739Z",
+    "branch": "wt/design-packs-install-prompt",
+    "worktree_id": "beehive--wt--design-packs-install-prompt",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

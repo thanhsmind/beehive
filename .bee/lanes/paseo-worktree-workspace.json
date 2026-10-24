@@ -14,5 +14,10 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Cả 2 việc đều xong. Bây giờ tôi chạy toàn bộ bộ test trước khi merge. Trong lúc chờ, tôi ghi lại những gì tôi học được về bộ bảo vệ của work",
+    "asked_at": "2026-10-24T13:04:37.604Z",
+    "session": "95a31d01-90e9-4b66-b4bb-93052e5e583c"
+  }
 }

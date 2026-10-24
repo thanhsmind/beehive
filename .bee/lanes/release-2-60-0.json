@@ -13,8 +13,13 @@
   "summary": "Feature \"release-2-60-0\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"release-2-60-0\" — feature is closed.",
   "created_at": "2026-10-24T11:01:55.311Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-24T11:45:41.143Z",
+    "session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf"
+  },
   "route": {
     "class": "release",
     "lane": "tiny",
