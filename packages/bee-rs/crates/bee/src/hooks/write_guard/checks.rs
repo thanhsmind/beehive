@@ -775,8 +775,7 @@ pub(crate) fn check_git_bash_command(
             &phase,
             cwd,
             command,
-            invocation.subcommand.as_deref(),
-            &invocation.rest,
+            &invocation,
             bind_remedy,
         )? {
             return Ok(Some(wv));
@@ -796,10 +795,11 @@ fn evaluate_git_invocation(
     phase: &Value,
     cwd: &str,
     command: &str,
-    subcommand: Option<&str>,
-    rest: &[String],
+    invocation: &GitInvocation,
     bind_remedy: bool,
 ) -> R<Option<WV>> {
+    let subcommand = invocation.subcommand.as_deref();
+    let rest = &invocation.rest;
     // gc-2: concurrent-worker whole-tree denial — phase-independent.
     if let Some(classified) = classify_concurrent_tree_verb(subcommand, rest) {
         match resolve_live_worker_count(root, &topo.control_root, &topo.ctx)? {
@@ -857,9 +857,9 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         return Ok(None);
     }
 
-    const READONLY: [&str; 12] = [
+    const READONLY: [&str; 13] = [
         "status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "merge-base",
-        "rev-list", "describe", "blame", "cat-file",
+        "rev-list", "describe", "blame", "cat-file", "fetch",
     ];
     if let Some(sub) = subcommand {
         if READONLY.contains(&sub) {
@@ -871,6 +871,9 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
     }
 
     if subcommand == Some("push") {
+        if invocation.globals.is_empty() && push_main_bookkeeping(rest) {
+            return Ok(None);
+        }
         return Ok(Some(WV::Deny(intake_refusal(
             phase,
             "`git push`",

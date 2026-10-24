@@ -87,6 +87,28 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn stage_only_target(rel: &str) -> bool {
+    let normalized = normalize_rel(rel);
+    direct_edit_verb(&normalized).is_some() || normalized == ".bee/config.json"
+}
+
+pub(crate) fn git_content_pathspecs(verb: &str, rest: &[String]) -> Vec<String> {
+    let positionals = |tokens: &[String]| -> Vec<String> {
+        tokens
+            .iter()
+            .filter(|t| !t.starts_with('-') && !is_separator(t))
+            .cloned()
+            .collect()
+    };
+    let positional = positionals(rest);
+    match rest.iter().position(|t| t == "--") {
+        Some(idx) => positionals(&rest[idx + 1..]),
+        None if verb == "restore" => positional,
+        None if positional.len() >= 2 => positional[1..].to_vec(),
+        None => positional.into_iter().filter(|p| p.contains('/')).collect(),
+    }
+}
+
 /// provenance: guards.mjs HISTORY_CODE_EXTENSIONS — also the "is this a code
 /// file" test for the credentials-prefix secret arm and the scratch
 /// verdict-/probe-/digest- prefix rule, both of which must not fire on a
@@ -855,14 +877,29 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             }
             for t in &segment {
                 if !is_flag(t) {
-                    // D8: staging a CLI-owned file with `git add` is not a
-                    // direct-edit target.
-                    let cli_owned_stage_only =
-                        git_verb == "add" && direct_edit_verb(&normalize_rel(t)).is_some();
-                    if !cli_owned_stage_only {
+                    let stage_only = git_verb == "add" && stage_only_target(t);
+                    if !stage_only {
                         add_target(t, &mut broad_write, &mut paths);
                     }
                 }
+            }
+            i = end;
+            continue;
+        }
+        if cmd == "git"
+            && matches!(
+                tokens.get(i + 1).map(String::as_str),
+                Some("checkout") | Some("restore")
+            )
+        {
+            let git_verb = tokens[i + 1].clone();
+            let mut end = i + 2;
+            while end < tokens.len() && !is_separator(&tokens[end]) {
+                end += 1;
+            }
+            let segment: Vec<String> = tokens[i + 2..end].to_vec();
+            for t in git_content_pathspecs(&git_verb, &segment) {
+                add_target(&t, &mut broad_write, &mut paths);
             }
             i = end;
             continue;
