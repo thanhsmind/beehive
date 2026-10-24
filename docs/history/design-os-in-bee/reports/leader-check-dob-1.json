@@ -1,0 +1,18 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "packages/bee/design holds bee-design plus the five packs, each with a SKILL.md", "artifact": "packages/bee/design/bee-design/SKILL.md"},
+    {"requirement": "no bee-design directory exists under skills/, either plugin tree, or any repo skill home", "artifact": "packages/bee/design/UPSTREAM.json"},
+    {"requirement": "every upstream knowledge entry is either mapped to a skill or listed in UPSTREAM.json excluded", "artifact": "packages/bee/design/UPSTREAM.json"},
+    {"requirement": "the path check rg command prints nothing", "artifact": "packages/bee/design/bee-design-figma/references/figma-agent-hand.md"},
+    {"requirement": "packages/bee/design/LICENSE.md starts with the upstream Required Notice line verbatim", "artifact": "packages/bee/design/LICENSE.md"},
+    {"requirement": "scripts/sync-design-os.sh run against the same design-os checkout leaves git status clean", "artifact": "scripts/sync-design-os.sh"},
+    {"requirement": "the release manifest check passes inside the declared test command", "artifact": "docs/history/codex-harness-hardening/release-manifest.json"},
+    {"requirement": "packages/bee/design/bee-design/SKILL.md", "artifact": "packages/bee/design/bee-design/SKILL.md"},
+    {"requirement": "packages/bee/design/LICENSE.md", "artifact": "packages/bee/design/LICENSE.md"},
+    {"requirement": "packages/bee/design/UPSTREAM.json", "artifact": "packages/bee/design/UPSTREAM.json"},
+    {"requirement": "scripts/sync-design-os.sh", "artifact": "scripts/sync-design-os.sh"},
+    {"requirement": "every SKILL.md ends with a license pointer that survives being copied into a host", "artifact": "packages/bee/design/bee-design-web/SKILL.md"},
+    {"requirement": "the core SKILL.md names each pack and what project type it serves", "artifact": "packages/bee/design/bee-design/SKILL.md"}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "a cell with role design dispatches as bee-design", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "a cell with role code still dispatches as bee-build", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"},
+    {"requirement": "the model guard accepts a bee-design pin for a design cell", "artifact": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"},
+    {"requirement": "a herding design cell's prompt body carries the design preamble", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"},
+    {"requirement": "bee team show on a freshly onboarded host lists design", "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"},
+    {"requirement": "onboard renders .claude/agents/bee-design.md", "artifact": ".claude/agents/bee-design.md"},
+    {"requirement": "packages/bee/agents/bee-design.md.tmpl", "artifact": "packages/bee/agents/bee-design.md.tmpl"},
+    {"requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"},
+    {"requirement": "AGENT_ROLES_BY_NAME, prompt.rs embedding and the opencode deny row all name bee-design", "artifact": "packages/bee-rs/crates/bee/src/onboard/templates.rs"},
+    {"requirement": "the pin reads the cell role, not only the dispatch kind", "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"}
+  ]
+}
