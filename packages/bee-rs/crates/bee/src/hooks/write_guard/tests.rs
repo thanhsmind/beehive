@@ -725,6 +725,7 @@ use std::process::ExitCode;
             "git commit -m wip -- .bee/config.json",
             "git commit -m wip",
             "git checkout somebranch",
+            "git checkout wt/some-feature",
             "git switch somebranch",
         ] {
             let e = expect_done(bash(cmd), &wtf.wt_root);
@@ -746,6 +747,7 @@ use std::process::ExitCode;
             "mv payload.json .bee/config.json",
             "git checkout -- .bee/config.json",
             "git checkout HEAD .bee/config.json",
+            "git checkout .bee/config.json",
             "git restore .bee/config.json",
             "git rm .bee/config.json",
             "git mv .bee/config.json .bee/config.old.json",

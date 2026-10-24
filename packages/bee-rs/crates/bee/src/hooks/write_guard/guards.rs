@@ -105,7 +105,7 @@ pub(crate) fn git_content_pathspecs(verb: &str, rest: &[String]) -> Vec<String> 
         Some(idx) => positionals(&rest[idx + 1..]),
         None if verb == "restore" => positional,
         None if positional.len() >= 2 => positional[1..].to_vec(),
-        None => positional.into_iter().filter(|p| p.contains('/')).collect(),
+        None => positional.into_iter().filter(|p| stage_only_target(p)).collect(),
     }
 }
 
