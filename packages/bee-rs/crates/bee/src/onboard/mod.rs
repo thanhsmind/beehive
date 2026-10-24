@@ -494,6 +494,7 @@ does run a POSIX shell."
             }),
         );
         payload.insert("notices".into(), build_notices(&computed.plan));
+        payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
         if computed.worktree_migration.applicable {
             payload.insert(
                 "worktree_migration".into(),
@@ -591,6 +592,7 @@ does run a POSIX shell."
             payload.insert("skills".into(), skills);
             payload.insert("onboarding".into(), onboarding);
             payload.insert("notices".into(), notices);
+            payload.insert("design_offer".into(), json!(notices::design_offer_due(&repo_root)));
             if forced_downgrade {
                 // F9: a forced apply reports the fact machine-readably.
                 payload.insert("forced_downgrade".into(), json!(true));
