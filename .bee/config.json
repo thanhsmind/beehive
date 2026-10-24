@@ -117,6 +117,11 @@
         "kind": "herding",
         "agent": "paseo-gpt-luna",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock"
+      },
+      "design": {
+        "kind": "herding",
+        "agent": "pi",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       }
     },
     "claude": {
@@ -214,6 +219,10 @@
         "model": "opus",
         "description": "hat: what the user sees and feels — gray-area probes + the SEE mock",
         "effort": "high"
+      },
+      "design": {
+        "model": "sonnet",
+        "description": "build and critique rendered UI with the bee-design taste; proves with the design gate"
       }
     },
     "codex": {
