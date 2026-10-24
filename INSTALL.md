@@ -19,6 +19,16 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/inst
 .\install-bee.ps1
 ```
 
+To add the design skills (`bee-design` and the packs you name), pass `--design-packs` (bash) / `-DesignPacks` (PowerShell). Packs: `web`, `charts`, `motion`, `apple`, `figma`; a comma list takes several. The installer asks about design only in a project with interface files, so in any other project this flag is the way in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- --design-packs web
+```
+
+```powershell
+.\install-bee.ps1 -DesignPacks web
+```
+
 To target another directory instead, add `-d /path/to/project` (bash) / `-Directory C:\path\to\project` (PowerShell).
 
 From a local clone: `scripts/install.sh [-d <target>]` / `.\scripts\install.ps1 [-Directory <target>]`.

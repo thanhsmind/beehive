@@ -532,6 +532,16 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/inst
 
 Safe on existing repos: content outside the managed `BEE:START/END` markers in `AGENTS.md`/`CLAUDE.md` is preserved byte-for-byte, `.bee/` state (`state.json`, `decisions.jsonl`, `cells/`) is never overwritten, the `.claude/settings.json` hook merge keeps a `.bak`, and re-running is idempotent (`up_to_date`). Want to see the plan first? Add `--dry-run` / `-DryRun` — it writes nothing. The installer asks before it writes, and in a project with interface files it asks which design skill packs to add; `-y` / `-Yes` skips every question.
 
+To add the design skills in any project, name the packs (`web`, `charts`, `motion`, `apple`, `figma`; a comma list takes several):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- --design-packs web
+```
+
+```powershell
+.\install-bee.ps1 -DesignPacks web
+```
+
 ### Greenfield — brand-new project
 
 Point the installer at a directory that doesn't exist yet (it creates it and offers `git init`):
