@@ -121,6 +121,7 @@ struct Args {
     force_downgrade: bool,
     statusline: bool,
     runtime: String,
+    design_packs: Option<Vec<String>>,
 }
 
 impl Default for Args {
@@ -142,6 +143,7 @@ impl Default for Args {
             statusline: true,
             // GH #22 P0-1: default "both" matches install.sh's own default.
             runtime: "both".to_string(),
+            design_packs: None,
         }
     }
 }
@@ -166,6 +168,20 @@ fn statusline_config_preference(repo_root: &Path) -> bool {
         Some(v) => v,
         None => true,
     }
+}
+
+fn parse_design_packs(value: &str) -> Result<Vec<String>, String> {
+    if value.trim() == "none" {
+        return Ok(Vec::new());
+    }
+    let named: Vec<&str> = value.split(',').map(str::trim).collect();
+    if named.iter().any(|p| !templates::DESIGN_PACKS.contains(p)) {
+        return Err(format!(
+            "--design-packs takes a comma list of {}, or none (got: {value})",
+            templates::DESIGN_PACKS.join(", ")
+        ));
+    }
+    Ok(templates::DESIGN_PACKS.iter().filter(|p| named.contains(p)).map(|p| p.to_string()).collect())
 }
 
 /// parseArgs (l. 4022).
@@ -207,6 +223,18 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             i += 1;
         } else if let Some(v) = arg.strip_prefix("--runtime=") {
             args.runtime = v.to_string();
+        } else if arg == "--design-packs" || arg.starts_with("--design-packs=") {
+            let value = match arg.strip_prefix("--design-packs=") {
+                Some(v) => v.to_string(),
+                None => {
+                    i += 1;
+                    argv.get(i).cloned().unwrap_or_default()
+                }
+            };
+            match parse_design_packs(&value) {
+                Ok(packs) => args.design_packs = Some(packs),
+                Err(message) => return ParseOutcome::Error(message),
+            }
         } else if arg == "--help" || arg == "-h" {
             return ParseOutcome::Delegate;
         } else {
@@ -395,6 +423,7 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         // project's recorded preference, and a PowerShell host.
         statusline: args.statusline && statusline_config_allowed && !is_powershell,
         runtime: args.runtime.clone(),
+        design_packs: args.design_packs.clone(),
     };
     let statusline_skip_notices: Vec<String> =
         if args.statusline && statusline_config_allowed && is_powershell {

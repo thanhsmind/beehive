@@ -420,6 +420,16 @@ pub fn apply_computed_plan(
             "add_pi_team" => {
                 add_pi_team(&target, item["table"].as_str().unwrap_or("team"));
             }
+            "add_design_role" => {
+                add_design_role(
+                    &target,
+                    item["table"].as_str().unwrap_or("team"),
+                    item["runtimes"].as_array().map(Vec::as_slice).unwrap_or_default(),
+                );
+            }
+            "set_design_packs" => {
+                set_design_packs(&target, &item["packs"]);
+            }
             "create_dir" => {
                 let _ = std::fs::create_dir_all(&target);
             }
@@ -658,9 +668,8 @@ pub fn apply_computed_plan(
                     applied.push(item.clone());
                     continue;
                 };
-                if let Some(reason) =
-                    apply_sync_skill(&skill_sync.source_root, &root, skill, runtime_for_target_kind(kind))
-                {
+                let source = Path::new(item["source"].as_str().unwrap_or(""));
+                if let Some(reason) = apply_sync_skill(source, &root, skill, runtime_for_target_kind(kind)) {
                     skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
                     continue; // skipped loudly, not applied
                 }
@@ -682,9 +691,8 @@ pub fn apply_computed_plan(
                     }));
                     continue;
                 }
-                if let Some(reason) =
-                    apply_sync_skill(&skill_sync.source_root, &root, skill, runtime_for_target_kind(kind))
-                {
+                let source = Path::new(item["source"].as_str().unwrap_or(""));
+                if let Some(reason) = apply_sync_skill(source, &root, skill, runtime_for_target_kind(kind)) {
                     skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
                     continue;
                 }
@@ -813,13 +821,18 @@ pub fn apply_computed_plan(
     );
     // host-packaging-gaps D2: once offered — added to an existing config, or
     // written into a fresh one — the Pi table is never offered again.
-    let pi_team_offered = previous.get(T::PI_TEAM_OFFERED_KEY) == Some(&Value::Bool(true))
-        || applied.iter().any(|i| {
-            i["action"] == "add_pi_team"
-                || (i["action"] == "create_runtime_file" && i["path"] == ".bee/config.json")
-        });
-    if pi_team_offered {
-        payload.insert(T::PI_TEAM_OFFERED_KEY.into(), json!(true));
+    for (key, action) in [
+        (T::PI_TEAM_OFFERED_KEY, "add_pi_team"),
+        (T::DESIGN_ROLE_OFFERED_KEY, "add_design_role"),
+    ] {
+        let offered = previous.get(key) == Some(&Value::Bool(true))
+            || applied.iter().any(|i| {
+                i["action"] == action
+                    || (i["action"] == "create_runtime_file" && i["path"] == ".bee/config.json")
+            });
+        if offered {
+            payload.insert(key.into(), json!(true));
+        }
     }
     let created_at = match previous.get("created_at") {
         Some(v) if is_truthy(v) => v.clone(),
@@ -852,19 +865,51 @@ pub fn apply_computed_plan(
 /// absent — no existing key is changed, reordered or removed. The file keeps
 /// its indent unit and line ending. Unparseable or non-object: left alone.
 fn add_pi_team(target: &Path, table: &str) {
+    edit_config(target, |config| {
+        let defaults = T::default_config();
+        let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+            return;
+        };
+        roster.entry("pi").or_insert_with(|| defaults["team"]["pi"].clone());
+        if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut() {
+            if let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
+                agents.entry("pi").or_insert_with(|| defaults["herding"]["agents"]["pi"].clone());
+            }
+        }
+    });
+}
+
+fn add_design_role(target: &Path, table: &str, runtimes: &[Value]) {
+    edit_config(target, |config| {
+        let defaults = T::default_config();
+        let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+            return;
+        };
+        for runtime in runtimes.iter().filter_map(Value::as_str) {
+            if let Some(roles) = roster.get_mut(runtime).and_then(Value::as_object_mut) {
+                roles.entry("design").or_insert_with(|| defaults["team"][runtime]["design"].clone());
+            }
+        }
+    });
+}
+
+fn set_design_packs(target: &Path, packs: &Value) {
+    edit_config(target, |config| {
+        if let Some(design) = config.entry("design").or_insert_with(|| json!({})).as_object_mut() {
+            design.insert("packs".into(), packs.clone());
+        }
+    });
+}
+
+fn edit_config(target: &Path, edit: impl FnOnce(&mut Map<String, Value>)) {
     let text = read_text_if_exists(target);
     let Ok(Value::Object(mut config)) = serde_json::from_str::<Value>(&text) else {
         return;
     };
-    let defaults = T::default_config();
-    let Some(roster) = config.get_mut(table).and_then(Value::as_object_mut) else {
+    let before = config.clone();
+    edit(&mut config);
+    if config == before {
         return;
-    };
-    roster.entry("pi").or_insert_with(|| defaults["team"]["pi"].clone());
-    if let Some(herding) = config.entry("herding").or_insert_with(|| json!({})).as_object_mut() {
-        if let Some(agents) = herding.entry("agents").or_insert_with(|| json!({})).as_object_mut() {
-            agents.entry("pi").or_insert_with(|| defaults["herding"]["agents"]["pi"].clone());
-        }
     }
     let mut out = jsjson::stringify_pretty(&Value::Object(config));
     // JSON strings hold no raw newline, so re-indenting line by line is safe.

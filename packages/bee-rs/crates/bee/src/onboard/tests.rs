@@ -13,6 +13,15 @@ use std::path::{Path, PathBuf};
 
 const VERSION: &str = "9.9.9";
 
+const DESIGN_DIRS: [&str; 6] = [
+    "bee-design",
+    "bee-design-apple",
+    "bee-design-charts",
+    "bee-design-figma",
+    "bee-design-motion",
+    "bee-design-web",
+];
+
 struct Fixture {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -90,6 +99,9 @@ fn fixture() -> Fixture {
     }
     write(&root.join("skills").join("bee-hive").join("SKILL.md"), "hive\n");
     write(&root.join("skills").join("bee-hive").join("references").join("r.md"), "ref\n");
+    for name in DESIGN_DIRS {
+        write(&root.join("packages").join("bee").join("design").join(name).join("SKILL.md"), &format!("{name}\n"));
+    }
     write(&root.join("expertise").join("tests.md"), "tests guide\n");
     write(
         &root.join("expertise").join("tests").join("patterns").join("differential-testing.md"),
@@ -286,7 +298,7 @@ fn an_existing_config_gains_the_pi_table_once_keeping_everything_else() {
     );
     assert_eq!(v["host_shell"], before["host_shell"]);
     assert_eq!(v["zeta"], before["zeta"]);
-    assert_eq!(v["team"]["claude"], before["team"]["claude"]);
+    assert_eq!(v["team"]["claude"]["code"], before["team"]["claude"]["code"]);
     assert_eq!(v["team"].as_object().unwrap().keys().collect::<Vec<_>>(), vec!["claude", "pi"]);
     assert_eq!(v["team"]["pi"], super::templates::default_config()["team"]["pi"]);
     assert_eq!(v["herding"]["agents"]["mine"], json!(["claude"]));
@@ -317,10 +329,10 @@ fn a_legacy_models_config_gains_models_pi() {
 #[test]
 fn a_config_the_pi_table_must_not_touch_stays_byte_identical() {
     let cases: [(&str, &str, Option<&str>, bool); 5] = [
-        ("team.pi present", "{\n  \"team\": {\n    \"pi\": {}\n  }\n}\n", None, false),
+        ("team.pi present", "{\n  \"team\": {\n    \"pi\": {\n      \"design\": {}\n    }\n  }\n}\n", None, false),
         (
             "team.pi only in config.local.json",
-            "{\n  \"team\": {\n    \"claude\": {}\n  }\n}\n",
+            "{\n  \"team\": {\n    \"claude\": {\n      \"design\": {}\n    }\n  }\n}\n",
             Some("{\"team\": {\"pi\": {\"code\": {\"kind\": \"herding\", \"agent\": \"pi\"}}}}"),
             false,
         ),
@@ -346,6 +358,219 @@ fn a_config_the_pi_table_must_not_touch_stays_byte_identical() {
         assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), body, "{label}: bytes");
         assert!(pi_items(&a, "applied").is_empty(), "{label}: applied");
     }
+}
+
+fn design_dirs_by_home(repo: &Path) -> Vec<(String, Vec<String>)> {
+    let homes: Vec<(String, Vec<String>)> = skill_homes(repo)
+        .into_iter()
+        .map(|(rel, root)| {
+            let names = super::util::read_dir_sorted(&root)
+                .into_iter()
+                .map(|e| e.name)
+                .filter(|n| n.starts_with("bee-design"))
+                .collect();
+            (rel, names)
+        })
+        .collect();
+    assert!(!homes.is_empty(), "the host has skill homes to check");
+    homes
+}
+
+fn every_home_holds(repo: &Path, expected: &[&str]) {
+    for (rel, names) in design_dirs_by_home(repo) {
+        assert_eq!(names, expected, "{rel}");
+    }
+}
+
+fn design_packs_recorded(fx: &Fixture) -> Value {
+    read_json(&config_path(fx))["design"]["packs"].clone()
+}
+
+#[test]
+fn picking_web_and_charts_installs_the_core_and_those_two_packs_only() {
+    let fx = fixture();
+    let a = apply(&fx, &["--design-packs", "web,charts"]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(a["recheck"], "up_to_date");
+    every_home_holds(&fx.repo, &["bee-design", "bee-design-charts", "bee-design-web"]);
+    for (rel, root) in skill_homes(&fx.repo) {
+        assert_eq!(
+            std::fs::read_to_string(root.join("bee-design-web").join("SKILL.md")).unwrap(),
+            "bee-design-web\n",
+            "{rel}"
+        );
+    }
+    assert_eq!(design_packs_recorded(&fx), json!(["web", "charts"]));
+    assert_eq!(plan(&fx, &[])["status"], "up_to_date", "the recorded pick needs no flag");
+}
+
+#[test]
+fn dropping_a_pack_removes_only_its_dir_and_keeps_a_host_skill() {
+    let fx = fixture();
+    apply(&fx, &["--design-packs", "web,charts"]);
+    for (_, root) in skill_homes(&fx.repo) {
+        write(&root.join("my-design").join("SKILL.md"), "mine\n");
+    }
+    let a = apply(&fx, &["--design-packs", "web"]);
+    assert_eq!(a["recheck"], "up_to_date");
+    every_home_holds(&fx.repo, &["bee-design", "bee-design-web"]);
+    for (rel, root) in skill_homes(&fx.repo) {
+        assert_eq!(
+            std::fs::read_to_string(root.join("my-design").join("SKILL.md")).unwrap(),
+            "mine\n",
+            "{rel}"
+        );
+    }
+    assert_eq!(design_packs_recorded(&fx), json!(["web"]));
+}
+
+#[test]
+fn a_host_with_no_pick_gets_no_design_dir() {
+    let fx = fixture();
+    let a = apply(&fx, &[]);
+    assert_eq!(a["recheck"], "up_to_date");
+    every_home_holds(&fx.repo, &[]);
+    assert!(read_json(&config_path(&fx)).get("design").is_none());
+}
+
+#[test]
+fn picking_none_removes_every_design_dir_and_records_none() {
+    let fx = fixture();
+    apply(&fx, &["--design-packs", "web"]);
+    every_home_holds(&fx.repo, &["bee-design", "bee-design-web"]);
+    let a = apply(&fx, &["--design-packs", "none"]);
+    assert_eq!(a["recheck"], "up_to_date");
+    every_home_holds(&fx.repo, &[]);
+    assert_eq!(design_packs_recorded(&fx), json!("none"));
+    assert_eq!(plan(&fx, &[])["status"], "up_to_date");
+}
+
+#[test]
+fn an_unknown_pack_refuses_before_any_write() {
+    let refusal = |value: &str| match parse_args(&["--design-packs".to_string(), value.to_string()]) {
+        ParseOutcome::Error(m) => m,
+        _ => panic!("{value} must refuse"),
+    };
+    let message = refusal("web,webb");
+    assert!(message.contains("webb"), "{message}");
+    for pack in ["web", "charts", "motion", "apple", "figma", "none"] {
+        assert!(message.contains(pack), "names {pack}: {message}");
+    }
+    refusal("none,web");
+    refusal("");
+
+    let fx = fixture();
+    let code = try_native(&[
+        OsString::from("onboard"),
+        OsString::from("--repo-root"),
+        fx.repo.clone().into_os_string(),
+        OsString::from("--apply"),
+        OsString::from("--design-packs"),
+        OsString::from("webb"),
+    ]);
+    assert_eq!(format!("{code:?}"), format!("{:?}", Some(ExitCode::from(1))));
+    assert_eq!(std::fs::read_dir(&fx.repo).unwrap().count(), 0, "nothing written");
+}
+
+#[test]
+fn a_design_pick_without_apply_reports_the_planned_write_only() {
+    let fx = fixture();
+    let p = plan(&fx, &["--design-packs", "charts,web"]);
+    let writes: Vec<Value> =
+        p["plan"].as_array().unwrap().iter().filter(|i| i["action"] == "set_design_packs").cloned().collect();
+    assert_eq!(
+        writes,
+        vec![json!({"action": "set_design_packs", "path": ".bee/config.json", "packs": ["web", "charts"]})]
+    );
+    let synced: Vec<&str> = p["plan"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["action"] == "sync_skill" && i["target"] == "repo-claude")
+        .map(|i| i["skill"].as_str().unwrap())
+        .collect();
+    assert_eq!(synced, vec!["bee-hive", "bee-design", "bee-design-charts", "bee-design-web"]);
+    assert!(!fx.repo.join(".bee").exists());
+    assert!(!fx.repo.join(".claude").exists());
+}
+
+fn design_offers(payload: &Value) -> usize {
+    payload["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|n| n.as_str() == Some(super::templates::DESIGN_PACKS_OFFER))
+        .count()
+}
+
+#[test]
+fn a_host_with_ui_files_and_no_pick_is_offered_the_packs() {
+    let fx = fixture();
+    write(&fx.repo.join("node_modules").join("pkg").join("index.html"), "<p></p>\n");
+    write(&fx.repo.join("dist").join("app.css"), "p {}\n");
+    write(&fx.repo.join("target").join("site").join("page.tsx"), "x\n");
+    assert_eq!(design_offers(&plan(&fx, &[])), 0, "build and vendor trees are not the project's UI");
+
+    write(&fx.repo.join("web").join("index.html"), "<p></p>\n");
+    assert_eq!(design_offers(&plan(&fx, &[])), 1);
+    let a = apply(&fx, &[]);
+    assert_eq!(design_offers(&a), 1);
+    every_home_holds(&fx.repo, &[]);
+    assert!(read_json(&config_path(&fx)).get("design").is_none(), "the offer writes nothing");
+
+    apply(&fx, &["--design-packs", "none"]);
+    assert_eq!(design_offers(&plan(&fx, &[])), 0, "none is a pick");
+    apply(&fx, &["--design-packs", "web"]);
+    assert_eq!(design_offers(&plan(&fx, &[])), 0, "a list is a pick");
+}
+
+#[test]
+fn a_host_with_no_ui_file_is_not_offered_the_packs() {
+    let fx = fixture();
+    write(&fx.repo.join("src").join("main.rs"), "fn main() {}\n");
+    assert_eq!(design_offers(&plan(&fx, &[])), 0);
+    assert_eq!(design_offers(&apply(&fx, &[])), 0);
+}
+
+const DESIGNLESS_CONFIG: &str = "{\r\n    \"host_shell\": \"posix\",\r\n    \"team\": {\r\n        \"claude\": {\r\n            \"code\": \"opus\"\r\n        },\r\n        \"pi\": {\r\n            \"code\": {\r\n                \"kind\": \"herding\",\r\n                \"agent\": \"pi\"\r\n            }\r\n        }\r\n    },\r\n    \"zeta\": 1\r\n}\r\n";
+
+#[test]
+fn an_existing_config_gains_the_design_role_once_keeping_its_other_bytes() {
+    let fx = fixture();
+    write(&config_path(&fx), DESIGNLESS_CONFIG);
+    let a = apply(&fx, &[]);
+    assert_eq!(a["recheck"], "up_to_date");
+
+    let text = std::fs::read_to_string(config_path(&fx)).unwrap();
+    let v: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["team"]["claude"]["design"]["model"], "sonnet");
+    let description = v["team"]["claude"]["design"]["description"].as_str().unwrap().to_string();
+    assert!(!description.is_empty());
+    assert_eq!(
+        v["team"]["pi"]["design"],
+        json!({"kind": "herding", "agent": "pi", "description": description})
+    );
+    let expected = DESIGNLESS_CONFIG
+        .replace(
+            "\"code\": \"opus\"\r\n",
+            &format!(
+                "\"code\": \"opus\",\r\n            \"design\": {{\r\n                \"model\": \"sonnet\",\r\n                \"description\": \"{description}\"\r\n            }}\r\n"
+            ),
+        )
+        .replace(
+            "\"agent\": \"pi\"\r\n            }\r\n",
+            &format!(
+                "\"agent\": \"pi\"\r\n            }},\r\n            \"design\": {{\r\n                \"kind\": \"herding\",\r\n                \"agent\": \"pi\",\r\n                \"description\": \"{description}\"\r\n            }}\r\n"
+            ),
+        );
+    assert_eq!(text, expected);
+    assert_eq!(read_json(&fx.repo.join(".bee").join("onboarding.json"))["design_role_offered"], true);
+
+    write(&config_path(&fx), DESIGNLESS_CONFIG);
+    let p = plan(&fx, &[]);
+    assert!(!actions(&p, "plan").contains(&"add_design_role".to_string()));
+    apply(&fx, &[]);
+    assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), DESIGNLESS_CONFIG, "a deleted row stays deleted");
 }
 
 #[test]
@@ -545,6 +770,7 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
             "managed",
             "agents_sync",
             "pi_team_offered",
+            "design_role_offered",
             "created_at",
             "updated_at"
         ]
@@ -764,6 +990,7 @@ fn remove_pi_extension_arm_refuses_out_of_scope_paths() {
         plugin_source: false,
         statusline: false,
         runtime: "all".into(),
+        design_packs: None,
     };
     let mut computed = super::plan::compute_plan(&engine, &fx.repo, &opts);
     computed.plan.push(json!({"action": "remove_pi_extension", "path": ".pi/extensions/../outside.ts"}));

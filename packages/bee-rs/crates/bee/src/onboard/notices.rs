@@ -8,7 +8,7 @@
 
 use super::plan::verify_source_root;
 use super::templates::{
-    COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
+    COMMAND_KEYS, DESIGN_PACKS_OFFER, GITIGNORE_BLOCK_PATTERNS, NO_TEST_VERIFICATION_OFFER,
     RETIRED_VERIFY_KEY_NO_TEST_WARNING, RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
     TESTED_REPO_VERIFICATION_OFFER, VERIFICATION_UPKEEP_POINTER, VERIFY_APP_SKILL_NAME,
 };
@@ -247,7 +247,43 @@ pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
             NO_TEST_VERIFICATION_OFFER.to_string()
         });
     }
+    let picked = obj.and_then(|o| o.get("design")).and_then(|d| d.get("packs")).is_some();
+    if !picked && has_ui_file(repo_root) {
+        notices.push(DESIGN_PACKS_OFFER.to_string());
+    }
     notices
+}
+
+const UI_FILE_EXTENSIONS: &[&str] = &["html", "css", "scss", "jsx", "tsx", "vue", "svelte"];
+const UI_SCAN_SKIPPED_DIRS: &[&str] = &["node_modules", "target", "dist"];
+const UI_SCAN_MAX_DEPTH: usize = 6;
+const UI_SCAN_MAX_ENTRIES: usize = 10_000;
+
+fn has_ui_file(repo_root: &Path) -> bool {
+    let mut queue = std::collections::VecDeque::from([(repo_root.to_path_buf(), 0usize)]);
+    let mut seen = 0usize;
+    while let Some((dir, depth)) = queue.pop_front() {
+        for entry in read_dir_sorted(&dir) {
+            seen += 1;
+            if seen > UI_SCAN_MAX_ENTRIES {
+                return false;
+            }
+            if entry.is_dir {
+                let skipped = entry.name.starts_with('.') || UI_SCAN_SKIPPED_DIRS.contains(&entry.name.as_str());
+                if depth < UI_SCAN_MAX_DEPTH && !skipped {
+                    queue.push_back((dir.join(&entry.name), depth + 1));
+                }
+            } else if entry.is_file
+                && Path::new(&entry.name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| UI_FILE_EXTENSIONS.contains(&e))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// The ONE path that answers "does this repo have a verification skill": its
@@ -605,6 +641,45 @@ mod tests {
             !VERIFICATION_UPKEEP_POINTER.contains("Offer"),
             "the upkeep notice is a pointer, not a second offer",
         );
+    }
+
+    #[test]
+    fn the_design_offer_speaks_plainly_and_names_every_pack() {
+        for banned in [".bee", "config.json", "design.packs", "gate", "cap ", "proof", "cell"] {
+            assert!(!DESIGN_PACKS_OFFER.contains(banned), "no offer may say {banned}");
+        }
+        for pack in ["web", "charts", "motion", "apple", "figma", "none"] {
+            assert!(DESIGN_PACKS_OFFER.contains(pack), "the offer names {pack}");
+        }
+        assert!(DESIGN_PACKS_OFFER.contains("replaces every edit made inside its design folders"));
+        assert!(DESIGN_PACKS_OFFER.contains("never pick for them"));
+    }
+
+    #[test]
+    fn the_ui_scan_skips_hidden_and_build_trees_and_stops_at_its_depth_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let put = |rel: &[&str]| {
+            let mut p = dir.path().to_path_buf();
+            for seg in rel {
+                p = p.join(seg);
+            }
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        };
+        put(&[".venv", "lib", "page.html"]);
+        put(&["node_modules", "x", "a.css"]);
+        put(&["dist", "a.jsx"]);
+        put(&["target", "a.vue"]);
+        put(&["src", "main.rs"]);
+        let too_deep: Vec<String> = (0..=UI_SCAN_MAX_DEPTH).map(|i| format!("d{i}")).collect();
+        let mut path: Vec<&str> = too_deep.iter().map(String::as_str).collect();
+        path.push("deep.svelte");
+        put(&path);
+        assert!(!has_ui_file(dir.path()));
+
+        let deepest: Vec<&str> = too_deep[..UI_SCAN_MAX_DEPTH].iter().map(String::as_str).chain(["ok.scss"]).collect();
+        put(&deepest);
+        assert!(has_ui_file(dir.path()));
     }
 
     #[test]

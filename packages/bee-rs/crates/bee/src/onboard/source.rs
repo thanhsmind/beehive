@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 pub struct Engine {
     pub plugin_root: PathBuf,
     pub skills_root: PathBuf,
+    pub design_root: PathBuf,
     pub plugin_hooks_dir: PathBuf,
     pub templates_dir: PathBuf,
     pub templates_lib_dir: PathBuf,
@@ -58,6 +59,7 @@ impl Engine {
         let templates_dir = plugin_root.join("packages").join("bee");
         Self {
             skills_root: plugin_root.join("skills"),
+            design_root: templates_dir.join("design"),
             plugin_hooks_dir: templates_dir.join("hooks"),
             templates_lib_dir: templates_dir.join("lib"),
             templates_prompts_dir: templates_dir.join("prompts"),

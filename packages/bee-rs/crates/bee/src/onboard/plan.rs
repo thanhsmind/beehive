@@ -49,6 +49,7 @@ pub struct Options {
     /// display only if onboarding writes it.
     pub statusline: bool,
     pub runtime: String,
+    pub design_packs: Option<Vec<String>>,
 }
 
 pub struct ComputedPlan {
@@ -681,16 +682,53 @@ fn pi_team_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<&'stat
         return None;
     }
     let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
-    let tracked = tracked.as_object()?;
-    let table = match tracked.get("team") {
-        Some(team) => team.is_object().then_some("team")?,
-        None => tracked.get("models").filter(|m| m.is_object()).map(|_| "models")?,
-    };
+    let table = roster_table(tracked.as_object()?)?;
     let merged = crate::state::read_config_raw(repo_root);
     if merged.get("team").and_then(|t| t.get("pi")).is_some() {
         return None;
     }
     Some(table)
+}
+
+fn roster_table(tracked: &Map<String, Value>) -> Option<&'static str> {
+    match tracked.get("team") {
+        Some(team) => team.is_object().then_some("team"),
+        None => tracked.get("models").filter(|m| m.is_object()).map(|_| "models"),
+    }
+}
+
+fn design_role_target(repo_root: &Path, onboarding: Option<&Value>) -> Option<(&'static str, Vec<String>)> {
+    if onboarding.and_then(|o| o.get(T::DESIGN_ROLE_OFFERED_KEY)) == Some(&Value::Bool(true)) {
+        return None;
+    }
+    let tracked = read_json_if_exists(&repo_root.join(".bee").join("config.json"))?;
+    let tracked = tracked.as_object()?;
+    let table = roster_table(tracked)?;
+    let merged = crate::state::read_config_raw(repo_root);
+    let runtimes: Vec<String> = T::default_config()["team"]
+        .as_object()?
+        .iter()
+        .filter(|(runtime, roles)| {
+            roles.get("design").is_some()
+                && tracked.get(table).and_then(|t| t.get(runtime.as_str())).is_some_and(Value::is_object)
+                && merged
+                    .get("team")
+                    .and_then(|t| t.get(runtime.as_str()))
+                    .and_then(|r| r.get("design"))
+                    .is_none()
+        })
+        .map(|(runtime, _)| runtime.clone())
+        .collect();
+    (!runtimes.is_empty()).then_some((table, runtimes))
+}
+
+fn known_design_packs(recorded: Option<&Value>) -> Vec<String> {
+    let named = recorded.and_then(Value::as_array);
+    T::DESIGN_PACKS
+        .iter()
+        .filter(|p| named.is_some_and(|a| a.iter().any(|v| v == **p)))
+        .map(|p| p.to_string())
+        .collect()
 }
 
 pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ComputedPlan {
@@ -787,6 +825,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     }
 
     let onboarding = read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"));
+    let recorded_packs = read_json_if_exists(&repo_root.join(".bee").join("config.json"))
+        .and_then(|c| c.get("design")?.get("packs").cloned());
+    let design_packs =
+        opts.design_packs.clone().unwrap_or_else(|| known_design_packs(recorded_packs.as_ref()));
 
     // 2b. host-packaging-gaps D2: offer the Pi role table ONCE to an existing
     // config that lacks it — the only step that edits a present config.json.
@@ -796,6 +838,24 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         m.insert("path".into(), json!(".bee/config.json"));
         m.insert("table".into(), json!(table));
         plan.push(Value::Object(m));
+    }
+    if let Some((table, runtimes)) = design_role_target(repo_root, onboarding.as_ref()) {
+        let mut m = Map::new();
+        m.insert("action".into(), json!("add_design_role"));
+        m.insert("path".into(), json!(".bee/config.json"));
+        m.insert("table".into(), json!(table));
+        m.insert("runtimes".into(), json!(runtimes));
+        plan.push(Value::Object(m));
+    }
+    if let Some(packs) = &opts.design_packs {
+        let wanted = if packs.is_empty() { json!("none") } else { json!(packs) };
+        if recorded_packs.as_ref() != Some(&wanted) {
+            let mut m = Map::new();
+            m.insert("action".into(), json!("set_design_packs"));
+            m.insert("path".into(), json!(".bee/config.json"));
+            m.insert("packs".into(), wanted);
+            plan.push(Value::Object(m));
+        }
     }
 
     // 3. vendored helpers + lib (copy when missing or drifted)
@@ -1180,7 +1240,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     // 7. skill sync (D1-D5, per target)
     let skill_sync = if opts.sync_skills {
-        compute_skill_sync(engine, repo_root, opts.global_skills)
+        compute_skill_sync(engine, repo_root, opts.global_skills, &design_packs)
     } else {
         SkillSync {
             source_root: engine.skills_root.join("bee-hive"),
