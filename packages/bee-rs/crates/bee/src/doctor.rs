@@ -92,15 +92,35 @@ struct Row {
     detail: String,
 }
 
+const WARN_ROWS: [&str; 1] = ["design_skill"];
+
 impl Row {
+    fn status(&self) -> &'static str {
+        match self.ok {
+            Some(true) => "ok",
+            Some(false) if WARN_ROWS.contains(&self.key) => "warn",
+            Some(false) => "not_ok",
+            None => "unknown",
+        }
+    }
+
+    fn votes(&self) -> bool {
+        !WARN_ROWS.contains(&self.key)
+    }
+
+    fn mark(&self) -> &'static str {
+        match self.status() {
+            "ok" => "ok  ",
+            "warn" => "warn",
+            "not_ok" => "FAIL",
+            _ => "?   ",
+        }
+    }
+
     fn value(&self) -> Value {
         json!({
             "row": self.key,
-            "status": match self.ok {
-                Some(true) => "ok",
-                Some(false) => "not_ok",
-                None => "unknown",
-            },
+            "status": self.status(),
             "detail": self.detail,
         })
     }
@@ -222,6 +242,10 @@ fn mechanical_rows_with_env(
         detail: skills_detail,
     });
 
+    if let Some(row) = design_skill_row(root) {
+        rows.push(row);
+    }
+
     rows.push(wiring_row(root, runtime, hooks_bytes.as_deref()));
     match runtime {
         Runtime::Codex | Runtime::Claude => {
@@ -239,6 +263,69 @@ fn mechanical_rows_with_env(
     }
 
     rows
+}
+
+const DESIGN_SKILL: &str = "bee-design";
+const DESIGN_AGENT_REL: &str = ".claude/agents/bee-design.md";
+
+fn design_role_configured(config: &Map<String, Value>) -> bool {
+    config.get("team").and_then(Value::as_object).is_some_and(|team| {
+        team.values()
+            .any(|roles| roles.get("design").is_some_and(|slot| !slot.is_null()))
+    })
+}
+
+fn design_pick_is_none(config: &Map<String, Value>) -> bool {
+    match config.get("design").and_then(|d| d.get("packs")) {
+        Some(Value::Array(packs)) => packs.is_empty(),
+        Some(Value::String(pick)) => pick == "none",
+        _ => false,
+    }
+}
+
+fn design_skill_row(root: &Path) -> Option<Row> {
+    let config = crate::state::read_config_raw(root);
+    let role = design_role_configured(&config);
+    let agent = root.join(DESIGN_AGENT_REL).is_file();
+    if !role && !agent {
+        return None;
+    }
+    let homes: Vec<String> = crate::onboard::templates::REPO_SKILL_TARGETS
+        .iter()
+        .map(|(_, segments)| segments.join("/"))
+        .collect();
+    let installed_under = homes
+        .iter()
+        .find(|home| root.join(home).join(DESIGN_SKILL).is_dir());
+    let configured_by = match (role, agent) {
+        (true, true) => "the design role is configured and .claude/agents/bee-design.md is installed",
+        (true, false) => "the design role is configured in .bee/config.json",
+        _ => ".claude/agents/bee-design.md is installed",
+    };
+    let (ok, detail) = if design_pick_is_none(&config) {
+        (
+            true,
+            format!(
+                "{configured_by}, and design.packs records no pick — no design taste is installed, so design work runs as a plain executor"
+            ),
+        )
+    } else if let Some(home) = installed_under {
+        (true, format!("{configured_by}, and {home}/{DESIGN_SKILL} carries the taste"))
+    } else {
+        let packs = crate::onboard::templates::DESIGN_PACKS.join(",");
+        (
+            false,
+            format!(
+                "{configured_by}, and no {DESIGN_SKILL} skill sits under any of {} — design work runs without the design taste. FIX: install it with `bee onboard --apply --design-packs <{packs}>`, or record that this project takes no packs with `bee onboard --apply --design-packs none`",
+                homes.join(", ")
+            ),
+        )
+    };
+    Some(Row {
+        key: "design_skill",
+        ok: Some(ok),
+        detail,
+    })
 }
 
 fn wiring_row(root: &Path, runtime: Runtime, hooks_bytes: Option<&[u8]>) -> Row {
@@ -1389,7 +1476,7 @@ fn run_doctor(runtime: Runtime, as_json: bool) -> ExitCode {
 
 fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<String>) -> (Value, Vec<String>) {
     let rows = mechanical_rows_with_env(root, runtime, env);
-    let mechanical_ok = rows.iter().all(|r| r.ok == Some(true));
+    let mechanical_ok = rows.iter().all(|r| !r.votes() || r.ok == Some(true));
 
     let mut all: Vec<Value> = rows.iter().map(Row::value).collect();
     let attest = read_attestation(root, runtime);
@@ -1445,12 +1532,7 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
 
     let mut lines = vec![format!("bee doctor ({}): {}", runtime.name(), status.to_uppercase())];
     for r in &rows {
-        let mark = match r.ok {
-            Some(true) => "ok  ",
-            Some(false) => "FAIL",
-            None => "?   ",
-        };
-        lines.push(format!("  {mark} {:<22} {}", r.key, r.detail));
+        lines.push(format!("  {} {:<22} {}", r.mark(), r.key, r.detail));
     }
     if runtime == Runtime::Codex && !attest.valid {
         lines.push(format!(
@@ -1579,3 +1661,102 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
 
 #[cfg(test)]
 mod tests;
+
+
+#[cfg(test)]
+mod design_skill_tests {
+    use super::*;
+
+    const ROLE_CONFIG: &str = r#"{"team":{"claude":{"design":{"model":"sonnet"}}}}"#;
+
+    fn repo(tmp: &Path, config: &str, design_agent: bool) -> PathBuf {
+        let root = tmp.join("repo");
+        std::fs::create_dir_all(root.join(".bee").join("bin")).unwrap();
+        std::fs::write(root.join(".bee/bin/bee"), b"#!/bin/sh\n").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills/bee-hive")).unwrap();
+        std::fs::create_dir_all(root.join(".agents/skills/bee-hive")).unwrap();
+        std::fs::write(
+            root.join(".claude/settings.json"),
+            r#"{"hooks":{"PreToolUse":[{"hooks":[{"command":".bee/bin/bee hook write-guard"}]}]}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join(".bee/config.json"), config).unwrap();
+        if design_agent {
+            std::fs::create_dir_all(root.join(".claude/agents")).unwrap();
+            std::fs::write(
+                root.join(".claude/agents/bee-design.md"),
+                "---\nname: bee-design\n---\n",
+            )
+            .unwrap();
+        }
+        root
+    }
+
+    fn design_row(root: &Path) -> Option<Row> {
+        mechanical_rows(root, Runtime::Claude)
+            .into_iter()
+            .find(|r| r.key == "design_skill")
+    }
+
+    fn install_skill(root: &Path, home: &str) {
+        std::fs::create_dir_all(root.join(home).join("bee-design")).unwrap();
+        std::fs::write(root.join(home).join("bee-design/SKILL.md"), "bee-design\n").unwrap();
+    }
+
+    #[test]
+    fn doctor_design_skill_warns_when_the_role_has_no_bee_design_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), ROLE_CONFIG, false);
+        let row = design_row(&root).expect("a configured design role with no bee-design skill is named");
+        assert_eq!(row.value()["status"], "warn", "{}", row.detail);
+        assert!(row.detail.contains("--design-packs"), "{}", row.detail);
+        assert!(!row.votes(), "a warning never votes");
+
+        let (payload, lines) = doctor_report(&root, Runtime::Claude, &|_| None);
+        assert_ne!(payload["overall_status"], "blocked", "{payload}");
+        assert!(
+            lines.iter().any(|l| l.contains("design_skill") && l.contains("--design-packs")),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn doctor_design_skill_warns_when_only_the_agent_file_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", true);
+        let row = design_row(&root).expect("an installed bee-design agent with no skill is named");
+        assert_eq!(row.value()["status"], "warn", "{}", row.detail);
+    }
+
+    #[test]
+    fn doctor_design_skill_is_ok_when_the_skill_is_installed() {
+        for home in [".claude/skills", ".agents/skills", ".opencode/skills"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(tmp.path(), ROLE_CONFIG, true);
+            install_skill(&root, home);
+            let row = design_row(&root).expect("the row reports on a project with a design role");
+            assert_eq!(row.value()["status"], "ok", "{home}: {}", row.detail);
+            assert!(!row.detail.contains("--design-packs"), "{home}: {}", row.detail);
+        }
+    }
+
+    #[test]
+    fn doctor_design_skill_is_ok_when_the_pick_is_none() {
+        for config in [
+            r#"{"team":{"claude":{"design":{"model":"sonnet"}}},"design":{"packs":[]}}"#,
+            r#"{"team":{"claude":{"design":{"model":"sonnet"}}},"design":{"packs":"none"}}"#,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = repo(tmp.path(), config, true);
+            let row = design_row(&root).expect("the row reports on a project with a design role");
+            assert_eq!(row.value()["status"], "ok", "{config}: {}", row.detail);
+        }
+    }
+
+    #[test]
+    fn doctor_design_skill_is_absent_when_no_design_role_and_no_agent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(tmp.path(), "{}", false);
+        assert!(design_row(&root).is_none(), "nothing configures design work, so nothing is named");
+    }
+}

@@ -158,8 +158,18 @@ pub(crate) fn git_global_flag_takes_value(t: &str) -> bool {
 }
 
 pub(crate) struct GitInvocation {
+    pub(crate) globals: Vec<String>,
     pub(crate) subcommand: Option<String>,
     pub(crate) rest: Vec<String>,
+}
+
+pub(crate) fn push_main_bookkeeping(rest: &[String]) -> bool {
+    match rest {
+        [remote, refspec] => {
+            !remote.starts_with('-') && matches!(refspec.as_str(), "main" | "HEAD:main")
+        }
+        _ => false,
+    }
 }
 
 /// Every git invocation in the token list, in order — not just the first.
@@ -204,10 +214,15 @@ pub(crate) fn find_git_invocations(tokens: &[String]) -> Vec<GitInvocation> {
         }
         out.push(match (subcommand, sub_idx) {
             (Some(s), Some(idx)) => GitInvocation {
+                globals: invocation[..idx].to_vec(),
                 subcommand: Some(s),
                 rest: invocation[idx + 1..].to_vec(),
             },
-            _ => GitInvocation { subcommand: None, rest: Vec::new() },
+            _ => GitInvocation {
+                globals: invocation,
+                subcommand: None,
+                rest: Vec::new(),
+            },
         });
         i = end;
     }

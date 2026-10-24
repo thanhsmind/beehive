@@ -708,7 +708,57 @@ use std::process::ExitCode;
     }
 
 
-    // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
+    #[test]
+    fn issue_135_staging_and_committing_bee_config_json_is_not_refused() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join(".bee")).unwrap();
+        std::fs::write(
+            wtf.wt_root.join(".bee").join("config.json"),
+            "{\"commands\":{\"test\":\"cargo test\"}}\n",
+        )
+        .unwrap();
+        for cmd in [
+            "git add .bee/config.json",
+            "git add -- .bee/config.json",
+            "git add -A .bee/config.json",
+            "git add .bee/config.json && git commit -m wip",
+            "git commit -m wip -- .bee/config.json",
+            "git commit -m wip",
+            "git checkout somebranch",
+            "git checkout wt/some-feature",
+            "git switch somebranch",
+        ] {
+            let e = expect_done(bash(cmd), &wtf.wt_root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_135_shell_content_writes_to_bee_config_json_stay_refused() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join(".bee")).unwrap();
+        std::fs::write(wtf.wt_root.join(".bee").join("config.json"), "{}\n").unwrap();
+        for cmd in [
+            "echo x > .bee/config.json",
+            "echo x >> .bee/config.json",
+            "sed -i s/a/b/ .bee/config.json",
+            "tee .bee/config.json < payload.json",
+            "cp payload.json .bee/config.json",
+            "mv payload.json .bee/config.json",
+            "git checkout -- .bee/config.json",
+            "git checkout HEAD .bee/config.json",
+            "git checkout .bee/config.json",
+            "git restore .bee/config.json",
+            "git rm .bee/config.json",
+            "git mv .bee/config.json .bee/config.old.json",
+            "git add .bee/config.json && echo x > .bee/config.json",
+            "git add .bee/config.json; sed -i s/a/b/ .bee/config.json",
+        ] {
+            let e = expect_done(bash(cmd), &wtf.wt_root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+        }
+    }
+
     // The pure decision table lives in hooks/cli_shape.rs; these rows prove
     // the wiring — that a denial reaches exit 2 on stderr, that a well-formed
     // call still exits 0, and that check (d) never overwrites an earlier deny.
@@ -1822,7 +1872,7 @@ use std::process::ExitCode;
             assert_eq!(e.stderr, "", "{cmd}");
         }
         let idle = build_git_fixture("idle");
-        let push = expect_done(bash("git push origin main"), &idle.root);
+        let push = expect_done(bash("git push origin other"), &idle.root);
         assert_eq!(push.code, 2, "{}", push.stderr);
         assert!(push.stderr.contains("never exempted"), "{}", push.stderr);
     }
@@ -2856,7 +2906,7 @@ use std::process::ExitCode;
     #[test]
     fn git_push_and_unknown_subcommands_refused() {
         let fx = build_git_fixture("idle");
-        let push = expect_done(bash("git push origin main"), &fx.root);
+        let push = expect_done(bash("git push origin other"), &fx.root);
         assert_eq!(push.code, 2);
         assert!(push.stderr.contains("never exempted"));
         let unk = expect_done(bash("git bisect start"), &fx.root);
@@ -2883,6 +2933,66 @@ use std::process::ExitCode;
         stage_file(&fx.root, "src/feature.js");
         let e = expect_done(bash("git commit -m \"normal work\""), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn issue_131_fetch_and_push_main_pass_the_idle_intake_gate() {
+        let fx = build_git_fixture("idle");
+        for cmd in [
+            "git fetch",
+            "git fetch origin",
+            "git fetch -q origin",
+            "git fetch --all --prune",
+            "git fetch upstream main:refs/remotes/upstream/main",
+            "git push origin main",
+            "git push origin HEAD:main",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_131_push_neighbours_and_unmodelled_git_stay_refused() {
+        let fx = build_git_fixture("idle");
+        for cmd in [
+            "git push origin main:other",
+            "git push origin HEAD~1:main",
+            "git push origin +main",
+            "git push --force origin main",
+            "git push -f origin main",
+            "git push --force-with-lease origin main",
+            "git push --mirror origin",
+            "git push --delete origin main",
+            "git push -d origin main",
+            "git push origin :main",
+            "git push -o ci.skip origin main",
+            "git push --push-option=ci.skip origin main",
+            "git push -q origin main",
+            "git push -u origin main",
+            "git -c x=y push origin main",
+            "git push",
+            "git push origin",
+            "git pull",
+            "git pull origin main",
+            "git bisect start",
+            "git submodule update --init",
+            "git fetch && git push origin other",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee intake gate"), "{cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn issue_131_push_from_a_linked_worktree_is_still_refused() {
+        let lx = build_linked(true);
+        for cmd in ["git push origin main", "git push origin HEAD:main"] {
+            let e = outward_deny(&lx, cmd);
+            assert!(e.stderr.contains("never exempted"), "{cmd}: {}", e.stderr);
+        }
+        outward_allow(&lx, "git fetch -q origin");
     }
 
     // ── sfg-1 (slp-followup-gaps D1/D2): an unbound session's OWN live claim

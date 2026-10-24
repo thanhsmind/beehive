@@ -509,9 +509,10 @@ pub(crate) fn merge_stage(
                 .chain(blocking_untracked.iter().map(|u| format!("?? {u}")))
                 .collect::<Vec<String>>()
                 .join("\n");
+            let stamps = skills_version_stamp_paths().join(", ");
             let scope = match &identity.feature {
-                Some(f) => format!(".bee/, docs/decisions/, docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
-                None => ".bee/ or docs/decisions/".to_string(),
+                Some(f) => format!(".bee/, docs/decisions/, the skills version stamps ({stamps}), docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
+                None => format!(".bee/, docs/decisions/, or the skills version stamps ({stamps})"),
             };
             return Err(refuse_merge(
                 "WORKTREE_MERGE_MAIN_DIRTY",
@@ -527,9 +528,11 @@ pub(crate) fn merge_stage(
         // keep refusing forever.
         let message = match &identity.feature {
             Some(f) => format!(
-                "Auto-commit .bee, docs/decisions, {f}'s recorded docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
+                "Auto-commit .bee, docs/decisions, the skills version stamps, {f}'s recorded docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
             ),
-            None => format!("Auto-commit .bee and docs/decisions bookkeeping before merging worktree {id}"),
+            None => format!(
+                "Auto-commit .bee, docs/decisions, and the skills version stamps before merging worktree {id}"
+            ),
         };
         let mut specs = roots.clone();
         specs.extend(unsweepable.iter().map(|u| format!(":(exclude){u}")));

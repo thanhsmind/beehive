@@ -899,7 +899,9 @@ fn evaluate_semantic_role_routing(
             ))?;
 
         let declared = declared_role.unwrap_or_default();
-        if declared != effective_role {
+        let escalated_ceiling = declared == crate::verbs::drivers::ESCALATION_WORD
+            && crate::verbs::cells::cell_is_escalated(&cell);
+        if declared != effective_role && !escalated_ceiling {
             return Err((
                 format!(
                     "bee-model-guard: planned_role_mismatch: cell \"{cell_id}\" planned effective role is \"{effective_role}\", dispatch declared \"{declared}\". FIX: use planned role [bee-tier: {effective_role}] or run bee cells reroute."
@@ -4591,5 +4593,87 @@ mod tests {
         });
         let (code, stderr) = run_payload(root, p_legacy);
         assert_eq!(code, 0, "legacy prompt without feature must succeed, stderr: {stderr}");
+    }
+
+    fn escalate_v2_fixture(cells: &[Value]) -> tempfile::TempDir {
+        use sha2::{Digest, Sha256};
+        let fx = fixture(&json!({"team": {"claude": {"code": "sonnet", "test": "haiku"}}}));
+        let root = fx.path();
+        let plan_dir = root.join("docs").join("history").join("feat-v2");
+        std::fs::create_dir_all(&plan_dir).unwrap();
+        let plan_text = "# Plan\n";
+        std::fs::write(plan_dir.join("plan.md"), plan_text).unwrap();
+        let plan_sha = format!("{:x}", Sha256::digest(plan_text.as_bytes()));
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        let packet_cells: Vec<Value> = cells
+            .iter()
+            .map(|c| json!({"id": c["id"], "feature": "feat-v2", "role": "code"}))
+            .collect();
+        let lane = json!({
+            "feature": "feat-v2",
+            "gate_preview": {
+                "feature": "feat-v2",
+                "plan_sha256": plan_sha,
+                "role_plan": {
+                    "schema_version": "1.0",
+                    "runtime": "claude",
+                    "roster_sha256": "sha-roster",
+                    "stages": [{"stage": "dev", "classification": "required", "role": "code", "reason": "dev"}]
+                },
+                "cells": packet_cells
+            }
+        });
+        std::fs::write(root.join(".bee").join("lanes").join("feat-v2.json"), lane.to_string()).unwrap();
+        for c in cells {
+            let id = c["id"].as_str().unwrap();
+            std::fs::write(root.join(".bee").join("cells").join(format!("{id}.json")), c.to_string()).unwrap();
+        }
+        fx
+    }
+
+    fn escalate_v2_dispatch(root: &Path, tier: &str, cell: &str) -> (u8, String) {
+        run_payload(
+            root,
+            json!({
+                "tool_name": "Agent",
+                "tool_input": {
+                    "description": format!("[bee-tier: {tier}] [bee-feature: feat-v2] [bee-cell: {cell}]"),
+                    "prompt": "do cell work"
+                }
+            }),
+        )
+    }
+
+    #[test]
+    fn escalate_v2_an_escalated_cell_dispatches_at_the_ceiling() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": true}),
+        ]);
+        let (code, stderr) = escalate_v2_dispatch(fx.path(), "ceiling", "c-1");
+        assert_eq!(code, 0, "an escalated cell's ceiling payload must pass: {stderr}");
+    }
+
+    #[test]
+    fn escalate_v2_ceiling_without_the_escalate_flag_is_still_refused() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed"}),
+            json!({"id": "c-2", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": false}),
+        ]);
+        for cell in ["c-1", "c-2"] {
+            let (code, stderr) = escalate_v2_dispatch(fx.path(), "ceiling", cell);
+            assert_eq!(code, 2, "{cell}: {stderr}");
+            assert!(stderr.contains("planned_role_mismatch"), "{cell}: {stderr}");
+        }
+    }
+
+    #[test]
+    fn escalate_v2_an_escalated_cell_declaring_a_third_role_is_refused() {
+        let fx = escalate_v2_fixture(&[
+            json!({"id": "c-1", "feature": "feat-v2", "role": "code", "status": "claimed", "escalate": true}),
+        ]);
+        let (code, stderr) = escalate_v2_dispatch(fx.path(), "test", "c-1");
+        assert_eq!(code, 2, "{stderr}");
+        assert!(stderr.contains("planned_role_mismatch"), "{stderr}");
     }
 }

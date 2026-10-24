@@ -266,10 +266,10 @@ pub(crate) fn branch_changed_files(main_root: &Path, branch: &str) -> Option<BTr
 // --no-gpg-sign`, through `commit_unsigned`.
 
 /// The pathspecs a pre-merge bookkeeping auto-commit is allowed to sweep:
-/// `.bee` and `docs/decisions` always — both are bee's own machine-written
-/// control plane and its rendered index, written by every session
-/// (`decisions log` writes `docs/decisions/taxonomy.json`,
-/// verbs/decisions/mod.rs). `docs/knowledge` and `docs/history/<feature>`
+/// `.bee`, `docs/decisions` and each skills root's own version stamp always —
+/// the first two are bee's own machine-written control plane and its
+/// rendered index, written by every session (`decisions log` writes
+/// `docs/decisions/taxonomy.json`). `docs/knowledge` and `docs/history/<feature>`
 /// are different: both hold AUTHORED prose (capture, not bookkeeping), so
 /// neither is ever swept blanket — each is scoped to the MERGING feature's
 /// own recorded paths, and only when that feature is known.
@@ -301,6 +301,7 @@ pub(crate) fn branch_changed_files(main_root: &Path, branch: &str) -> Option<BTr
 /// same path that already names an unscoped `docs/history` file.
 pub(crate) fn main_bookkeeping_roots(root: &Path, feature: Option<&str>) -> Vec<String> {
     let mut roots = vec![".bee".to_string(), "docs/decisions".to_string()];
+    roots.extend(skills_version_stamp_paths());
     if let Some(feature) = feature {
         let touched = crate::verbs::drivers::feature_touched_files(root, feature).unwrap_or_default();
         for f in touched {
@@ -311,6 +312,19 @@ pub(crate) fn main_bookkeeping_roots(root: &Path, feature: Option<&str>) -> Vec<
         roots.push(format!("docs/history/{feature}"));
     }
     roots
+}
+
+pub(crate) fn skills_version_stamp_paths() -> Vec<String> {
+    crate::onboard::templates::REPO_SKILL_TARGETS
+        .iter()
+        .map(|(_, segments)| {
+            format!(
+                "{}/{}",
+                segments.join("/"),
+                crate::onboard::templates::SKILLS_VERSION_STAMP
+            )
+        })
+        .collect()
 }
 
 /// `worktree_merge_commit_bookkeeping` in the merged config (`.bee/config.json`

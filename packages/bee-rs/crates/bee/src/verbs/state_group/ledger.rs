@@ -310,11 +310,38 @@ pub(crate) fn bound_lane_missing_refusal(verb: &str, session_id: &str, bound: &s
     )
 }
 
+pub(crate) fn worktree_feature_lane_refusal(verb: &str, worktree_feature: &str, default_feature: &str) -> String {
+    format!(
+        "{verb}: refused — this session runs in the granted worktree of feature \"{worktree_feature}\", is bound to no lane, and no .bee/lanes/{worktree_feature}.json exists, while main's default record belongs to feature \"{default_feature}\"; writing there would change another feature's state. FIX: pass --lane {worktree_feature} after starting that lane (\"state start-feature --feature {worktree_feature} --as-lane\"), or --no-lane to write the default record on purpose."
+    )
+}
+
+fn calling_worktree_feature(root: &Path) -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let (resolved, here) = crate::verbs::drivers::resolve_root_serving_granted(&cwd);
+    let crate::roots::Roots::Ordinary(main_root) = resolved else { return None };
+    let same_store = std::fs::canonicalize(&main_root).ok()? == std::fs::canonicalize(root).ok()?;
+    if !same_store {
+        return None;
+    }
+    crate::verbs::status_full::read_worktree_feature(&here?.to_string_lossy())
+}
+
 pub(crate) fn resolve_mutation_target(
     root: &Path,
     lane_feature: Option<&str>,
     verb: &str,
     no_lane: bool,
+) -> Result<Target, Err2> {
+    resolve_mutation_target_in(root, lane_feature, verb, no_lane, || calling_worktree_feature(root))
+}
+
+pub(crate) fn resolve_mutation_target_in(
+    root: &Path,
+    lane_feature: Option<&str>,
+    verb: &str,
+    no_lane: bool,
+    worktree_feature: impl FnOnce() -> Option<String>,
 ) -> Result<Target, Err2> {
     let default_target = |root: &Path| -> Result<Target, Err2> {
         let record = read_state_strict(root)?;
@@ -334,7 +361,19 @@ pub(crate) fn resolve_mutation_target(
         return default_target(root);
     }
     let (sid, bound) = session_binding(None, root)?;
-    let Some(bound) = bound else { return default_target(root) };
+    let Some(bound) = bound else {
+        let Some(wt_feature) = worktree_feature() else { return default_target(root) };
+        if let Some(record) = read_lane_strict(root, &wt_feature)? {
+            return Ok(Target::Lane { record, lane: wt_feature });
+        }
+        let target = default_target(root)?;
+        if let Target::Default { target_feature: Some(f), .. } = &target {
+            if f != &wt_feature {
+                return Err(Err2::Msg(worktree_feature_lane_refusal(verb, &wt_feature, f)));
+            }
+        }
+        return Ok(target);
+    };
     let Some(record) = read_lane_strict(root, &bound)? else {
         return Err(Err2::Msg(bound_lane_missing_refusal(verb, &sid_disp(&sid), &bound)));
     };
@@ -501,6 +540,79 @@ mod tests {
         let file = root.join(rel);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, body).unwrap();
+    }
+
+    fn worktree_state_record_store(default_feature: &str, lane: Option<&str>) -> tempfile::TempDir {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write(
+            root,
+            ".bee/state.json",
+            &serde_json::json!({"feature": default_feature, "phase": "swarming", "mode": "standard"}).to_string(),
+        );
+        if let Some(f) = lane {
+            write(
+                root,
+                &format!(".bee/lanes/{f}.json"),
+                &serde_json::json!({"feature": f, "phase": "swarming", "mode": "standard"}).to_string(),
+            );
+        }
+        tmp
+    }
+
+    fn worktree_state_record_resolve(root: &Path, wt: Option<&str>) -> Result<Target, Err2> {
+        let wt = wt.map(str::to_string);
+        resolve_mutation_target_in(root, None, "state.gate", false, move || wt)
+    }
+
+    #[test]
+    fn worktree_state_record_an_unbound_write_from_a_worktree_lands_in_its_feature_lane() {
+        let tmp = worktree_state_record_store("other-feature", Some("wt-feature"));
+        match worktree_state_record_resolve(tmp.path(), Some("wt-feature")) {
+            Ok(Target::Lane { lane, .. }) => assert_eq!(lane, "wt-feature"),
+            Ok(other) => panic!("expected the worktree feature's lane, got {:?}", other.lane()),
+            Err(_) => panic!("expected the worktree feature's lane, got a refusal"),
+        }
+    }
+
+    #[test]
+    fn worktree_state_record_refuses_to_write_another_features_default_record() {
+        let tmp = worktree_state_record_store("other-feature", None);
+        let before = std::fs::read_to_string(tmp.path().join(".bee/state.json")).unwrap();
+        match worktree_state_record_resolve(tmp.path(), Some("wt-feature")) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains("--lane wt-feature"), "{m}");
+                assert!(m.contains("other-feature"), "{m}");
+            }
+            _ => panic!("a write into another feature's default record must be refused"),
+        }
+        let after = std::fs::read_to_string(tmp.path().join(".bee/state.json")).unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn worktree_state_record_same_feature_default_and_main_writes_are_unchanged() {
+        let tmp = worktree_state_record_store("wt-feature", None);
+        assert!(matches!(
+            worktree_state_record_resolve(tmp.path(), Some("wt-feature")),
+            Ok(Target::Default { .. })
+        ));
+        let tmp = worktree_state_record_store("other-feature", Some("wt-feature"));
+        assert!(matches!(worktree_state_record_resolve(tmp.path(), None), Ok(Target::Default { .. })));
+    }
+
+    #[test]
+    fn worktree_state_record_explicit_selectors_keep_their_meaning() {
+        let tmp = worktree_state_record_store("other-feature", Some("wt-feature"));
+        let wt = || Some("wt-feature".to_string());
+        assert!(matches!(
+            resolve_mutation_target_in(tmp.path(), None, "state.gate", true, wt),
+            Ok(Target::Default { .. })
+        ));
+        assert!(matches!(
+            resolve_mutation_target_in(tmp.path(), Some("wt-feature"), "state.gate", false, wt),
+            Ok(Target::Lane { .. })
+        ));
     }
 
     #[test]
