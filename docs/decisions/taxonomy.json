@@ -749,6 +749,13 @@
     "contract:mailbox-tilde",
     "release-2-59-0",
     "release-test-flakes",
-    "contract:pi-harness-await-steps"
+    "contract:pi-harness-await-steps",
+    "design-os",
+    "team-roles",
+    "ui-design",
+    "licensing",
+    "packaging",
+    "contract:design-cell-pin",
+    "contract:design-gate"
   ]
 }
