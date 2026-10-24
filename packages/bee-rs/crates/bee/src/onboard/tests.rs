@@ -532,6 +532,73 @@ fn a_host_with_no_ui_file_is_not_offered_the_packs() {
     assert_eq!(design_offers(&apply(&fx, &[])), 0);
 }
 
+#[test]
+fn design_offer_is_reported_to_a_ui_host_that_has_no_pick() {
+    let fx = fixture();
+    write(&fx.repo.join("index.html"), "<p></p>\n");
+    let p = plan(&fx, &[]);
+    assert_eq!(p["design_offer"], true, "a UI host with no pick is offered");
+    assert_eq!(design_offers(&p), 1, "the field and the notice come from one predicate");
+    assert_eq!(apply(&fx, &[])["design_offer"], true);
+    assert!(read_json(&config_path(&fx)).get("design").is_none(), "the field writes nothing");
+}
+
+#[test]
+fn design_offer_stops_once_a_pick_is_recorded() {
+    let fx = fixture();
+    write(&fx.repo.join("index.html"), "<p></p>\n");
+    for pick in ["web,charts", "none"] {
+        let a = apply(&fx, &["--design-packs", pick]);
+        assert_eq!(a["design_offer"], false, "{pick}: an applied pick stops the offer");
+        assert_eq!(plan(&fx, &[])["design_offer"], false, "{pick}: a recorded pick stops the offer");
+    }
+    write(&config_path(&fx), "{\"design\":{\"packs\":[]}}");
+    assert_eq!(notices::design_offer_due(&fx.repo), false, "an empty list is a pick");
+}
+
+#[test]
+fn design_offer_is_absent_for_a_host_with_no_ui_file() {
+    let fx = fixture();
+    write(&fx.repo.join("src").join("main.rs"), "fn main() {}\n");
+    assert_eq!(notices::design_offer_due(&fx.repo), false);
+    assert_eq!(plan(&fx, &[])["design_offer"], false);
+    assert_eq!(apply(&fx, &[])["design_offer"], false);
+}
+
+#[test]
+fn design_offer_flag_is_listed_in_onboard_help() {
+    let raw = include_str!("../generated/registry_payload.json");
+    let payload: Value = serde_json::from_str(raw).expect("the embedded registry payload parses");
+    let onboard = payload["commands"]
+        .as_array()
+        .expect("commands is an array")
+        .iter()
+        .find(|c| c["name"] == "onboard")
+        .expect("onboard is registered");
+    let declared = &onboard["parameters"]["properties"]["design-packs"];
+    assert_eq!(declared["type"], "string", "--design-packs is a comma list");
+    let described = declared["description"].as_str().unwrap_or_default();
+    for pack in ["web", "charts", "motion", "apple", "figma", "none"] {
+        assert!(described.contains(pack), "the description names {pack}: {described}");
+    }
+
+    let mut exe = std::env::current_exe().unwrap();
+    exe.pop();
+    if exe.ends_with("deps") {
+        exe.pop();
+    }
+    let bin = exe.join(format!("bee{}", std::env::consts::EXE_SUFFIX));
+    assert!(bin.is_file(), "built bee binary not found at {}", bin.display());
+    let out = std::process::Command::new(&bin).args(["onboard", "--help"]).output().unwrap();
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "`bee onboard --help` failed: {said}");
+    assert!(said.contains("--design-packs"), "help must list the flag: {said}");
+}
+
 const DESIGNLESS_CONFIG: &str = "{\r\n    \"host_shell\": \"posix\",\r\n    \"team\": {\r\n        \"claude\": {\r\n            \"code\": \"opus\"\r\n        },\r\n        \"pi\": {\r\n            \"code\": {\r\n                \"kind\": \"herding\",\r\n                \"agent\": \"pi\"\r\n            }\r\n        }\r\n    },\r\n    \"zeta\": 1\r\n}\r\n";
 
 #[test]
@@ -657,7 +724,16 @@ fn plan_payload_key_order_matches_node() {
     let keys: Vec<&str> = p.as_object().unwrap().keys().map(|k| k.as_str()).collect();
     assert_eq!(
         keys,
-        vec!["repo_root", "status", "source", "bee_version", "plan", "skills", "notices"]
+        vec![
+            "repo_root",
+            "status",
+            "source",
+            "bee_version",
+            "plan",
+            "skills",
+            "notices",
+            "design_offer"
+        ]
     );
     // No worktree_migration key for an ordinary checkout (must_have truth).
     assert!(p.get("worktree_migration").is_none());

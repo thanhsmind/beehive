@@ -567,6 +567,30 @@ try {
   try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
 
+  if (-not $DesignPacks) {
+    Push-Location $beeSrc
+    try { $previewJson = (& $beeBin onboard --repo-root $Directory --json @onboardFlags) -join "`n" } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
+    if ((($previewJson | ConvertFrom-Json).design_offer) -eq $true) {
+      $answered = $false
+      if ((-not $Yes) -and (-not $DryRun) -and [Environment]::UserInteractive) {
+        $designAnswer = Read-Host 'Design skill packs for this project? web, charts, motion, apple, figma (comma list) - none stops the offer, Enter skips'
+        if ($designAnswer) {
+          $DesignPacks = $designAnswer
+          $onboardFlags += @('--design-packs', $DesignPacks)
+          Write-Host "design   packs: $DesignPacks"
+          $answered = $true
+          Push-Location $beeSrc
+          try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
+          if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
+        }
+      }
+      if (-not $answered) {
+        Write-Host 'design   this project has interface files; re-run with -DesignPacks web (or charts,motion,apple,figma, or none) to add design skills'
+      }
+    }
+  }
+
   if ($DryRun) {
     Write-Host 'dry-run  nothing written. Re-run without -DryRun to apply.'
     exit 0

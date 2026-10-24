@@ -247,11 +247,21 @@ pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
             NO_TEST_VERIFICATION_OFFER.to_string()
         });
     }
-    let picked = obj.and_then(|o| o.get("design")).and_then(|d| d.get("packs")).is_some();
-    if !picked && has_ui_file(repo_root) {
+    if design_offer_due(repo_root) {
         notices.push(DESIGN_PACKS_OFFER.to_string());
     }
     notices
+}
+
+pub fn design_offer_due(repo_root: &Path) -> bool {
+    let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
+    let picked = config
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|o| o.get("design"))
+        .and_then(|d| d.get("packs"))
+        .is_some();
+    !picked && has_ui_file(repo_root)
 }
 
 const UI_FILE_EXTENSIONS: &[&str] = &["html", "css", "scss", "jsx", "tsx", "vue", "svelte"];
