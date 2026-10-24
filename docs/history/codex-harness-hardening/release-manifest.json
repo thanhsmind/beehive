@@ -2042,6 +2042,1000 @@
       "packagePath": "packages/bee/agents/bee-review.md.tmpl"
     },
     {
+      "path": "packages/bee/design/bee-design-apple/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/apple-swiftui-craft.md",
+      "sha256": "b585f3829d49c3697a2228dac94ac75b1e9e7724d609cd7053e99bdb71181a6e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/apple-swiftui-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ios-craft.md",
+      "sha256": "c662a8053d3024a022257a3a0a4c76e3469498adb8b3d7f56f70cb037a69c5f0",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ios-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ios/pilot-01-evidence.json",
+      "sha256": "8f1ac37587308ab9a7661e86038b55d2400463908d5577f9fc1a924953408de7",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ios/pilot-01-evidence.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ios/pilot-01-source-evidence.json",
+      "sha256": "bcf7af83f0cd778d7470ca84dfb0c58e8e4067a6578dff1f63003bb9a9656ec9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ios/pilot-01-source-evidence.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ipados-craft.md",
+      "sha256": "ffc2aec9f44a5c91cd4d9aea37efdba6f00f90873cf10369b10b69844e9ebf1f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ipados-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ipados/pilot-01-evidence.json",
+      "sha256": "d4a5f1a99f9537ecef9ed0785a62584342fd8409bc140b3e958e0bf18a195e52",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ipados/pilot-01-evidence.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-ipados/pilot-01-source-evidence.json",
+      "sha256": "2f5daf4b0bb389ad3302597908ab2abc100b9aec394a030d5bd5b7f3eb7c6b71",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-ipados/pilot-01-source-evidence.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-macos-craft.md",
+      "sha256": "4ef2b2a4dcbb12c7fd28f2dbb91da406870281cc959605f1b80bfb40584f22e9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-macos-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/references/native-macos/pilot-01-evidence.json",
+      "sha256": "15985c431056cc29b5823650b4daf8c09974caed64e75019b103f89d69341ff9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/references/native-macos/pilot-01-evidence.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/SKILL.md",
+      "sha256": "ca5fa30193999c50443800697384d674c2db2a903a0ea76388e0f3b7609d7230",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-apple/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-apple/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-craft.md",
+      "sha256": "9953fea300fe2de40fd80edb72b6dc9f20fd996acebdb0b835344e5859da9d0c",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/bar.md",
+      "sha256": "42d8d1d1938756444a48b75e11c5e495b1b5dc064d9f83c9ced2f7eeb8ea20cd",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/bar.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/gantt.md",
+      "sha256": "c94ea7d70e5d1e303010df7e2f6370f8fe876c4c88c0bd0de64f1211a6edd14b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/gantt.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/line.md",
+      "sha256": "6ff901573d0142b4753733a187941afe53f83551e70052ebf697001b76d3b95f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/line.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/pyramid.md",
+      "sha256": "23f8282845348b1bb6148822d66ae3ab90420374bb8e00b85a158612dec8540f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/pyramid.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/quadrant.md",
+      "sha256": "ce6af134b25a2b21cbd0f207812680c6ed4a6018fdf9a7fece55672666d2311b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/quadrant.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/radar.md",
+      "sha256": "c3ba86c27ef466ef21e624d2801b291f76fdd0b3b59008416a53ad4b2b658106",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/radar.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/scatter.md",
+      "sha256": "786bde3fe336ec1cd69aa9c96d8e65b2c9b4b9d1522ce18cb6fb28a672f394d3",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/scatter.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/timeline.md",
+      "sha256": "ac1b56ed8f9c4f4b7d3e356ff9d963d5b4d7872b929fa66d023534b0f15bc95c",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/timeline.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/chart-grammars/venn.md",
+      "sha256": "1ea2b8c2b35e436e94ea113e3c1c00f0a0e23384623776a9b0adb758e43c2a63",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/venn.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-craft.md",
+      "sha256": "9d5ca2ac14d0d1f81da23480c9c827dc6a66a2cebee7a4ae50ccda0a9da90d47",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/architecture.md",
+      "sha256": "a394c93eb425d821a432fcb3e83aab5b21fd54bc4c6bb2189df5423d6dca6b95",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/architecture.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/data-flow.md",
+      "sha256": "119e64f85a08862ee22f62c4ce0b583d9a06395ae24ffcb651bac0e6a7c15096",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/data-flow.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/dp-integration.md",
+      "sha256": "722da520f7ee0ebb5777f095ecc3e52af161bbc3ca4fe3dd428b3f017533b625",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/dp-integration.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/dp-security-matrix.md",
+      "sha256": "89961d7500f3bbc2a3d8266e749096d4574251561360201e7f396aabb60720e7",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/dp-security-matrix.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/er.md",
+      "sha256": "76d55d5eeea4c59334489fabcf92d103609ec2191ccc1c5d55fcd660967aebdf",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/er.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/flowchart.md",
+      "sha256": "c7d8633604f6cdc9c825d6222b6597d99ef8a6068ef706254426281053025a3a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/flowchart.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/high-level.md",
+      "sha256": "705a4ff08a1a5f70cc6ba8ee6d115ec35d255dc8386fb1e97412a32775833b29",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/high-level.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/it-state.md",
+      "sha256": "849bbb61da5f9b838b7fe9b5572b2c96e8e50ebd4ae5d6a13c75a257110158d8",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/it-state.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/layers.md",
+      "sha256": "1e81029a83f144c127fcae17c9d31f926836f81ae103caeda257029a63d6bee9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/layers.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/loop.md",
+      "sha256": "e3da8368e3f612bbf38912037a7e6669b4a83a825c88ded8439e3d10587723ee",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/loop.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/medallion.md",
+      "sha256": "36d5a7655c8f4e5d407ad9063b5cf14d45eb643f118159546cf0b3d18807e43f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/medallion.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/nested.md",
+      "sha256": "02d5ebe7a4169d1e1d3eb5b03435f464dbe81b975f824cd10c519a827c65aede",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/nested.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/org-chart.md",
+      "sha256": "d567f2c454365abd012372ebe4704be038a301e6e5d1aa851665d1eb64ddb5fe",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/org-chart.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/process.md",
+      "sha256": "c8a0e93a12a1f0d6dad356397132e61bdd1dd6fca776f686910c83f46af73698",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/process.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/product-flow.md",
+      "sha256": "e273e4a603fe5d65598cf2cdc7fdfa5e11b49a9f4397c6270af2d54aae9ae203",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/product-flow.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/sequence.md",
+      "sha256": "e1b69cb7f459b683a288f71568d4d14bef3f05764698cfed70ecd5c0cca90742",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/sequence.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/state.md",
+      "sha256": "51761c9157853ea47e92ddf33cd45c7a18156fcb07497e6e6a0d60718a89b26a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/state.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/swimlane.md",
+      "sha256": "a4ee040f2132ab3bfd382fc753c508c65239763662291f5fec6afc76db8098d9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/swimlane.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-grammars/tree.md",
+      "sha256": "792bd7dd037d09cd4d4a662a13b0cb6d75f22f8d11c1e7345de63f2e796b57aa",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-grammars/tree.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/diagram-icons.md",
+      "sha256": "3524fb8c49ab3907123d5999c9a0ad173b159de40228360d073f17dee216e6ea",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/diagram-icons.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/references/flow-craft.md",
+      "sha256": "4dec64e7851e3d08b7a1f9c5d2a14100cd5c5affebabeeebc0ab3229b14d9f1f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/flow-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/SKILL.md",
+      "sha256": "f79e6c73c27c99e46ca6aacea4c42c5a08ede9d7eea319d91311e4536911c991",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-charts/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-agent-hand.md",
+      "sha256": "8567831554e57b24e234e54f6abeaf1cc4d67f77271b17aea320500518ed6830",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-agent-hand.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/canvas-operations.md",
+      "sha256": "389293f31ad17d4def9e91251231441aa20e9ff719fa653079471e00d4421e7d",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/canvas-operations.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/code-connect.md",
+      "sha256": "f2a7f7fc644d4b96838a86ca9eb362c024bc3933909d142db2353a7d78300a24",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/code-connect.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/component-design.md",
+      "sha256": "801ae0e728406addd00590a2e2706d505fee5ffa97e734130c9660ee51532de7",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/component-design.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/components-variables-styles.md",
+      "sha256": "bac6a1a748a1a535101731b79affc40d3a37dde48a73c563a3af0009f21844fe",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/components-variables-styles.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/curator.md",
+      "sha256": "9e2a183e9679ef953c3aa8013bd1902a1e45ee6ff338cb2368cf87871f38a5ff",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/curator.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/facet-model.md",
+      "sha256": "89f9992d9fd1aa1c2f5ac94c14c7edb586b9c49fa375e7b7120d3b3152d9804e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/facet-model.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/figma-craft.md",
+      "sha256": "9324f7aa97ff767cac240548b185dcda5ae46e1a12d135edfe763aecaf61af95",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/figma-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/intent-recipes.md",
+      "sha256": "f182365c26ee0af6becba4df3e11ef232be3f7ef0e45d20f498836f88f67c6ac",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/intent-recipes.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/layout-mastery.md",
+      "sha256": "ade1ae113f75c2f12fa607414c1e0ca59cadcbed002a426968a395e37237a209",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/layout-mastery.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/structure-hygiene.md",
+      "sha256": "a32fd37134c22f8c38d3774566d5c078a3d436a3675b21fc47e5467678b87004",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/structure-hygiene.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/visual-craft.md",
+      "sha256": "b820a69b3c57f54f6ed22434135c67a22ea5b83c9fa1285da523ef2c373dd5a4",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/visual-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-craft/workflow-experience.md",
+      "sha256": "ac784670f559628ca1deb67c4da4a0519629691290dc8b56868dc7240930bd90",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-craft/workflow-experience.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/figma-ds-onboarding.md",
+      "sha256": "0993725a55b0d470969da8e467e0f2b24401fe36b3cb765c69f826e6b4fb5154",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/figma-ds-onboarding.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/SKILL.md",
+      "sha256": "dadc3d86598bce4f544c2ba3c3c11f6395f772d3b310183aca653e5927a39567",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/asset-production-orchestration.md",
+      "sha256": "d4dfc9219eb71173696f985ed25c8e5e0a53ac0bf3fb984ef3a0d7cd50cc6fcd",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/asset-production-orchestration.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/canvas-effect-direction.md",
+      "sha256": "05da36c425ff4f24a7a620831413217894e350728ccb442d0a1a1ed0d43020e9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/canvas-effect-direction.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/canvas-ui/catalog.json",
+      "sha256": "576dd54eb45c62201f9d1d8cdc2cfa72ff8cc047668cba0e6bab09965ade45ad",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/canvas-ui/catalog.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/canvas-ui/README.md",
+      "sha256": "510f6bbb3a09f073ddfeec47100bea215ffd5932ad4684daa914ed4ef4bbe2a6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/canvas-ui/README.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/delivery-assets.md",
+      "sha256": "22ffe9a70846059f991e0eddb6dd8f21aa4ba1042df299663bcd875982acecf7",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/delivery-assets.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/gflow-hand.md",
+      "sha256": "f5f49f3a89bd5107d71b65359fc4beea94b6aae3cf6aa1c0706ac8312b329f50",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/gflow-hand.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/gsap-motion-direction.md",
+      "sha256": "26d25f6ed994b0a7ca40d7496c79fb01c31586517f708db933349767a052b3f1",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/gsap-motion-direction.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/motion-craft.md",
+      "sha256": "cf9f5190a1f1b01c07109c4f0062a32c6a3349ec60dd0917ca7828375ee95ea4",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/motion-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/scroll-cinema-direction.md",
+      "sha256": "90e180bbdfbbfc8c67fab79163e47b1565d7c72edf6fdc482872d2ac78ab5909",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/scroll-cinema-direction.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/shader-gradient-direction.md",
+      "sha256": "c6a81d7f0d659c1e9a3eaf99e27715bb1c1632466b6f0e86b22a90dbefb4e1f8",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/shader-gradient-direction.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/shader-gradient/catalog.json",
+      "sha256": "21254d47a6bc82a9d1b44ff93361d1a2111884d8123379ce1abfeaa8e567c3da",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/shader-gradient/catalog.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/shader-gradient/README.md",
+      "sha256": "15376d5effba4bc8d314ed8bbe0381955cde8a3ad66c4cd3fef89b003d9c29b3",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/shader-gradient/README.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/SKILL.md",
+      "sha256": "04f2601e2101c81b4df89ad979cd1469a9a5c89def3a00978f93992e0c3dcf03",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/designmd-format.md",
+      "sha256": "17c05e79ce28c95b869866351b2318e3e5c7df511ba0517594541559131a7a8c",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/designmd-format.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/ds-kit-onboarding.md",
+      "sha256": "4851a7adcf104de35324c0882af6720baf2e598199a9833634bcb44053d09ec3",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/ds-kit-onboarding.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/pattern-cards.md",
+      "sha256": "be627d51b18afa5ef2682789ccf192fd440a0ae061cf1df5514229e38eb72d86",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/pattern-cards.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/banking-home.json",
+      "sha256": "35a687a5a385052b5de76c3bc7feb40e695662574de48e79cbe41f8dd346daa1",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/banking-home.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/checkout.json",
+      "sha256": "e92310098a24e9c68de4421ed1c7c648794ae2cb3a3660bdd263ae0ac7029052",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/checkout.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/home-feed.json",
+      "sha256": "caae2c31fd3d340741536ee8ba448b1705f35fa5dad64d12c075f45965dac324",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/home-feed.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/login.json",
+      "sha256": "748913160d08e9081d5a7576bb3ed2a523361230e39e50848b28b5279002ed1a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/login.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/onboarding.json",
+      "sha256": "db2e927bf68f4a60728c266a51ece1498bd35ebfa07d068637a989e63a8d7625",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/onboarding.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/password-change.json",
+      "sha256": "d5044b22e7beeb54616174697e347135f490c83b5ee10324efff0354db82bdf6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/password-change.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/product-detail.json",
+      "sha256": "9c6ab4200696cc0f302ca2ad85c8b0184292a6fcbfb9b213f1fad0e5d4e82b7d",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/product-detail.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/ios/profile-settings.json",
+      "sha256": "69abc48b4c1ede2a0f4bd894ca5271e0ef2ac6fa3c8f8d29e65a2b08d084a143",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/ios/profile-settings.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/checkout.json",
+      "sha256": "0d9b4b938668cae8002cde883ad2b44e21615b1ba14e13af8c1ad450e8199b9f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/checkout.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/data-table.json",
+      "sha256": "5e6c4acfa66d5ca3dbda109152fb2a5e25132eab3c87bd25427facfc42b8094b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/data-table.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/login.json",
+      "sha256": "603a2d1a026ccbc482150e08221ede131f6248b2ce84dbc6e611f47706531915",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/login.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/onboarding.json",
+      "sha256": "1b47e693f2b5009ee40fab70d1c22075badda636e0d1c7ccf75a2a482f5e660a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/onboarding.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/pricing.json",
+      "sha256": "a56ca51871249ce76bc2b0ac0bfabd444f76fb126b7dcd301016778665108405",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/pricing.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/product-detail.json",
+      "sha256": "0b4cafc53989a9354a863177e7d16cbe86c78c020526b81dffceebb98494adcb",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/product-detail.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/settings.json",
+      "sha256": "321a0f4b7fe7edef08e3859f7010134d02e44f98710b43ce0abfc80545e2ffe8",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/settings.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/patterns/web/usage-dashboard.json",
+      "sha256": "62e5712de563c1dceefaf118303f57b61d65311e626d4a355ae5c20b10ad6f43",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/patterns/web/usage-dashboard.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/signature-devices.md",
+      "sha256": "e6630e853a01b5891ce8b6e37663af6ab4d2c352f92a7f231c5b48c4886d8b8f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/signature-devices.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-technique-craft.md",
+      "sha256": "2d4c4c54cf78c17b73a8acd5597ed1fcbaf5c43a40be2a6dea799aeae7754096",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-technique-craft.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/3d-worlds.md",
+      "sha256": "df41be2053fa0a05d04462361602445869b6b868b11bb3619924d478e512a3ff",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/3d-worlds.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/catalog.json",
+      "sha256": "b84cafe8757ab082c85eb0f8853666c1d7d55bb411e2de8f9badd06bb33c9314",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/catalog.json"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/content-and-proof.md",
+      "sha256": "ed0d3a7814522adc3a348918d840e563b7a250e6206c1f7341abfd843699bebd",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/content-and-proof.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/layout-and-surface.md",
+      "sha256": "7fc0c6aaec71b565cd3dddd85d7d6e363ebb12c298683a3698f94e692b4c1e41",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/layout-and-surface.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/real-time-fields.md",
+      "sha256": "9f1a6e60c7ed0611e9bce574d3ca64b08429009d29f1ee48f6f49de7d7601910",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/real-time-fields.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/scroll-storytelling.md",
+      "sha256": "4b8b521be384d25834ed4daaa2514d80a7d1fd4e56b44e39cb84dea5667a1974",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/scroll-storytelling.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/semantic-motion.md",
+      "sha256": "73852c98f42ed774c0f1cc30c3aca2efdbd2336bd2dabb7b29428c2a2a66f1a2",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/semantic-motion.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/web-techniques/system-quality-contracts.md",
+      "sha256": "cc685088f7d68b7ccc75b47bca8a383fab06c1feb68bfce828150552139d113b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/web-techniques/system-quality-contracts.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/SKILL.md",
+      "sha256": "9d895cd024d260faf0f00efbb45f75d2fd422e0497af41378acc164a165d4ca5",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/accessibility.md",
+      "sha256": "fb63a888f2a133f2db50cf7d53d08ed172b5f4d8a4b9af3d291d95875aca03f9",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/accessibility.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/build-loop.md",
+      "sha256": "b62456ad19b667bc3098d644a16d8ddf5db81a0ba7d94bfde59672517240a672",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/build-loop.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/color-science.md",
+      "sha256": "72097a0906f18fece5311aa7ab74dc1c8fcc847e0c4de3166c1ca9c218f6f5a3",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/color-science.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/component-catalog.md",
+      "sha256": "d12885750360ef3f87298acbe1275cdb9df69899078beb368cbb1e5f80b9674e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/component-catalog.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/concepts.md",
+      "sha256": "5349be8680c1f0a76506ff6f74da082fa2ec6dae527310c4c78c62fa47fff05a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/concepts.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/content-design.md",
+      "sha256": "6df89350c613377f28dc4e4d8c345e8036f662576d61eede15fdbbf40e92f758",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/content-design.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/contract.md",
+      "sha256": "6e9c65aea0e6208e9962c05ad3267044e7ac8d57a3b5bb6f5b32ce67c57f594a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/contract.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/design-reuse-ladder.md",
+      "sha256": "e074bf6f349db8a5f3385dd4aea7ec8e9b7d4ccd654aeee317df167c470713fd",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/design-reuse-ladder.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/design-review.md",
+      "sha256": "a6e90c370608eae5c605b30d21f33038837dbe1e9c77a840f67020c3595e68bb",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/design-review.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/design-soul.md",
+      "sha256": "2b4b2bd64eeec32ac0ee3afdf5fe5a54ba6081f8fe579e81d7c6926b410121a0",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/design-soul.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/design-tells.md",
+      "sha256": "9def6556228a2ef1d8989c66d1d596aa288a709b81de969f2463b535363c0841",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/design-tells.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/domain-packs/lakehouse.md",
+      "sha256": "b58f4f32f606304637810a7e8d5084828d9436df09f7a16dbff5f4011f3de47b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/domain-packs/lakehouse.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/ds-guidelines.md",
+      "sha256": "e417d876d76117d6c901c43042c01f87e33c02341b5cc6fbe1f5336f9d320e72",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/ds-guidelines.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/generation-craft-defaults.md",
+      "sha256": "8818eedfdbf32301c67c72e5f5fb75bf69f39ad1a9d6c794a82a59aa4ee75d49",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/generation-craft-defaults.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/mode-constraints.md",
+      "sha256": "0907f69774ce3865bb239f67838bfaee12983c0265b71264282ff627dbed3b46",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/mode-constraints.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/need-routing.md",
+      "sha256": "ef0561d0cdf1e3f2c89d964e54eb1bae0c72355ff049c5071a168061d81c0082",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/need-routing.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/page-structures.md",
+      "sha256": "0463e8ed6eccf3ee80bc4047973c74456624580101afbd0e2b296f6f8f835254",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/page-structures.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/qualified-delivery.md",
+      "sha256": "783eaf9692f5e7eb99b0e3a1c73daaf5d36ae0b57d3b6c4f99941cfa75148f0e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/qualified-delivery.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/rules.md",
+      "sha256": "2cdf14a28b9d75e4eb6e6fd45c76ff8518eaaa208bb18395996898d9b0209dce",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/rules.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/taste-rubric.md",
+      "sha256": "7aa5d270b9bba5d6352a7818bec1c03eb376f1d6d5eeedc7220ea3100aead7e4",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/taste-rubric.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/token-taxonomy.md",
+      "sha256": "15f1b03b58b8d1940ea96c0dd9b4af328c670014572de61ce3c86f3fb9d09baa",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/token-taxonomy.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/user-evidence.md",
+      "sha256": "05e89764dfd3ea5455c657d1cdf45a82cba845a37d1178a31b5fbfcba73e4c6e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/user-evidence.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/ux-psychology.md",
+      "sha256": "a4822152c8c5917e158ad2ceebf298ec1abfbe11c49e6b33ef24866b66f76a1e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/ux-psychology.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/verification-honesty.md",
+      "sha256": "c4b90956110bf4bb14d08caea7af660125abda2dc8f0138df9c193f7a2164dd2",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/verification-honesty.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/references/visual-regression.md",
+      "sha256": "4cfbac91d4c0a143161d3a71f48e31551f6943faf5cd7b29484ec1d768b79c8b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/references/visual-regression.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/SKILL.md",
+      "sha256": "756268ccc0ac49e9e1b69fb66a52da6680c793ed2b0732ab2cfaa54626acd41a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/SKILL.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/LICENSE.md",
+      "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/THIRD_PARTY_LICENSES.md",
+      "sha256": "20b845d1f1ded771cbba341e14faabaca613bc99a5314fbc8ed54306650d102e",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/THIRD_PARTY_LICENSES.md"
+    },
+    {
+      "path": "packages/bee/design/UPSTREAM.json",
+      "sha256": "2c95f17dd35652d27414f5154a33d509475435f68864755480797ef801ef14a6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/UPSTREAM.json"
+    },
+    {
       "path": "packages/bee/hooks/claude-hooks.json",
       "sha256": "90b974327297a29043a530e807f4ccc35c0ac69d46c9e6b9e9dbe5d639f94651",
       "mode": "644",
