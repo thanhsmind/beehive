@@ -310,6 +310,9 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             "capCell: cell \"{id}\" refused — proof command \"{proof_command}\" does not match approved cell verify command \"{cell_verify}\"."
         )));
     }
+    if let Some(refusal) = design_cap_refusal(root, id, existing_map, &proof_reason) {
+        return Err(Fail::Thrown(refusal));
+    }
 
     // slp-advisor-nudge an-3 (9e5eda5b): the advisor-nudge response debt, at
     // the CAP. `bee close` and `bee worktree merge` carry the same arm, but

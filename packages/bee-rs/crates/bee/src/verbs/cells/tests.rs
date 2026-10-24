@@ -9146,6 +9146,16 @@ use std::time::Instant;
     /// banner the same way `cells_schedule_run` (above) does for its own
     /// out-of-process seam.
     fn cells_add_judge_obligation_run(root: &Path, payload: &Value) -> String {
+        let out = cells_add_child_output(root, payload);
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let prefix = format!("test {CELLS_ADD_JUDGE_CHILD} ... ");
+        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
+        let suffix = "ok\n\ntest result:";
+        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
+        stdout[start..end].to_string()
+    }
+
+    fn cells_add_child_output(root: &Path, payload: &Value) -> std::process::Output {
         std::fs::write(root.join("cell.json"), jsjson::stringify_pretty(payload)).unwrap();
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
@@ -9159,12 +9169,7 @@ use std::time::Instant;
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
-        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        let prefix = format!("test {CELLS_ADD_JUDGE_CHILD} ... ");
-        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
-        let suffix = "ok\n\ntest result:";
-        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
-        stdout[start..end].to_string()
+        out
     }
 
     /// A `.bee` marker with nothing else declared — the same minimal root
@@ -11785,6 +11790,135 @@ use std::time::Instant;
             err9.contains("cells finish: worker result proof text is empty (FIX: pass --proof-reason)"),
             "got: {err9}"
         );
+    }
+
+    fn picked() -> Value {
+        json!({"commands": {"test": "none"}, "design": {"packs": ["web"]}})
+    }
+
+    fn design_cap(config: Value, files: Value, verify: &str, reason: &str, last_run: Option<Value>) -> MR<Value> {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &config);
+        if let Some(record) = last_run {
+            std::fs::create_dir_all(root.join(".bee/design")).unwrap();
+            std::fs::write(root.join(".bee/design/last-run.json"), record.to_string()).unwrap();
+        }
+        let mut body = cell("dr-1", "claimed", "f", json!([]));
+        body["files"] = files;
+        body["verify"] = json!(verify);
+        write_cell_fixture(root, "dr-1", &body);
+        let mut flags = cap_flags_frd("dr-1", Vec::new(), None);
+        flags.report = Some(
+            json!({"outcome": "o", "commit": "c", "files": [], "deviations": [],
+                   "tests": format!("{verify} — green:unit — {reason}")})
+            .to_string(),
+        );
+        cap_cell_from_flags(root, &flags, false)
+    }
+
+    #[test]
+    fn design_rule_leaves_a_host_with_no_pick_exactly_as_before() {
+        for config in [
+            json!({"commands": {"test": "none"}}),
+            json!({"commands": {"test": "none"}, "design": {"packs": "none"}}),
+            json!({"commands": {"test": "none"}, "design": {"packs": []}}),
+        ] {
+            let capped = design_cap(config.clone(), json!(["web/index.html"]), "echo ok", "fixture", None)
+                .unwrap_or_else(|_| panic!("a host with no pick caps a UI cell as before: {config}"));
+            assert_eq!(capped["status"], json!("capped"));
+        }
+    }
+
+    #[test]
+    fn design_rule_refuses_a_ui_cell_without_the_gate_in_a_picked_host() {
+        for file in ["web/index.html", "app/src/deep/Card.tsx", "theme.scss"] {
+            let refusal = thrown(design_cap(picked(), json!([file]), "echo ok", "fixture", None));
+            assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+            assert!(
+                refusal.contains("FIX: add `bee design gate` to the cell's verify"),
+                "the refusal names its fix: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn design_rule_accepts_a_ui_cell_with_the_gate_or_a_non_ui_cell_in_a_picked_host() {
+        let gate = ".bee/bin/bee design gate && echo ok";
+        let capped = design_cap(picked(), json!(["web/index.html"]), gate, "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let ran = Some(json!({"status": "ran", "pages": 2, "regressions": 0}));
+        let capped = design_cap(picked(), json!(["web/index.html"]), gate, "fixture", ran).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let capped = design_cap(picked(), json!(["src/main.rs", "README.md"]), "echo ok", "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"), "a cell with no UI file is untouched");
+    }
+
+    #[test]
+    fn design_rule_reads_ui_globs_from_config() {
+        let mut config = picked();
+        config["design"]["ui_globs"] = json!(["*.twig"]);
+        let refusal = thrown(design_cap(config.clone(), json!(["views/page.twig"]), "echo ok", "fixture", None));
+        assert!(refusal.contains("bee design gate"), "{refusal}");
+        let capped = design_cap(config, json!(["web/index.html"]), "echo ok", "fixture", None).unwrap();
+        assert_eq!(capped["status"], json!("capped"), "the config list replaces the default list");
+    }
+
+    #[test]
+    fn design_rule_needs_the_not_run_phrase_when_the_gate_did_not_run() {
+        let gate = ".bee/bin/bee design gate && echo ok";
+        let not_run = || Some(json!({"status": "not-run", "reason": "node-missing"}));
+        let refusal = thrown(design_cap(picked(), json!(["web/index.html"]), gate, "fixture", not_run()));
+        assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+        assert!(
+            refusal.contains("FIX: say in the proof reason") && refusal.contains("design gate not run"),
+            "the refusal names its fix: {refusal}"
+        );
+        let capped = design_cap(
+            picked(),
+            json!(["web/index.html"]),
+            gate,
+            "design gate not run — Node 20 or newer is missing",
+            not_run(),
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"), "owner answer 1: the gap is recorded, the cap lands");
+    }
+
+    #[test]
+    fn design_rule_refuses_a_cell_that_lists_the_baseline_in_any_host() {
+        for config in [picked(), json!({"commands": {"test": "none"}})] {
+            let files = json!(["./.bee/design/gate-baseline.json"]);
+            let refusal = thrown(design_cap(config.clone(), files, "echo ok", "fixture", None));
+            assert!(refusal.starts_with("capCell: cell \"dr-1\" refused — "), "{refusal}");
+            assert!(refusal.contains("FIX: ") && refusal.contains("bee design gate --write"), "{config}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn cells_add_warns_on_stderr_and_still_adds_a_ui_cell_without_the_gate() {
+        let ui_cell = json!({
+            "id": "dr-add", "feature": "dr", "title": "restyle the card", "action": "edit css",
+            "verify": "echo ok", "lane": "tiny", "role": "code",
+            "files": ["web/card.css"], "affects_skills": [], "affects_specs": [],
+        });
+        let tmp = judge_root();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"design": {"packs": ["web"]}}));
+        let out = cells_add_child_output(root, &ui_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("cell \"dr-add\"") && stderr.contains("FIX: add `bee design gate`"),
+            "stderr: {stderr}"
+        );
+        let stored = read_cell_norm(root, "dr-add").unwrap().expect("the warning never refuses");
+        assert_eq!(stored["verify"], json!("echo ok"), "the warning never changes the cell");
+
+        let tmp = judge_root();
+        let root = tmp.path();
+        let out = cells_add_child_output(root, &ui_cell);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("bee design gate"), "a host with no pick hears nothing: {stderr}");
     }
 
 
