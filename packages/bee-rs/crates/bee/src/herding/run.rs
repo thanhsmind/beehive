@@ -3462,6 +3462,37 @@ fn claude_worker_guard_missing(main_root: &Path) -> Option<String> {
     })
 }
 
+fn spawn_title(argv: &[String]) -> Option<&str> {
+    let at = argv.iter().position(|a| a == "--title")?;
+    argv.get(at + 1).map(|t| t.trim()).filter(|t| !t.is_empty())
+}
+
+fn field_text<'a>(item: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a str> {
+    keys.iter().find_map(|k| item.get(*k).and_then(Value::as_str))
+}
+
+fn named_agent_in_ls(listed: &str, title: &str) -> Option<String> {
+    let doc = paseo::first_json_document(listed)?;
+    let items = match &doc {
+        Value::Array(items) => items,
+        other => other.get("agents").or_else(|| other.get("Agents"))?.as_array()?,
+    };
+    items.iter().filter_map(Value::as_object).find_map(|item| {
+        let name = field_text(item, &["name", "Name", "title", "Title"])?;
+        let id = field_text(item, &["id", "Id", "agentId", "AgentId"])?;
+        let archived = item.get("archived").and_then(Value::as_bool).unwrap_or(false)
+            || field_text(item, &["status", "Status"]) == Some("archived");
+        (!archived && !id.trim().is_empty() && name.trim() == title).then(|| id.to_string())
+    })
+}
+
+fn adopted_agent_after_spawn_timeout(listed: &str, argv: &[String], error: &str) -> Option<String> {
+    if !error.contains("timed out after") {
+        return None;
+    }
+    named_agent_in_ls(listed, spawn_title(argv)?)
+}
+
 pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli) -> ExecResult {
     let provider_is_pi = spec.provider.trim().eq_ignore_ascii_case("pi");
     let provider_is_claude = spec.provider.trim().eq_ignore_ascii_case("claude");
@@ -3639,44 +3670,56 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
         workspace.as_deref(),
     );
     let run_res = cli.call_as_caller(&argv);
-    let stdout = match run_res {
-        Ok(out) => out,
+    let agent_id = match run_res {
+        Ok(stdout) => match paseo::parse_run_agent_id(&stdout) {
+            Ok(id) => id,
+            Err(e) => {
+                return ExecResult {
+                    outcome: RunOutcome::SpawnFailed(format!("could not parse agent id: {e}")),
+                    pane_id: None,
+                    closed_pane: false,
+                };
+            }
+        },
         Err(e) => {
             let label = format!("bee_job={}", opts.job_id);
             let agents_reply = cli.call(&paseo::ls_label_argv(&label));
-            let agent_id = agents_reply
-                .as_ref()
+            let adopted = agents_reply
+                .as_deref()
                 .ok()
-                .and_then(|out| paseo::parse_ls_agents_checked(out).or_else(|| Some(paseo::parse_ls_agents(out))))
-                .and_then(|agents| {
-                    agents.into_iter().find(|(id, j, _)| !id.is_empty() && (j == &opts.job_id || j.is_empty() || j == &label))
-                })
-                .map(|(id, _, _)| id);
-            let agent_msg = agent_id.map(|id| format!(" — agent {id}")).unwrap_or_default();
-            let fix = match agents_reply {
-                Ok(_) => format!(
-                    "check the provider and model that herding.agents.{agent_name} names in .bee/config.json"
-                ),
-                Err(_) => {
-                    "start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)".to_string()
+                .and_then(|listed| adopted_agent_after_spawn_timeout(listed, &argv, &e));
+            match adopted {
+                Some(id) => {
+                    eprintln!(
+                        "bee herding run: paseo run timed out after the agent was created; supervising agent {id}"
+                    );
+                    id
                 }
-            };
-            return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!("{e}{agent_msg} — FIX: {fix}")),
-                pane_id: None,
-                closed_pane: false,
-            };
-        }
-    };
-
-    let agent_id = match paseo::parse_run_agent_id(&stdout) {
-        Ok(id) => id,
-        Err(e) => {
-            return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!("could not parse agent id: {e}")),
-                pane_id: None,
-                closed_pane: false,
-            };
+                None => {
+                    let agent_id = agents_reply
+                        .as_ref()
+                        .ok()
+                        .and_then(|out| paseo::parse_ls_agents_checked(out).or_else(|| Some(paseo::parse_ls_agents(out))))
+                        .and_then(|agents| {
+                            agents.into_iter().find(|(id, j, _)| !id.is_empty() && (j == &opts.job_id || j.is_empty() || j == &label))
+                        })
+                        .map(|(id, _, _)| id);
+                    let agent_msg = agent_id.map(|id| format!(" — agent {id}")).unwrap_or_default();
+                    let fix = match agents_reply {
+                        Ok(_) => format!(
+                            "check the provider and model that herding.agents.{agent_name} names in .bee/config.json"
+                        ),
+                        Err(_) => {
+                            "start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)".to_string()
+                        }
+                    };
+                    return ExecResult {
+                        outcome: RunOutcome::SpawnFailed(format!("{e}{agent_msg} — FIX: {fix}")),
+                        pane_id: None,
+                        closed_pane: false,
+                    };
+                }
+            }
         }
     };
 
@@ -14511,6 +14554,218 @@ mod tests {
             }
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
+    }
+
+    fn seed_paseo_result(main_root: &Path, job_id: &str) {
+        let dir = mailbox::mailbox_dir(&main_root.join(".bee"), job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+        )
+        .unwrap();
+    }
+
+    fn fake_timed_out_spawn(ls_json: Value) -> FakePaseoCli {
+        FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("paseo timed out after 15s".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_ls(Ok(ls_json.to_string()))
+    }
+
+    fn plain_paseo_spec() -> PaseoSpec {
+        PaseoSpec {
+            provider: "pi".to_string(),
+            model: None,
+            thinking: None,
+            mode: None,
+            isolated_config: false,
+        }
+    }
+
+    fn seeded_paseo_job_agent_id(main_root: &Path, job_id: &str) -> Value {
+        let text = std::fs::read_to_string(mailbox::job_path(&main_root.join(".bee"), job_id)).unwrap();
+        serde_json::from_str::<Value>(&text).unwrap()
+            .get("paseo_agent_id")
+            .cloned()
+            .unwrap_or(Value::Null)
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_with_a_live_agent_is_supervised_not_spawn_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        seed_paseo_result(main_root, &opts.job_id);
+        let spec = plain_paseo_spec();
+        let ls_json = serde_json::json!([{ "id": "agent-timeout-7", "name": "paseo job-1" }]);
+        let fake = fake_timed_out_spawn(ls_json);
+
+        let res = execute_paseo(&opts, &spec, &fake);
+
+        assert!(
+            matches!(res.outcome, RunOutcome::Result(_)),
+            "a spawned agent that timed out on the client must be supervised, got {:?}",
+            res.outcome
+        );
+        assert_eq!(res.pane_id.as_deref(), Some("agent-timeout-7"), "the adopted agent is the run's agent");
+        assert_eq!(
+            seeded_paseo_job_agent_id(main_root, &opts.job_id),
+            Value::String("agent-timeout-7".to_string()),
+            "job.json must record the agent the run adopted"
+        );
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_with_no_agent_is_still_spawn_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let spec = plain_paseo_spec();
+        let fake = fake_timed_out_spawn(serde_json::json!([]));
+
+        let res = execute_paseo(&opts, &spec, &fake);
+
+        match res.outcome {
+            RunOutcome::SpawnFailed(ref msg) => {
+                assert!(msg.contains("timed out after 15s"), "{msg}");
+            }
+            ref other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        assert!(res.pane_id.is_none(), "no agent was found, so no agent id may be reported");
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_ignores_an_agent_with_another_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let opts = test_options(main_root, false);
+        let spec = plain_paseo_spec();
+        let ls_json = serde_json::json!([{ "id": "agent-someone-else", "name": "paseo job-other" }]);
+        let fake = fake_timed_out_spawn(ls_json);
+
+        let res = execute_paseo(&opts, &spec, &fake);
+
+        assert!(
+            matches!(res.outcome, RunOutcome::SpawnFailed(_)),
+            "an agent under another name is not this run's agent, got {:?}",
+            res.outcome
+        );
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_looks_up_the_cell_title_the_run_gave() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.cell_id = Some("isw-6".to_string());
+        opts.agent = Some("paseo-pi-flash".to_string());
+        seed_paseo_result(main_root, &opts.job_id);
+        let spec = plain_paseo_spec();
+        let ls_json = serde_json::json!([
+            { "id": "agent-job-title", "name": "paseo-pi-flash job-1" },
+            { "id": "agent-cell-title", "name": "isw-6 paseo-pi-flash" }
+        ]);
+        let fake = fake_timed_out_spawn(ls_json);
+
+        let res = execute_paseo(&opts, &spec, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)), "got {:?}", res.outcome);
+        assert_eq!(
+            seeded_paseo_job_agent_id(main_root, &opts.job_id),
+            Value::String("agent-cell-title".to_string()),
+            "the lookup must use the title the run itself gave the agent"
+        );
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_lookup_reads_the_real_ls_item_shape() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.cell_id = Some("isw-6".to_string());
+        seed_paseo_result(main_root, &opts.job_id);
+        let spec = plain_paseo_spec();
+        let ls_json = format!(
+            "[desktop] startup line\n{}",
+            serde_json::json!([
+                {
+                    "id": "agent-real-item",
+                    "shortId": "agent-r",
+                    "name": "isw-6 paseo",
+                    "provider": "pi/deepseek-flash",
+                    "thinking": "auto",
+                    "status": "running",
+                    "cwd": "/work/repo",
+                    "created": "1 minutes ago"
+                },
+                {
+                    "id": "agent-archived",
+                    "shortId": "agent-a",
+                    "name": "isw-6 paseo",
+                    "provider": "pi",
+                    "thinking": "auto",
+                    "status": "archived",
+                    "cwd": "/work/repo",
+                    "created": "2 minutes ago"
+                },
+                {
+                    "id": "agent-untitled",
+                    "shortId": "agent-u",
+                    "name": "-",
+                    "provider": "pi",
+                    "thinking": "auto",
+                    "status": "running",
+                    "cwd": "/work/repo",
+                    "created": "3 minutes ago"
+                }
+            ])
+        );
+        let fake = FakePaseoCli::new(
+            Ok("0.10.3\n".to_string()),
+            Err("paseo timed out after 15s".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        )
+        .with_ls(Ok(ls_json));
+
+        let res = execute_paseo(&opts, &spec, &fake);
+
+        assert!(matches!(res.outcome, RunOutcome::Result(_)), "got {:?}", res.outcome);
+        assert_eq!(
+            seeded_paseo_job_agent_id(main_root, &opts.job_id),
+            Value::String("agent-real-item".to_string()),
+            "the live name field of a running agent is the one adopted"
+        );
+    }
+
+    #[test]
+    fn paseo_spawn_timeout_adopted_agent_envelope_carries_no_retryable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let mut opts = test_options(main_root, false);
+        opts.cell_id = Some("isw-6".to_string());
+        seed_paseo_result(main_root, &opts.job_id);
+        let spec = plain_paseo_spec();
+        let ls_json = serde_json::json!([{ "id": "agent-timeout-9", "name": "isw-6 paseo" }]);
+        let fake = fake_timed_out_spawn(ls_json);
+
+        let res = execute_paseo(&opts, &spec, &fake);
+        let envelope = result_envelope(&opts, &res, "paseo", None);
+
+        assert_ne!(
+            envelope.get("outcome").and_then(Value::as_str),
+            Some("spawn_failed"),
+            "a live agent must never be reported spawn_failed: {envelope}"
+        );
+        assert_ne!(
+            envelope.get("retryable"),
+            Some(&Value::Bool(true)),
+            "no retry may be invited while the agent runs: {envelope}"
+        );
     }
 }
 
