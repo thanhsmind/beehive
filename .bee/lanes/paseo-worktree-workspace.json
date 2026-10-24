@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Git guard chặn commit file plan. Tôi bỏ qua bước commit này. Script phát hành chỉ cảnh báo khi có file chưa commit. Tôi chuyển sang tạo lệnh",
-    "asked_at": "2026-10-24T14:41:55.481Z",
-    "session": "95a31d01-90e9-4b66-b4bb-93052e5e583c"
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-24T15:06:12.477Z",
+    "session": "ef043ed6-7cf0-45cb-b727-ac06ad359514"
   }
 }

@@ -758,6 +758,8 @@
     "contract:design-cell-pin",
     "contract:design-gate",
     "design-packs",
-    "test-gate"
+    "test-gate",
+    "issue-sweep",
+    "contract:issue-sweep-1024"
   ]
 }
