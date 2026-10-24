@@ -922,6 +922,88 @@ mod tests {
     }
 
     #[test]
+    fn leader_check_directory_entry_passes_when_a_commit_touched_a_file_under_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        std::fs::create_dir_all(root.join("packages/bee/design/nested")).unwrap();
+        std::fs::write(root.join("packages/bee/design/a.ts"), "a").unwrap();
+        std::fs::write(root.join("packages/bee/design/nested/b.ts"), "b").unwrap();
+        commit_paths(
+            root,
+            &["packages/bee/design/a.ts", "packages/bee/design/nested/b.ts"],
+            "Add the design package\n\ncell: c-1",
+        );
+        write_cell_fixture(
+            root,
+            "c-1",
+            &make_capped_cell("c-1", &["Truth A"], &["packages/bee/design"], None),
+        );
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "packages/bee/design"}]
+        });
+
+        let updated = record_leader_check(root, "c-1", "ok", &payload, None, false).unwrap();
+        assert_eq!(updated["trace"]["leader_check"][0]["commit_diff"], json!("checked"));
+        assert_eq!(updated["status"], json!("capped"));
+    }
+
+    #[test]
+    fn leader_check_directory_partial_name_prefix_is_refused_naming_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        std::fs::create_dir_all(root.join("packages/bee/design")).unwrap();
+        std::fs::write(root.join("packages/bee/design/x.ts"), "x").unwrap();
+        std::fs::create_dir_all(root.join("packages/bee/des")).unwrap();
+        commit_paths(root, &["packages/bee/design/x.ts"], "Add design\n\ncell: c-1");
+        write_cell_fixture(
+            root,
+            "c-1",
+            &make_capped_cell("c-1", &["Truth A"], &["packages/bee/des"], None),
+        );
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "packages/bee/des"}]
+        });
+
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &payload, None, false));
+        assert!(
+            msg.contains("files_changed names path(s) the cell's commit(s) never touched: packages/bee/des."),
+            "{msg}"
+        );
+        assert_eq!(read_cell_fixture(root, "c-1")["status"], json!("capped"));
+    }
+
+    #[test]
+    fn leader_check_directory_entry_with_no_commit_path_under_it_is_refused_naming_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        diff_repo(root);
+        std::fs::create_dir_all(root.join("packages/bee/design")).unwrap();
+        std::fs::write(root.join("packages/bee/design/x.ts"), "x").unwrap();
+        std::fs::create_dir_all(root.join("packages/bee/other")).unwrap();
+        commit_paths(root, &["packages/bee/design/x.ts"], "Add design\n\ncell: c-1");
+        write_cell_fixture(
+            root,
+            "c-1",
+            &make_capped_cell("c-1", &["Truth A"], &["packages/bee/other"], None),
+        );
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{"requirement": "Truth A", "artifact": "packages/bee/other"}]
+        });
+
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &payload, None, false));
+        assert!(
+            msg.contains("files_changed names path(s) the cell's commit(s) never touched: packages/bee/other."),
+            "{msg}"
+        );
+        assert_eq!(read_cell_fixture(root, "c-1")["status"], json!("capped"));
+    }
+
+    #[test]
     fn string_prefix_of_a_touched_path_is_still_refused_naming_it() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
