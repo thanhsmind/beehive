@@ -874,7 +874,7 @@ use std::time::Instant;
         // no rendered agent for an operator-invented job, and inventing one
         // would name a file that does not exist.
         assert_eq!(agent_for_role("test"), None);
-        assert_eq!(agent_for_role("design"), None);
+        assert_eq!(agent_for_role("design"), Some("bee-design"));
         assert_eq!(canonical_role("test"), "test");
         // The inverse lookup is deliberately NOT aliased: its answer is
         // resolved against `models.<runtime>`, so it must name the role the
@@ -1015,6 +1015,70 @@ use std::time::Instant;
         // The economics record still names the tier, not the agent, as the
         // generation-tier model authority (must-have 4).
         assert_eq!(v.get("economics").and_then(|e| e.get("logical_tier")), Some(&json!("generation")));
+    }
+
+    #[test]
+    fn a_design_cell_pins_bee_design_and_every_other_role_keeps_bee_build() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"code":"sonnet","design":"sonnet","generation":"sonnet"}}}"#,
+        );
+        for (id, role, agent) in
+            [("c-d", "design", "bee-design"), ("c-c", "code", "bee-build"), ("c-t", "test", "bee-build")]
+        {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","role":"{role}","status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            let p = v.get("payload").unwrap();
+            assert_eq!(p.get("subagent_type"), Some(&json!(agent)), "{role}: {v}");
+            let prompt = p.get("prompt").and_then(Value::as_str).unwrap();
+            assert_eq!(
+                prompt.contains("load the `bee-design` skill"),
+                role == "design",
+                "{role}: only a design cell carries the design preamble: {prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_herding_design_cell_carries_the_design_preamble_in_its_prompt_body() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"design":{"kind":"herding"},"code":{"kind":"herding"},"generation":{"kind":"herding"}}}}"#,
+        );
+        for (id, role) in [("c-d", "design"), ("c-c", "code")] {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","role":"{role}","status":"claimed","trace":{{"worker":"w"}}}}"#
+                ),
+            );
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            assert_eq!(v.get("tool"), Some(&json!("Bash")), "{role}: {v}");
+            let stdin = v["payload"]["stdin"].as_str().unwrap();
+            assert!(stdin.contains(&format!("Assigned cell id: {id}")), "{stdin}");
+            for phrase in ["load the `bee-design` skill", "bee-design-*", "Node 20"] {
+                assert_eq!(stdin.contains(phrase), role == "design", "{role}: {phrase}: {stdin}");
+            }
+        }
     }
 
     /// Measured from a live agent list: every row read `bee-build  Execute

@@ -2021,6 +2021,13 @@
       "packagePath": "packages/bee/agents/bee-build.md.tmpl"
     },
     {
+      "path": "packages/bee/agents/bee-design.md.tmpl",
+      "sha256": "c92baaa86792be8695f0de1c355192610b10899e025f2b17838be85d7917a81b",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/agents/bee-design.md.tmpl"
+    },
+    {
       "path": "packages/bee/agents/bee-extract.md.tmpl",
       "sha256": "bc81852cf9477c3f1bc667061df7365790237bd82b542b70a3ce9544f066d694",
       "mode": "644",

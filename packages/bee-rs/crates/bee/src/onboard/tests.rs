@@ -210,7 +210,7 @@ fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
     apply(&fx, &[]);
     let config = read_json(&config_path(&fx));
     let pi = config["team"]["pi"].as_object().unwrap();
-    assert_eq!(pi.len(), 18);
+    assert_eq!(pi.len(), 19);
     assert_eq!(
         pi.keys().collect::<Vec<_>>(),
         config["team"]["claude"].as_object().unwrap().keys().collect::<Vec<_>>()
@@ -231,6 +231,25 @@ fn a_fresh_apply_writes_the_pi_table_and_records_the_offer() {
     assert!(pi_items(&plan(&fx, &[]), "plan").is_empty());
     apply(&fx, &[]);
     assert_eq!(std::fs::read_to_string(config_path(&fx)).unwrap(), body);
+}
+
+#[test]
+fn a_fresh_apply_seeds_the_design_role_and_renders_the_bee_design_agent() {
+    let fx = fixture();
+    let template = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..").join("..").join("..").join("bee").join("agents").join("bee-design.md.tmpl");
+    write(
+        &fx.root.join("packages").join("bee").join("agents").join("bee-design.md.tmpl"),
+        &std::fs::read_to_string(&template).unwrap(),
+    );
+    apply(&fx, &[]);
+    let config = read_json(&config_path(&fx));
+    assert_eq!(config["team"]["claude"]["design"]["model"], "sonnet");
+    assert_eq!(config["team"]["pi"]["design"]["kind"], "herding");
+    let rendered =
+        std::fs::read_to_string(fx.repo.join(".claude").join("agents").join("bee-design.md")).unwrap();
+    assert!(rendered.starts_with("---\nname: bee-design\n"), "{rendered}");
+    assert!(rendered.contains("load the `bee-design` skill"), "{rendered}");
 }
 
 /// A 4-space, CRLF config with a `team` but no `team.pi`.

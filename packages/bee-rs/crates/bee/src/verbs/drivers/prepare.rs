@@ -2450,7 +2450,12 @@ pub(crate) fn prepare_dispatch_wire(
     // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
     // dispatch still reads the ASKED token, so `--role extraction` keeps
     // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
-    let pinned_type = if kind == "cell" {
+    let design_cell = kind == "cell" && tier_token == "design";
+    let prompt_body =
+        if design_cell { format!("{DESIGN_CELL_PREAMBLE}\n\n{prompt_body}") } else { prompt_body };
+    let pinned_type = if design_cell {
+        "bee-design"
+    } else if kind == "cell" {
         "bee-build"
     } else if default_gather {
         "bee-gather"
@@ -5044,24 +5049,27 @@ mod role_flag_tests {
             let t = v.get("payload").and_then(|p| p.get("subagent_type")).cloned().unwrap();
             returned.insert(t.as_str().unwrap().to_string());
         }
-        // bee-build is the cell-execution agent: `--kind cell` names it, and
-        // that is deliberately NOT role-driven — a cell execution reserves,
-        // writes and caps whatever job the cell declares (`--role` selects
-        // the MODEL, per D4, never the capability).
         w_cell(&root, "c-1");
-        let Prepared::Value(v) = prepare_dispatch_with_role(
-            &root, "claude", "cell", None, Some("c-1"), Some("w"), false, None, None, false, None,
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-2.json"),
+            r#"{"id":"c-2","feature":"f","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
         )
-        .unwrap() else {
-            panic!("expected an envelope")
-        };
-        returned.insert(
-            v.get("payload")
-                .and_then(|p| p.get("subagent_type"))
-                .and_then(Value::as_str)
-                .unwrap()
-                .to_string(),
-        );
+        .unwrap();
+        for id in ["c-1", "c-2"] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", "cell", None, Some(id), Some("w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("expected an envelope")
+            };
+            returned.insert(
+                v.get("payload")
+                    .and_then(|p| p.get("subagent_type"))
+                    .and_then(Value::as_str)
+                    .unwrap()
+                    .to_string(),
+            );
+        }
         for (_, agent) in crate::verbs::drivers::ROLE_AGENTS {
             assert!(
                 returned.contains(agent),

@@ -199,6 +199,7 @@ pub fn default_config() -> Value {
                 "read": { "model": "haiku", "description": "read-only lookups from known locations; a bare --kind gather also runs here" },
                 "test": { "model": "sonnet", "description": "author or repair tests, red-first" },
                 "docs": { "model": "sonnet", "description": "doc edits and parity sweeps" },
+                "design": { "model": "sonnet", "description": "build and critique rendered UI with the bee-design taste; proves with the design gate" },
                 "plan": { "model": "opus", "description": "planning-shaped work — shaping, drafting cells, plan checks" },
                 "extraction": { "model": "haiku", "description": "narrow fact lookups from known locations" },
                 "generation": { "model": "sonnet", "description": "fall-through tail: default writer role" },
@@ -430,6 +431,7 @@ pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
     // role decides the model; what the agent may DO is the agent file's own
     // contract.
     ("bee-build", &["generation"]),
+    ("bee-design", &["design", "generation"]),
     ("bee-gather", &["read", "generation"]),
     ("bee-extract", &["extraction"]),
     ("bee-review", &["review", "generation"]),
@@ -476,6 +478,7 @@ pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
 /// verified live against opencode 1.18.16's `opencode agent list`).
 pub const AGENT_OPENCODE_PERMISSION_DENY: &[(&str, &[&str])] = &[
     ("bee-build", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-design", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-gather", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-extract", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-review", &["edit", "task", "todowrite", "webfetch", "websearch", "lsp"]),
@@ -558,6 +561,7 @@ mod tests {
                 "read",
                 "test",
                 "docs",
+                "design",
                 "plan",
                 "extraction",
                 "generation",
