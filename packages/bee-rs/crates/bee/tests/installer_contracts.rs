@@ -573,3 +573,112 @@ fn install_sh_retries_a_blipped_download_before_falling_back_to_a_build() {
          deadline before paying for a source build"
     );
 }
+
+#[cfg(unix)]
+fn run_install_sh(sandbox: &std::path::Path, extra: &[&str]) -> (bool, String) {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let repo = repo_root();
+    let src = sandbox.join("src");
+    for (dir, real, own) in [
+        (src.clone(), repo.clone(), &["packages", "skills"][..]),
+        (src.join("packages"), repo.join("packages"), &["bee-rs"][..]),
+    ] {
+        std::fs::create_dir_all(&dir).unwrap();
+        for entry in std::fs::read_dir(&real).unwrap() {
+            let name = entry.unwrap().file_name();
+            if !own.iter().any(|o| name == *o) && name != ".git" {
+                symlink(real.join(&name), dir.join(&name)).unwrap();
+            }
+        }
+    }
+    let copied = std::process::Command::new("cp").arg("-R").arg(repo.join("skills")).arg(&src).status().unwrap();
+    assert!(copied.success(), "could not copy the skills tree into the sandbox source");
+    let release = src.join("packages/bee-rs/target/release");
+    std::fs::create_dir_all(&release).unwrap();
+    std::fs::write(src.join("packages/bee-rs/Cargo.toml"), "").unwrap();
+    symlink(env!("CARGO_BIN_EXE_bee"), release.join("bee")).unwrap();
+    let bin = sandbox.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("cargo"), "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(bin.join("cargo"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let state = sandbox.join("plugins.json");
+    std::fs::write(&state, r#"{"claude":[],"codex":[]}"#).unwrap();
+    std::fs::create_dir_all(sandbox.join("home")).unwrap();
+    let out = std::process::Command::new("bash")
+        .arg(repo.join("scripts/install.sh"))
+        .arg("--source")
+        .arg(&src)
+        .arg("--directory")
+        .arg(sandbox.join("host"))
+        .arg("--plugin-state-file")
+        .arg(&state)
+        .args(["--no-git-init", "--yes"])
+        .args(extra)
+        .env_clear()
+        .env("HOME", sandbox.join("home"))
+        .env("PATH", format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default()))
+        .output()
+        .unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    (out.status.success(), text)
+}
+
+#[cfg(unix)]
+#[test]
+fn install_sh_forwards_the_design_pick_to_onboarding() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = sandbox.path().join("host");
+    std::fs::create_dir_all(&host).unwrap();
+    let (ok, output) = run_install_sh(sandbox.path(), &["--design-packs", "web"]);
+    assert!(ok, "install.sh --design-packs web failed:\n{output}");
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(host.join(".bee/config.json")).unwrap()).unwrap();
+    assert_eq!(config["design"]["packs"], serde_json::json!(["web"]), "the pick is not recorded");
+    for home in [".claude/skills", ".agents/skills"] {
+        for pack in ["bee-design", "bee-design-web"] {
+            assert!(host.join(home).join(pack).join("SKILL.md").is_file(), "{home}/{pack} is missing");
+        }
+        assert!(!host.join(home).join("bee-design-charts").exists(), "{home} holds a pack nobody picked");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn install_sh_names_a_design_pick_onboarding_refuses() {
+    let sandbox = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(sandbox.path().join("host")).unwrap();
+    let (ok, output) = run_install_sh(sandbox.path(), &["--design-packs", "webb"]);
+    assert!(!ok, "install.sh accepted an unknown design pack:\n{output}");
+    assert!(
+        output.contains("--design-packs takes a comma list of"),
+        "install.sh refused an unknown design pack without saying why:\n{output}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn install_sh_shows_onboardings_design_offer_to_a_ui_project() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = sandbox.path().join("host");
+    std::fs::create_dir_all(&host).unwrap();
+    std::fs::write(host.join("index.html"), "<!doctype html>\n").unwrap();
+    let (ok, output) = run_install_sh(sandbox.path(), &[]);
+    assert!(ok, "install.sh failed:\n{output}");
+    assert!(
+        output.contains("notice: ") && output.contains("--design-packs none to stop this offer"),
+        "install.sh hid onboarding's design offer from a project with UI files:\n{output}"
+    );
+}
+
+#[test]
+fn install_ps1_forwards_the_design_pick_and_prints_onboardings_notices() {
+    let ps1 = read("scripts/install.ps1");
+    assert!(ps1.contains("[string]$DesignPacks"), "install.ps1 takes no -DesignPacks parameter");
+    assert!(
+        ps1.contains("$onboardFlags += @('--design-packs', $DesignPacks)"),
+        "install.ps1 never forwards -DesignPacks to onboarding"
+    );
+    let apply = ps1.find("--apply @onboardFlags").expect("install.ps1 no longer applies");
+    let notices = ps1.find("-like 'notice: *'").expect("install.ps1 never prints onboarding's notices");
+    assert!(apply < notices, "install.ps1 prints onboarding's notices before the apply that makes them");
+}

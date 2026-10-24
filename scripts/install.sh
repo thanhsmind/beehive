@@ -70,6 +70,11 @@ Options:
       --no-statusline     Skip vendoring the status-display script and adding
                           the project-level statusLine entry to .claude/settings.json.
                           By default onboarding writes both when the key is absent.
+      --design-packs <list|none>
+                          Design skill packs to install: a comma list of web,
+                          charts, motion, apple, figma, or none. Passed through
+                          to onboarding. Without it, a project with UI files is
+                          offered the packs at the end of the install.
       --no-git-init       Greenfield: do not run `git init` in a non-git target.
   -y, --yes               Non-interactive; accept defaults, skip prompts.
       --dry-run           Show the runtime copies and the exact onboarding plan
@@ -132,6 +137,7 @@ REPO_HOOKS=1
 GLOBAL_SKILLS=0
 NO_CLAUDE_MD=0
 NO_STATUSLINE=0
+DESIGN_PACKS=""
 GIT_INIT=1
 ASSUME_YES=0
 DRY_RUN=0
@@ -151,6 +157,7 @@ while [ $# -gt 0 ]; do
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
     --claude-md)    shift ;;
     --no-statusline) NO_STATUSLINE=1; shift ;;
+    --design-packs) DESIGN_PACKS="$2"; shift 2 ;;
     --no-git-init)  GIT_INIT=0; shift ;;
     -y|--yes)       ASSUME_YES=1; shift ;;
     --dry-run)      DRY_RUN=1; shift ;;
@@ -473,6 +480,9 @@ fi
 if [ "$NO_STATUSLINE" -eq 1 ]; then
   ONBOARD_FLAGS+=("--no-statusline")
 fi
+if [ -n "$DESIGN_PACKS" ]; then
+  ONBOARD_FLAGS+=("--design-packs" "$DESIGN_PACKS")
+fi
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   ONBOARD_FLAGS+=("--global-skills")
 fi
@@ -653,7 +663,7 @@ plan_field() {
 #    a refusal as a non-`changes_needed`/`up_to_date` status (and may still exit 0),
 #    so status — not exit code alone — is the gate.
 log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
-PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)"
+PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)$PREVIEW_JSON"
 PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
 case "$PREVIEW_STATUS" in
   up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
@@ -791,3 +801,4 @@ if [ "$RUNTIME" = "pi" ]; then
   log "  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain \`pi\`)"
 fi
 log "  - scout any time: .bee/bin/bee status --json"
+printf '%s\n' "${APPLY_OUTPUT:-}" | grep '^notice: ' || true
