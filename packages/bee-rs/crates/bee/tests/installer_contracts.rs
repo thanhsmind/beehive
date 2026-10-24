@@ -575,7 +575,7 @@ fn install_sh_retries_a_blipped_download_before_falling_back_to_a_build() {
 }
 
 #[cfg(unix)]
-fn run_install_sh(sandbox: &std::path::Path, extra: &[&str]) -> (bool, String) {
+fn prepare_install_sh_sandbox(sandbox: &std::path::Path) -> Vec<String> {
     use std::os::unix::fs::{symlink, PermissionsExt};
     let repo = repo_root();
     let src = sandbox.join("src");
@@ -604,23 +604,37 @@ fn run_install_sh(sandbox: &std::path::Path, extra: &[&str]) -> (bool, String) {
     let state = sandbox.join("plugins.json");
     std::fs::write(&state, r#"{"claude":[],"codex":[]}"#).unwrap();
     std::fs::create_dir_all(sandbox.join("home")).unwrap();
+    vec![
+        repo.join("scripts/install.sh").display().to_string(),
+        "--source".into(),
+        src.display().to_string(),
+        "--directory".into(),
+        sandbox.join("host").display().to_string(),
+        "--plugin-state-file".into(),
+        state.display().to_string(),
+        "--no-git-init".into(),
+    ]
+}
+
+#[cfg(unix)]
+fn run_install_sh_args(sandbox: &std::path::Path, args: &[String]) -> (bool, String) {
     let out = std::process::Command::new("bash")
-        .arg(repo.join("scripts/install.sh"))
-        .arg("--source")
-        .arg(&src)
-        .arg("--directory")
-        .arg(sandbox.join("host"))
-        .arg("--plugin-state-file")
-        .arg(&state)
-        .args(["--no-git-init", "--yes"])
-        .args(extra)
+        .args(args)
         .env_clear()
         .env("HOME", sandbox.join("home"))
-        .env("PATH", format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default()))
+        .env("PATH", format!("{}:{}", sandbox.join("bin").display(), std::env::var("PATH").unwrap_or_default()))
         .output()
         .unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     (out.status.success(), text)
+}
+
+#[cfg(unix)]
+fn run_install_sh(sandbox: &std::path::Path, extra: &[&str]) -> (bool, String) {
+    let mut args = prepare_install_sh_sandbox(sandbox);
+    args.push("--yes".into());
+    args.extend(extra.iter().map(|a| a.to_string()));
+    run_install_sh_args(sandbox, &args)
 }
 
 #[cfg(unix)]
@@ -681,4 +695,165 @@ fn install_ps1_forwards_the_design_pick_and_prints_onboardings_notices() {
     let apply = ps1.find("--apply @onboardFlags").expect("install.ps1 no longer applies");
     let notices = ps1.find("-like 'notice: *'").expect("install.ps1 never prints onboarding's notices");
     assert!(apply < notices, "install.ps1 prints onboarding's notices before the apply that makes them");
+}
+
+#[cfg(unix)]
+const DESIGN_LINE: &str = "design   this project has interface files; re-run with --design-packs";
+
+#[cfg(unix)]
+fn ui_host(sandbox: &std::path::Path) -> std::path::PathBuf {
+    let host = sandbox.join("host");
+    std::fs::create_dir_all(&host).unwrap();
+    std::fs::write(host.join("index.html"), "<!doctype html>\n").unwrap();
+    host
+}
+
+/// The offer existed only as prose an agent was expected to act on, so a person
+/// running `install.sh -y` was never told the flag exists. Nothing may be
+/// installed on their behalf either: the line names the flag, the packs stay
+/// uninstalled until someone answers.
+#[cfg(unix)]
+#[test]
+fn install_sh_design_offer_prints_one_plain_line_and_installs_no_pack_under_yes() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = ui_host(sandbox.path());
+    let (ok, output) = run_install_sh(sandbox.path(), &[]);
+    assert!(ok, "install.sh failed on a UI host under --yes:\n{output}");
+    assert!(output.contains(DESIGN_LINE), "install.sh never names --design-packs to a UI host under --yes:\n{output}");
+    for home in [".claude/skills", ".agents/skills"] {
+        assert!(
+            !host.join(home).join("bee-design").exists(),
+            "install.sh picked a design pack nobody asked for in {home}"
+        );
+    }
+}
+
+/// A pick given on the command line is the answer. Asking again after it would
+/// be the installer second-guessing the person, and printing the line would
+/// tell them to re-run a flag they already passed.
+#[cfg(unix)]
+#[test]
+fn install_sh_design_pick_given_prints_no_design_line() {
+    let sandbox = tempfile::tempdir().unwrap();
+    ui_host(sandbox.path());
+    let (ok, output) = run_install_sh(sandbox.path(), &["--design-packs", "web"]);
+    assert!(ok, "install.sh --design-packs web failed on a UI host:\n{output}");
+    assert!(
+        !output.contains(DESIGN_LINE),
+        "install.sh printed the re-run hint although a pick was already given:\n{output}"
+    );
+}
+
+/// `script` runs the installer under a real pty so `/dev/tty` is readable, which
+/// is the only way to prove the interactive arm end to end: the answer must
+/// reach onboarding, install the core set and the picked pack, and be recorded.
+#[cfg(unix)]
+#[test]
+fn install_sh_design_question_under_a_tty_installs_the_answered_pack() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = ui_host(sandbox.path());
+    let text = run_install_sh_under_a_pty(sandbox.path(), b"web\ny\n");
+    assert!(
+        text.contains("Design skill packs for this project?"),
+        "install.sh never asked a person on a terminal which packs to add:\n{text}"
+    );
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(host.join(".bee/config.json")).unwrap()).unwrap();
+    assert_eq!(config["design"]["packs"], serde_json::json!(["web"]), "the answered pack is not recorded");
+    for home in [".claude/skills", ".agents/skills"] {
+        for pack in ["bee-design", "bee-design-web"] {
+            assert!(host.join(home).join(pack).join("SKILL.md").is_file(), "{home}/{pack} was not installed");
+        }
+    }
+}
+
+/// Enter is a valid answer, and it means "not now": the question must not
+/// return, and nothing may be installed on the strength of a skipped question.
+#[cfg(unix)]
+#[test]
+fn install_sh_design_enter_answer_prints_the_line_and_installs_no_pack() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = ui_host(sandbox.path());
+    let text = run_install_sh_under_a_pty(sandbox.path(), b"\ny\n");
+    assert!(text.contains(DESIGN_LINE), "Enter left the person with no way to add packs:\n{text}");
+    for home in [".claude/skills", ".agents/skills"] {
+        assert!(!host.join(home).join("bee-design").exists(), "Enter installed a design pack in {home}");
+    }
+}
+
+/// A dry run writes nothing and asks nothing, but it is the run a cautious
+/// person starts with - so it must still name the flag it would act on.
+#[cfg(unix)]
+#[test]
+fn install_sh_design_dry_run_names_the_flag_and_writes_nothing() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let host = ui_host(sandbox.path());
+    let mut args = prepare_install_sh_sandbox(sandbox.path());
+    args.push("--dry-run".into());
+    let (ok, output) = run_install_sh_args(sandbox.path(), &args);
+    assert!(ok, "install.sh --dry-run failed on a UI host:\n{output}");
+    assert!(output.contains(DESIGN_LINE), "a dry run never names --design-packs:\n{output}");
+    assert!(!host.join(".bee").exists(), "a dry run wrote into the target");
+}
+
+#[cfg(unix)]
+fn run_install_sh_under_a_pty(sandbox: &std::path::Path, answers: &[u8]) -> String {
+    let has_script = std::process::Command::new("sh")
+        .args(["-c", "command -v script"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !has_script {
+        eprintln!("skipping: no `script` to allocate a pty");
+        return String::new();
+    }
+    let driver = sandbox.join("drive.sh");
+    let mut cmd = String::from("bash");
+    for arg in prepare_install_sh_sandbox(sandbox) {
+        cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+    }
+    std::fs::write(&driver, format!("{cmd}\n")).unwrap();
+    let mut child = std::process::Command::new("script")
+        .args(["-qec", &format!("bash {}", driver.display()), "/dev/null"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .env_clear()
+        .env("HOME", sandbox.join("home"))
+        .env("PATH", format!("{}:{}", sandbox.join("bin").display(), std::env::var("PATH").unwrap_or_default()))
+        .spawn()
+        .unwrap();
+    {
+        use std::io::Write;
+        child.stdin.as_mut().unwrap().write_all(answers).unwrap();
+    }
+    let out = child.wait_with_output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success(), "interactive install.sh failed:\n{text}");
+    text
+}
+
+/// No pwsh on this host to run the Windows half, and `install.ps1` is the half
+/// that drifts. Pin its shape: it reads the field from onboarding's JSON, and
+/// the terminal read it adds is gated on the same three conditions install.sh
+/// uses - a scripted, dry or non-interactive run must never block.
+#[test]
+fn install_ps1_design_offer_reads_the_field_and_gates_the_terminal_read_host() {
+    let ps1 = read("scripts/install.ps1");
+    let field = ps1.find("design_offer").expect("install.ps1 never reads onboarding's design_offer");
+    assert!(
+        ps1[..field].contains("--json @onboardFlags"),
+        "install.ps1 reads design_offer from something other than the onboarding JSON preview"
+    );
+    let ask = ps1.find("Read-Host 'Design skill packs for this project?").expect("install.ps1 never asks for design packs");
+    let gate = &ps1[..ask];
+    let gate_start = gate.rfind("if (").expect("install.ps1 asks for design packs outside any gate");
+    let condition = &gate[gate_start..];
+    for needed in ["-not $Yes", "-not $DryRun", "[Environment]::UserInteractive"] {
+        assert!(
+            condition.contains(needed),
+            "install.ps1's design question is not gated on {needed}; a scripted, dry or non-interactive run would block"
+        );
+    }
+    assert!(field < ask, "install.ps1 asks for design packs before it reads the offer");
 }

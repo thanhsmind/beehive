@@ -662,13 +662,34 @@ plan_field() {
 #    before any confirmation, transition, or target/home write. onboard_bee reports
 #    a refusal as a non-`changes_needed`/`up_to_date` status (and may still exit 0),
 #    so status — not exit code alone — is the gate.
-log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
-PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)$PREVIEW_JSON"
-PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
-case "$PREVIEW_STATUS" in
-  up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
-  *) fail "Onboarding refused before any change [$PREVIEW_STATUS]: $(plan_field "$PREVIEW_JSON" reason)" ;;
-esac
+preview_plan() {
+  log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
+  PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)$PREVIEW_JSON"
+  PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
+  case "$PREVIEW_STATUS" in
+    up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
+    *) fail "Onboarding refused before any change [$PREVIEW_STATUS]: $(plan_field "$PREVIEW_JSON" reason)" ;;
+  esac
+}
+preview_plan
+
+if [ -z "$DESIGN_PACKS" ] && [ "$(plan_field "$PREVIEW_JSON" design_offer)" = "true" ]; then
+  if [ "$ASSUME_YES" -eq 1 ] || [ "$DRY_RUN" -eq 1 ] || ! can_prompt; then
+    log "design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills"
+  else
+    printf 'Design skill packs for this project? web, charts, motion, apple, figma (comma list) — none stops the offer, Enter skips: ' > /dev/tty
+    DESIGN_ANSWER=""
+    IFS= read -r DESIGN_ANSWER < /dev/tty || true
+    if [ -n "$DESIGN_ANSWER" ]; then
+      DESIGN_PACKS="$DESIGN_ANSWER"
+      ONBOARD_FLAGS+=("--design-packs" "$DESIGN_PACKS")
+      log "design   packs: $DESIGN_PACKS"
+      preview_plan
+    else
+      log "design   this project has interface files; re-run with --design-packs web (or charts,motion,apple,figma, or none) to add design skills"
+    fi
+  fi
+fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   log "dry-run  nothing written, no plugin changes. Re-run without --dry-run to apply."
