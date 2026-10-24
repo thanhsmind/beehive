@@ -333,7 +333,10 @@ pub(crate) fn validate(entry: &Entry, args: &ParsedArgs) -> Option<Vec<Problem>>
     let mut problems: Vec<Problem> = Vec::new();
 
     for field in &required {
-        if !is_present(args.get(field)) {
+        let alternative = format!("{field}-file");
+        let satisfied = is_present(args.get(field))
+            || (props.contains_key(&alternative) && is_present(args.get(&alternative)));
+        if !satisfied {
             problems.push(Problem {
                 field: Some((*field).to_string()),
                 reason: "required, missing".to_string(),
@@ -874,6 +877,45 @@ parameters (see `bee cells show --help --json`)."
         allow("bee cells ready --json");
         allow("bee state worker add --nickname w1 --cell c1 --json");
         allow("bee decisions log --decision d --rationale r --relation none");
+    }
+
+    #[test]
+    fn report_file_passes_cells_cap_and_cells_finish_alike() {
+        let both = [
+            "bee cells cap --id demo-1 --files a,b --report-file docs/history/x/.report.json",
+            "bee cells finish --id demo-1 --files a,b --report-file docs/history/x/.report.json",
+        ];
+        for command in both {
+            allow(command);
+        }
+    }
+
+    #[test]
+    fn report_file_does_not_excuse_a_cap_with_no_report_at_all() {
+        let reason = deny("bee cells cap --id demo-1 --files a,b");
+        assert!(reason.contains("cells.cap"), "{reason}");
+        assert!(reason.contains("(--report)"), "{reason}");
+        assert!(reason.contains("field: report"), "{reason}");
+        allow("bee cells finish --id demo-1 --files a,b");
+    }
+
+    #[test]
+    fn report_file_is_an_alternative_to_report_not_a_second_requirement() {
+        for command in [
+            "bee cells cap --id demo-1 --report \"cargo test -p bee — green:unit — ok\"",
+            "bee cells finish --id demo-1 --report \"cargo test -p bee — green:unit — ok\"",
+        ] {
+            allow(command);
+        }
+    }
+
+    #[test]
+    fn report_file_leaves_every_other_required_field_still_required() {
+        let reason = deny("bee cells cap --report-file ./.report.json");
+        assert!(reason.contains("cells.cap"), "{reason}");
+        assert!(reason.contains("(--id)"), "{reason}");
+        assert!(reason.contains("field: id"), "{reason}");
+        assert!(!reason.contains("(--report)"), "{reason}");
     }
 
     #[test]
