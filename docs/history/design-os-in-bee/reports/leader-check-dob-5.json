@@ -1,0 +1,16 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "a clean run exits 0 with one summary line", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "an error rise, a coverage fall, or a new page with errors exits 1 naming the page", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "--write refuses and writes nothing while any cell is claimed", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "a Node-less or Node-below-20 run prints the exact not-run line, writes last-run.json not-run and exits 0", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "the core skill, the agent template and the preamble name bee design gate, not the raw npx call", "artifact": "packages/bee/design/bee-design/SKILL.md"},
+    {"requirement": "the registry and cli-shape tests stay green with the new verb", "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"},
+    {"requirement": "packages/bee-rs/crates/bee/src/verbs/design_group.rs", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json", "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"},
+    {"requirement": "verbs/mod.rs routes design to design_group", "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"},
+    {"requirement": "last-run.json shape and the not-run line match the contract dob-6 reads", "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"}
+  ]
+}

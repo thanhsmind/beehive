@@ -56,6 +56,7 @@ run installs from, and are owned by
 | [`release-identity-and-version-parity.md`](release-identity-and-version-parity.md) | One release version across every projection, the downgrade refusal, honest drift reporting, source-origin classification, and the blast radius a forceable refusal must name |
 | [`repo-local-guardrails.md`](repo-local-guardrails.md) | The remembered opt-in that keeps a project's local guardrails current, and the second runtime's lifecycle hook wiring |
 | [`host-project-artifacts.md`](host-project-artifacts.md) | The artifacts a host project receives and keeps: the instructions import, the unified command surface, the state-layer landing pages, and the annotated configuration sample |
+| [`onboarding-design-packs-the-design-role-and-the-design-gate.md`](onboarding-design-packs-the-design-role-and-the-design-gate.md) | The design-os taste picked per project as packs, the design team role, and the design gate's baseline ratchet that UI work must pass before it closes |
 
 ## Open Gaps
 

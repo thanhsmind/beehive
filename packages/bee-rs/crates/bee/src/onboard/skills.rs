@@ -21,7 +21,7 @@ use super::source::{
 use super::templates::SKILLS_VERSION_STAMP;
 use super::util::{
     entry_identity, exists, is_under, join_rel, lstat_if_exists, path_resolve, realpath,
-    write_file_atomic_random, EntryId,
+    write_file_atomic_random, Dirent, EntryId,
 };
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
@@ -55,9 +55,43 @@ fn alias_blocked_item(name: &str, detail: &str) -> Value {
     )
 }
 
+fn sync_item(name: &str, source: &Path) -> Value {
+    let mut v = item("sync_skill", name, name, "installed");
+    v.as_object_mut().unwrap().insert("source".into(), json!(source.to_string_lossy()));
+    v
+}
+
 fn with_target(mut v: Value, target: &str) -> Value {
     v.as_object_mut().unwrap().insert("target".into(), json!(target));
     v
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SkillSources {
+    pub skills_root: PathBuf,
+    pub design_root: PathBuf,
+    pub design_packs: Vec<String>,
+}
+
+impl SkillSources {
+    fn picks(&self, name: &str) -> bool {
+        !self.design_packs.is_empty()
+            && (name == "bee-design"
+                || name
+                    .strip_prefix("bee-design-")
+                    .is_some_and(|pack| self.design_packs.iter().any(|p| p == pack)))
+    }
+
+    fn entries(&self) -> Vec<(&Path, Dirent)> {
+        let skills = list_bee_skill_entries(&self.skills_root)
+            .into_iter()
+            .map(|e| (self.skills_root.as_path(), e));
+        let design = list_bee_skill_entries(&self.design_root)
+            .into_iter()
+            .filter(|e| self.picks(&e.name))
+            .map(|e| (self.design_root.as_path(), e));
+        skills.chain(design).collect()
+    }
 }
 
 // ── alias detection (win32 defect fix rides entry_identity, see util.rs) ───
@@ -140,14 +174,14 @@ fn detect_nested_alias(
 /// computeSkillItems (l. 1088): D4/D5 drift plan items. Content difference IS
 /// drift, at any version (D5); a bee-* skill absent from the anchored source
 /// IS an intentional removal (D2).
-pub fn compute_skill_items(source_root: &Path, target_root: &Path, runtime: &str) -> Vec<Value> {
+pub fn compute_skill_items(sources: &SkillSources, target_root: &Path, runtime: &str) -> Vec<Value> {
     let mut items = Vec::new();
     let render = |buf: &[u8]| render_skill_bytes(buf, runtime);
-    let source_entries = list_bee_skill_entries(source_root);
-    let source_names: Vec<String> = source_entries.iter().map(|e| e.name.clone()).collect();
+    let source_entries = sources.entries();
+    let source_names: Vec<String> = source_entries.iter().map(|(_, e)| e.name.clone()).collect();
     let alias_collisions = detect_alias_collisions(&source_names, target_root);
 
-    for entry in &source_entries {
+    for (source_root, entry) in &source_entries {
         let name = &entry.name;
         if alias_collisions.contains(name) {
             items.push(alias_blocked_item(
@@ -193,7 +227,7 @@ pub fn compute_skill_items(source_root: &Path, target_root: &Path, runtime: &str
             continue;
         }
         if !target_stat.is_some_and(|s| s.is_dir) {
-            items.push(item("sync_skill", name, name, "installed"));
+            items.push(sync_item(name, source_root));
             continue;
         }
         let target_walk = walk_skill_tree(&target_dir, None);
@@ -215,7 +249,7 @@ pub fn compute_skill_items(source_root: &Path, target_root: &Path, runtime: &str
             continue;
         }
         if manifest_fingerprint(&source_walk.files) != manifest_fingerprint(&target_walk.files) {
-            items.push(item("sync_skill", name, name, "installed"));
+            items.push(sync_item(name, source_root));
         }
     }
 
@@ -338,7 +372,7 @@ pub struct SkillSync {
 
 struct TargetInput<'a> {
     real_repo: &'a Path,
-    source_root: &'a Path,
+    sources: &'a SkillSources,
     real_source: &'a Path,
     source_version: &'a VersionState,
     host_version: &'a VersionState,
@@ -491,7 +525,7 @@ fn compute_skill_sync_target(input: TargetInput<'_>) -> SkillTarget {
         && target.blocked.as_ref().is_none_or(|b| b.forceable)
     {
         target.items =
-            compute_skill_items(input.source_root, input.target_root, runtime_for_target_kind(input.kind))
+            compute_skill_items(input.sources, input.target_root, runtime_for_target_kind(input.kind))
                 .into_iter()
                 .map(|i| with_target(i, input.kind))
                 .collect();
@@ -576,7 +610,7 @@ fn host_lib_downgrade_block(
 /// computeLegacyGlobalRefresh (l. 1463): strictly additive best-effort pass
 /// over ~/.claude/skills. Never creates, never deletes, never blocks.
 fn compute_legacy_global_refresh(
-    source_root: &Path,
+    sources: &SkillSources,
     real_source: &Path,
     real_repo: &Path,
     source_version: &VersionState,
@@ -613,7 +647,7 @@ fn compute_legacy_global_refresh(
             return out; // never downgrade the legacy global
         }
     }
-    for it in compute_skill_items(source_root, &global_root, "claude") {
+    for it in compute_skill_items(sources, &global_root, "claude") {
         let action = it["action"].as_str().unwrap_or("").to_string();
         if action == "remove_skill" {
             continue; // never delete from the legacy global root
@@ -638,8 +672,18 @@ fn compute_legacy_global_refresh(
 }
 
 /// computeSkillSync (l. 1547): D2 resolution over ALL sync targets.
-pub fn compute_skill_sync(engine: &Engine, repo_root: &Path, global_skills: bool) -> SkillSync {
+pub fn compute_skill_sync(
+    engine: &Engine,
+    repo_root: &Path,
+    global_skills: bool,
+    design_packs: &[String],
+) -> SkillSync {
     let source_root = engine.skills_root.clone();
+    let sources = SkillSources {
+        skills_root: source_root.clone(),
+        design_root: engine.design_root.clone(),
+        design_packs: design_packs.to_vec(),
+    };
     let target_specs = skill_sync_targets(repo_root, global_skills);
 
     let block_all = |reason: String, status: &str| -> SkillSync {
@@ -721,7 +765,7 @@ pub fn compute_skill_sync(engine: &Engine, repo_root: &Path, global_skills: bool
     for (kind, target_root) in &target_specs {
         targets.push(compute_skill_sync_target(TargetInput {
             real_repo: &real_repo,
-            source_root: &source_root,
+            sources: &sources,
             real_source: &real_source,
             source_version: &source_version,
             host_version: &host_version,
@@ -737,7 +781,7 @@ pub fn compute_skill_sync(engine: &Engine, repo_root: &Path, global_skills: bool
         None
     } else {
         Some(compute_legacy_global_refresh(
-            &source_root,
+            &sources,
             &real_source,
             &real_repo,
             &source_version,
@@ -917,6 +961,10 @@ mod tests {
         std::fs::write(p, body).unwrap();
     }
 
+    fn only(src: &Path) -> SkillSources {
+        SkillSources { skills_root: src.to_path_buf(), ..Default::default() }
+    }
+
     #[test]
     fn fresh_target_plans_one_sync_per_source_skill() {
         let dir = tempfile::tempdir().unwrap();
@@ -927,12 +975,126 @@ mod tests {
         let target = dir.path().join("target");
         std::fs::create_dir_all(&target).unwrap();
 
-        let items = compute_skill_items(&src, &target, "claude");
+        let items = compute_skill_items(&only(&src), &target, "claude");
         let actions: Vec<&str> = items.iter().map(|i| i["action"].as_str().unwrap()).collect();
         assert_eq!(actions, vec!["sync_skill", "sync_skill"]);
         assert_eq!(items[0]["skill"], "bee-hive");
         assert_eq!(items[0]["scope"], "installed");
         assert_eq!(items[1]["skill"], "bee-planning");
+    }
+
+    fn design_sources(dir: &Path, packs: &[&str]) -> SkillSources {
+        let src = dir.join("skills");
+        let design = dir.join("design");
+        write(&src.join("bee-hive").join("SKILL.md"), "hi");
+        for name in ["bee-design", "bee-design-charts", "bee-design-motion", "bee-design-web"] {
+            write(&design.join(name).join("SKILL.md"), name);
+        }
+        SkillSources {
+            skills_root: src,
+            design_root: design,
+            design_packs: packs.iter().map(|p| p.to_string()).collect(),
+        }
+    }
+
+    fn planned(items: &[Value]) -> Vec<(String, String)> {
+        items
+            .iter()
+            .map(|i| (i["action"].as_str().unwrap().to_string(), i["skill"].as_str().unwrap().to_string()))
+            .collect()
+    }
+
+    fn pair(action: &str, skill: &str) -> (String, String) {
+        (action.to_string(), skill.to_string())
+    }
+
+    #[test]
+    fn a_design_pick_plans_the_core_and_each_picked_pack_from_the_design_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let sources = design_sources(dir.path(), &["web", "charts"]);
+        let target = dir.path().join("target");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let items = compute_skill_items(&sources, &target, "claude");
+        assert_eq!(
+            planned(&items),
+            vec![
+                pair("sync_skill", "bee-hive"),
+                pair("sync_skill", "bee-design"),
+                pair("sync_skill", "bee-design-charts"),
+                pair("sync_skill", "bee-design-web"),
+            ]
+        );
+        assert_eq!(items[0]["source"], json!(dir.path().join("skills").to_string_lossy()));
+        for i in &items[1..] {
+            assert_eq!(i["source"], json!(dir.path().join("design").to_string_lossy()), "{i}");
+        }
+    }
+
+    #[test]
+    fn a_dropped_pack_is_pruned_and_a_non_bee_skill_is_untouchable() {
+        let dir = tempfile::tempdir().unwrap();
+        let sources = design_sources(dir.path(), &["web"]);
+        let target = dir.path().join("target");
+        write(&target.join("bee-hive").join("SKILL.md"), "hi");
+        write(&target.join("bee-design").join("SKILL.md"), "bee-design");
+        write(&target.join("bee-design-web").join("SKILL.md"), "bee-design-web");
+        write(&target.join("bee-design-charts").join("SKILL.md"), "bee-design-charts");
+        write(&target.join("my-design").join("SKILL.md"), "mine");
+
+        assert_eq!(
+            planned(&compute_skill_items(&sources, &target, "claude")),
+            vec![pair("remove_skill", "bee-design-charts")]
+        );
+    }
+
+    #[test]
+    fn no_pick_plans_no_design_skill_and_prunes_every_design_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let sources = design_sources(dir.path(), &[]);
+        let fresh = dir.path().join("fresh");
+        std::fs::create_dir_all(&fresh).unwrap();
+        assert_eq!(
+            planned(&compute_skill_items(&sources, &fresh, "claude")),
+            vec![pair("sync_skill", "bee-hive")]
+        );
+
+        let target = dir.path().join("target");
+        write(&target.join("bee-hive").join("SKILL.md"), "hi");
+        write(&target.join("bee-design").join("SKILL.md"), "bee-design");
+        write(&target.join("bee-design-web").join("SKILL.md"), "bee-design-web");
+        assert_eq!(
+            planned(&compute_skill_items(&sources, &target, "claude")),
+            vec![pair("remove_skill", "bee-design"), pair("remove_skill", "bee-design-web")]
+        );
+    }
+
+    #[test]
+    fn the_shipped_design_root_holds_the_core_and_one_dir_per_pack() {
+        let design = repo_root().join("packages").join("bee").join("design");
+        let shipped: Vec<String> = list_bee_skill_entries(&design)
+            .into_iter()
+            .filter(|e| e.is_dir && !e.is_symlink)
+            .map(|e| e.name)
+            .collect();
+        assert_eq!(
+            shipped,
+            vec![
+                "bee-design",
+                "bee-design-apple",
+                "bee-design-charts",
+                "bee-design-figma",
+                "bee-design-motion",
+                "bee-design-web",
+            ]
+        );
+        let mut from_packs: Vec<String> = super::super::templates::DESIGN_PACKS
+            .iter()
+            .map(|p| format!("bee-design-{p}"))
+            .collect();
+        from_packs.push("bee-design".to_string());
+        from_packs.sort();
+        assert_eq!(from_packs, shipped);
     }
 
     #[test]
@@ -942,10 +1104,10 @@ mod tests {
         write(&src.join("bee-hive").join("SKILL.md"), "hi");
         let target = dir.path().join("target");
         write(&target.join("bee-hive").join("SKILL.md"), "hi");
-        assert!(compute_skill_items(&src, &target, "claude").is_empty());
+        assert!(compute_skill_items(&only(&src), &target, "claude").is_empty());
 
         write(&target.join("bee-hive").join("SKILL.md"), "drifted");
-        let items = compute_skill_items(&src, &target, "claude");
+        let items = compute_skill_items(&only(&src), &target, "claude");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "sync_skill");
     }
@@ -960,7 +1122,7 @@ mod tests {
         write(&target.join("bee-legacy").join("SKILL.md"), "old");
         write(&target.join("my-own-skill").join("SKILL.md"), "mine");
 
-        let items = compute_skill_items(&src, &target, "claude");
+        let items = compute_skill_items(&only(&src), &target, "claude");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["action"], "remove_skill");
         assert_eq!(items[0]["skill"], "bee-legacy");
@@ -988,9 +1150,9 @@ mod tests {
         assert!(!target.join("bee-hive").join("stale.md").exists());
         assert!(!target.join("bee-hive").join("old").exists());
         // Idempotent: a second apply plans nothing.
-        assert!(compute_skill_items(&src, &target, "claude").is_empty());
+        assert!(compute_skill_items(&only(&src), &target, "claude").is_empty());
         assert_eq!(apply_sync_skill(&src, &target, "bee-hive", "claude"), None);
-        assert!(compute_skill_items(&src, &target, "claude").is_empty());
+        assert!(compute_skill_items(&only(&src), &target, "claude").is_empty());
     }
 
     #[test]
@@ -1018,9 +1180,9 @@ mod tests {
             "x\nK\n"
         );
         // And the drift check agrees (no perpetual re-sync).
-        assert!(compute_skill_items(&src, &target, "codex").is_empty());
+        assert!(compute_skill_items(&only(&src), &target, "codex").is_empty());
         // The claude render differs, so a claude-runtime compare shows drift.
-        assert_eq!(compute_skill_items(&src, &target, "claude").len(), 1);
+        assert_eq!(compute_skill_items(&only(&src), &target, "claude").len(), 1);
     }
 
     /// D1 (opencode-support oc-4): the ONBOARDING SYNC PATH's per-target
@@ -1041,11 +1203,11 @@ mod tests {
             std::fs::read_to_string(target.join("bee-hive").join("SKILL.md")).unwrap(),
             "x\nO\n"
         );
-        assert!(compute_skill_items(&src, &target, "opencode").is_empty());
+        assert!(compute_skill_items(&only(&src), &target, "opencode").is_empty());
         // Neither claude nor codex would have rendered the opencode-only
         // block, so a runtime-mismatched compare still shows drift.
-        assert_eq!(compute_skill_items(&src, &target, "claude").len(), 1);
-        assert_eq!(compute_skill_items(&src, &target, "codex").len(), 1);
+        assert_eq!(compute_skill_items(&only(&src), &target, "claude").len(), 1);
+        assert_eq!(compute_skill_items(&only(&src), &target, "codex").len(), 1);
     }
 
     #[test]
@@ -1163,7 +1325,7 @@ mod tests {
             ".opencode/skills/ must exist — run `regen_opencode_skills_tree` (see its doc comment)"
         );
         assert!(
-            compute_skill_items(&source_root, &target_root, "opencode").is_empty(),
+            compute_skill_items(&only(&source_root), &target_root, "opencode").is_empty(),
             ".opencode/skills/ has drifted from skills/ — re-run the opencode regen"
         );
         let committed_sidecar =

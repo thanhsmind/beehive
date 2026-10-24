@@ -178,11 +178,12 @@ pub(crate) fn role_list(models: &Map<String, Value>, runtime: &str) -> String {
 /// answer when nothing else in the dispatch says which of the two is meant;
 /// the one signal that CAN say so is `--kind cell`, and `prepare.rs` reads it
 /// before it ever reaches this table.
-pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
+pub(crate) const ROLE_AGENTS: [(&str, &str); 5] = [
     ("generation", "bee-gather"),
     ("generation", "bee-build"),
     ("extraction", "bee-extract"),
     ("review", "bee-review"),
+    ("design", "bee-design"),
 ];
 
 /// What a rendered bee agent DOES, in one clause — the sentence a refusal
@@ -196,6 +197,7 @@ pub(crate) const ROLE_AGENTS: [(&str, &str); 4] = [
 pub(crate) fn agent_job_summary(agent: &str) -> Option<&'static str> {
     match agent {
         "bee-build" => Some("executes a cell (reserves, writes, commits, caps)"),
+        "bee-design" => Some("executes a design cell with the bee-design taste (reserves, writes, commits, caps)"),
         "bee-gather" => Some("reads and reports (never writes)"),
         "bee-extract" => Some("pulls one already-scoped fact and reports (never writes)"),
         "bee-review" => Some("checks a claim read-only and reports (never edits)"),

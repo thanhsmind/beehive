@@ -21,6 +21,7 @@ pub mod capture;
 pub mod cells;
 pub mod decisions;
 pub mod deferred_queue;
+pub mod design_group;
 pub mod detector;
 pub mod discovery;
 pub mod drivers;
@@ -120,6 +121,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = tmp_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = design_group::try_native(args, t0) {
         return Some(code);
     }
     // hm-1 registered `mailbox` as a library module with no probe, because the

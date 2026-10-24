@@ -19,7 +19,7 @@ never a generation timestamp or any other wall-clock value.
 - [hook-runtime/](hook-runtime/index.md) — 26 concept(s)
 - [human-mailbox/](human-mailbox/index.md) — 1 concept(s)
 - [okf-profile/](okf-profile/index.md) — 8 concept(s)
-- [onboarding/](onboarding/index.md) — 9 concept(s)
+- [onboarding/](onboarding/index.md) — 10 concept(s)
 - [performance-log/](performance-log/index.md) — 5 concept(s)
 - [product-backlog/](product-backlog/index.md) — 1 concept(s)
 - [rust-runtime/](rust-runtime/index.md) — 6 concept(s)

@@ -1898,7 +1898,7 @@ mod tests {
     fn repo_config() -> Value {
         json!({
             "models": {
-                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable" },
+                "claude": { "extraction": "haiku", "generation": "sonnet", "review": "opus", "advisor": "fable", "design": "sonnet" },
                 "codex": { "extraction": "gpt-5.5", "generation": "gpt-5.5" }
             }
         })
@@ -2208,7 +2208,7 @@ mod tests {
         // never ran. Sweeping both tables is what makes an alias spelling
         // reachable by this test at all.
         let migrated = fixture(&json!({"models": {"claude": {
-            "code": "sonnet", "read": "haiku",
+            "code": "sonnet", "read": "haiku", "design": "sonnet",
             "extraction": "haiku", "generation": "sonnet", "review": "opus"
         }}}));
         let spellings = crate::verbs::drivers::ROLE_ALIASES
@@ -2232,6 +2232,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_design_cell_payload_from_the_door_passes_the_guard_as_bee_design() {
+        let fx = fixture(&repo_config());
+        let root = fx.path();
+        crate::fsutil::ensure_dir(&root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join("c-design.json"),
+            r#"{"id":"c-design","feature":"f","title":"design a page","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
+        )
+        .unwrap();
+        let crate::verbs::drivers::Prepared::Value(prep) = crate::verbs::drivers::prepare_dispatch(
+            root, "claude", "cell", Some("c-design"), Some("w"), false, None, None, false, None,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        let payload = prep["payload"].clone();
+        assert_eq!(payload["subagent_type"], json!("bee-design"), "{prep}");
+        let (code, stdout, stderr) = run_full(root, json!({"tool_name": "Agent", "tool_input": payload}));
+        assert_eq!(code, 0, "{stderr}");
+        assert_eq!(stdout, "", "the door's own payload needs no repair");
+        let d = last_jsonl(dispatch_log(root)).unwrap();
+        assert_eq!(d["tier"], "design");
+        assert_eq!(d["subagent_type"], "bee-design");
+        assert_eq!(d["model"], "sonnet");
     }
 
     #[test]
@@ -2294,7 +2321,7 @@ mod tests {
             assert_eq!(d["subagent_type"], pinned);
             // the tier's configured model is what the audit says was requested
             assert_eq!(d["requested_model"], json!(match tier {
-                "generation" => "sonnet",
+                "generation" | "design" => "sonnet",
                 "extraction" => "haiku",
                 _ => "opus",
             }));

@@ -40,6 +40,10 @@ pub(crate) const PROMPT_ADVISOR: &str = include_str!("../../../../../../bee/prom
 
 pub(crate) const AGENT_BUILD: &str = include_str!("../../../../../../bee/agents/bee-build.md.tmpl");
 
+pub(crate) const AGENT_DESIGN: &str = include_str!("../../../../../../bee/agents/bee-design.md.tmpl");
+
+pub(crate) const DESIGN_CELL_PREAMBLE: &str = "Design cell: before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack, and follow its workflow. The design check is `bee design gate`; record it as your proof. It needs Node 20 or newer; without it, it prints `design gate: not run — Node 20 or newer is missing`, the proof reason must carry `design gate not run`, and you never write that it ran. With no `bee-design` skill installed, say the design taste is absent and execute the cell as a plain cell executor.";
+
 pub(crate) const AGENT_GATHER: &str = include_str!("../../../../../../bee/agents/bee-gather.md.tmpl");
 
 pub(crate) const AGENT_EXTRACT: &str = include_str!("../../../../../../bee/agents/bee-extract.md.tmpl");
@@ -49,6 +53,7 @@ pub(crate) const AGENT_REVIEW: &str = include_str!("../../../../../../bee/agents
 pub(crate) fn embedded_agent_body(agent_name: &str) -> Option<&'static str> {
     let source = match agent_name {
         "bee-build" => AGENT_BUILD,
+        "bee-design" => AGENT_DESIGN,
         "bee-gather" => AGENT_GATHER,
         "bee-extract" => AGENT_EXTRACT,
         "bee-review" => AGENT_REVIEW,

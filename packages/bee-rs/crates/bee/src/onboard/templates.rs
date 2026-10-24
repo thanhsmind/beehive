@@ -17,6 +17,8 @@ pub const ONBOARDING_SCHEMA_VERSION: &str = "1.0";
 /// host-packaging-gaps D2: the `.bee/onboarding.json` flag recording that the
 /// Pi role table was offered, so a user who deletes it is never re-offered.
 pub const PI_TEAM_OFFERED_KEY: &str = "pi_team_offered";
+pub const DESIGN_ROLE_OFFERED_KEY: &str = "design_role_offered";
+pub const DESIGN_PACKS: &[&str] = &["web", "charts", "motion", "apple", "figma"];
 pub const MARKER_START: &str = "<!-- BEE:START -->";
 pub const MARKER_END: &str = "<!-- BEE:END -->";
 pub const GITIGNORE_MARKER_START: &str = "# BEE:START";
@@ -199,6 +201,7 @@ pub fn default_config() -> Value {
                 "read": { "model": "haiku", "description": "read-only lookups from known locations; a bare --kind gather also runs here" },
                 "test": { "model": "sonnet", "description": "author or repair tests, red-first" },
                 "docs": { "model": "sonnet", "description": "doc edits and parity sweeps" },
+                "design": { "model": "sonnet", "description": "build and critique rendered UI with the bee-design taste; proves with the design gate" },
                 "plan": { "model": "opus", "description": "planning-shaped work — shaping, drafting cells, plan checks" },
                 "extraction": { "model": "haiku", "description": "narrow fact lookups from known locations" },
                 "generation": { "model": "sonnet", "description": "fall-through tail: default writer role" },
@@ -362,6 +365,8 @@ pub const VERIFY_APP_SKILL_NAME: &str = "verify-app";
 /// version mismatch, so an offer already refused must not be made again.
 pub const NO_TEST_VERIFICATION_OFFER: &str = "This project has no command that proves it works. The bee-verifying skill can build one together with the user: it studies the project, writes a check that drives the real product, and leaves a single command anyone can run. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
 
+pub const DESIGN_PACKS_OFFER: &str = "This project has files that draw a user interface. bee can install design skills that guide how that interface looks and feels, in packs for the kind of project it is: web - web pages and web apps; charts - dashboards and data displays; motion - animation and transitions; apple - native apps for iPhone, iPad and Mac; figma - work that starts from Figma designs. A core design skill comes with any pack. Offer it - say what each pack is for, then ask which ones fit, or none. Then run bee onboard --apply --design-packs with the chosen names (for example --design-packs web,charts), or --design-packs none to stop this offer. Tell the user first that bee replaces every edit made inside its design folders on each install, so their own design notes belong in a folder of their own. The choice is the user's: never pick for them, and install nothing before they answer.";
+
 /// The second offer: this repo tests its code but nothing drives its product.
 pub const TESTED_REPO_VERIFICATION_OFFER: &str = "This project's tests check that its code is correct, but nothing starts the real product and looks at what a user would see. The bee-verifying skill can build that second check together with the user: it studies the project, writes a check that drives the product itself, and leaves a single command anyone can run. The tests stay exactly as they are — this is a separate command beside them. Offer it — say what it does, then ask, but first look through the project's recorded decisions for an earlier refusal: if the user already said no to this, say nothing. The choice is the user's to accept or refuse: never assume a yes, and build nothing before they answer.";
 
@@ -430,6 +435,7 @@ pub const AGENT_ROLES_BY_NAME: &[(&str, &[&str])] = &[
     // role decides the model; what the agent may DO is the agent file's own
     // contract.
     ("bee-build", &["generation"]),
+    ("bee-design", &["design", "generation"]),
     ("bee-gather", &["read", "generation"]),
     ("bee-extract", &["extraction"]),
     ("bee-review", &["review", "generation"]),
@@ -476,6 +482,7 @@ pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
 /// verified live against opencode 1.18.16's `opencode agent list`).
 pub const AGENT_OPENCODE_PERMISSION_DENY: &[(&str, &[&str])] = &[
     ("bee-build", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-design", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-gather", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-extract", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
     ("bee-review", &["edit", "task", "todowrite", "webfetch", "websearch", "lsp"]),
@@ -558,6 +565,7 @@ mod tests {
                 "read",
                 "test",
                 "docs",
+                "design",
                 "plan",
                 "extraction",
                 "generation",

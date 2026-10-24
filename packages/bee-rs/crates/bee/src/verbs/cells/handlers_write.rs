@@ -364,6 +364,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
                 write_cell(&root, cell)?;
             }
             emit_manifest_lint_warnings(&normalized);
+            emit_design_gate_warnings(&root, &normalized);
             let text = normalized
                 .iter()
                 .map(|c| format!("Added {}", summarize_cell(c)))
@@ -387,6 +388,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
         assert_no_cycle(&root, "addCell", std::slice::from_ref(&normalized))?;
         write_cell(&root, &normalized)?;
         emit_manifest_lint_warnings(std::slice::from_ref(&normalized));
+        emit_design_gate_warnings(&root, std::slice::from_ref(&normalized));
         let text = format!("Added {}", summarize_cell(&normalized));
         Ok(Out::Emit(normalized, text, 0))
     })

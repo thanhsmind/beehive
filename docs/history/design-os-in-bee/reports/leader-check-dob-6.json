@@ -1,0 +1,15 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"},
+    {"requirement": "in a host with no pick the cap behaves exactly as before", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"},
+    {"requirement": "in a picked host a UI cell whose verify lacks bee design gate is refused with the fix named", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"},
+    {"requirement": "a not-run record requires the proof reason to say design gate not run, and then the cap is accepted", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"},
+    {"requirement": "a cell listing the baseline file is refused", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"},
+    {"requirement": "cells add warns on stderr and still adds the cell", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"},
+    {"requirement": "cap and add both call design_rule", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"},
+    {"requirement": "the last-run.json shape matches the contract dob-5 writes", "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"}
+  ]
+}
