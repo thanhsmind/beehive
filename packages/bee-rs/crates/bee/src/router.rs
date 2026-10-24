@@ -99,7 +99,7 @@ pub const PORTED: &[&str] = &[
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
      [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--force-downgrade] \
-     [--no-statusline]",
+     [--no-statusline] [--design-packs <list|none>]",
     "dev render-skill-trees",
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",

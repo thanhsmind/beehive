@@ -790,6 +790,56 @@ pub fn compute_skill_sync(
     SkillSync { source_root, targets, blocked, legacy_refresh }
 }
 
+pub fn compute_design_sync(engine: &Engine, repo_root: &Path, design_packs: &[String]) -> SkillSync {
+    let sources = SkillSources {
+        design_root: engine.design_root.clone(),
+        design_packs: design_packs.to_vec(),
+        ..SkillSources::default()
+    };
+    let real_repo =
+        realpath(repo_root).unwrap_or_else(|| path_resolve(&repo_root.to_string_lossy()));
+    let targets = skill_sync_targets(repo_root, false)
+        .into_iter()
+        .map(|(kind, target_root)| {
+            let target_exists = exists(&target_root);
+            let mut target = SkillTarget {
+                mode: Some(if target_exists { "sync" } else { "fresh" }),
+                versions: None,
+                blocked: None,
+                items: Vec::new(),
+                kind,
+                target_root,
+            };
+            if target_exists
+                && !realpath(&target.target_root).is_some_and(|r| is_under(&r, &real_repo))
+            {
+                target.blocked = Some(TargetBlocked {
+                    status: "blocked_no_source".into(),
+                    reason: format!(
+                        "managed in-repo skills root {} resolves outside the repo root - refusing fail-closed",
+                        repo_target_segments_joined(&target.kind)
+                    ),
+                    forceable: false,
+                });
+                return target;
+            }
+            target.items = compute_skill_items(
+                &sources,
+                &target.target_root,
+                runtime_for_target_kind(&target.kind),
+            )
+            .into_iter()
+            .filter(|i| {
+                i["skill"].as_str().is_some_and(|s| s == "bee-design" || s.starts_with("bee-design-"))
+            })
+            .map(|i| with_target(i, &target.kind))
+            .collect();
+            target
+        })
+        .collect();
+    SkillSync { source_root: engine.design_root.clone(), targets, blocked: None, legacy_refresh: None }
+}
+
 /// blockedSourceIdentitySkillSync (l. 2980).
 pub fn blocked_source_identity_skill_sync(
     engine: &Engine,
@@ -1067,6 +1117,25 @@ mod tests {
             planned(&compute_skill_items(&sources, &target, "claude")),
             vec![pair("remove_skill", "bee-design"), pair("remove_skill", "bee-design-web")]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_design_only_sync_refuses_a_skill_home_outside_the_repo() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::from_plugin_root(dir.path().join("src"));
+        write(&engine.design_root.join("bee-design").join("SKILL.md"), "bee-design");
+        let repo = dir.path().join("repo");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(repo.join(".claude")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, repo.join(".claude").join("skills")).unwrap();
+        let sync = compute_design_sync(&engine, &repo, &["web".to_string()]);
+        let kind = |k: &str| sync.targets.iter().find(|t| t.kind == k).unwrap();
+        assert!(kind("repo-claude").blocked.is_some());
+        assert!(kind("repo-claude").items.is_empty());
+        assert_eq!(planned(&kind("repo-agents").items), vec![pair("sync_skill", "bee-design")]);
+        assert!(sync.blocked.is_none());
     }
 
     #[test]

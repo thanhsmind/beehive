@@ -1519,6 +1519,49 @@ fn plugin_source_skips_skill_sync_and_codex_runtime_adds_the_hybrid_hooks() {
     assert!(!fx.repo.join(".claude").join("skills").exists());
 }
 
+fn skill_dirs_by_home(repo: &Path) -> Vec<(String, Vec<String>)> {
+    skill_homes(repo)
+        .into_iter()
+        .map(|(rel, root)| (rel, super::util::read_dir_sorted(&root).into_iter().map(|e| e.name).collect()))
+        .collect()
+}
+
+#[test]
+fn plugin_first_installs_the_picked_design_skills_and_no_other_skill() {
+    let fx = fixture();
+    apply(&fx, &["--plugin-source"]);
+    for (rel, root) in skill_homes(&fx.repo) {
+        assert!(!root.exists(), "no pick writes no skill dir: {rel}");
+    }
+    let a = apply(&fx, &["--plugin-source", "--design-packs", "web"]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(a["recheck"], "up_to_date");
+    for (rel, names) in skill_dirs_by_home(&fx.repo) {
+        assert_eq!(names, ["bee-design", "bee-design-web"], "{rel}");
+    }
+    assert_eq!(design_packs_recorded(&fx), json!(["web"]));
+    assert_eq!(plan(&fx, &["--plugin-source"])["status"], "up_to_date", "the recorded pick needs no flag");
+}
+
+#[test]
+fn plugin_first_prunes_dropped_design_skills_and_keeps_every_other_skill() {
+    let fx = fixture();
+    apply(&fx, &["--design-packs", "web,charts"]);
+    let a = apply(&fx, &["--plugin-source", "--design-packs", "web"]);
+    assert_eq!(a["recheck"], "up_to_date");
+    for (rel, names) in skill_dirs_by_home(&fx.repo) {
+        assert!(names.contains(&"bee-hive".to_string()), "{rel}: {names:?}");
+    }
+    every_home_holds(&fx.repo, &["bee-design", "bee-design-web"]);
+    let a = apply(&fx, &["--plugin-source", "--design-packs", "none"]);
+    assert_eq!(a["recheck"], "up_to_date");
+    every_home_holds(&fx.repo, &[]);
+    for (rel, names) in skill_dirs_by_home(&fx.repo) {
+        assert!(names.contains(&"bee-hive".to_string()), "{rel}: {names:?}");
+    }
+    assert_eq!(design_packs_recorded(&fx), json!("none"));
+}
+
 // ── notices ────────────────────────────────────────────────────────────────
 
 #[test]
