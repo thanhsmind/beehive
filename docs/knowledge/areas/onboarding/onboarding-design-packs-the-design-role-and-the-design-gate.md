@@ -33,6 +33,13 @@ picked, beside each picked pack, in every skill home of the project. An unknown
 pack name is refused before anything is written, and the refusal lists the
 valid names (design-os-in-bee D4).
 
+**Picking at install time.** Both installers accept the pick and pass it to
+every onboarding step, so a fresh install can carry it in one run. After a
+successful install the installer shows onboarding's notices, the design offer
+among them. A plugin-based install, which copies no other skill into the
+project, still copies the core set and the picked packs, and still removes
+dropped ones (owner decision 1dd050b7).
+
 **Dropping a pack.** When a later install's pick no longer names a pack, that
 pack's folder is removed from the project, like any other bee-owned skill. A
 project's own skills are never touched, whatever their names. Picking "none"
@@ -115,6 +122,9 @@ flowchart TD
   (`source.rs` design root, `skills.rs` sources, `plan.rs`, `apply.rs`,
   `notices.rs`, `templates.rs` `DESIGN_PACKS_OFFER`); flag `--design-packs`;
   host config keys `design.packs`, `design.pages`, `design.ui_globs`.
+- Installers: `scripts/install.sh --design-packs`, `scripts/install.ps1
+  -DesignPacks`; plugin-first design copy `compute_design_sync` in
+  `onboard/skills.rs`, called from `onboard/plan.rs`.
 - Design agent: `packages/bee/agents/bee-design.md.tmpl`; pin in
   `verbs/drivers/prepare.rs`; `ROLE_AGENTS` in `verbs/drivers/guard.rs`;
   `DESIGN_CELL_PREAMBLE` in `verbs/drivers/prompt.rs`.
