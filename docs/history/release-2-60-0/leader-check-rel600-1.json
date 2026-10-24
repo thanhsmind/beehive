@@ -1,0 +1,12 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "both plugin manifests report 2.60.0", "artifact": ".claude-plugin/plugin.json"},
+    {"requirement": "tag v2.60.0 exists locally and on the remote", "artifact": ".codex-plugin/plugin.json"},
+    {"requirement": "the GitHub release for v2.60.0 carries the binaries and SHA256SUMS", "artifact": "docs/history/codex-harness-hardening/release-manifest.json"},
+    {"requirement": "the script printed its final OK line", "artifact": ".claude-plugin/plugin.json"},
+    {"requirement": ".claude-plugin/plugin.json", "artifact": ".claude-plugin/plugin.json"},
+    {"requirement": ".codex-plugin/plugin.json", "artifact": ".codex-plugin/plugin.json"},
+    {"requirement": "the pushed tag is what triggers release-binaries.yml", "artifact": ".claude-plugin/plugin.json"}
+  ]
+}
