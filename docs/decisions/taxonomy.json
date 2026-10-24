@@ -757,6 +757,7 @@
     "packaging",
     "contract:design-cell-pin",
     "contract:design-gate",
-    "design-packs"
+    "design-packs",
+    "test-gate"
   ]
 }
