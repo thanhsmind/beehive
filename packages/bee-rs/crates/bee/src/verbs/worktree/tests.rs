@@ -2836,6 +2836,133 @@ use std::time::Instant;
         );
     }
 
+    #[test]
+    fn skills_version_stamp_paths_are_one_per_repo_skill_target() {
+        assert_eq!(
+            skills_version_stamp_paths(),
+            vec![
+                ".claude/skills/.bee-skills-version.json".to_string(),
+                ".agents/skills/.bee-skills-version.json".to_string(),
+                ".opencode/skills/.bee-skills-version.json".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn skills_version_stamp_dirt_in_main_auto_commits_and_merge_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+        assert!(is_tree_dirty(&main).unwrap(), "main must start dirty for this test to mean anything");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("merge refused instead of auto-committing the skills version stamps: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    #[test]
+    fn skills_version_stamp_dirt_in_main_auto_commits_on_a_feature_less_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        let created = worktree_with_a_real_commit(&main, "demo");
+        make_feature_unresolvable(&created.worktree_root);
+        assert_eq!(resolve_worktree_feature(&created.worktree_root).feature, None);
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("a feature-less merge must still auto-commit the skills version stamps: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    #[test]
+    fn skills_version_stamp_sibling_under_a_skills_root_still_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        seed_tracked_file(&main, ".claude/skills/bee-build/SKILL.md");
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+        std::fs::write(main.join(".claude/skills/bee-build/SKILL.md"), "edited by hand\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("a modified file under a skills root other than the stamp must still refuse")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains(".claude/skills/bee-build/SKILL.md"), "{msg}");
+    }
+
+    #[test]
+    fn skills_version_stamp_name_outside_a_skills_root_still_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        for rel in skills_version_stamp_paths() {
+            seed_tracked_file(&main, &rel);
+        }
+        seed_tracked_file(&main, ".claude/skills/bee-build/.bee-skills-version.json");
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        for rel in skills_version_stamp_paths() {
+            std::fs::write(main.join(&rel), "{\"version\": \"9.9.9\"}\n").unwrap();
+        }
+        std::fs::write(
+            main.join(".claude/skills/bee-build/.bee-skills-version.json"),
+            "{\"version\": \"9.9.9\"}\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("a stamp-named file NOT directly under a skills root must still refuse")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains(".claude/skills/bee-build/.bee-skills-version.json"), "{msg}");
+    }
+
     // ── mdp-1: an untracked path in main blocks the merge only where the
     //    merging branch actually writes it ─────────────────────────────────
     //
