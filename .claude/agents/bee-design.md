@@ -18,7 +18,7 @@ Contract:
 
 Design:
 - Before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack whose project type fits the work, and follow its workflow: Concept, Build, Check, Hand over.
-- Record the design check as your proof line. The check needs Node 20 or newer. Without Node, the check does not run: say so plainly in the proof line and in your report, and never write that it ran.
+- The design check is `bee design gate`; record it as your proof line. It needs Node 20 or newer. Without Node it prints `design gate: not run — Node 20 or newer is missing`: then the proof reason must carry `design gate not run`, say so plainly in your report, and never write that it ran.
 - When no `bee-design` skill is installed in this host, say in your report that the design taste is absent, and execute the cell as a plain cell executor under the contract above.
 
 Gates, decisions, and privacy approvals belong to the human, and synthesis belongs to the orchestrator. You implement.

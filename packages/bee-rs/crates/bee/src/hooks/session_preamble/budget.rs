@@ -158,7 +158,7 @@ pub(crate) fn command_surface_header_note() -> String {
     let total = entries.len();
     let with_json = entries.iter().filter(|e| e.properties.contains_key("json")).count();
     format!(
-        "Names only ({total} commands). Flags and usage: before the FIRST use of a verb in a session, read `bee <verb> --help` — never guess flags; one read per verb, never re-read (everything at once: `bee --help --all`); nearly every command also takes a `json` flag ({with_json} of {total})."
+        "Names only ({total} commands). Flags and usage: before the FIRST use of a verb in a session, read `bee <verb> --help` — never guess flags; one read per verb, never re-read (all at once: `bee --help --all`); most commands also take a `json` flag ({with_json} of {total})."
     )
 }
 

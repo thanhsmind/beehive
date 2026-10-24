@@ -9,14 +9,14 @@ metadata:
       kind: command
       command: npx
       missing_effect: degraded
-      reason: The Check step runs the ease-design ui gate through npx and needs Node 20 or newer. Without it the skill still designs from its references and says plainly that the check did not run.
+      reason: The Check step runs `bee design gate`, which calls the ease-design ui gate through npx and needs Node 20 or newer. Without it the skill still designs from its references and says plainly that the check did not run.
 ---
 
 # bee-design — design taste for rendered UI
 
 This skill carries the design-os taste (ease-design 0.6.1) inside bee. One workflow: Concept → Build →
-Check → Hand over → Adjust. The taste is in `references/`; this file routes you to it. The check is the
-ease-design `ui gate`, run through `npx`; this skill never grades taste by script.
+Check → Hand over → Adjust. The taste is in `references/`; this file routes you to it. The check is
+`bee design gate`, the ease-design `ui gate` held to a baseline; this skill never grades taste by script.
 
 ## Packs
 
@@ -39,7 +39,8 @@ A pack adds the taste for one project type. A host has only the packs it picked.
 - `design-os:<path>` is a file in the upstream design-os knowledge folder that bee does not carry
   (upstream tooling, governance or research inputs). Read it at https://github.com/jangtrinh/design-os.
 - `ui <command>` is the ease-design CLI. Run it as `npx --yes ease-design@0.6.1 <command>`, and only with
-  the commands and flags in [contract.md](references/contract.md).
+  the commands and flags in [contract.md](references/contract.md). The gate is the exception: run it as
+  `bee design gate` (step 3), never through `npx`.
 
 ## 1. Concept
 
@@ -71,19 +72,23 @@ Sample data lives in one place and is labelled. Work from your project directory
 
 ## 3. Check
 
-Run the gate on each page you built, from the project directory:
+Run the gate from the project directory, and put the same command in the cell's verify:
 
 ```sh
-npx --yes ease-design@0.6.1 gate <page.html> --dir . --json
+bee design gate
 ```
 
-Exit 0 means no error-severity finding; exit 1 means the gate rejected the page, and `errorCount` in the
-JSON says how many errors it found. Add `--tokens <file>` or `--family <slug>` only as
-[contract.md](references/contract.md) describes them. Warnings and advisories stay visible but do not reject.
+It runs `ui gate` on every page (the project's `design.pages` globs, or every `*.html`) and compares
+each page with the baseline in `.bee/design/gate-baseline.json`. Exit 0 means no page gained errors or
+lost design-token coverage, and every page with no baseline has 0 errors. Exit 1 names each page that
+regressed, with its numbers. Fix the page, never the baseline: recording a baseline
+(`bee design gate --write`) is a person's act, and bee refuses it while any cell is claimed. Warnings
+and advisories stay visible but do not reject.
 
-The gate needs Node 20 or newer. Without it the check does not run. Keep designing from the references,
-and say plainly in the hand-over and in the cell report that the gate did not run and why. Never report
-an unrun gate as passed.
+The gate needs Node 20 or newer. On a machine without it, `bee design gate` prints
+`design gate: not run — Node 20 or newer is missing` and exits 0. Keep designing from the references,
+and say plainly in the hand-over and in the cell report that the gate did not run and why: the proof
+reason must then carry `design gate not run`. Never report an unrun gate as passed.
 
 bee does not carry upstream's `build.mjs`, `validate.mjs` or `look.mjs`. In [rules.md](references/rules.md),
 read "validate" as the gate above. Rules 2 and 3 bind upstream's build evidence folder and do not apply.

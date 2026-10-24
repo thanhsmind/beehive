@@ -42,7 +42,7 @@ pub(crate) const AGENT_BUILD: &str = include_str!("../../../../../../bee/agents/
 
 pub(crate) const AGENT_DESIGN: &str = include_str!("../../../../../../bee/agents/bee-design.md.tmpl");
 
-pub(crate) const DESIGN_CELL_PREAMBLE: &str = "Design cell: before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack, and follow its workflow. Record the design check as your proof. The check needs Node 20 or newer; without it, say plainly that the check did not run, and never write that it ran. With no `bee-design` skill installed, say the design taste is absent and execute the cell as a plain cell executor.";
+pub(crate) const DESIGN_CELL_PREAMBLE: &str = "Design cell: before you write UI, load the `bee-design` skill and every installed `bee-design-*` pack, and follow its workflow. The design check is `bee design gate`; record it as your proof. It needs Node 20 or newer; without it, it prints `design gate: not run — Node 20 or newer is missing`, the proof reason must carry `design gate not run`, and you never write that it ran. With no `bee-design` skill installed, say the design taste is absent and execute the cell as a plain cell executor.";
 
 pub(crate) const AGENT_GATHER: &str = include_str!("../../../../../../bee/agents/bee-gather.md.tmpl");
 

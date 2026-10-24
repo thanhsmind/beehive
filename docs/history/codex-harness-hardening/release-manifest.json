@@ -2022,7 +2022,7 @@
     },
     {
       "path": "packages/bee/agents/bee-design.md.tmpl",
-      "sha256": "c92baaa86792be8695f0de1c355192610b10899e025f2b17838be85d7917a81b",
+      "sha256": "6bb1d266dacf6fa2b8b155ae52aeda88ff78e5402fe33e72b3eb847c42ddc599",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-design.md.tmpl"
@@ -3009,7 +3009,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "756268ccc0ac49e9e1b69fb66a52da6680c793ed2b0732ab2cfaa54626acd41a",
+      "sha256": "af642c0fa812007e5ee1629544d77680fcd61182b98f964e11b48acc8a7b315d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"
