@@ -2022,6 +2022,13 @@ pub(crate) fn set_escalation(
     })
 }
 
+pub(crate) fn escalate_off(flags: &rsv::Flags) -> Option<bool> {
+    match flags.get("off") {
+        Some(rsv::FlagV::S(s)) if s == "true" => Some(true),
+        _ => bool_flag(flags, "off"),
+    }
+}
+
 /// `bee cells escalate --id <id> [--reason <text>] [--off]` — the door
 /// `bee cells tier --tier ceiling` used to be.
 pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -2029,7 +2036,7 @@ pub(crate) fn run_escalate(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
         return None;
     }
     let id = flags.req_str("id")?.to_string();
-    let off = bool_flag(&flags, "off")?;
+    let off = escalate_off(&flags)?;
     // --reason <text> (D3): overrides the escalation-share budget refusal
     // below. A flag-alone `--reason` (no value) is unprovable here — same
     // as every other optional value-flag this verb group parses through
@@ -2703,5 +2710,47 @@ mod tests {
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(trace_deviations(&capped), vec!["followed the plan".to_string()]);
         assert_eq!(capped["trace"].get("plan_followed"), None);
+    }
+}
+
+#[cfg(test)]
+mod escalate_v2_off_tests {
+    use super::*;
+
+    fn off_of(tokens: &[&str]) -> Option<bool> {
+        let (flags, _) = rsv::parse_flags(tokens)?;
+        escalate_off(&flags)
+    }
+
+    #[test]
+    fn escalate_v2_bare_off_parses_as_true() {
+        assert_eq!(off_of(&["--id", "c-1", "--off"]), Some(true));
+        assert_eq!(off_of(&["--off", "--id", "c-1"]), Some(true));
+    }
+
+    #[test]
+    fn escalate_v2_off_equals_true_clears_and_false_escalates() {
+        assert_eq!(off_of(&["--id", "c-1", "--off=true"]), Some(true));
+        assert_eq!(off_of(&["--id", "c-1", "--off=false"]), Some(false));
+        assert_eq!(off_of(&["--id", "c-1"]), Some(false));
+    }
+
+    #[test]
+    fn escalate_v2_off_clears_an_escalated_cell_without_the_budget_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..4 {
+            let cell = json!({
+                "id": format!("c-{i}"), "feature": "f", "title": "t", "action": "a", "verify": "v",
+                "lane": "standard", "role": "code", "status": "open", "deps": [], "files": [],
+                "escalate": true, "trace": {},
+            });
+            std::fs::write(dir.join(format!("c-{i}.json")), jsjson::stringify_pretty(&cell)).unwrap();
+        }
+        let cleared = set_escalation(root, "c-0", false, None).unwrap();
+        assert!(cleared.get(ESCALATE_FIELD).is_none(), "{cleared}");
+        assert!(!crate::verbs::cells::cell_is_escalated(&cleared));
     }
 }
