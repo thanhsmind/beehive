@@ -171,6 +171,7 @@ One slice, eight cells, two waves.
     "deps": [],
     "decisions": ["8f114141-d74d-463f-b4a6-529c0db32761"],
     "files": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
@@ -178,12 +179,13 @@ One slice, eight cells, two waves.
       "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
     ],
     "read_first": [
-      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
       "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "GitHub issues #131 and #135 (read them with `gh issue view 131` and `gh issue view 135`). Red first; name EVERY new test with `issue_131` or `issue_135`. #131: with phase idle in the main checkout, the intake gate (hooks/write_guard/paths.rs:592) refuses `git fetch` and `git push origin main`. Make `git fetch` (any remote, any flags) read-only-eligible, and make `git push <remote> main` (and `HEAD:main`) bookkeeping-eligible on main. Keep refused: a push of any other ref, `--force`/`-f`/`--mirror`/`--delete`, and every other unmodelled git subcommand. #135: in a granted feature worktree, `git add .bee/config.json` and `git commit` that carries it are refused by the config guard (hooks/write_guard/main.rs, `cannot be modified via the shell`). Staging and committing are not content writes: let `git add`/`git commit` naming .bee/config.json through, while a shell write that changes the file's bytes (redirect, sed -i, tee, cp, mv over it) stays refused. Tests must pin both the newly allowed shapes and the still-refused neighbours. Do not change any other guard. No code comments.",
+    "action": "GitHub issues #131 and #135 (read them with `gh issue view 131` and `gh issue view 135`). Red first; name EVERY new test with `issue_131` or `issue_135`. #131: with phase idle in the main checkout, the intake gate (logic in hooks/write_guard/checks.rs evaluate_git_invocation ~793-934: READONLY ~860, idle_gate_safe_form ~1263, push deny ~873-880; the message only at paths.rs:592) refuses `git fetch` and `git push origin main`. Make `git fetch` (any remote, any flags) read-only-eligible, and make `git push <remote> main` (and `HEAD:main`) bookkeeping-eligible on main. Keep refused and pin with tests: `git push origin main:other`, `git push origin HEAD~1:main`, `git push origin +main`, `--force`/`-f`/`--force-with-lease`/`--mirror`/`--delete`, `git push origin :main`, `git push -o ...`, `git -c x=y push ...`, `git pull`, every other unmodelled git subcommand, and the outward arm that refuses push from a linked worktree (checks.rs ~1033). The existing assertions at write_guard/tests.rs ~1825-1827 and ~2859-2861 pin the old refusal of `git push origin main` on idle main; D1 reverses exactly that, so update those two and only those two. #135: in a granted feature worktree, `git add .bee/config.json` becomes a shell target (guards.rs ~841-868; config.json is not a CLI-store exemption, guards.rs ~66-88) and main.rs ~633-650 denies it (`cannot be modified via the shell`). Reproduce first: `git commit` may add no targets and already pass. Staging and committing are not content writes: let `git add`/`git commit` naming .bee/config.json through, while anything that changes the file's bytes stays refused and is pinned: redirect, sed -i, tee, cp, mv over it, `git checkout -- .bee/config.json`, `git restore`, `git rm`, `git mv`, and a compound `git add .bee/config.json && echo x > .bee/config.json`. Tests must pin both the newly allowed shapes and the still-refused neighbours. Do not change any other guard. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml issue_13",
     "must_haves": {
       "truths": [
@@ -195,7 +197,7 @@ One slice, eight cells, two waves.
         {"path": "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs", "substantive": "fetch and push-main modelled; no TODO stubs"}
       ],
       "key_links": ["each allowed shape has a still-refused neighbour test"],
-      "prohibitions": ["No guard turned off", "No refusal widened beyond the issue's command shapes", "No edit to any existing assertion", "No code comments"]
+      "prohibitions": ["No guard turned off", "No refusal widened beyond the issue's command shapes", "No edit to any existing assertion except the two that pin the old #131 push refusal", "No code comments"]
     },
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
@@ -277,17 +279,20 @@ One slice, eight cells, two waves.
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
       "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
       "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
       "packages/bee-rs/crates/bee/src/catalog.rs"
     ],
     "read_first": [
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
       "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "GitHub issue #134 (`gh issue view 134`). Red first; name EVERY new test with `escalate_v2`, and put them inline in the files this cell owns (not verbs/cells/tests.rs or verbs/drivers/tests.rs, which other work may touch). Two defects: (1) under an approved bee-plan/v2 role plan, an escalated cell gets a `[bee-tier: ceiling]` payload from dispatch prepare, and the model guard refuses it with planned_role_mismatch (model_guard.rs ~811) because only the planned role is accepted. An escalated cell must dispatch: either the guard accepts the escalation marker for a cell whose record says escalated, or prepare emits a payload the guard accepts — pick the one that keeps the planned-role check strict for non-escalated cells. (2) `bee cells escalate --id X --off` is refused as unsupported argument shape, and `--off true` leaves escalate true and re-runs the budget check. Make --off a boolean flag (registry entry for cells.escalate; update the PINNED_FLAG_COUNT pin in catalog.rs only if the distinct flag-name set changes) and make run_escalate (handlers_close.rs:2027) clear the escalation without the budget check. No code comments.",
+    "action": "GitHub issue #134 (`gh issue view 134`). Red first; name EVERY new test with `escalate_v2`, and put them inline in the files this cell owns (not verbs/cells/tests.rs or verbs/drivers/tests.rs, which other work may touch). Two defects: (1) under an approved bee-plan/v2 role plan, an escalated cell gets a `[bee-tier: ceiling]` payload from dispatch prepare, and the model guard refuses it with planned_role_mismatch (model_guard.rs ~811) because only the planned role is accepted. An escalated cell must dispatch: either the guard accepts the escalation marker for a cell whose record says escalated, or prepare emits a payload the guard accepts — pick the one that keeps the planned-role check strict: model_guard.rs ~901-909 compares declared to effective_role, prepare.rs ~2223-2225 emits ceiling from cell_is_escalated (validate.rs:108); accept ceiling ONLY when cell_is_escalated(cell) is true. Pin refused: a non-escalated cell declaring ceiling; a cell with role ceiling but no escalate flag (the self-escalation hole prepare.rs ~2226-2250 names); an escalated cell declaring a third role. (2) `bee cells escalate --id X --off` is refused as unsupported argument shape, and `--off true` leaves escalate true and re-runs the budget check. The registry already types `off` boolean and set_escalation already skips the budget on off (handlers_close.rs ~2005); the fault is that `off` is missing from FLAG_ALONE_BOOLEANS (verbs/reservations/flags.rs ~31-38) and bool_flag maps the string true to false (verbs/cells/util.rs ~127). Reproduce first, then fix both so `--off`, `--off true` and `--off=true` clear the escalation without the budget check; update the PINNED_FLAG_COUNT pin in catalog.rs only if the distinct flag-name set changes. No code comments.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml escalate_v2",
     "must_haves": {
       "truths": [
