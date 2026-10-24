@@ -1183,5 +1183,12 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-24T15:03:24.436Z"
+  },
+  "merge_ready": {
+    "since": "2026-10-24T17:11:27.388Z",
+    "branch": "wt/issue-sweep-1024",
+    "worktree_id": "beehive--wt--issue-sweep-1024",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
