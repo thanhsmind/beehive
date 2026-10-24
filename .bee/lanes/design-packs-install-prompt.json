@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"design-packs-install-prompt\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 882a491; reload the product and test \"design-packs-install-prompt\", then either approve uat (\"bee gate --name uat --approved true --lane design-packs-install-prompt\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-24T12:31:20.246Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: design-packs-install-prompt",
+    "asked_at": "2026-10-24T13:08:53.692Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -553,12 +558,5 @@
   },
   "gate_revoked_at": {
     "execution": "2026-10-24T12:33:42.311Z"
-  },
-  "merge_ready": {
-    "since": "2026-10-24T13:04:10.739Z",
-    "branch": "wt/design-packs-install-prompt",
-    "worktree_id": "beehive--wt--design-packs-install-prompt",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
