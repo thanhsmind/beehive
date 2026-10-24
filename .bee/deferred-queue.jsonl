@@ -948,3 +948,4 @@
 {"ts":"2026-10-24T11:00:46.625Z","event":"complete","id":"cd9ad8b7-74dd-4410-adf5-ddafd864bc9c"}
 {"ts":"2026-10-24T11:00:46.625Z","event":"complete","id":"2d992c04-45dc-498f-b1ca-69cd3e690c5e"}
 {"ts":"2026-10-24T11:01:01.484Z","event":"add","id":"55363015-4589-4f42-bb28-572406c7104e","kind":"promote","feature":"design-os-in-bee","cells":[],"areas":[],"files":["docs/history/design-os-in-bee/promote-proposals.md"],"reason":"Promote proposal for \"design-os-in-bee\" awaiting apply — docs/history/design-os-in-bee/promote-proposals.md."}
+{"ts":"2026-10-24T11:28:50.723Z","event":"add","id":"7efff6af-fb5b-49d0-82ec-d2c077445815","kind":"promote","feature":"release-2-60-0","cells":[],"areas":[],"files":["docs/history/release-2-60-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-60-0\" awaiting apply — docs/history/release-2-60-0/promote-proposals.md."}

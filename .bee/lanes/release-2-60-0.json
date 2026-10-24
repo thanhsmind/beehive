@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"release-2-60-0\" started at phase \"planning\" (lane).",
   "next_action": "Run rel600-1",
   "created_at": "2026-10-24T11:01:55.311Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Mình đang lấy quyền release (deployment dispatch) cho cell release.",
-    "asked_at": "2026-10-24T11:03:09.837Z",
-    "session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "release",
     "lane": "tiny",
