@@ -98,17 +98,17 @@ Risk map:
 
 | Component | Risk | Lands in | Proof needed |
 |---|---|---|---|
-| Intake gate and config guard | HIGH — widens what passes a safety net | iss-1 | red-first test per issue; a test that `git push` of a non-main ref and a shell write to config.json stay refused |
-| Merge auto-commit of the stamp | MEDIUM — writes on main | iss-2 | test that only `.bee-skills-version.json` under a skills root is auto-committed |
-| CLI-shape schema | LOW | iss-3 | test `cells cap --report-file` passes, no report at all still refused |
-| Escalate under v2 | MEDIUM | iss-4 | test payload passes the model guard; `--off` clears |
-| Leader-check directory | LOW | iss-5 | test directory entry passes, unrelated directory refused |
-| Spawn timeout | MEDIUM — external process | iss-6 | test with a fake transport that times out but lists the agent |
-| Worktree state record | MEDIUM | iss-7 | test write then read from a granted worktree hit one record |
-| Doctor design row | LOW | iss-8 | test row present with role and no skill, absent with skill |
+| Intake gate and config guard | HIGH — widens what passes a safety net | isw-1 | red-first test per issue; a test that `git push` of a non-main ref and a shell write to config.json stay refused |
+| Merge auto-commit of the stamp | MEDIUM — writes on main | isw-2 | test that only `.bee-skills-version.json` under a skills root is auto-committed |
+| CLI-shape schema | LOW | isw-3 | test `cells cap --report-file` passes, no report at all still refused |
+| Escalate under v2 | MEDIUM | isw-4 | test payload passes the model guard; `--off` clears |
+| Leader-check directory | LOW | isw-5 | test directory entry passes, unrelated directory refused |
+| Spawn timeout | MEDIUM — external process | isw-6 | test with a fake transport that times out but lists the agent |
+| Worktree state record | MEDIUM | isw-7 | test write then read from a granted worktree hit one record |
+| Doctor design row | LOW | isw-8 | test row present with role and no skill, absent with skill |
 
-Waves: wave 1 runs iss-1, iss-2, iss-3, iss-5, iss-6, iss-7, iss-8 in parallel;
-iss-4 waits on iss-3 because both edit the command registry and the flag pin.
+Waves: wave 1 runs isw-1, isw-2, isw-3, isw-5, isw-6, isw-7, isw-8 in parallel;
+isw-4 waits on isw-3 because both edit the command registry and the flag pin.
 
 ## Role assignments
 
@@ -150,19 +150,19 @@ One slice, eight cells, two waves.
 
 | id | title | files | deps | you see | proof |
 |---|---|---|---|---|---|
-| iss-1 | Let git fetch, a push of main, and config.json staging through the guards | `hooks/write_guard/*` | — | `git fetch` on idle main and `git add .bee/config.json` in a worktree run | `cargo test ... write_guard::` — green:unit |
-| iss-2 | Auto-commit the skills version stamps in worktree merge | `verbs/worktree/merge.rs`, `phases.rs`, `tests.rs` | — | merge after an upgrade no longer deadlocks | `cargo test ... skills_version_stamp` — green:unit |
-| iss-3 | Accept cells cap --report-file in the CLI-shape guard | `hooks/cli_shape.rs`, registry, `catalog.rs` | — | `cells cap --report-file` is no longer refused before bee runs | `cargo test ... report_file` — green:unit |
-| iss-4 | Dispatch escalated cells under v2 plans and let escalate --off clear | `handlers_close.rs`, `drivers/prepare.rs`, `hooks/model_guard.rs`, registry, `catalog.rs` | iss-3 | an escalated cell dispatches; `--off` clears it | `cargo test ... escalate_v2` — green:unit |
-| iss-5 | Count a directory in files_changed as touched in leader-check | `verbs/cells/leader_check.rs` | — | leader-check passes a cell capped with a directory | `cargo test ... leader_check_directory` — green:unit |
-| iss-6 | Report a paseo spawn timeout with a live agent as running | `herding/run.rs` | — | no `spawn_failed` while the agent runs | `cargo test ... spawn_timeout` — green:unit |
-| iss-7 | Resolve one state record for writes and reads in a granted worktree | `state.rs`, `verbs/state_group/store.rs` | — | `bee gate` in a worktree changes what `bee close` there reads | `cargo test ... worktree_state_record` — green:unit |
-| iss-8 | Name a design role with no design skill in bee doctor | `doctor.rs` | — | doctor prints the gap and `--design-packs` | `cargo test ... doctor_design_skill` — green:unit |
+| isw-1 | Let git fetch, a push of main, and config.json staging through the guards | `hooks/write_guard/*` | — | `git fetch` on idle main and `git add .bee/config.json` in a worktree run | `cargo test ... write_guard::` — green:unit |
+| isw-2 | Auto-commit the skills version stamps in worktree merge | `verbs/worktree/merge.rs`, `phases.rs`, `tests.rs` | — | merge after an upgrade no longer deadlocks | `cargo test ... skills_version_stamp` — green:unit |
+| isw-3 | Accept cells cap --report-file in the CLI-shape guard | `hooks/cli_shape.rs`, registry, `catalog.rs` | — | `cells cap --report-file` is no longer refused before bee runs | `cargo test ... report_file` — green:unit |
+| isw-4 | Dispatch escalated cells under v2 plans and let escalate --off clear | `handlers_close.rs`, `drivers/prepare.rs`, `hooks/model_guard.rs`, registry, `catalog.rs` | isw-3 | an escalated cell dispatches; `--off` clears it | `cargo test ... escalate_v2` — green:unit |
+| isw-5 | Count a directory in files_changed as touched in leader-check | `verbs/cells/leader_check.rs` | — | leader-check passes a cell capped with a directory | `cargo test ... leader_check_directory` — green:unit |
+| isw-6 | Report a paseo spawn timeout with a live agent as running | `herding/run.rs` | — | no `spawn_failed` while the agent runs | `cargo test ... spawn_timeout` — green:unit |
+| isw-7 | Resolve one state record for writes and reads in a granted worktree | `state.rs`, `verbs/state_group/store.rs` | — | `bee gate` in a worktree changes what `bee close` there reads | `cargo test ... worktree_state_record` — green:unit |
+| isw-8 | Name a design role with no design skill in bee doctor | `doctor.rs` | — | doctor prints the gap and `--design-packs` | `cargo test ... doctor_design_skill` — green:unit |
 
 ```json
 [
   {
-    "id": "iss-1",
+    "id": "isw-1",
     "feature": "issue-sweep-1024",
     "title": "Let git fetch, a push of main, and config.json staging through the guards",
     "lane": "high-risk",
@@ -202,7 +202,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-2",
+    "id": "isw-2",
     "feature": "issue-sweep-1024",
     "title": "Auto-commit the skills version stamps in worktree merge",
     "lane": "high-risk",
@@ -235,7 +235,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-3",
+    "id": "isw-3",
     "feature": "issue-sweep-1024",
     "title": "Accept cells cap --report-file in the CLI-shape guard",
     "lane": "high-risk",
@@ -267,13 +267,13 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-4",
+    "id": "isw-4",
     "feature": "issue-sweep-1024",
     "title": "Dispatch escalated cells under v2 plans and let escalate --off clear",
     "lane": "high-risk",
     "role": "code",
     "status": "open",
-    "deps": ["iss-3"],
+    "deps": ["isw-3"],
     "decisions": ["8f114141-d74d-463f-b4a6-529c0db32761"],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
@@ -307,7 +307,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-5",
+    "id": "isw-5",
     "feature": "issue-sweep-1024",
     "title": "Count a directory in files_changed as touched in leader-check",
     "lane": "high-risk",
@@ -338,7 +338,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-6",
+    "id": "isw-6",
     "feature": "issue-sweep-1024",
     "title": "Report a paseo spawn timeout with a live agent as running",
     "lane": "high-risk",
@@ -369,7 +369,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-7",
+    "id": "isw-7",
     "feature": "issue-sweep-1024",
     "title": "Resolve one state record for writes and reads in a granted worktree",
     "lane": "high-risk",
@@ -401,7 +401,7 @@ One slice, eight cells, two waves.
     "trace": {"worker": null, "outcome": null, "files_changed": [], "deviations": [], "friction": null, "capped_at": null, "behavior_change": true}
   },
   {
-    "id": "iss-8",
+    "id": "isw-8",
     "feature": "issue-sweep-1024",
     "title": "Name a design role with no design skill in bee doctor",
     "lane": "high-risk",
