@@ -24,7 +24,9 @@ use super::notices::has_prose_outside_block;
 use super::render::{
     render_skill_bytes, runtime_for_target_kind, validate_skill_markers, walk_skill_tree, Walk,
 };
-use super::skills::{blocked_source_identity_skill_sync, compute_skill_sync, SkillSync};
+use super::skills::{
+    blocked_source_identity_skill_sync, compute_design_sync, compute_skill_sync, SkillSync,
+};
 use super::source::{read_source_release_identity, Engine};
 use super::templates as T;
 use super::util::{
@@ -1241,6 +1243,8 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // 7. skill sync (D1-D5, per target)
     let skill_sync = if opts.sync_skills {
         compute_skill_sync(engine, repo_root, opts.global_skills, &design_packs)
+    } else if opts.design_packs.is_some() || recorded_packs.is_some() {
+        compute_design_sync(engine, repo_root, &design_packs)
     } else {
         SkillSync {
             source_root: engine.skills_root.join("bee-hive"),
@@ -1263,8 +1267,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     // Appended AFTER section 7 and computed independently of it: these items
     // read the HOST's `.bee/verify/`, never the engine's skill tree, so
     // nothing a host wrote there can withhold, block or reorder bee's own
-    // install. Gated on the same `sync_skills` switch, because a
-    // `--plugin-source` run installs no skills at all.
+    // install.
     if opts.sync_skills {
         plan.extend(compute_verify_skill_items(repo_root));
     }

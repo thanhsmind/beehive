@@ -42,6 +42,7 @@ param(
   [string]$OwnershipLedger = '',
   [string]$Source = '',
   [string]$Ref = 'main',
+  [string]$DesignPacks = '',
   [switch]$BuildFromSource,
   [switch]$NoHooks,
   [switch]$GlobalSkills,
@@ -543,6 +544,7 @@ try {
   if ($NoClaudeMd) { $onboardFlags += '--no-claude-md' }
   if ($ClaudeMd) { $onboardFlags += '--claude-md' }
   if ($NoStatusline) { $onboardFlags += '--no-statusline' }
+  if ($DesignPacks) { $onboardFlags += @('--design-packs', $DesignPacks) }
   if ($GlobalSkills) { $onboardFlags += '--global-skills' }
 
   if ($PluginStateFile -and -not (Test-Path $PluginStateFile)) { Fail "-PluginStateFile not found: $PluginStateFile" }
@@ -682,6 +684,7 @@ try {
     Write-Host '  - Pi: the bee extension and skills are in place; set a Pi default model first (bee runs plain `pi`)'
   }
   Write-Host '  - scout any time: .bee/bin/bee status --json'
+  @($applyOutput) | Where-Object { $_ -like 'notice: *' } | ForEach-Object { Write-Host $_ }
 } finally {
   if ($cleanupDir -and (Test-Path $cleanupDir)) {
     Remove-Item -Recurse -Force $cleanupDir -ErrorAction SilentlyContinue

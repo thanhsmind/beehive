@@ -33,6 +33,7 @@ Useful flags (same semantics in both scripts):
 | `--no-claude-md`              | `-NoClaudeMd`   | Skip writing/extending CLAUDE.md with the`@AGENTS.md` import (written by default)                                                        |
 | `--claude-md`                 | `-ClaudeMd`     | Accepted for compatibility; a no-op alias of the default (CLAUDE.md is written unless`--no-claude-md`/`-NoClaudeMd` is passed)         |
 | `--no-statusline`             | `-NoStatusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                            |
+| `--design-packs <list\|none>` | `-DesignPacks …` | Design skill packs to install: a comma list of `web`, `charts`, `motion`, `apple`, `figma`, or `none`. Without it, a project with UI files is offered the packs at the end of the install |
 | `--no-hooks`                  | `-NoHooks`      | Skip repo-local hook wiring for Claude Code                                                                                                |
 | `--no-git-init`               | `-NoGitInit`    | Greenfield: don't offer`git init`                                                                                                        |
 | `--source <path>`             | `-Source …`    | Use a local bee checkout instead of cloning                                                                                                |
@@ -176,6 +177,7 @@ Flags:
 | `--no-claude-md`  | Skip writing/extending CLAUDE.md's`@AGENTS.md` import (written by default)                                                                                                          |
 | `--claude-md`     | Accepted for compatibility; a no-op alias of the default                                                                                                                              |
 | `--no-statusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                                                                        |
+| `--design-packs <list\|none>` | Install `bee-design` plus these design skill packs (a comma list of `web`, `charts`, `motion`, `apple`, `figma`) and record the pick; `none` removes them and stops the offer |
 | `--global-skills` | Also sync the legacy global`~/.claude/skills` root (Claude Code only — Codex's `~/.codex/skills` global copy is handled by the install scripts, not this script). Off by default |
 | `--json`          | Machine-readable output                                                                                                                                                               |
 

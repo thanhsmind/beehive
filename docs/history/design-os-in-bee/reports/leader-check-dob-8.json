@@ -1,0 +1,13 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new assertion fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/tests/installer_contracts.rs"},
+    {"requirement": "install.sh --design-packs web onto a sandbox target installs bee-design and bee-design-web and records the pick", "artifact": "scripts/install.sh"},
+    {"requirement": "a target with UI files and no pick shows the design offer in installer output", "artifact": "scripts/install.sh"},
+    {"requirement": "install.ps1 forwards -DesignPacks to onboard", "artifact": "scripts/install.ps1"},
+    {"requirement": "README and INSTALL document the flag", "artifact": "INSTALL.md"},
+    {"requirement": "scripts/install.sh", "artifact": "scripts/install.sh"},
+    {"requirement": "scripts/install.ps1", "artifact": "scripts/install.ps1"},
+    {"requirement": "the flag reaches every onboard call the installer makes (plan, apply, recheck)", "artifact": "scripts/install.sh"}
+  ]
+}
