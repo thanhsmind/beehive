@@ -1,0 +1,11 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "each new test fails first for its own reason", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "a plugin-first apply with a pick writes exactly bee-design and the picked packs and no other skill", "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"},
+    {"requirement": "a plugin-first apply with no pick writes no skill dir", "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"},
+    {"requirement": "repo-copy onboarding behaves as before", "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"},
+    {"requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs", "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"},
+    {"requirement": "plugin-first design targets reuse the dob-3 pick logic", "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"}
+  ]
+}
