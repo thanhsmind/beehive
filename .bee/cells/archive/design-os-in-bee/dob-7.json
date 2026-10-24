@@ -1,0 +1,188 @@
+{
+  "id": "dob-7",
+  "feature": "design-os-in-bee",
+  "title": "Install picked design packs on plugin-first onboarding too",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "572bc11e-0249-4ef8-97ef-a2dc996d4a9b",
+    "1dd050b7-ac07-4227-a39c-7a8d807fd283",
+    "053a14a4-7bac-4462-9b0b-733b80481aa8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "read_first": [
+    "docs/history/design-os-in-bee/plan.md",
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST: write the failing tests in onboard/tests.rs before the code and watch each fail for its own reason.\n\nPlugin-first onboarding sets `sync_skills: !args.plugin_source,` (mod.rs:419), and plan.rs `let skill_sync = if opts.sync_skills {` (:1242) then plans no skill targets at all, so a plugin-first host never receives its picked design packs (owner decision 1dd050b7). Make plugin-first onboarding still plan and apply the DESIGN source only: when sync_skills is false and a pick exists, compute the repo skill-home targets for `bee-design` plus each picked `bee-design-<pack>` from the design root (the same SkillSources pick logic dob-3 added), and prune un-picked `bee-design*` dirs; in plugin-first no other skill is copied, refreshed or removed. With no pick (absent or \"none\"), plugin-first writes and removes nothing design-related except pruning `bee-design*` dirs when the pick is \"none\". Also add `--design-packs <list|none>` to the onboard usage line in router.rs (around the onboard entry, ~:99-101).\n\nTests: plugin-first + --design-packs web --apply writes exactly bee-design and bee-design-web into the repo skill homes and no bee-hive or other bee- skill; plugin-first with no pick writes no skill dir; plugin-first switching web to none removes the design dirs; repo-copy behavior is unchanged (existing dob-3 tests stay green).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "each new test fails first for its own reason",
+      "a plugin-first apply with a pick writes exactly bee-design and the picked packs and no other skill",
+      "a plugin-first apply with no pick writes no skill dir",
+      "repo-copy onboarding behaves as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "design-only skill targets when the general skill copy is off"
+      }
+    ],
+    "key_links": [
+      "plugin-first design targets reuse the dob-3 pick logic"
+    ],
+    "prohibitions": [
+      "Do not copy, refresh or remove any non-design skill in plugin-first",
+      "Do not render design packs into the plugin skill trees",
+      "Do not touch the installer scripts in this cell"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-dob-7",
+    "outcome": "plugin-first onboarding installs bee-design and the picked packs only, prunes un-picked design dirs, touches no other skill",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/router.rs"
+    ],
+    "deviations": [
+      "the no-pick case rides as the first guard step of the pick test, not as its own red-first test — the base already writes no skill dir in plugin-first, so a no-pick test cannot fail first — the plan was wrong about a fact",
+      "compute_design_sync refuses one skill home that resolves outside the repo (per target, no aggregate block), with a unix unit test a_design_only_sync_refuses_a_skill_home_outside_the_repo — without it a symlinked .claude/skills would receive design packs outside the project, which repo-copy already refuses — found a better route",
+      "deleted the plan.rs comment sentence saying a --plugin-source run installs no skills at all — it is now false — something else had to be fixed first",
+      "deleted untracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl left by the full suite run (a dispatch authorize test writes timings under the crate cwd) so a sibling commit cannot sweep it; the test leak itself is not fixed here — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-24T09:23:20.166Z",
+    "behavior_change": true,
+    "verification_evidence": "declared suite, run with cargo already on PATH (the same binary the PATH prefix names) and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 because opencode on PATH is a wrapper on this machine: exit 0, 40 test binaries ok, unit binary 4440 passed 24 ignored 0 failed; red first: plugin_first_installs_the_picked_design_skills_and_no_other_skill failed with .claude/skills [] vs [bee-design, bee-design-web], plugin_first_prunes_dropped_design_skills_and_keeps_every_other_skill failed with bee-design-charts not pruned; the run also compiled dob-8's in-flight installer_contracts.rs edits",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-10-24T09:09:02.100Z",
+    "mistakes": [
+      {
+        "wrong": "redirected the verify log to target-dob-7-verify.log in the tracked worktree root and the scratch-shape guard refused it",
+        "better": "write scratch output to .bee/tmp/dob-7/ from the start",
+        "fix_at": "check"
+      },
+      {
+        "wrong": "ran git add with a sibling worker live in the checkout and the concurrent-worker git guard refused it",
+        "better": "commit with a path-scoped git commit -- <paths> from the start",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "plugin-first onboarding now installs bee-design and the picked packs into the repo skill homes, prunes un-picked bee-design dirs, and touches no other skill; onboard usage names --design-packs",
+      "commit": "17411daa8b6571b83df8f7a9b7591845ade99ecc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/router.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — declared suite, run with cargo already on PATH (the same binary the PATH prefix names) and BEE_OPENCODE_SUITE_ALLOW_SKIP=1 because opencode on PATH is a wrapper on this machine: exit 0, 40 test binaries ok, unit binary 4440 passed 24 ignored 0 failed; red first: plugin_first_installs_the_picked_design_skills_and_no_other_skill failed with .claude/skills [] vs [bee-design, bee-design-web], plugin_first_prunes_dropped_design_skills_and_keeps_every_other_skill failed with bee-design-charts not pruned; the run also compiled dob-8's in-flight installer_contracts.rs edits",
+      "deviations": [
+        "the no-pick case rides as the first guard step of the pick test, not as its own red-first test — the base already writes no skill dir in plugin-first, so a no-pick test cannot fail first — the plan was wrong about a fact",
+        "compute_design_sync refuses one skill home that resolves outside the repo (per target, no aggregate block), with a unix unit test a_design_only_sync_refuses_a_skill_home_outside_the_repo — without it a symlinked .claude/skills would receive design packs outside the project, which repo-copy already refuses — found a better route",
+        "deleted the plan.rs comment sentence saying a --plugin-source run installs no skills at all — it is now false — something else had to be fixed first",
+        "deleted untracked packages/bee-rs/crates/bee/.bee/logs/timings.jsonl left by the full suite run (a dispatch authorize test writes timings under the crate cwd) so a sibling commit cannot sweep it; the test leak itself is not fixed here — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "redirected the verify log to target-dob-7-verify.log in the tracked worktree root and the scratch-shape guard refused it — write scratch output to .bee/tmp/dob-7/ from the start — check",
+        "ran git add with a sibling worker live in the checkout and the concurrent-worker git guard refused it — commit with a path-scoped git commit -- <paths> from the start — check"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each new test fails first for its own reason",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "a plugin-first apply with a pick writes exactly bee-design and the picked packs and no other skill",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          },
+          {
+            "requirement": "a plugin-first apply with no pick writes no skill dir",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "repo-copy onboarding behaves as before",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "plugin-first design targets reuse the dob-3 pick logic",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          }
+        ],
+        "recorded_at": "2026-10-24T09:23:45.292Z",
+        "recorded_by": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pick-writes-exactly-design",
+            "status": "PASS",
+            "evidence": "plan.rs:1246-1247 -> compute_design_sync; skills.rs:831-835; test plugin_first_installs_the_picked_design_skills_and_no_other_skill ok"
+          },
+          {
+            "id": "no-pick-writes-nothing",
+            "status": "PASS",
+            "evidence": "plan.rs:1246 empty SkillSync branch; tests.rs:1532-1535 ok"
+          },
+          {
+            "id": "repo-copy-unchanged",
+            "status": "PASS",
+            "evidence": "plan.rs:1244-1245 unchanged; dob-3 tests ok"
+          },
+          {
+            "id": "reuses-dob3-pick-logic",
+            "status": "PASS",
+            "evidence": "skills.rs:794-798, :826 SkillSources"
+          },
+          {
+            "id": "no-non-design-skill-touched",
+            "status": "PASS",
+            "evidence": "skills.rs:832-834; tests.rs:1552-1562 bee-hive survives"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-24T09:46:39.778Z"
+      }
+    ]
+  }
+}

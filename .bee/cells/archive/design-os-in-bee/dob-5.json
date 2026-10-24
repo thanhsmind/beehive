@@ -1,0 +1,241 @@
+{
+  "id": "dob-5",
+  "feature": "design-os-in-bee",
+  "title": "Add bee design gate, a baseline ratchet over ui gate",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "d5399608-c7db-4184-968f-1f870805a522",
+    "587bcc85-ac38-42a1-87e5-9fae09a85db9",
+    "b99dde04-7232-4139-b09b-a409034e0464",
+    "053a14a4-7bac-4462-9b0b-733b80481aa8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+    "packages/bee/design/bee-design/SKILL.md",
+    "packages/bee/agents/bee-design.md.tmpl",
+    ".claude/agents/bee-design.md",
+    ".opencode/agent/bee-design.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/design-os-in-bee/CONTEXT.md",
+    "docs/history/design-os-in-bee/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/tmp_group.rs",
+    "packages/bee-rs/crates/bee/src/verbs/report.rs",
+    "/mnt/data/Projects/anphabe/anphabe-goglbe/scripts/design-gate.mjs",
+    "packages/bee/design/bee-design/SKILL.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST: write the failing tests before the code and watch each fail for its own reason. Drive the external tool through fakes only: a fake CLI script named by BEE_DESIGN_OS_CLI that prints a canned `ui gate --json` object, and a fake node named by BEE_DESIGN_NODE_BIN that prints a version.\n\n(1) VERB (per D5). Add verbs/design_group.rs with `bee design gate [--write] [--json]`, wired like tmp sweep: `if let Some(code) = tmp_group::try_native(args, t0) {` in verbs/mod.rs gains a design_group sibling; router.rs gains `\"design gate [--write] [--json]\",` beside `\"tmp sweep\",`; add a `design.gate` entry to src/generated/registry_payload.json in the same shape as `tmp.sweep` (name, invoke, surface, description, parameters, examples, deprecated) and keep tests/registry_contracts.rs and the cli-shape guard (hooks/cli_shape.rs) green. Port the field ratchet /mnt/data/Projects/anphabe/anphabe-goglbe/scripts/design-gate.mjs: pages = host config design.pages (a list of globs, read with crate::state::read_config_raw), default every *.html under the repo root skipping hidden dirs, node_modules, target, dist; per page run `npx --yes ease-design@0.6.1 gate <page> --dir . --json` with cwd = repo root, or `<node> <BEE_DESIGN_OS_CLI> gate <page> --dir . --json` when that env var is set (the BEE_GH_BIN pattern in verbs/report.rs); a non-zero exit with JSON on stdout is still a result (the field script does the same). Read data.errorCount, data.warningCount and data.tokenCoverage.overall.coverage (absent coverage = 0). Baseline file .bee/design/gate-baseline.json {version, pages: {<page>: {errors, warnings, coverage}}}, coverage rounded to 4 places. Rules: a page with no baseline entry must have 0 errors; errors may not rise; coverage may not fall. Clean -> one summary line, exit 0. Any regression -> one line per page naming it and the numbers, exit 1. Malformed tool output -> exit 1 naming the page and that the output was not the expected JSON.\n\n(2) WRITE IS A HUMAN ACT. `--write` records the baseline for every page and refuses, writing nothing, while any cell in this repo's store has status claimed (a record with status \"claimed\", as handlers_select.rs reads it), naming the claimed cell ids.\n\n(3) NO NODE (owner answer 1). Before any page, check `node --version` (or BEE_DESIGN_NODE_BIN). Missing, unparsable, or major below 20 -> print exactly `design gate: not run — Node 20 or newer is missing`, write .bee/design/last-run.json {\"status\": \"not-run\", \"reason\": \"node-missing\"}, exit 0. Every run that does run writes .bee/design/last-run.json {\"status\": \"ran\", \"pages\": <n>, \"regressions\": <n>}. This file shape and the exact line are a contract dob-6 reads; do not change them.\n\n(4) SKILL TEXT. In packages/bee/design/bee-design/SKILL.md replace the raw npx call in the Check step (`npx --yes ease-design@0.6.1 gate <page.html> --dir . --json` at :77, and the `ui <command>` note at :41 where it concerns the gate) with `bee design gate`, saying the not-run line is what a Node-less machine prints and that the proof reason must then carry `design gate not run`. Make the same change in packages/bee/agents/bee-design.md.tmpl and in DESIGN_CELL_PREAMBLE (prompt.rs `pub(crate) const DESIGN_CELL_PREAMBLE: &str = \"Design cell:`). Then rewrite the rendered agents with `bee dev regen` using the freshly built binary, and the release manifest with `bee dev release-manifest --write`. Revert any regen change outside this cell's files (.gitattributes, .bee/onboarding.json).\n\nTests: clean pages -> exit 0, one line; error rise -> exit 1 naming the page; coverage fall -> exit 1; new page with errors -> exit 1; new page with 0 errors -> exit 0; malformed output -> exit 1; --write with no claimed cell writes the baseline; --write with a claimed cell refuses and writes nothing; node 18 -> exact not-run line, exit 0, last-run.json not-run; a ran run writes last-run.json ran; design.pages globs limit the pages.",
+  "verify": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "each new test fails first for its own reason",
+      "a clean run exits 0 with one summary line",
+      "an error rise, a coverage fall, or a new page with errors exits 1 naming the page",
+      "--write refuses and writes nothing while any cell is claimed",
+      "a Node-less or Node-below-20 run prints the exact not-run line, writes last-run.json not-run and exits 0",
+      "the core skill, the agent template and the preamble name bee design gate, not the raw npx call",
+      "the registry and cli-shape tests stay green with the new verb"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+        "substantive": "the gate verb: pages, tool run, baseline compare, write guard, Node check, last-run record"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "design.gate entry"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs routes design to design_group",
+      "last-run.json shape and the not-run line match the contract dob-6 reads"
+    ],
+    "prohibitions": [
+      "Do not call the real npx or network in tests",
+      "Do not change the cap path in this cell",
+      "Do not add design skills to any plugin tree"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-dob-5",
+    "outcome": "bee design gate ratchets ui gate results against the baseline, refuses --write while a cell is claimed, records last-run.json, and the design skill, agent and preamble name it",
+    "files_changed": [
+      ".claude/agents/bee-design.md",
+      ".opencode/agent/bee-design.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee/agents/bee-design.md.tmpl",
+      "packages/bee/design/bee-design/SKILL.md"
+    ],
+    "deviations": [
+      "Trimmed the session-preamble command-surface header by 15 characters in packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs (reserved as an additional path under w-dob-5): 'everything at once' to 'all at once' and 'nearly every command also takes' to 'most commands also take'; the D2 read-once words are untouched — the new design group pushed the section to 2610 of its 2600-character budget, and decision 0cd42844 keeps the budget and trims wording instead — something else had to be fixed first",
+      "Pages, gate-baseline.json and last-run.json resolve under the checkout the gate runs in (StoreRoots.work_root), claimed cells under the main store (main_root), and config under the store root — the cell named no root for a linked worktree, and dob-6's design_rule reads last-run.json from both the cells root and the feature worktree, so this matches it — hit an unforeseen obstacle",
+      "The baseline version field records the pinned spec ease-design@0.6.1 instead of running the tool's --version as the field script does — one fewer external call, and npx runs exactly that pin — found a better route",
+      "bee dev regen also rewrote .bee/config.json (add_design_role) besides .gitattributes and .bee/onboarding.json; all three were reverted, none committed — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-24T07:44:38.311Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify in full on the final tree: release-manifest --check matched 562 files, then the whole declared cargo suite exited 0 (4935 passed, 0 failed, 28 ignored; the ignored ones are the suite's own child-process and opt-in tests); run with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 because opencode on PATH on this machine is a wrapper, and with cargo already on PATH instead of the CARGO_HOME PATH prefix because this host guard refuses shell variable expansion; the 13 new design_group tests ran and passed in that run, and each was first seen red against stub bodies (registry_dispatch was also red for design.gate before the verb was wired)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-10-24T07:05:12.090Z",
+    "mistakes": [
+      {
+        "wrong": "The first green run of design_group had one red: the freshly written fake-node script failed to exec (text file busy) while parallel tests forked",
+        "better": "a fixture that writes an executable fake should wait until it runs before the test uses it, ideally one shared fake-binary test helper (verbs/report.rs has the same latent race)",
+        "fix_at": "architecture"
+      }
+    ],
+    "report": {
+      "outcome": "bee design gate ratchets ui gate results against .bee/design/gate-baseline.json (errors may not rise, coverage may not fall, new pages need 0 errors), refuses --write while any cell is claimed, prints the exact not-run line without Node 20 and records last-run.json, and the design skill, bee-design agent and design-cell preamble now name it",
+      "commit": "cb759ede089771423639d28e5250fdcc6df36777",
+      "files": [
+        ".claude/agents/bee-design.md",
+        ".opencode/agent/bee-design.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee/agents/bee-design.md.tmpl",
+        "packages/bee/design/bee-design/SKILL.md"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell verify in full on the final tree: release-manifest --check matched 562 files, then the whole declared cargo suite exited 0 (4935 passed, 0 failed, 28 ignored; the ignored ones are the suite's own child-process and opt-in tests); run with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 because opencode on PATH on this machine is a wrapper, and with cargo already on PATH instead of the CARGO_HOME PATH prefix because this host guard refuses shell variable expansion; the 13 new design_group tests ran and passed in that run, and each was first seen red against stub bodies (registry_dispatch was also red for design.gate before the verb was wired)",
+      "deviations": [
+        "Trimmed the session-preamble command-surface header by 15 characters in packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs (reserved as an additional path under w-dob-5): 'everything at once' to 'all at once' and 'nearly every command also takes' to 'most commands also take'; the D2 read-once words are untouched — the new design group pushed the section to 2610 of its 2600-character budget, and decision 0cd42844 keeps the budget and trims wording instead — something else had to be fixed first",
+        "Pages, gate-baseline.json and last-run.json resolve under the checkout the gate runs in (StoreRoots.work_root), claimed cells under the main store (main_root), and config under the store root — the cell named no root for a linked worktree, and dob-6's design_rule reads last-run.json from both the cells root and the feature worktree, so this matches it — hit an unforeseen obstacle",
+        "The baseline version field records the pinned spec ease-design@0.6.1 instead of running the tool's --version as the field script does — one fewer external call, and npx runs exactly that pin — found a better route",
+        "bee dev regen also rewrote .bee/config.json (add_design_role) besides .gitattributes and .bee/onboarding.json; all three were reverted, none committed — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "The first green run of design_group had one red: the freshly written fake-node script failed to exec (text file busy) while parallel tests forked — a fixture that writes an executable fake should wait until it runs before the test uses it, ideally one shared fake-binary test helper (verbs/report.rs has the same latent race) — architecture"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 527 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "each new test fails first for its own reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "a clean run exits 0 with one summary line",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "an error rise, a coverage fall, or a new page with errors exits 1 naming the page",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "--write refuses and writes nothing while any cell is claimed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "a Node-less or Node-below-20 run prints the exact not-run line, writes last-run.json not-run and exits 0",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "the core skill, the agent template and the preamble name bee design gate, not the raw npx call",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "the registry and cli-shape tests stay green with the new verb",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "verbs/mod.rs routes design to design_group",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+          },
+          {
+            "requirement": "last-run.json shape and the not-run line match the contract dob-6 reads",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+          }
+        ],
+        "recorded_at": "2026-10-24T07:45:11.165Z",
+        "recorded_by": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "clean-run-one-line",
+            "status": "PASS",
+            "evidence": "design_group.rs:220; test ok"
+          },
+          {
+            "id": "regressions-exit-1",
+            "status": "PASS",
+            "evidence": "design_group.rs:140-155; rise, fall, new-page, malformed tests ok"
+          },
+          {
+            "id": "write-refuses-while-claimed",
+            "status": "PASS",
+            "evidence": "design_group.rs:171-183; test ok"
+          },
+          {
+            "id": "node-missing-not-run",
+            "status": "PASS",
+            "evidence": "design_group.rs:14, :185-189; test ok"
+          },
+          {
+            "id": "skill-agent-preamble-name-gate",
+            "status": "PASS",
+            "evidence": "SKILL.md:41-43, :78; bee-design.md.tmpl:21; prompt.rs:45"
+          },
+          {
+            "id": "registry-cli-shape-green",
+            "status": "PASS",
+            "evidence": "registry_contracts 12 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-24T07:50:08.542Z"
+      }
+    ]
+  }
+}

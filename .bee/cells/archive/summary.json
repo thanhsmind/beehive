@@ -1703,5 +1703,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-21T08:30:16.977Z"
+  },
+  "design-os-in-bee": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-10-24T11:01:01.484Z"
   }
 }

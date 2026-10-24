@@ -1,0 +1,166 @@
+{
+  "id": "dob-4",
+  "feature": "design-os-in-bee",
+  "title": "Keep read-only jobs on read-only agents when they ask for the design role",
+  "lane": "high-risk",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "c86c235c-9a7f-418f-9827-e16a8fef6946",
+    "961426b5-5f85-419a-a25f-5a4fdf9e72f8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/design-os-in-bee/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "RED FIRST: write the failing test before the code and watch it fail for its own reason.\n\nSlice 1 added (\"design\", \"bee-design\") to ROLE_AGENTS, so in prepare.rs the non-cell branch `pinned_agent_type(marker_role)` now hands a `--kind gather --role design` or `--kind reviewer --role design` dispatch to bee-design, an agent that writes and caps a cell. Make a non-cell dispatch whose role is design pin the read-only agent of its kind instead: gather -> bee-gather, reviewer -> bee-review; advisor keeps its current agent. `--kind cell` with role design keeps pinning bee-design (contract c86c235c). The model guard must accept each of those payloads (round-trip through the guard as the slice-1 design-pin test does).\n\nTests: gather + role design -> bee-gather; reviewer + role design -> bee-review; cell + role design -> bee-design (unchanged); gather + role read -> unchanged; each payload passes the model guard.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "the new test fails first for its own reason",
+      "a gather dispatch with role design pins bee-gather",
+      "a reviewer dispatch with role design pins bee-review",
+      "a cell dispatch with role design still pins bee-design",
+      "the model guard accepts each payload"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "non-cell design role keeps the read-only agent of its kind"
+      }
+    ],
+    "key_links": [
+      "the cell pin and the non-cell pin read the same role token"
+    ],
+    "prohibitions": [
+      "Do not change the pin for any role other than design",
+      "Do not touch onboard files in this cell"
+    ]
+  },
+  "behavior_change": true,
+  "status": "capped",
+  "trace": {
+    "worker": "w-dob-4",
+    "outcome": "A gather or reviewer dispatch with role design now pins bee-gather or bee-review; a design cell still pins bee-design; each payload passes the model guard",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "ran the verify as plain cargo with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 instead of the PATH-prefixed spelling — the host guard refuses the CARGO_HOME expansion and opencode on PATH is a wrapper — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-24T06:51:42.171Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify over the whole workspace, every target green (bee unit 4402 passed, 0 failed, 24 ignored; every integration target ok); run as plain cargo on PATH because the host guard refuses the CARGO_HOME expansion, with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 for the opencode wrapper on PATH; red first: the new test failed with gather/design pinning bee-design before the prepare.rs change",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml",
+    "claimed_at": "2026-10-24T06:43:46.833Z",
+    "mistakes": [
+      {
+        "wrong": "redirected the suite log to /tmp/dob-4-verify.log from the worktree session and the write guard refused it",
+        "better": "pipe cargo output through rg and never write a file outside the worktree",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "A gather or reviewer dispatch with role design now pins bee-gather or bee-review; a design cell still pins bee-design; each payload passes the model guard",
+      "commit": "ec52fd7af",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --no-fail-fast --manifest-path packages/bee-rs/Cargo.toml — green:unit — the cell verify over the whole workspace, every target green (bee unit 4402 passed, 0 failed, 24 ignored; every integration target ok); run as plain cargo on PATH because the host guard refuses the CARGO_HOME expansion, with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 for the opencode wrapper on PATH; red first: the new test failed with gather/design pinning bee-design before the prepare.rs change",
+      "deviations": [
+        "ran the verify as plain cargo with BEE_OPENCODE_SUITE_ALLOW_SKIP=1 instead of the PATH-prefixed spelling — the host guard refuses the CARGO_HOME expansion and opencode on PATH is a wrapper — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "redirected the suite log to /tmp/dob-4-verify.log from the worktree session and the write guard refused it — pipe cargo output through rg and never write a file outside the worktree — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the new test fails first for its own reason",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "a gather dispatch with role design pins bee-gather",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a reviewer dispatch with role design pins bee-review",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "a cell dispatch with role design still pins bee-design",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "the model guard accepts each payload",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "the cell pin and the non-cell pin read the same role token",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          }
+        ],
+        "recorded_at": "2026-10-24T06:52:06.032Z",
+        "recorded_by": "7968f1f7-8ca3-4827-964e-84b204e4fcdf",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "gather-design-bee-gather",
+            "status": "PASS",
+            "evidence": "prepare.rs:2460; test ok"
+          },
+          {
+            "id": "reviewer-design-bee-review",
+            "status": "PASS",
+            "evidence": "prepare.rs:2461"
+          },
+          {
+            "id": "cell-design-still-bee-design",
+            "status": "PASS",
+            "evidence": "prepare.rs:2458"
+          },
+          {
+            "id": "guard-accepts-each",
+            "status": "PASS",
+            "evidence": "each payload through model_guard::run exits SUCCESS"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-24T07:50:08.541Z"
+      }
+    ]
+  }
+}
