@@ -34,9 +34,15 @@ pack name is refused before anything is written, and the refusal lists the
 valid names (design-os-in-bee D4).
 
 **Picking at install time.** Both installers accept the pick and pass it to
-every onboarding step, so a fresh install can carry it in one run. After a
-successful install the installer shows onboarding's notices, the design offer
-among them. A plugin-based install, which copies no other skill into the
+every onboarding step, so a fresh install can carry it in one run. When no pick
+was given, the installer reads `design_offer` from onboarding's preview — true
+when the project has interface files and no recorded pick, from the same check
+that drives the offer notice. An interactive install then asks the person once
+which packs to add (Enter skips; an unknown name is refused by onboarding
+before anything is written). With `--yes`, with no terminal, or on a dry run it
+asks nothing and prints one plain line naming `--design-packs` (decision
+7cbfad00). After a successful install the installer shows onboarding's
+notices, the design offer among them. A plugin-based install, which copies no other skill into the
 project, still copies the core set and the picked packs, and still removes
 dropped ones (owner decision 1dd050b7).
 
@@ -120,7 +126,9 @@ flowchart TD
   `scripts/sync-design-os.sh`.
 - Pick, install, prune, offer, role upgrade: `packages/bee-rs/crates/bee/src/onboard/`
   (`source.rs` design root, `skills.rs` sources, `plan.rs`, `apply.rs`,
-  `notices.rs`, `templates.rs` `DESIGN_PACKS_OFFER`); flag `--design-packs`;
+  `notices.rs` `design_offer_due`, `templates.rs` `DESIGN_PACKS_OFFER`); flag
+  `--design-packs` (declared in `generated/registry_payload.json`); JSON field
+  `design_offer`;
   host config keys `design.packs`, `design.pages`, `design.ui_globs`.
 - Installers: `scripts/install.sh --design-packs`, `scripts/install.ps1
   -DesignPacks`; plugin-first design copy `compute_design_sync` in
@@ -134,4 +142,4 @@ flowchart TD
 - Close rule: `verbs/cells/design_rule.rs`, called from `handlers_close.rs` and
   `handlers_write.rs`.
 - Decisions: b99dde04, 961426b5, 572bc11e, d5399608, 587bcc85, f4bbb166,
-  c86c235c, 053a14a4.
+  c86c235c, 053a14a4, 7cbfad00.
