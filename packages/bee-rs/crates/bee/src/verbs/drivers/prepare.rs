@@ -2450,17 +2450,16 @@ pub(crate) fn prepare_dispatch_wire(
     // (`ROLE_ALIASES`), renaming an agent no decision moved. Every other
     // dispatch still reads the ASKED token, so `--role extraction` keeps
     // `bee-extract` (B11) and `--kind reviewer` keeps `bee-review`.
-    let design_cell = kind == "cell" && tier_token == "design";
+    let design_role = tier_token == "design";
+    let design_cell = kind == "cell" && design_role;
     let prompt_body =
         if design_cell { format!("{DESIGN_CELL_PREAMBLE}\n\n{prompt_body}") } else { prompt_body };
-    let pinned_type = if design_cell {
-        "bee-design"
-    } else if kind == "cell" {
-        "bee-build"
-    } else if default_gather {
-        "bee-gather"
-    } else {
-        pinned_agent_type(marker_role)
+    let pinned_type = match kind {
+        "cell" if design_role => "bee-design",
+        "cell" => "bee-build",
+        "gather" if default_gather || design_role => "bee-gather",
+        "reviewer" if design_role => "bee-review",
+        _ => pinned_agent_type(marker_role),
     };
     let is_deployment = v2_info
         .as_ref()

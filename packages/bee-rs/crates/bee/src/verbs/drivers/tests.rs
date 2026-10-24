@@ -1081,6 +1081,45 @@ use std::time::Instant;
         }
     }
 
+    #[test]
+    fn a_read_only_job_asking_for_the_design_role_keeps_the_read_only_agent_of_its_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"read":"haiku","design":"sonnet","generation":"sonnet","review":"opus"}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-d.json",
+            r#"{"id":"c-d","feature":"f","title":"design a page","role":"design","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        for (kind, role, cell, agent) in [
+            ("gather", Some("design"), None, "bee-gather"),
+            ("reviewer", Some("design"), None, "bee-review"),
+            ("cell", None, Some("c-d"), "bee-design"),
+            ("gather", Some("read"), None, "bee-extract"),
+        ] {
+            let Prepared::Value(v) = prepare_dispatch_with_role(
+                &root, "claude", kind, role, cell, cell.map(|_| "w"), false, None, None, false, None,
+            )
+            .unwrap() else {
+                panic!("{kind}/{role:?}: expected an envelope")
+            };
+            let payload = v["payload"].clone();
+            assert_eq!(payload["subagent_type"], json!(agent), "{kind}/{role:?}: {v}");
+            let hook_input = json!({"tool_name": "Agent", "tool_input": payload, "cwd": root.to_string_lossy()});
+            let crate::hooks::Outcome::Done(code) = crate::hooks::model_guard::run(&[], &hook_input.to_string())
+            else {
+                panic!("{kind}/{role:?}: the guard delegated")
+            };
+            assert_eq!(code, ExitCode::SUCCESS, "{kind}/{role:?}: the guard refused {payload}");
+            let log = std::fs::read_to_string(root.join(".bee").join("logs").join("dispatch.jsonl")).unwrap();
+            let d: Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+            assert_eq!(d["subagent_type"], json!(agent), "{kind}/{role:?}: {d}");
+            assert!(!d["transport"].as_str().unwrap().ends_with("-repaired"), "{kind}/{role:?}: {d}");
+        }
+    }
+
     /// Measured from a live agent list: every row read `bee-build  Execute
     /// bbp-6` — an id and nothing else. prepare's own description was
     /// `cell (sonnet)`, which work-visibility D2 names a red flag, so nobody
