@@ -3093,7 +3093,7 @@
     },
     {
       "path": "scripts/install.ps1",
-      "sha256": "2ab2a700d51d7e1c2da0d42559eb932909b7869af822ad863e9079e6e7bf0674",
+      "sha256": "1f61675162d3e7cbfbda588596432e5965cfee513181a9d1c58f61adfc787c6b",
       "mode": "644",
       "role": "distribution_tool"
     },

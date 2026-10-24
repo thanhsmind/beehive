@@ -567,11 +567,6 @@ try {
   try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
 
-  # The design packs reach a project only by pick, and onboarding is the one
-  # place that knows whether this project is offered them. Ask once when it is,
-  # and only where a question cannot hang a scripted or dry run; a name the
-  # person typed goes back through onboarding so an unknown pack is refused
-  # before anything is written. bee never picks a pack for the user.
   if (-not $DesignPacks) {
     Push-Location $beeSrc
     try { $previewJson = (& $beeBin onboard --repo-root $Directory --json @onboardFlags) -join "`n" } finally { Pop-Location }
