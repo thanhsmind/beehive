@@ -1723,5 +1723,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-10-27T13:36:50.050Z"
+  },
+  "pi-1-4-capability-audit": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-10-27T14:24:04.647Z"
   }
 }

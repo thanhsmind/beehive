@@ -1,0 +1,169 @@
+{
+  "id": "p14-1",
+  "feature": "pi-1-4-capability-audit",
+  "title": "Support pi 1.4.0 in the bee Pi belt",
+  "lane": "small",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "5345c42d-50e7-426d-a734-568dff58008a",
+    "7bbc7df3-b3ba-45da-9137-09730fbc7b40"
+  ],
+  "files": [
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+    "docs/history/pi-1-4-capability-audit/CONTEXT.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pi-1-4-capability-audit/CONTEXT.md",
+    ".pi/extensions/bee-guard/events.ts",
+    ".pi/extensions/bee-guard/index.ts",
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+    "/home/thanhsmind/.local/share/mise/installs/pi/1.4.0/pi/docs/extensions.md",
+    "/home/thanhsmind/.local/share/mise/installs/pi/1.4.0/pi/CHANGELOG.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+  ],
+  "action": "D1 (red first): in packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs add a contract test that fires before_agent_start with {messageType: custom, message: {...}, systemPrompt: BASE} and NO prompt, on a store where prompt-context would inject (reuse the fixture of the existing test near line 3065 that proves the preamble injection on the first turn). Assert: the handler does not throw, returns no systemPrompt change, logs no UserPromptSubmit activity row, and selfBusy is set so a result drained right after is steered (reuse the turn_starts and await_injections helpers). Run it and watch it fail for the reported reason, then change the before_agent_start handler in .pi/extensions/bee-guard/events.ts: keep the three state assignments before the try; inside, when event.messageType is a string and is not user, return undefined before the preamble, prompt-context and activity work. Keep the user and absent-messageType paths identical in behavior. D2: in the .pi/extensions/bee-guard/index.ts header block change the CEILING line to Pi 1.4.0 and name the live evidence: run pi -p with the prompt Reply with the single word ok, from the worktree root with the belt loaded (it must print ok and no extension error on stderr), and put the exact command plus the date in that line; keep every other version label in the file untouched (the header says why). D3: in docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md update the Last live-evidence version row to 1.4.0 and add a section 1.0.0 to 1.4.0 with one row per changelog item that touches a belt surface, each with keep, adapt or delete: 1.2.0 before_agent_start messageType (adapt, D1, cite events.ts); 1.2.0 run-start busy window for sendUserMessage without deliverAs (keep: result-inbox.ts sendLeaderMessageOutcome catches the throw and resets turnStartPending, name the file and function, mark as re-probe); 1.2.0 before_agent_start also fires on sendMessage with triggerTurn true (keep: the belt only ever passes triggerTurn false); 1.3.0 resumed sessions keep active tools (keep: turn_start captures fullToolSet from getAllTools before getActiveTools, name events.ts); 1.4.0 compaction uses the model output limit (keep: the belt only observes session_before_compact); codemode parallel worker queue and PI_CODEMODE_MAX_WORKERS, published schemas, provider header attribution, model defaults (no belt surface). Update the title and description frontmatter to say 0.84.3 to 1.4.0. Regen: after the belt edit run the full chain in this cell: .bee/bin/bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write) and commit the manifest with the cell. No code comments anywhere except the existing header blocks you edit. One commit, subject in imperative mood, trailer cell: p14-1.",
+  "must_haves": [
+    "new contract test fails before the events.ts change and passes after, both runs quoted in the cap",
+    "before_agent_start with messageType custom injects nothing and logs no UserPromptSubmit activity, but still sets the busy latch",
+    "index.ts header CEILING names Pi 1.4.0 with the live command and date",
+    "audit page frontmatter and body cover 0.84.3 to 1.4.0 with a disposition row per belt-touching changelog item",
+    "pi -p one-shot from the worktree prints ok with no extension error",
+    "release manifest regenerated and bee dev release-manifest --check green"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && pi -p \"Reply with the single word ok\"",
+  "status": "capped",
+  "trace": {
+    "worker": "p14-worker",
+    "outcome": null,
+    "files_changed": [
+      ".pi/extensions/bee-guard/events.ts",
+      ".pi/extensions/bee-guard/index.ts",
+      "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+      "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+      "docs/history/pi-1-4-capability-audit/CONTEXT.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "herding run hit the 1800s ceiling while the worker ran the full crate suite after the narrow verify was green; the leader re-ran the narrow verify and the worker committed on a follow-up prompt",
+      "pi -p one-shot could not print ok: provider returned 402 Insufficient Balance (not a belt fault); the worker guard also refuses pi for a Paseo worker"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-27T14:22:12.738Z",
+    "behavior_change": false,
+    "verification_evidence": "the cargo segment passed 123 of 123 and the manifest segment matched 568 files; the pi -p segment loaded the belt (bee prompt-context hook line printed) but the model call returned 402 Insufficient Balance so it printed no ok; the live 1.4.0 ceiling evidence is the paseo pi 1.4.0 session 01a17d9e that executed this cell through the belt; the full suite runs on CI",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "4694b993-475c-4851-8570-7fc0a93483b0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && pi -p \"Reply with the single word ok\"",
+    "claimed_at": "2026-10-27T13:48:07.501Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "4694b993-475c-4851-8570-7fc0a93483b0",
+        "owner_bypassed": null,
+        "at": "2026-10-27T14:22:12.738Z"
+      },
+      {
+        "verb": "recordLeaderCheck",
+        "forced_by": "4694b993-475c-4851-8570-7fc0a93483b0",
+        "owner_bypassed": null,
+        "at": "2026-10-27T14:23:55.428Z"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "the worker brief named the full crate suite as the proof command and the worker ran it inside a 1800s ceiling",
+        "better": "the brief should name the cell verify line as the cap proof and leave the full suite to CI",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "The Pi belt ignores custom-run before_agent_start events (messageType not user) for prompt-context and activity while still setting the busy latch; a red-then-green contract test proves it; the belt header CEILING and the hook-runtime audit page now cover pi 1.4.0 with one disposition row per belt-touching changelog item; release manifest regenerated.",
+      "commit": "ac876fe5c",
+      "files": [
+        ".pi/extensions/bee-guard/events.ts",
+        ".pi/extensions/bee-guard/index.ts",
+        "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+        "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+        "docs/history/pi-1-4-capability-audit/CONTEXT.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pi_plugin_contracts && .bee/bin/bee dev release-manifest --check && pi -p \"Reply with the single word ok\" — green:unit — the cargo segment passed 123 of 123 and the manifest segment matched 568 files; the pi -p segment loaded the belt (bee prompt-context hook line printed) but the model call returned 402 Insufficient Balance so it printed no ok; the live 1.4.0 ceiling evidence is the paseo pi 1.4.0 session 01a17d9e that executed this cell through the belt; the full suite runs on CI",
+      "deviations": [
+        "herding run hit the 1800s ceiling while the worker ran the full crate suite after the narrow verify was green; the leader re-ran the narrow verify and the worker committed on a follow-up prompt",
+        "pi -p one-shot could not print ok: provider returned 402 Insufficient Balance (not a belt fault); the worker guard also refuses pi for a Paseo worker"
+      ],
+      "mistakes": [
+        "the worker brief named the full crate suite as the proof command and the worker ran it inside a 1800s ceiling — the brief should name the cell verify line as the cap proof and leave the full suite to CI — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "new contract test fails before the events.ts change and passes after, both runs quoted in the cap",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs — red run panicked at line 2755 with got BASE PREAMBLE-MARK DELTA-MARK; green run 1 passed; leader re-run of the whole file: 123 passed 0 failed"
+          },
+          {
+            "requirement": "before_agent_start with messageType custom injects nothing and logs no UserPromptSubmit activity, but still sets the busy latch",
+            "artifact": ".pi/extensions/bee-guard/events.ts — line 240 early return inside the try after the three state assignments; test a_custom_message_run_sets_the_busy_latch_and_injects_nothing asserts empty systemPrompt, one prompt-context and one activity invocation (control only), and a steered delivery"
+          },
+          {
+            "requirement": "index.ts header CEILING names Pi 1.4.0 with the live command and date",
+            "artifact": ".pi/extensions/bee-guard/index.ts — header CEILING Pi 1.4.0, 2026-10-27, session 01a17d9e-85d0-701f-a482-759c1db6a0c6, one-shot re-proof command named"
+          },
+          {
+            "requirement": "audit page frontmatter and body cover 0.84.3 to 1.4.0 with a disposition row per belt-touching changelog item",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md — title/description/timestamp updated, Last live-evidence row 1.4.0, new section The 1.0.0 to 1.4.0 audit with 11 rows (adapt 1, keep 10, delete 0)"
+          },
+          {
+            "requirement": "pi -p one-shot from the worktree prints ok with no extension error",
+            "artifact": "GAP by environment: leader ran pi -p in the worktree; the belt loaded (prompt-context hook line) but the provider returned 402 Insufficient Balance, so no ok was printed; live evidence substituted by the paseo pi 1.4.0 session that executed the cell through the belt; recorded as a deviation on the cap"
+          },
+          {
+            "requirement": "release manifest regenerated and bee dev release-manifest --check green",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json — in commit ac876fe5c; leader run: release_manifest --check: 568 file(s) match stored manifest"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/events.ts",
+            "artifact": ".pi/extensions/bee-guard/events.ts"
+          },
+          {
+            "requirement": ".pi/extensions/bee-guard/index.ts",
+            "artifact": ".pi/extensions/bee-guard/index.ts"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs",
+            "artifact": "packages/bee-rs/crates/bee/tests/pi_plugin_contracts.rs"
+          },
+          {
+            "requirement": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md",
+            "artifact": "docs/knowledge/areas/hook-runtime/pi-version-pin-and-capability-audit.md"
+          },
+          {
+            "requirement": "docs/history/pi-1-4-capability-audit/CONTEXT.md",
+            "artifact": "docs/history/pi-1-4-capability-audit/CONTEXT.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-27T14:23:55.428Z",
+        "recorded_by": "4694b993-475c-4851-8570-7fc0a93483b0",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
