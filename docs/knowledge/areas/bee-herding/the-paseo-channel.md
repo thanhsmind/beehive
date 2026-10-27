@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["claude-read-only D1-D5 (read-only Paseo claude workers: env marker, Claude PreToolUse worker-guard group, mode A/B, fail-closed pre-spawn check, extended matcher)", "paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730", "paseo-leverage D1 a7071d2b", "paseo-leverage D2 906e0b1f (revised by claude-read-only D1; supersedes 168b8037)", "paseo-leverage D3 a7067517", "paseo-leverage D4 33df9d0d", "paseo-leverage D5 89d24cf0", "paseo-leverage D6 1742a721", "paseo-leverage D7 12211a7d", "paseo-leverage D8 28b0b5c2", "paseo-cli-autodetect 03ff4564 (bee resolves the paseo CLI without config: herding.paseo.command, else PASEO_CLI when it names an existing file, else the running daemon's CLI from paseo.pid and that pid's environ or exe directory, else plain paseo)", "paseo-leverage hat-wave refinements 6fc537f6", "paseo-worktree-workspace D1-D6 57793b86 (worktree new registers a Paseo workspace inside Paseo; teardown archives it; herding runs pass --workspace; paseo children drop PASEO_AGENT_ID and PASEO_AGENT_CWD; JSON read past log lines)", "paseo-worker-subagent c09228a8 (the paseo run that starts a worker keeps PASEO_AGENT_ID and PASEO_AGENT_CWD so the worker is the lead's subagent; every other paseo process runs without them; --workspace still rides the run; narrows paseo-worktree-workspace D5)"]
-  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md, docs/history/paseo-worktree-workspace/CONTEXT.md]
+  decisions: ["claude-read-only D1-D5 (read-only Paseo claude workers: env marker, Claude PreToolUse worker-guard group, mode A/B, fail-closed pre-spawn check, extended matcher)", "paseo-pi D1 03c795c7 (Paseo is a new herding channel beside herdr, chosen per team config; herdr panes keep working unchanged)", "paseo-pi D4 9d884211 (each worker on the Paseo channel runs the provider and model that bee team config binds to its role; Paseo only carries the worker)", "paseo-pi D5 b6dd8b33 (on the Paseo channel, an answer goes into the running worker by steering only when the worker's provider can steer; otherwise stop and next round; never interrupt-and-replace)", "paseo-pi D6 83f5caad (the Pi leader on Paseo wakes from a Paseo heartbeat; extension runs the code tick and turns heartbeat into news prompt or short turn; never swallows it)", "paseo-pi D8 2aa8417a (the leader turns its heartbeat on by itself at session start inside Paseo; never a second heartbeat for the same agent)", "paseo-answers D1, D2", "paseo-observe D1, D2", "paseo-pi-hardening D1 9a502af1", "paseo-pi-hardening D2 a8d28361", "paseo-pi-hardening D3 c2a5af66", "paseo-pi-hardening D4 4cb9c644", "paseo-pi-hardening D6 976ef5a5", "paseo-pi-hardening D7 fb38df99", "paseo-pi-hardening D8 f26723a1", "paseo-pi-hardening D10 0a0ef8e7", "herding-leader-toil D1 cb3dc85d", "herding-leader-toil D4 2e46ebbe", "herding-leader-toil D5 8fa9692a", "herding-leader-toil D6 9e018527", "herding-leader-toil D7 e1dcf730", "paseo-leverage D1 a7071d2b", "paseo-leverage D2 906e0b1f (revised by claude-read-only D1; supersedes 168b8037)", "paseo-leverage D3 a7067517", "paseo-leverage D4 33df9d0d", "paseo-leverage D5 89d24cf0", "paseo-leverage D6 1742a721", "paseo-leverage D7 12211a7d", "paseo-leverage D8 28b0b5c2", "paseo-cli-autodetect 03ff4564 (bee resolves the paseo CLI without config: herding.paseo.command, else PASEO_CLI when it names an existing file, else the running daemon's CLI from paseo.pid and that pid's environ or exe directory, else plain paseo)", "paseo-leverage hat-wave refinements 6fc537f6", "paseo-worktree-workspace D1-D6 57793b86 (worktree new registers a Paseo workspace inside Paseo; teardown archives it; herding runs pass --workspace; paseo children drop PASEO_AGENT_ID and PASEO_AGENT_CWD; JSON read past log lines)", "paseo-worker-subagent c09228a8 (the paseo run that starts a worker keeps PASEO_AGENT_ID and PASEO_AGENT_CWD so the worker is the lead's subagent; every other paseo process runs without them; --workspace still rides the run; narrows paseo-worktree-workspace D5)", "paseo-013-compat D1-D7 5477c172 4236f83d ad803822 dc38fecc 5ccde9fb 11719b08 87defaa3 (paseo run --no-wait replaces -d; Paseo CLI 0.12.0 floor at doctor and pre-spawn; bee herding steer sends paseo send --behavior steer --no-wait -- <text> for every provider; paseo_steer_failed on a CLI error; Paseo owns the steer capability check)"]
+  sources: [docs/history/claude-read-only/CONTEXT.md, docs/history/paseo-pi/CONTEXT.md, docs/history/paseo-pi/plan.md, docs/history/paseo-pi-hardening/CONTEXT.md, docs/history/paseo-pi-hardening/plan.md, docs/history/herding-leader-toil/CONTEXT.md, docs/history/herding-leader-toil/plan.md, docs/history/paseo-leverage/CONTEXT.md, docs/history/paseo-leverage/plan.md, docs/history/paseo-worktree-workspace/CONTEXT.md, docs/history/paseo-013-compat/CONTEXT.md]
   authoritative_for: "bee-herding: the Paseo channel, paseo agent block configuration, worker execution, and lifecycle management"
   owns.code: [packages/bee-rs/crates/bee/src/herding/paseo.rs, packages/bee-rs/crates/bee/src/herding/run.rs, packages/bee-rs/crates/bee/src/herding.rs, packages/bee-rs/crates/bee/src/doctor.rs, packages/bee-rs/crates/bee/src/herding/pi_agent_dir.rs, packages/bee-rs/crates/bee/src/herding/paseo_state.rs, packages/bee-rs/crates/bee/src/herding/fork.rs, packages/bee-rs/crates/bee/src/herding/notify.rs]
 ---
@@ -82,7 +82,7 @@ Here is an example configuration:
 
 The command `bee herding run` executes a worker through the Paseo CLI.
 
-The runner executes `paseo run -d --json` with the following arguments:
+The runner executes `paseo run --no-wait --json` with the following arguments. The flag `-d`/`--background` is deprecated since Paseo 0.12.0, so the runner never passes it (paseo-013-compat D1, store `5477c172`).
 - `--provider <provider>[/<model>]`
 - `--cwd <directory>`
 - `--workspace <id>` when the run has a Paseo workspace (see "Worktree workspaces")
@@ -244,14 +244,15 @@ The command builds the cap report from the latest `result-N.json` and git change
 
 The Paseo channel supplies two diagnostic messages with `FIX:` guidance.
 
-When the installed version of Paseo is older than version 0.10.3, the runner refuses to spawn the agent:
+When the installed version of Paseo is older than version 0.12.0, the runner refuses to spawn the agent:
 ```text
-FIX: upgrade paseo to 0.10.3 or newer
+paseo version 0.12.0 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.12.0+)
 ```
+Version 0.12.0 is the first release with `paseo run --no-wait` and `paseo send --behavior steer`. The floor is one number at `bee doctor` and at the pre-spawn checks of `bee herding run` (paseo-013-compat D2 and D5, stores `4236f83d` and `5ccde9fb`).
 
 When `paseo run` fails, the runner asks the daemon for the job's agent with `paseo ls`. When that call fails too, the daemon is down, and the runner refuses with:
 ```text
-FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)
+FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.12.0+)
 ```
 When that call answers, the daemon is up and the agent itself failed (for example `AGENT_CREATE_FAILED`, model not found), and the FIX names the provider and model that `herding.agents.<name>` sets in `.bee/config.json` (open-issues-sweep D4, issue #98).
 
@@ -262,7 +263,7 @@ Two rules hold for every herded worker (open-issues-sweep D3 and D13, issues #10
 On the `pi` runtime, `bee doctor` adds a report-only `paseo_ready` row when any `team.pi` slot configures a Paseo agent (paseo-pi-hardening D7, store `fb38df99`, contract store `28ffec0f`).
 The check verifies these conditions:
 1. The Paseo daemon answers probes.
-2. The CLI version output is valid: the first non-blank stdout line of `paseo --version` must be a bare version number (such as `0.10.3`). The command must not resolve to an AppImage wrapper script. If either check fails, doctor fails with:
+2. The CLI version output is valid: the first non-blank stdout line of `paseo --version` must be a bare version number (such as `0.12.0`). The command must not resolve to an AppImage wrapper script. If either check fails, doctor fails with:
    `FIX: set herding.paseo.command to the npm @getpaseo/cli paseo`
    (herding-leader-toil D6, store `9e018527`, contract store `a79e3edc`).
 3. For each Pi agent with `isolated_config`:
@@ -278,11 +279,11 @@ The doctor row reports findings only and changes no state.
 
 Three environment facts apply from CONTEXT.md:
 
-First, Paseo 0.10.3 is the minimum required version. It supports steering for the Pi provider. Older versions do not support steering.
+First, Paseo 0.12.0 is the minimum required version. It is the first release with `paseo run --no-wait` and `paseo send --behavior steer` (paseo-013-compat D2, store `4236f83d`).
 
-Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon. The AppImage CLI cannot start the daemon, and its `paseo run --json` prints no JSON object, so `bee herding run` fails with `spawn_failed` ("could not parse agent id") while `bee doctor` originally reported `paseo_ready` ok (live run 2026-10-06). Decision 9e018527 (herding-leader-toil D6) adds doctor AppImage checks to detect this condition. When a desktop AppImage wrapper comes first on `PATH`, decision 03ff4564 makes bee skip it and use the CLI of the running daemon. `herding.paseo.command` stays as a deliberate override.
+Second, the npm package `@getpaseo/cli` 0.12.0 can start the daemon. The AppImage CLI cannot start the daemon, and its `paseo run --json` prints no JSON object, so `bee herding run` fails with `spawn_failed` ("could not parse agent id") while `bee doctor` originally reported `paseo_ready` ok (live run 2026-10-06). Decision 9e018527 (herding-leader-toil D6) adds doctor AppImage checks to detect this condition. When a desktop AppImage wrapper comes first on `PATH`, decision 03ff4564 makes bee skip it and use the CLI of the running daemon. `herding.paseo.command` stays as a deliberate override.
 
-Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface. Extensions in `.pi/extensions/` load inside a Paseo Pi agent and receive `PASEO_AGENT_ID`.
+Third, extensions in `.pi/extensions/` load inside a Paseo Pi agent and receive `PASEO_AGENT_ID`.
 
 ## The leader heartbeat and broker timer
 
@@ -346,7 +347,7 @@ FIX: wait for it to finish, then run bee herding run --continue <job>
 
 The runner makes no send call when the agent is busy.
 
-The command `bee herding steer` steers a running turn on Paseo (paseo-answers D2, store `e13feabc`). The steer path depends on the provider of the Paseo agent. For `claude`, `codex`, and `opencode` providers, the command steers through the Paseo daemon helper. This daemon helper requires Node.js and the npm package `@getpaseo/cli`. The helper sends the steer message with `activeTurnBehavior: "steer"`. For a `pi` provider, the command writes a steer file to the mailbox as before. The runner refuses steer requests for other providers with an error and a `FIX:` message. The command never uses `paseo send` to steer because an ordinary send interrupts and replaces a running turn.
+The command `bee herding steer` steers a running turn on Paseo (paseo-answers D2, store `e13feabc`). The command runs `paseo send <agent-id> --behavior steer --no-wait -- <text>` for every provider (paseo-013-compat D3, store `ad803822`). The call goes through the same CLI seam as the other Paseo calls, with a 5 s timeout. The lone `--` separator keeps a text that starts with a dash a positional argument (paseo-013-compat D6, store `11719b08`). Paseo owns the steer capability check, and bee keeps no provider list. A steer that reaches an idle worker opens a new turn; Paseo does not drop it (paseo-013-compat D7, store `87defaa3`). The rule never-interrupt-and-replace still holds (paseo-pi D5, store `b6dd8b33`). A Paseo job never writes a mailbox steer file; a non-Paseo job still writes the mailbox `steer-N.json` file. When `paseo send` returns an error, the command fails with `paseo_steer_failed` and `FIX: check the Paseo daemon`. The code `paseo_steer_unsupported` remains only for a job whose agent has no paseo config (paseo-013-compat D4, store `dc38fecc`).
 
 ## Watching and controlling Paseo workers
 
