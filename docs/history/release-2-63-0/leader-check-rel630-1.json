@@ -1,0 +1,9 @@
+{
+  "schema": "leader-check/1",
+  "answers": [
+    {"requirement": "both plugin manifests report 2.63.0", "artifact": ".claude-plugin/plugin.json and .codex-plugin/plugin.json line 3: \"version\": \"2.63.0\""},
+    {"requirement": "tag v2.63.0 exists locally and on the remote", "artifact": "git tag -l v2.63.0 prints v2.63.0; HEAD = v2.63.0 = origin/main = 00b9011be"},
+    {"requirement": "the GitHub release for v2.63.0 carries the binaries and SHA256SUMS", "artifact": "gh release view v2.63.0: 6 assets (5 binaries + SHA256SUMS)"},
+    {"requirement": "the script printed its final OK line", "artifact": ".bee/mailbox/job-1793087259677-3516293-1/report-1.md:26 release OK bee 2.63.0 is live"}
+  ]
+}
