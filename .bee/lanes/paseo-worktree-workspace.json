@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-27T05:56:21.372Z",
+    "subject": "Đã gỡ xung đột trong worktree. Tôi chạy ghép (merge) lần nữa.",
+    "asked_at": "2026-10-27T06:17:43.583Z",
     "session": "a6a9d2dd-0217-4ac3-8a36-f0d0bf6e6779"
   }
 }
