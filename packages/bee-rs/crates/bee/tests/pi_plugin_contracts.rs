@@ -2683,6 +2683,110 @@ fn the_session_preamble_is_injected_once_and_a_reload_never_re_runs_session_init
     );
 }
 
+/// Pi 1.2.0 widened `before_agent_start` to fire on `pi.sendMessage(...)` with
+/// `triggerTurn: true` too, carrying `messageType: "custom"`, a starting
+/// `message`, and NO `prompt`. A `custom` run is not a user prompt: the
+/// per-turn `prompt-context` delta and the UserPromptSubmit activity row belong
+/// to prompts only. The busy latch does not — a run has begun either way, so a
+/// result drained after it is steered into that run rather than opening one.
+#[cfg(unix)]
+#[test]
+fn a_custom_message_run_sets_the_busy_latch_and_injects_nothing() {
+    node_or_skip!("a_custom_message_run_sets_the_busy_latch_and_injects_nothing");
+
+    let harness_dir = tempfile::tempdir().expect("tempdir for the harness script");
+    let harness = write_harness(harness_dir.path());
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_stub_bee(dir.path(), &StubBehavior::AdvisoryMarks);
+
+    // Control: on THIS store a user prompt does inject, so a silent custom run
+    // cannot be blamed on a fixture that never had anything to inject.
+    const USER_TOKEN: &str = "sess-custom-user";
+    let control = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), USER_TOKEN, "new"),
+            turn_starts(dir.path(), USER_TOKEN),
+        ],
+    );
+    let control_prompt = control.results[1]
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        control_prompt.contains(PREAMBLE_MARK) && control_prompt.contains(DELTA_MARK),
+        "the fixture must inject on a user prompt, got {control_prompt:?} (stderr={})",
+        control.stderr.trim()
+    );
+
+    const TOKEN: &str = "sess-custom-run";
+    let mailbox = job_mailbox(dir.path(), "job-100");
+    write_result(&mailbox, 1, &result_envelope("ok", "the gather landed", "cargo test — green"));
+    write_marker(dir.path(), TOKEN, "job-100", &mailbox, Some("cell-7"));
+
+    let run = run_harness(
+        &harness,
+        vec![
+            session_start(dir.path(), TOKEN, "new"),
+            advisory_call(
+                "before_agent_start",
+                dir.path(),
+                TOKEN,
+                json!({
+                    "messageType": "custom",
+                    "message": {"customType": "bee-stage-tools", "content": "stage notice"},
+                    "systemPrompt": "BASE",
+                }),
+            ),
+            await_injections(1),
+        ],
+    );
+
+    let custom = &run.results[1];
+    assert!(!custom.threw, "a custom run must not throw from the belt: {custom:?}");
+    let injected = custom
+        .result
+        .as_ref()
+        .and_then(|r| r.get("systemPrompt"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        injected.is_empty() && !injected.contains(PREAMBLE_MARK) && !injected.contains(DELTA_MARK),
+        "a run started by a custom message carries no prompt, so the preamble and the per-turn \
+         delta must NOT ride it: got {injected:?}"
+    );
+    assert_eq!(
+        count_invocations(dir.path(), "prompt-context"),
+        1,
+        "prompt-context is the per-turn PROMPT delta — it ran once for the control prompt and must \
+         not run for the custom run: invocations={:?}",
+        stub_invocations(dir.path())
+    );
+    assert_eq!(
+        count_invocations(dir.path(), "activity"),
+        1,
+        "a custom run is not a UserPromptSubmit — only the control prompt logs one: \
+         invocations={:?}",
+        stub_invocations(dir.path())
+    );
+
+    assert_eq!(
+        run.messages.len(),
+        1,
+        "the result written before the custom run must be delivered once, got {:?} (stderr={})",
+        run.messages,
+        run.stderr.trim()
+    );
+    assert!(
+        run.messages[0].steered(),
+        "a custom run IS a turn in flight (D1): `selfBusy` must be set from it alone, so the result \
+         is STEERED rather than opening a second turn — got options {:?}",
+        run.messages[0].options
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn a_reload_with_a_fresh_module_scope_keeps_belt_state_and_one_drain_timer() {
