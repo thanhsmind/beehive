@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Release đã xong. Tôi đang ghi bằng chứng (proof) để đóng việc này trong bee.",
-    "asked_at": "2026-10-27T08:02:06.461Z",
-    "session": "a6a9d2dd-0217-4ac3-8a36-f0d0bf6e6779"
+    "kind": "question",
+    "subject": "Paseo 0.13.2 compat: fix run -d only, or also move steer to paseo send --behavior steer",
+    "asked_at": "2026-10-27T13:00:55.811Z",
+    "session": "80478409-d636-4470-9ad5-34b1f2403b58"
   }
 }

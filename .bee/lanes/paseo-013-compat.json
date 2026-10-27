@@ -1,0 +1,600 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-013-compat",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-013-compat\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-27T13:04:34.160Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems",
+      "covered-contract-change",
+      "proof-weakening"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-10-27T13:04:59.430Z",
+    "feature": "paseo-013-compat"
+  },
+  "gate_preview": {
+    "feature": "paseo-013-compat",
+    "plan_sha256": "4ad49f8463bee52abc5323c37dbee073e71b63421c2f11e6b1e685853ebc2caa",
+    "previewed_at": "2026-10-27T13:15:09.786Z",
+    "cells": [
+      {
+        "id": "p13-1",
+        "feature": "paseo-013-compat",
+        "title": "Spawn with --no-wait, require Paseo 0.12.0 everywhere, steer through paseo send",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "5477c172",
+          "4236f83d",
+          "ad803822",
+          "dc38fecc",
+          "5ccde9fb",
+          "11719b08",
+          "87defaa3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/tests.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs"
+        ],
+        "read_first": [
+          "docs/history/paseo-013-compat/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "A. Run flag, per D1 (store 5477c172). In herding/paseo.rs `run_argv`, replace the token `\"-d\".to_string(),` (second element of the initial argv vec, right after `\"run\".to_string(),`) with `\"--no-wait\".to_string(),`. Update the three run_argv unit tests that pin it — `rg -n '\"-d\",' packages/bee-rs/crates/bee/src/herding/paseo.rs` hits `1239:                \"-d\",`, `1268:                \"-d\",`, `1306:                \"-d\",` — to expect `\"--no-wait\",`. B. Steer argv, per D3 (store ad803822) and D6 (store 11719b08). Directly below `send_argv` in paseo.rs add `pub fn send_steer_argv(id: &str, text: &str) -> Vec<String>` returning exactly [send, <id>, --behavior, steer, --no-wait, --, <text>] and add that shape to the existing `new_argv_builders_produce_expected_tokens` test. C. Version floor, per D2 (store 4236f83d) and D5 (store 5ccde9fb): every Paseo floor becomes 0.12.0. doctor.rs: the tuple at `} else if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {` becomes (0, 12, 0); the two `upgrade to 0.10.3 with npm @getpaseo/cli` FIX strings and the ok detail `version >= 0.10.3` say 0.12.0. herding/run.rs: both `Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),` sites (near the spawn and the continue path) become (0, 12, 0); the refusal strings `paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)` (two sites) and `start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)` say 0.12.0. Tests: in run.rs the ~42 fixtures `Ok(\"0.10.3\\n\")` become `Ok(\"0.12.0\\n\")` (one bulk replace) and the asserts `assert!(msg.contains(\"0.10.3\"));` (two sites) and `...(npm @getpaseo/cli 0.10.3+)\"))` say 0.12.0; in doctor/tests.rs every `version_out: Ok(\"0.10.3\"...)` fixture (13 sites, including the AppImage string `[desktop] app startup { version: '0.10.3' }\\n0.10.3`) becomes 0.12.0, the old-version fixture `version_out: Ok(\"0.10.2\".to_string()),` becomes 0.11.4, and the two `.contains(\"upgrade to 0.10.3 with npm @getpaseo/cli\")` asserts say 0.12.0. Afterwards `rg -n '0\\.10\\.3' packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/doctor/tests.rs` must print nothing (paseo.rs's own `version_at_least_checks_semver` test may keep its 0.10.3 sample strings). D. Steer verb, per D3, D4 (store dc38fecc) and D7 (store 87defaa3). In herding/job_verbs.rs change `steer_job_with` to take `paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>` instead of `runner: &dyn crate::herding::paseo_steer::SteerRunner`; `steer_job` (hit `steer_job_with(main_root, job_id, text, &crate::herding::paseo_steer::RealSteerRunner)`) passes None. Inside the `is_paseo` branch keep the two `paseo_steer_unsupported` refusals (unreadable or missing paseo config) and the `paseo_steer_failed` refusal for a missing `paseo_agent_id`; delete the `if spec.provider != \"pi\"` split, the `steerable` check (hit `if !crate::herding::paseo_steer::steerable(&spec.provider) {`), the `cli_package_dir` lookup and the `runner.steer(...)` call. In their place, for EVERY provider: resolve the CLI lazily exactly as `interrupt` does (hit `real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));` — `Some(c)` uses it, `None` builds from `crate::herding::paseo::paseo_command(&cfg)` with a 5 s timeout, `cfg` is already read in this branch), call `cli.call(&crate::herding::paseo::send_steer_argv(paseo_agent_id, text))`, map Err to code `paseo_steer_failed` with message `herding steer: paseo steer failed: {e}. FIX: check the Paseo daemon`, and `return Ok(next_n)` — a Paseo job never writes the mailbox steer file. The non-Paseo path (the `steer_obj` / `steer-{next_n}.json` write) stays byte-for-byte. Delete `packages/bee-rs/crates/bee/src/herding/paseo_steer.rs` and `paseo_steer.mjs`, and remove `pub(crate) mod paseo_steer;` from herding.rs. Tests in job_verbs.rs: delete `FakeSteerRunner` and `setup_fake_cli` (hits `struct FakeSteerRunner {`, `impl crate::herding::paseo_steer::SteerRunner for FakeSteerRunner {`, `fn setup_fake_cli(tmp: &Path)`); reuse the in-file `FakePaseoCli` (hit `struct FakePaseoCli {`, with `calls` and a settable `result`) and rewrite the four steer tests (`steer_job_with_fake_runner_for_claude`, `steer_job_with_fake_runner_for_pi`, `steer_job_with_unknown_provider`, `steer_job_with_runner_error`) into: a pi Paseo job and a claude Paseo job each make exactly one call equal to `send_steer_argv(agent_id, text)` and write no `steer-1.json`; a provider name bee has never seen (e.g. `omp`) makes the same single call (no allow-list); a failing CLI yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; a job whose agent has no paseo config yields `paseo_steer_unsupported` (new case — today no test covers it). `steer_writes_text_verbatim_as_numbered_files` in herding/tests.rs (non-Paseo job) stays green; adjust only its call site if the signature forces it. Afterwards `rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)' packages/bee-rs/crates/bee/src` must print nothing (the error codes paseo_steer_failed / paseo_steer_unsupported stay). No code comments anywhere.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && ! rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)|0\\.10\\.3' packages/bee-rs/crates/bee/src/herding/job_verbs.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/herding.rs packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "must_haves": {
+          "truths": [
+            "run_argv starts with run, --no-wait, --json and never carries -d",
+            "send_steer_argv(id, text) is [send, id, --behavior, steer, --no-wait, --, text]",
+            "bee doctor and bee herding run refuse a Paseo CLI older than 0.12.0 with a FIX line naming 0.12.0 and accept 0.12.0 and 0.13.2",
+            "bee herding steer on a Paseo job of any provider makes one paseo send call equal to send_steer_argv and writes no mailbox steer file",
+            "a paseo send error yields paseo_steer_failed with FIX: check the Paseo daemon",
+            "a job whose agent has no paseo config yields paseo_steer_unsupported",
+            "a non-Paseo job still writes steer-N.json verbatim and makes no CLI call",
+            "no file under src refers to the paseo_steer module"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "run_argv uses --no-wait; send_steer_argv exists with a unit test"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "both floors (0, 12, 0) and the three FIX strings name 0.12.0; fixtures moved"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+              "substantive": "floor tuple (0, 12, 0) and FIX/ok strings name 0.12.0"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+              "substantive": "steer_job_with takes Option<&dyn PaseoCli>, builds the real CLI lazily with 5 s, calls send_steer_argv; fake-CLI tests cover pi, claude, unknown provider, error and no-config"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+              "substantive": "deleted"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs",
+              "substantive": "deleted"
+            }
+          ],
+          "key_links": [
+            "job_verbs.rs steer path calls crate::herding::paseo::send_steer_argv",
+            "herding.rs no longer declares mod paseo_steer",
+            "doctor.rs and run.rs call version_at_least with (0, 12, 0)"
+          ],
+          "prohibitions": [
+            "no change to send_argv, logs_argv, permit_argv, the wait loop or the non-Paseo mailbox steer file format",
+            "no change to the semver sample strings inside paseo.rs's version_at_least_checks_semver test",
+            "no change outside the nine listed files"
+          ]
+        },
+        "trace": {
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "p13-2",
+        "feature": "paseo-013-compat",
+        "title": "Document the --no-wait spawn, the 0.12.0 floor and the CLI steer",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "5477c172",
+          "4236f83d",
+          "ad803822",
+          "dc38fecc",
+          "5ccde9fb",
+          "11719b08",
+          "87defaa3"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-013-compat/CONTEXT.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Update docs/knowledge/areas/bee-herding/the-paseo-channel.md from the locked decisions in CONTEXT.md, in ASD-STE100 style like the rest of the file. (1) The line `The runner executes `paseo run -d --json` with the following arguments:` becomes `paseo run --no-wait --json`; add one sentence: `-d`/`--background` is deprecated since Paseo 0.12.0 (D1, store 5477c172). (2) Every `0.10.3` mention (`rg -n '0\\.10\\.3' docs/knowledge/areas/bee-herding/the-paseo-channel.md`: the spawn refusal text and its FIX line, the daemon-down FIX line, the doctor bare-version example, the paragraph `First, Paseo 0.10.3 is the minimum required version. It supports steering for the Pi provider.` and the paragraph `Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon.`) becomes 0.12.0, with the reason: 0.12.0 is the first release with `paseo run --no-wait` and `paseo send --behavior steer`, and the floor is one number at doctor and at the pre-spawn check (D2 store 4236f83d, D5 store 5ccde9fb). (3) Rewrite the `bee herding steer` paragraph (the one containing `This daemon helper requires Node.js and the npm package `@getpaseo/cli`.`): the command runs `paseo send <agent-id> --behavior steer --no-wait -- <text>` for every provider through the same CLI seam as the other calls with a 5 s timeout; the `--` separator keeps text that starts with a dash a positional (D6 store 11719b08); Paseo owns the capability check and a steer that reaches an idle worker opens a new turn, it is not dropped (D7 store 87defaa3); a Paseo job never writes a mailbox steer file; a CLI error yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; `paseo_steer_unsupported` remains only for a job whose agent has no paseo config (D3 store ad803822, D4 store dc38fecc). Remove every mention of the Node helper, `activeTurnBehavior`, the WebSocket interface and the provider allow-list. (4) Delete or rewrite the paragraph `Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface.` — keep its last sentence about `.pi/extensions/` receiving `PASEO_AGENT_ID`. (5) Add the seven store ids (5477c172, 4236f83d, ad803822, dc38fecc, 5ccde9fb, 11719b08, 87defaa3) to the frontmatter `decisions` list as one `paseo-013-compat D1-D7` entry and `docs/history/paseo-013-compat/CONTEXT.md` to `sources`. Do not edit any other file.",
+        "verify": "! rg -n '0\\.10\\.3|paseo run -d|daemon helper|Node\\.js|activeTurnBehavior|has no steer flag|WebSocket interface' docs/knowledge/areas/bee-herding/the-paseo-channel.md && rg -q 'paseo-013-compat' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "must_haves": {
+          "truths": [
+            "the channel doc names paseo run --no-wait, the 0.12.0 floor at doctor and pre-spawn, and paseo send --behavior steer with the -- separator for every provider",
+            "the channel doc no longer names the Node helper, 0.10.3, the WebSocket interface or a pi-only steer file"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "run argv, version floor and steer paragraphs rewritten; frontmatter cites paseo-013-compat D1-D7 and its CONTEXT.md"
+            }
+          ],
+          "key_links": [
+            "frontmatter decisions list carries the seven paseo-013-compat store ids"
+          ],
+          "prohibitions": [
+            "no edit outside the channel doc"
+          ]
+        },
+        "trace": {
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p13-1 changes Rust argv builders, every version floor and the steer verb."
+        },
+        {
+          "stage": "test-authoring",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cell."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p13-2 updates the Paseo channel concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-27T13:15:42.584Z",
+    "feature": "paseo-013-compat",
+    "newest_decision_id": "87defaa3-e8fc-4b52-860b-5058f1639538",
+    "plan_sha256": "4ad49f8463bee52abc5323c37dbee073e71b63421c2f11e6b1e685853ebc2caa",
+    "advisor": "hat wave: hat-facts-gaps, hat-alternatives, hat-user-impact (opus advisor)",
+    "digest_head": "# Plan check — hat wave synthesis (paseo-013-compat)\n\nPLAN CHECK\nWork: current slice (p13-1 code, p13-2 docs)\n\nSeats: hat-facts-gaps, hat-alternatives, hat-user-impact (opus, advisor kind), 2026-10-27.\n\nSTRUCTURE\nBLOCKERS (all fixed in plan.md rev 2):\n- Coverage: a second Paseo version floor in `herding/run.rs` (two `version_at_least(&out, (0, 10, 3))` sites, three 0.10.3 FIX strings, ~42 fixtures) had no owner — folded into p13-1; new decision D5 (`5ccde9fb`).\n- Testable exit: the `paseo_steer`"
+  },
+  "approved_cell_packet": {
+    "feature": "paseo-013-compat",
+    "plan_sha256": "4ad49f8463bee52abc5323c37dbee073e71b63421c2f11e6b1e685853ebc2caa",
+    "previewed_at": "2026-10-27T13:15:09.786Z",
+    "cells": [
+      {
+        "id": "p13-1",
+        "feature": "paseo-013-compat",
+        "title": "Spawn with --no-wait, require Paseo 0.12.0 everywhere, steer through paseo send",
+        "lane": "standard",
+        "role": "code",
+        "deps": [],
+        "decisions": [
+          "5477c172",
+          "4236f83d",
+          "ad803822",
+          "dc38fecc",
+          "5ccde9fb",
+          "11719b08",
+          "87defaa3"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/run.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/herding.rs",
+          "packages/bee-rs/crates/bee/src/herding/tests.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs",
+          "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+          "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs"
+        ],
+        "read_first": [
+          "docs/history/paseo-013-compat/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+          "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+          "packages/bee-rs/crates/bee/src/doctor.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "A. Run flag, per D1 (store 5477c172). In herding/paseo.rs `run_argv`, replace the token `\"-d\".to_string(),` (second element of the initial argv vec, right after `\"run\".to_string(),`) with `\"--no-wait\".to_string(),`. Update the three run_argv unit tests that pin it — `rg -n '\"-d\",' packages/bee-rs/crates/bee/src/herding/paseo.rs` hits `1239:                \"-d\",`, `1268:                \"-d\",`, `1306:                \"-d\",` — to expect `\"--no-wait\",`. B. Steer argv, per D3 (store ad803822) and D6 (store 11719b08). Directly below `send_argv` in paseo.rs add `pub fn send_steer_argv(id: &str, text: &str) -> Vec<String>` returning exactly [send, <id>, --behavior, steer, --no-wait, --, <text>] and add that shape to the existing `new_argv_builders_produce_expected_tokens` test. C. Version floor, per D2 (store 4236f83d) and D5 (store 5ccde9fb): every Paseo floor becomes 0.12.0. doctor.rs: the tuple at `} else if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {` becomes (0, 12, 0); the two `upgrade to 0.10.3 with npm @getpaseo/cli` FIX strings and the ok detail `version >= 0.10.3` say 0.12.0. herding/run.rs: both `Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),` sites (near the spawn and the continue path) become (0, 12, 0); the refusal strings `paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)` (two sites) and `start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)` say 0.12.0. Tests: in run.rs the ~42 fixtures `Ok(\"0.10.3\\n\")` become `Ok(\"0.12.0\\n\")` (one bulk replace) and the asserts `assert!(msg.contains(\"0.10.3\"));` (two sites) and `...(npm @getpaseo/cli 0.10.3+)\"))` say 0.12.0; in doctor/tests.rs every `version_out: Ok(\"0.10.3\"...)` fixture (13 sites, including the AppImage string `[desktop] app startup { version: '0.10.3' }\\n0.10.3`) becomes 0.12.0, the old-version fixture `version_out: Ok(\"0.10.2\".to_string()),` becomes 0.11.4, and the two `.contains(\"upgrade to 0.10.3 with npm @getpaseo/cli\")` asserts say 0.12.0. Afterwards `rg -n '0\\.10\\.3' packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/doctor/tests.rs` must print nothing (paseo.rs's own `version_at_least_checks_semver` test may keep its 0.10.3 sample strings). D. Steer verb, per D3, D4 (store dc38fecc) and D7 (store 87defaa3). In herding/job_verbs.rs change `steer_job_with` to take `paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>` instead of `runner: &dyn crate::herding::paseo_steer::SteerRunner`; `steer_job` (hit `steer_job_with(main_root, job_id, text, &crate::herding::paseo_steer::RealSteerRunner)`) passes None. Inside the `is_paseo` branch keep the two `paseo_steer_unsupported` refusals (unreadable or missing paseo config) and the `paseo_steer_failed` refusal for a missing `paseo_agent_id`; delete the `if spec.provider != \"pi\"` split, the `steerable` check (hit `if !crate::herding::paseo_steer::steerable(&spec.provider) {`), the `cli_package_dir` lookup and the `runner.steer(...)` call. In their place, for EVERY provider: resolve the CLI lazily exactly as `interrupt` does (hit `real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));` — `Some(c)` uses it, `None` builds from `crate::herding::paseo::paseo_command(&cfg)` with a 5 s timeout, `cfg` is already read in this branch), call `cli.call(&crate::herding::paseo::send_steer_argv(paseo_agent_id, text))`, map Err to code `paseo_steer_failed` with message `herding steer: paseo steer failed: {e}. FIX: check the Paseo daemon`, and `return Ok(next_n)` — a Paseo job never writes the mailbox steer file. The non-Paseo path (the `steer_obj` / `steer-{next_n}.json` write) stays byte-for-byte. Delete `packages/bee-rs/crates/bee/src/herding/paseo_steer.rs` and `paseo_steer.mjs`, and remove `pub(crate) mod paseo_steer;` from herding.rs. Tests in job_verbs.rs: delete `FakeSteerRunner` and `setup_fake_cli` (hits `struct FakeSteerRunner {`, `impl crate::herding::paseo_steer::SteerRunner for FakeSteerRunner {`, `fn setup_fake_cli(tmp: &Path)`); reuse the in-file `FakePaseoCli` (hit `struct FakePaseoCli {`, with `calls` and a settable `result`) and rewrite the four steer tests (`steer_job_with_fake_runner_for_claude`, `steer_job_with_fake_runner_for_pi`, `steer_job_with_unknown_provider`, `steer_job_with_runner_error`) into: a pi Paseo job and a claude Paseo job each make exactly one call equal to `send_steer_argv(agent_id, text)` and write no `steer-1.json`; a provider name bee has never seen (e.g. `omp`) makes the same single call (no allow-list); a failing CLI yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; a job whose agent has no paseo config yields `paseo_steer_unsupported` (new case — today no test covers it). `steer_writes_text_verbatim_as_numbered_files` in herding/tests.rs (non-Paseo job) stays green; adjust only its call site if the signature forces it. Afterwards `rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)' packages/bee-rs/crates/bee/src` must print nothing (the error codes paseo_steer_failed / paseo_steer_unsupported stay). No code comments anywhere.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && ! rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)|0\\.10\\.3' packages/bee-rs/crates/bee/src/herding/job_verbs.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/herding.rs packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "must_haves": {
+          "truths": [
+            "run_argv starts with run, --no-wait, --json and never carries -d",
+            "send_steer_argv(id, text) is [send, id, --behavior, steer, --no-wait, --, text]",
+            "bee doctor and bee herding run refuse a Paseo CLI older than 0.12.0 with a FIX line naming 0.12.0 and accept 0.12.0 and 0.13.2",
+            "bee herding steer on a Paseo job of any provider makes one paseo send call equal to send_steer_argv and writes no mailbox steer file",
+            "a paseo send error yields paseo_steer_failed with FIX: check the Paseo daemon",
+            "a job whose agent has no paseo config yields paseo_steer_unsupported",
+            "a non-Paseo job still writes steer-N.json verbatim and makes no CLI call",
+            "no file under src refers to the paseo_steer module"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+              "substantive": "run_argv uses --no-wait; send_steer_argv exists with a unit test"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+              "substantive": "both floors (0, 12, 0) and the three FIX strings name 0.12.0; fixtures moved"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+              "substantive": "floor tuple (0, 12, 0) and FIX/ok strings name 0.12.0"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+              "substantive": "steer_job_with takes Option<&dyn PaseoCli>, builds the real CLI lazily with 5 s, calls send_steer_argv; fake-CLI tests cover pi, claude, unknown provider, error and no-config"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+              "substantive": "deleted"
+            },
+            {
+              "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs",
+              "substantive": "deleted"
+            }
+          ],
+          "key_links": [
+            "job_verbs.rs steer path calls crate::herding::paseo::send_steer_argv",
+            "herding.rs no longer declares mod paseo_steer",
+            "doctor.rs and run.rs call version_at_least with (0, 12, 0)"
+          ],
+          "prohibitions": [
+            "no change to send_argv, logs_argv, permit_argv, the wait loop or the non-Paseo mailbox steer file format",
+            "no change to the semver sample strings inside paseo.rs's version_at_least_checks_semver test",
+            "no change outside the nine listed files"
+          ]
+        },
+        "trace": {
+          "behavior_change": true
+        }
+      },
+      {
+        "id": "p13-2",
+        "feature": "paseo-013-compat",
+        "title": "Document the --no-wait spawn, the 0.12.0 floor and the CLI steer",
+        "lane": "standard",
+        "role": "docs",
+        "deps": [],
+        "decisions": [
+          "5477c172",
+          "4236f83d",
+          "ad803822",
+          "dc38fecc",
+          "5ccde9fb",
+          "11719b08",
+          "87defaa3"
+        ],
+        "files": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "read_first": [
+          "docs/history/paseo-013-compat/CONTEXT.md",
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+        ],
+        "action": "Update docs/knowledge/areas/bee-herding/the-paseo-channel.md from the locked decisions in CONTEXT.md, in ASD-STE100 style like the rest of the file. (1) The line `The runner executes `paseo run -d --json` with the following arguments:` becomes `paseo run --no-wait --json`; add one sentence: `-d`/`--background` is deprecated since Paseo 0.12.0 (D1, store 5477c172). (2) Every `0.10.3` mention (`rg -n '0\\.10\\.3' docs/knowledge/areas/bee-herding/the-paseo-channel.md`: the spawn refusal text and its FIX line, the daemon-down FIX line, the doctor bare-version example, the paragraph `First, Paseo 0.10.3 is the minimum required version. It supports steering for the Pi provider.` and the paragraph `Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon.`) becomes 0.12.0, with the reason: 0.12.0 is the first release with `paseo run --no-wait` and `paseo send --behavior steer`, and the floor is one number at doctor and at the pre-spawn check (D2 store 4236f83d, D5 store 5ccde9fb). (3) Rewrite the `bee herding steer` paragraph (the one containing `This daemon helper requires Node.js and the npm package `@getpaseo/cli`.`): the command runs `paseo send <agent-id> --behavior steer --no-wait -- <text>` for every provider through the same CLI seam as the other calls with a 5 s timeout; the `--` separator keeps text that starts with a dash a positional (D6 store 11719b08); Paseo owns the capability check and a steer that reaches an idle worker opens a new turn, it is not dropped (D7 store 87defaa3); a Paseo job never writes a mailbox steer file; a CLI error yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; `paseo_steer_unsupported` remains only for a job whose agent has no paseo config (D3 store ad803822, D4 store dc38fecc). Remove every mention of the Node helper, `activeTurnBehavior`, the WebSocket interface and the provider allow-list. (4) Delete or rewrite the paragraph `Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface.` — keep its last sentence about `.pi/extensions/` receiving `PASEO_AGENT_ID`. (5) Add the seven store ids (5477c172, 4236f83d, ad803822, dc38fecc, 5ccde9fb, 11719b08, 87defaa3) to the frontmatter `decisions` list as one `paseo-013-compat D1-D7` entry and `docs/history/paseo-013-compat/CONTEXT.md` to `sources`. Do not edit any other file.",
+        "verify": "! rg -n '0\\.10\\.3|paseo run -d|daemon helper|Node\\.js|activeTurnBehavior|has no steer flag|WebSocket interface' docs/knowledge/areas/bee-herding/the-paseo-channel.md && rg -q 'paseo-013-compat' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "must_haves": {
+          "truths": [
+            "the channel doc names paseo run --no-wait, the 0.12.0 floor at doctor and pre-spawn, and paseo send --behavior steer with the -- separator for every provider",
+            "the channel doc no longer names the Node helper, 0.10.3, the WebSocket interface or a pi-only steer file"
+          ],
+          "artifacts": [
+            {
+              "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+              "substantive": "run argv, version floor and steer paragraphs rewritten; frontmatter cites paseo-013-compat D1-D7 and its CONTEXT.md"
+            }
+          ],
+          "key_links": [
+            "frontmatter decisions list carries the seven paseo-013-compat store ids"
+          ],
+          "prohibitions": [
+            "no edit outside the channel doc"
+          ]
+        },
+        "trace": {
+          "behavior_change": false
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "implementation",
+          "classification": "required",
+          "role": "code",
+          "reason": "p13-1 changes Rust argv builders, every version floor and the steer verb."
+        },
+        {
+          "stage": "test-authoring",
+          "classification": "not-applicable",
+          "role": "test",
+          "reason": "Tests ride the code cell."
+        },
+        {
+          "stage": "documentation-and-capture",
+          "classification": "required",
+          "role": "docs",
+          "reason": "p13-2 updates the Paseo channel concept."
+        },
+        {
+          "stage": "planning",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "The leader wrote this plan."
+        },
+        {
+          "stage": "deployment",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "A release is a separate user ask."
+        },
+        {
+          "stage": "read-only-gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "a worker report needs a multi-file check",
+          "reason": "Discovery is done; gathers only on demand."
+        },
+        {
+          "stage": "fact-extraction",
+          "classification": "not-applicable",
+          "role": "extraction",
+          "reason": "Discovery is done."
+        },
+        {
+          "stage": "generation-fallback",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every job has a specific role."
+        },
+        {
+          "stage": "independent-review",
+          "classification": "not-applicable",
+          "role": "review",
+          "reason": "Review is user-invoked."
+        },
+        {
+          "stage": "generic-advisor",
+          "classification": "not-applicable",
+          "role": "advisor",
+          "reason": "The hat wave is the plan consult."
+        },
+        {
+          "stage": "supervision",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "No unattended loop runs here."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "One shape."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "One shape."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Three seats on standard work."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Standard plan check — ran."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No rendered UI."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-27T13:29:30.562Z",
+    "branch": "wt/paseo-013-compat",
+    "worktree_id": "beehive--wt--paseo-013-compat",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}
