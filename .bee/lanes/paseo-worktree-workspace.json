@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Trong lúc 4 reader chạy, tôi đóng 41 proposal không gắn area (chỉ có bản delivery và pattern candidate). Thử trên 1 feature trước, rồi làm đ",
-    "asked_at": "2026-10-27T14:43:34.737Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-27T15:02:32.980Z",
     "session": "4694b993-475c-4851-8570-7fc0a93483b0"
   }
 }

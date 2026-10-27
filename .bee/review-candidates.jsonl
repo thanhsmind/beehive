@@ -167,3 +167,4 @@
 {"id":"7200e8c3-c6df-473e-be40-79dd5fdea107","type":"candidate","date":"2026-10-06T06:55:45.131Z","feature":"paseo-pi-hardening","head":"489775e62","mode":"high-risk","baseline":"9c4e986c3","cells":["pph-1","pph-2","pph-3","pph-4","pph-5","pph-6","pph-7"]}
 {"id":"574a2bb8-3167-429e-9b6b-5b3ef941f3ba","type":"candidate","date":"2026-10-06T10:05:18.245Z","feature":"herding-leader-toil","head":"3af625b1e","mode":"high-risk","baseline":"569490ef4","cells":["hlt-1","hlt-2","hlt-3","hlt-4","hlt-5","hlt-6","hlt-7"]}
 {"id":"c83ca80b-66d3-40ea-9c38-4da35f6e524a","type":"candidate","date":"2026-10-24T11:01:18.992Z","feature":"design-os-in-bee","head":"1473306d2","mode":"high-risk","baseline":null,"cells":[]}
+{"id":"ae081862-5b8c-4264-8b50-779250d7cb08","type":"candidate","date":"2026-10-27T14:50:55.848Z","feature":"capture-drain-20261027","head":"7b6ae6e75","mode":"docs","baseline":null,"cells":[]}
