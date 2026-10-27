@@ -760,6 +760,7 @@
     "design-packs",
     "test-gate",
     "issue-sweep",
-    "contract:issue-sweep-1024"
+    "contract:issue-sweep-1024",
+    "principles"
   ]
 }
