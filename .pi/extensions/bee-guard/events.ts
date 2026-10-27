@@ -237,6 +237,7 @@ export function registerEvents(pi: ExtensionAPI, belt: Belt): void {
     state.selfBusy = true
     if (ctx) state.activeDrainCtx = ctx
     try {
+      if (typeof event?.messageType === "string" && event.messageType !== "user") return undefined
       const directory = directoryOf(ctx)
       const parts: string[] = []
 

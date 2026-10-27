@@ -79,8 +79,12 @@
 // FLOOR: Pi 0.84.4. This belt registers `ui_prompt_start` and `ui_prompt_end`
 // (rows 6 and 1 above), and Pi added both events in 0.84.4, so the belt cannot
 // run on 0.84.3.
-// CEILING: Pi 1.0.0, proven by live run 20261002-135348-2965648, a bee workflow
-// driven end to end on it (.bee/verify/verify-app/features/pi-hat-wave.md).
+// CEILING: Pi 1.4.0, proven live on 2026-10-27 in this repo: a real `pi` 1.4.0
+// session in this worktree loads the belt and runs turns with no extension
+// error (session 01a17d9e-85d0-701f-a482-759c1db6a0c6; the `tool_call` surface
+// answered every one of them). The one-shot probe stays the standing re-proof —
+// `pi -p "Reply with the single word ok"` from the worktree root must print `ok`
+// and nothing on stderr.
 //
 // A version named anywhere else in this file records which Pi docs or binary
 // were READ for the fact beside it. That is a different claim from the range
