@@ -214,6 +214,22 @@ current slice isn't painting anything into a corner. "Slice 3: replace
 the polling loop with the webhook, remove the poller" is a fine headline.
 Its unit breakdown, written today, is waste with a due date.
 
+## Build the lever
+
+When a unit of work repeats many times and is not obvious at a glance — a
+rename that must respect scope, a migration over thousands of records, the
+same rewrite across many files — plan a tool, not a hand pass.
+
+1. **Do one unit by hand.** It is the specification: the correct result,
+   including the edge the tool must respect.
+2. **Build the tool and run it on that unit.** Its output must match the hand
+   result before it touches anything else.
+3. **Run it on the rest, then check a sample** against the same standard.
+
+Keep the tool where the next person can rerun it, and name it in the cell's
+`verify` line. Skip the lever when the work is a few obvious edits: a tool
+that costs more than the work it replaces is waste too.
+
 ## The walking skeleton
 
 For anything user-visible, the first slice is the thinnest end-to-end path

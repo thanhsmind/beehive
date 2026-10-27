@@ -284,6 +284,27 @@ the proxy path at all?) before applying last time's fix. Familiarity is
 where experienced debuggers lose the most time: they skip the verification
 step precisely because they have seen it before.
 
+## Attack the premise
+
+When a second fix fails the same gate the first one failed — the same test,
+the same reviewer objection, the same refusal — stop before the third. Two
+failures at one gate usually share one premise, and every fix built on it
+inherits its failure.
+
+- **Write the premise in one sentence.** "Both fixes assume the worker owns
+  the lock." If you cannot write the sentence, you do not yet know what the
+  two fixes have in common, and the third fix is a guess.
+- **Count who holds the imbalance.** Name each actor the sentence implicates:
+  two writers of one value, a duty assigned to a component that cannot see
+  the data, a check on the wrong side of a boundary.
+- **Remove the assignment.** Move the duty, drop the second writer, put the
+  check where the data enters. Compensating around the wrong assignment — a
+  retry, a longer timeout, a guard at the crash site — is the pattern that
+  already failed twice.
+
+Only then start the next fix. Record the premise and its verdict
+(`bee decisions log`) so the next session does not rebuild the same loop.
+
 ## The fix is not done at "it works"
 
 "It works now" is the beginning of the end, not the end. Before closing,

@@ -393,6 +393,18 @@ plugin trees, not just `skills/`.
   - applied_at:
     - `skills/bee-principle-never-invent-behavior-neither-side-has/SKILL.md`
 
+- `bee-principle-attack-the-premise` (expertise/debugging.md § Attack the premise):
+  spoken: when a second fix fails the same check, stop patching — write the premise both fixes share in one sentence, remove the wrong assignment, then fix
+  classes: bugfix, feature, refactor
+  - applied_at:
+    - `skills/bee-principle-attack-the-premise/SKILL.md`
+
+- `bee-principle-build-the-lever` (expertise/planning.md § Build the lever):
+  spoken: repeated work that is not obvious at a glance gets a tool — do one unit by hand, make the tool match it, then run it on the rest
+  classes: feature, refactor
+  - applied_at:
+    - `skills/bee-principle-build-the-lever/SKILL.md`
+
 ## Open Gaps
 
 - **The realised saving is smaller than first projected.** The router fell 18.7%, about 1,675 tokens
