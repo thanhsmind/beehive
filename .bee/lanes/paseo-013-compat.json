@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-013-compat",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"paseo-013-compat\" started at phase \"exploring\" (lane).",
-  "next_action": "uat: user tests a Paseo worker spawn and steer on main, then approves uat",
+  "next_action": "bee close finished \"paseo-013-compat\" — feature is closed.",
   "created_at": "2026-10-27T13:04:34.160Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",

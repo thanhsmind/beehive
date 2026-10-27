@@ -1,19 +1,19 @@
 {
   "schema": "bee-usage/v1",
   "feature": "paseo-013-compat",
-  "closed_at": "2026-10-27T13:36:50.089Z",
+  "closed_at": "2026-10-27T13:36:56.160Z",
   "sessions": [
     {
       "session_id": "80478409-d636-4470-9ad5-34b1f2403b58",
       "models": {
         "claude-fable-5-1": {
-          "input": 2816,
-          "output": 107261,
-          "cache_write": 293796,
-          "cache_read": 19762037,
-          "new": 403873,
-          "cached": 19762037,
-          "total": 20165910
+          "input": 2848,
+          "output": 107544,
+          "cache_write": 294044,
+          "cache_read": 20067007,
+          "new": 404436,
+          "cached": 20067007,
+          "total": 20471443
         }
       },
       "subagent_models": {
@@ -29,20 +29,20 @@
       },
       "subagent_count": 4,
       "started_ms": 1793105888217,
-      "ended_ms": 1793108207422,
+      "ended_ms": 1793108214299,
       "totals": {
-        "new": 716334,
-        "cached": 23089494,
-        "total": 23805828
+        "new": 716897,
+        "cached": 23394464,
+        "total": 24111361
       }
     }
   ],
   "skipped": 0,
   "totals": {
     "main": {
-      "new": 403873,
-      "cached": 19762037,
-      "total": 20165910
+      "new": 404436,
+      "cached": 20067007,
+      "total": 20471443
     },
     "subagents": {
       "new": 312461,
@@ -50,9 +50,9 @@
       "total": 3639918
     },
     "total": {
-      "new": 716334,
-      "cached": 23089494,
-      "total": 23805828
+      "new": 716897,
+      "cached": 23394464,
+      "total": 24111361
     }
   }
 }
