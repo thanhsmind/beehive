@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Lane release đã mở. Giờ xem trước gate, ghi gate gộp, thêm cell, rồi xin permit deploy.",
-    "asked_at": "2026-10-27T15:09:40.441Z",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-27T18:31:19.580Z",
     "session": "4694b993-475c-4851-8570-7fc0a93483b0"
   }
 }
