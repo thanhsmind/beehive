@@ -1,0 +1,104 @@
+{
+  "id": "rel640-1",
+  "feature": "release-2-64-0",
+  "title": "Publish release 2.64.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-64-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.64.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.64.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.64.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.64.0",
+      "tag v2.64.0 exists locally and on the remote",
+      "the GitHub release for v2.64.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.64.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.64.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "BEE_OPENCODE_SUITE_ALLOW_SKIP=1 added to the deploy dispatch env, as in releases 2.60.0 to 2.63.0, because the local opencode is a wrapper script",
+      "herding ceiling raised from the door 1800 s to 5400 s because the full declared suite exceeded 1800 s earlier the same day"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-27T18:30:34.729Z",
+    "behavior_change": false,
+    "verification_evidence": "release cell, evidence https://github.com/thanhsmind/beehive/actions/runs/40528796003 and /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1793113776906-873705-1/report-1.md; the script ran the full declared suite before tagging (40 binaries, 4987 passed, 0 failed) and the leader re-checked gh release v2.64.0 (6 assets, not draft) and the run conclusion success",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": null,
+    "verify_command": "bash scripts/release.sh 2.64.0 && bee dev release-manifest --check",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "4694b993-475c-4851-8570-7fc0a93483b0",
+        "owner_bypassed": null,
+        "at": "2026-10-27T18:30:34.729Z"
+      }
+    ],
+    "mistakes": [
+      {
+        "wrong": "the first deployment dispatch was minted before the lane bookkeeping was committed, so its main_commit pin went stale and a second permit had to be minted",
+        "better": "commit every piece of bookkeeping first, as B23 says",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "Release 2.64.0 published from main through scripts/release.sh under deployment dispatch 1f69f118: both plugin manifests report 2.64.0, tag v2.64.0 pushed, release-binaries run 40528796003 green, GitHub release carries 5 binaries plus SHA256SUMS, the script printed its final OK line.",
+      "commit": "ea5cdd6c7",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.64.0 && bee dev release-manifest --check — green:live — release cell, evidence https://github.com/thanhsmind/beehive/actions/runs/40528796003 and /mnt/data/Projects/goglbe/beehive/.bee/mailbox/job-1793113776906-873705-1/report-1.md; the script ran the full declared suite before tagging (40 binaries, 4987 passed, 0 failed) and the leader re-checked gh release v2.64.0 (6 assets, not draft) and the run conclusion success",
+      "deviations": [
+        "BEE_OPENCODE_SUITE_ALLOW_SKIP=1 added to the deploy dispatch env, as in releases 2.60.0 to 2.63.0, because the local opencode is a wrapper script",
+        "herding ceiling raised from the door 1800 s to 5400 s because the full declared suite exceeded 1800 s earlier the same day"
+      ],
+      "mistakes": [
+        "the first deployment dispatch was minted before the lane bookkeeping was committed, so its main_commit pin went stale and a second permit had to be minted — commit every piece of bookkeeping first, as B23 says — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

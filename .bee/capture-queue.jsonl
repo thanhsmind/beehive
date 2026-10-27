@@ -2784,3 +2784,4 @@
 {"kind":"flush","id":"4481ea6c-5df4-45df-9d7c-bc3449e5543a","at":"2026-10-27T14:48:43.582Z","into":"docs/knowledge/work/design-os-in-bee/delivery.md"}
 {"kind":"flush","id":"a0093fe6-5a9a-49ae-bf19-dc5d6600c671","at":"2026-10-27T14:48:43.625Z","into":"docs/knowledge/work/paseo-013-compat/delivery.md"}
 {"kind":"flush","id":"84e0307a-0809-44df-b919-69afe501ad0f","at":"2026-10-27T14:48:43.640Z","into":"docs/knowledge/work/paseo-013-compat/delivery.md"}
+{"kind":"stub","id":"0d069ecb-0d64-4039-8168-6a782d0bd765","at":"2026-10-27T18:31:02.752Z","outcome":"Promote proposal for \"release-2-64-0\" — docs/history/release-2-64-0/promote-proposals.md","dids":[],"area":null,"files":["docs/history/release-2-64-0/promote-proposals.md"],"lane":null,"source":"promote"}

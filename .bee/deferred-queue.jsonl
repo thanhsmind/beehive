@@ -1056,3 +1056,4 @@
 {"ts":"2026-10-27T14:48:43.567Z","event":"complete","id":"55363015-4589-4f42-bb28-572406c7104e"}
 {"ts":"2026-10-27T14:48:43.610Z","event":"complete","id":"b921999d-c4a2-4799-a802-425d83044371"}
 {"ts":"2026-10-27T14:48:43.610Z","event":"complete","id":"89b9ffff-ecb2-41fc-b066-6505aae5ad6f"}
+{"ts":"2026-10-27T18:31:02.752Z","event":"add","id":"b74b8ee0-b2a0-4f7a-af5b-d8973c09128b","kind":"promote","feature":"release-2-64-0","cells":[],"areas":[],"files":["docs/history/release-2-64-0/promote-proposals.md"],"reason":"Promote proposal for \"release-2-64-0\" awaiting apply — docs/history/release-2-64-0/promote-proposals.md."}
