@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "pi-1-4-capability-audit",
+  "mode": "small",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pi-1-4-capability-audit\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming: dispatch p14-1 in the worktree.",
+  "created_at": "2026-10-27T13:43:41.584Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 3,
+    "rationale": "pi 1.4.0 upgrade: belt touches 3 product files; one external-systems flag (pi host API)",
+    "updated_at": "2026-10-27T13:44:07.424Z",
+    "feature": "pi-1-4-capability-audit"
+  },
+  "merge_ready": {
+    "since": "2026-10-27T14:22:12.763Z",
+    "branch": "wt/pi-1-4-capability-audit",
+    "worktree_id": "beehive--wt--pi-1-4-capability-audit",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

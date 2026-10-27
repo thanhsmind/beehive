@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: test a Paseo worker spawn and steer on main, then approve uat for paseo-013-compat",
-    "asked_at": "2026-10-27T13:31:23.502Z",
-    "session": "80478409-d636-4470-9ad5-34b1f2403b58"
+    "kind": "turn-end",
+    "subject": "Đang chờ 2 việc chạy nền: kiểm chứng (cargo test + pi one-shot) và worker pi commit. Trong lúc đó tôi đọc mẫu `--report` để cap cell.",
+    "asked_at": "2026-10-27T14:21:09.440Z",
+    "session": "4694b993-475c-4851-8570-7fc0a93483b0"
   }
 }
