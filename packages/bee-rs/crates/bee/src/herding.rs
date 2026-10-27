@@ -123,7 +123,6 @@ pub(crate) mod notify;
 pub(crate) mod broker;
 pub(crate) mod paseo;
 pub(crate) mod paseo_state;
-pub(crate) mod paseo_steer;
 pub(crate) mod pi_agent_dir;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";

@@ -3634,13 +3634,13 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
 
     let version_output = cli.call(&["--version".to_string()]);
     let version_ok = match version_output {
-        Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),
+        Ok(out) => paseo::version_at_least(&out, (0, 12, 0)),
         Err(_) => false,
     };
     if !version_ok {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(
-                "paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)".to_string(),
+                "paseo version 0.12.0 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.12.0+)".to_string(),
             ),
             pane_id: None,
             closed_pane: false,
@@ -3710,7 +3710,7 @@ pub(super) fn execute_paseo(opts: &Options, spec: &PaseoSpec, cli: &dyn PaseoCli
                             "check the provider and model that herding.agents.{agent_name} names in .bee/config.json"
                         ),
                         Err(_) => {
-                            "start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)".to_string()
+                            "start the daemon with paseo daemon start (npm @getpaseo/cli 0.12.0+)".to_string()
                         }
                     };
                     return ExecResult {
@@ -3897,13 +3897,13 @@ pub(super) fn execute_continue_paseo(opts: &Options, cli: &dyn PaseoCli) -> Exec
 
     let version_output = cli.call(&["--version".to_string()]);
     let version_ok = match version_output {
-        Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),
+        Ok(out) => paseo::version_at_least(&out, (0, 12, 0)),
         Err(_) => false,
     };
     if !version_ok {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(
-                "paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)".to_string(),
+                "paseo version 0.12.0 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.12.0+)".to_string(),
             ),
             pane_id: Some(agent_id),
             closed_pane: false,
@@ -12190,7 +12190,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-happy\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12225,7 +12225,7 @@ mod tests {
         let spec = pi_spec();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-caller\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12260,7 +12260,7 @@ mod tests {
         .unwrap();
         let spec = PaseoSpec { provider: "pi".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-ro\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12282,7 +12282,7 @@ mod tests {
         opts.read_only = true;
         let spec = PaseoSpec { provider: "codex".to_string(), model: None, thinking: None, mode: None, isolated_config: false };
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"x\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12333,7 +12333,7 @@ mod tests {
             isolated_config: false,
         };
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-claude\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12404,7 +12404,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-q\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12442,7 +12442,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-fail\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12480,7 +12480,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"my-own-agent-id\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12523,7 +12523,7 @@ mod tests {
         match res.outcome {
             RunOutcome::SpawnFailed(ref msg) => {
                 assert!(msg.contains("FIX:"));
-                assert!(msg.contains("0.10.3"));
+                assert!(msg.contains("0.12.0"));
             }
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
@@ -12549,7 +12549,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("daemon unreachable".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12559,7 +12559,7 @@ mod tests {
         let res = execute_paseo(&opts, &spec, &fake);
         match res.outcome {
             RunOutcome::SpawnFailed(ref msg) => {
-                assert!(msg.contains("FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)"));
+                assert!(msg.contains("FIX: start the daemon with paseo daemon start (npm @getpaseo/cli 0.12.0+)"));
             }
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
@@ -12581,7 +12581,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("provider not configured".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12613,7 +12613,7 @@ mod tests {
 
     fn failing_run_cli() -> FakePaseoCli {
         FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("stop here".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12721,7 +12721,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-job-test\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12820,7 +12820,7 @@ mod tests {
 
         let r2_path = mailbox::result_path(&bee_dir, &opts.job_id, 2);
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("".to_string()),
             Ok("{\"Status\":\"idle\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12896,7 +12896,7 @@ mod tests {
         .unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("".to_string()),
             Ok("{\"Status\":\"idle\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -12952,7 +12952,7 @@ mod tests {
         .unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13006,7 +13006,7 @@ mod tests {
         .unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("".to_string()),
             Ok("{\"Status\":\"idle\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13072,7 +13072,7 @@ mod tests {
         match res.outcome {
             RunOutcome::SpawnFailed(ref msg) => {
                 assert!(msg.contains("FIX:"));
-                assert!(msg.contains("0.10.3"));
+                assert!(msg.contains("0.12.0"));
             }
             ref other => panic!("expected SpawnFailed, got {other:?}"),
         }
@@ -13144,7 +13144,7 @@ mod tests {
         let dir_clone = dir.clone();
         let count = std::sync::atomic::AtomicUsize::new(0);
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-blocked-result\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13193,7 +13193,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-timeout\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"PendingPermissions\":[{\"id\":\"p1\",\"tool\":\"bash\"}]}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13221,7 +13221,7 @@ mod tests {
         let spec = pi_spec();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-ceiling\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13265,7 +13265,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-ledger\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13294,7 +13294,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-si\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13349,7 +13349,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-ta\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13406,7 +13406,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-pi\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13465,7 +13465,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-ed\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13517,7 +13517,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-nab\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13585,7 +13585,7 @@ mod tests {
         .unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-ce\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13639,7 +13639,7 @@ mod tests {
         .unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-psm\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"Model\":\"claude-3-5-sonnet\",\"Thinking\":\"high\",\"Mode\":\"default\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -13800,7 +13800,7 @@ mod tests {
         opts.close_always = true;
         mismatch_job(tmp.path(), &opts.job_id, refuse, result_ready);
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-mm\"}\n".to_string()),
             Ok(FLASH_OFF.to_string()),
             Ok("archived\n".to_string()),
@@ -14049,7 +14049,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-fs\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14114,7 +14114,7 @@ mod tests {
 
         let dir_clone = dir.clone();
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-ran\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14179,7 +14179,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-ns\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14256,7 +14256,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-obs\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"Model\":\"deepseek/deepseek-chat\",\"Thinking\":\"HIGH\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14294,7 +14294,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-sentinels\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"Model\":\"-\",\"Thinking\":\"auto\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14332,7 +14332,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-prefix\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"Model\":\"anthropic/claude-3-5-sonnet\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14369,7 +14369,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"paseo-agent-mismatch\"}\n".to_string()),
             Ok("{\"Status\":\"running\",\"Model\":\"gpt-4o\",\"Thinking\":\"low\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14408,7 +14408,7 @@ mod tests {
         .to_string();
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("paseo timed out after 15s".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14461,7 +14461,7 @@ mod tests {
         };
 
         let fake1 = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-iso-1\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14485,7 +14485,7 @@ mod tests {
             isolated_config: false,
         };
         let fake2 = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-iso-2\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14504,7 +14504,7 @@ mod tests {
             isolated_config: true,
         };
         let fake3 = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-iso-3\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14541,7 +14541,7 @@ mod tests {
         };
 
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Ok("{\"agentId\":\"agent-fail\"}\n".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14568,7 +14568,7 @@ mod tests {
 
     fn fake_timed_out_spawn(ls_json: Value) -> FakePaseoCli {
         FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("paseo timed out after 15s".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),
@@ -14725,7 +14725,7 @@ mod tests {
             ])
         );
         let fake = FakePaseoCli::new(
-            Ok("0.10.3\n".to_string()),
+            Ok("0.12.0\n".to_string()),
             Err("paseo timed out after 15s".to_string()),
             Ok("{\"Status\":\"running\"}\n".to_string()),
             Ok("archived\n".to_string()),

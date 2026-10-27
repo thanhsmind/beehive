@@ -788,14 +788,14 @@ pub(crate) fn steer_job(
     job_id: &str,
     text: &str,
 ) -> Result<u32, JobVerbError> {
-    steer_job_with(main_root, job_id, text, &crate::herding::paseo_steer::RealSteerRunner)
+    steer_job_with(main_root, job_id, text, None)
 }
 
 pub(crate) fn steer_job_with(
     main_root: &Path,
     job_id: &str,
     text: &str,
-    runner: &dyn crate::herding::paseo_steer::SteerRunner,
+    paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>,
 ) -> Result<u32, JobVerbError> {
     let bee_dir = main_root.join(".bee");
     let mbox = mailbox::mailbox_dir(&bee_dir, job_id);
@@ -909,8 +909,8 @@ pub(crate) fn steer_job_with(
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("");
-        let spec = match crate::herding::paseo::PaseoSpec::from_config(&cfg, agent) {
-            Some(Ok(s)) => s,
+        match crate::herding::paseo::PaseoSpec::from_config(&cfg, agent) {
+            Some(Ok(_)) => {}
             Some(Err(e)) => {
                 return Err(JobVerbError {
                     code: "paseo_steer_unsupported",
@@ -927,55 +927,41 @@ pub(crate) fn steer_job_with(
                     ),
                 });
             }
-        };
+        }
 
-        if spec.provider != "pi" {
-            if !crate::herding::paseo_steer::steerable(&spec.provider) {
+        let paseo_agent_id = match job_raw
+            .get("paseo_agent_id")
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(id) => id,
+            None => {
                 return Err(JobVerbError {
-                    code: "paseo_steer_unsupported",
+                    code: "paseo_steer_failed",
                     message: format!(
-                        "herding steer: provider \"{}\" does not support steering on Paseo. FIX: wait for the worker to finish or use a supported provider (claude, codex, opencode, pi)",
-                        spec.provider
+                        "herding steer: job \"{job_id}\" missing paseo_agent_id in job.json. FIX: check the job with bee herding status"
                     ),
                 });
             }
+        };
 
-            let paseo_agent_id = match job_raw
-                .get("paseo_agent_id")
-                .and_then(Value::as_str)
-                .filter(|s| !s.trim().is_empty())
-            {
-                Some(id) => id,
-                None => {
-                    return Err(JobVerbError {
-                        code: "paseo_steer_failed",
-                        message: format!(
-                            "herding steer: job \"{job_id}\" missing paseo_agent_id in job.json. FIX: check the job with bee herding status"
-                        ),
-                    });
-                }
-            };
+        let steer_cmd = crate::herding::paseo::send_steer_argv(paseo_agent_id, text);
+        let real_cli;
+        let cli = match paseo_cli {
+            Some(c) => c,
+            None => {
+                let cmd = crate::herding::paseo::paseo_command(&cfg);
+                real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));
+                &real_cli
+            }
+        };
 
-            let paseo_cmd = crate::herding::paseo::paseo_command(&cfg);
-            let cli_dir = match crate::herding::paseo_steer::cli_package_dir(&paseo_cmd, |k| std::env::var(k).ok()) {
-                Some(d) => d,
-                None => {
-                    return Err(JobVerbError {
-                        code: "paseo_steer_failed",
-                        message: "herding steer: could not locate @getpaseo/cli package directory. FIX: install @getpaseo/cli via npm or check your PATH".to_string(),
-                    });
-                }
-            };
+        cli.call(&steer_cmd).map_err(|e| JobVerbError {
+            code: "paseo_steer_failed",
+            message: format!("herding steer: paseo steer failed: {e}. FIX: check the Paseo daemon"),
+        })?;
 
-            runner
-                .steer(&cli_dir, paseo_agent_id, text)
-                .map_err(|e| JobVerbError {
-                    code: "paseo_steer_failed",
-                    message: format!("herding steer: paseo steer failed: {e}. FIX: check the Paseo daemon"),
-                })?;
-
-            return Ok(next_n);
-        }
+        return Ok(next_n);
     }
 
     let steer_obj = serde_json::json!({
@@ -1587,208 +1573,106 @@ mod tests {
         );
     }
 
-    struct FakeSteerRunner {
-        calls: std::sync::atomic::AtomicUsize,
-        should_fail: bool,
-    }
-
-    impl FakeSteerRunner {
-        fn new(should_fail: bool) -> Self {
-            Self {
-                calls: std::sync::atomic::AtomicUsize::new(0),
-                should_fail,
-            }
-        }
-
-        fn call_count(&self) -> usize {
-            self.calls.load(std::sync::atomic::Ordering::SeqCst)
-        }
-    }
-
-    impl crate::herding::paseo_steer::SteerRunner for FakeSteerRunner {
-        fn steer(&self, _cli_dir: &Path, _agent_id: &str, _text: &str) -> Result<(), String> {
-            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if self.should_fail {
-                Err("fake runner error".to_string())
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    fn setup_fake_cli(tmp: &Path) -> std::path::PathBuf {
-        let pkg_dir = tmp.join("fake_cli_pkg");
-        let bin_dir = pkg_dir.join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        std::fs::write(
-            pkg_dir.join("package.json"),
-            r#"{"name":"@getpaseo/cli","version":"0.10.3"}"#,
-        )
-        .unwrap();
-        let bin_path = bin_dir.join("paseo");
-        std::fs::write(&bin_path, "#!/bin/sh\nexit 0\n").unwrap();
-        bin_path
-    }
-
-    #[test]
-    fn steer_job_with_fake_runner_for_claude() {
-        let tmp = tempfile::tempdir().unwrap();
-        let bee_dir = tmp.path().join(".bee");
-        let fake_bin = setup_fake_cli(tmp.path());
-
+    fn seed_paseo_steer_config(bee_dir: &Path, agent: &str, provider: &str) {
         let cfg = serde_json::json!({
             "herding": {
-                "paseo": {
-                    "command": fake_bin.to_str().unwrap()
-                },
                 "agents": {
-                    "w-claude": {
+                    agent: {
                         "paseo": {
-                            "provider": "claude"
+                            "provider": provider
                         }
                     }
                 }
             }
         });
-        std::fs::create_dir_all(&bee_dir).unwrap();
+        std::fs::create_dir_all(bee_dir).unwrap();
         std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
+    }
 
-        let job_dir = bee_dir.join("mailbox").join("job-claude-test");
+    fn seed_steer_job(bee_dir: &Path, job_id: &str, agent: &str, agent_id: &str) -> std::path::PathBuf {
+        let job_dir = bee_dir.join("mailbox").join(job_id);
         std::fs::create_dir_all(&job_dir).unwrap();
         let job_spec = serde_json::json!({
-            "job_id": "job-claude-test",
+            "job_id": job_id,
             "transport": "paseo",
-            "agent": "w-claude",
-            "paseo_agent_id": "agent-uuid-claude",
+            "agent": agent,
+            "paseo_agent_id": agent_id,
             "round": 1
         });
         std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
+        job_dir
+    }
 
-        let runner = FakeSteerRunner::new(false);
-        let res = steer_job_with(tmp.path(), "job-claude-test", "steer prompt", &runner);
-        assert!(res.is_ok());
-        assert_eq!(runner.call_count(), 1);
+    fn failing_cli(message: &str) -> FakePaseoCli {
+        FakePaseoCli {
+            calls: std::sync::Mutex::new(Vec::new()),
+            result: Err(message.to_string()),
+        }
+    }
+
+    #[test]
+    fn steer_paseo_job_for_pi_and_claude_sends_one_steer_call() {
+        for (agent, provider, agent_id) in [("w-pi", "pi", "agent-uuid-pi"), ("w-claude", "claude", "agent-uuid-claude")] {
+            let tmp = tempfile::tempdir().unwrap();
+            let bee_dir = tmp.path().join(".bee");
+            seed_paseo_steer_config(&bee_dir, agent, provider);
+            let job_dir = seed_steer_job(&bee_dir, "job-steer-paseo", agent, agent_id);
+
+            let cli = FakePaseoCli::new();
+            let res = steer_job_with(tmp.path(), "job-steer-paseo", "steer prompt", Some(&cli));
+            assert!(res.is_ok(), "{res:?}");
+            assert_eq!(
+                cli.get_calls(),
+                vec![crate::herding::paseo::send_steer_argv(agent_id, "steer prompt")]
+            );
+            assert!(!job_dir.join("steer-1.json").exists(), "{provider} writes no steer file");
+        }
+    }
+
+    #[test]
+    fn steer_paseo_job_for_unknown_provider_sends_the_same_call() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        seed_paseo_steer_config(&bee_dir, "w-omp", "omp");
+        let job_dir = seed_steer_job(&bee_dir, "job-omp-test", "w-omp", "agent-uuid-omp");
+
+        let cli = FakePaseoCli::new();
+        let res = steer_job_with(tmp.path(), "job-omp-test", "steer prompt", Some(&cli));
+        assert!(res.is_ok(), "{res:?}");
+        assert_eq!(
+            cli.get_calls(),
+            vec![crate::herding::paseo::send_steer_argv("agent-uuid-omp", "steer prompt")]
+        );
         assert!(!job_dir.join("steer-1.json").exists());
     }
 
     #[test]
-    fn steer_job_with_fake_runner_for_pi() {
+    fn steer_paseo_job_failed_call_returns_paseo_steer_failed() {
         let tmp = tempfile::tempdir().unwrap();
         let bee_dir = tmp.path().join(".bee");
+        seed_paseo_steer_config(&bee_dir, "w-claude", "claude");
+        let job_dir = seed_steer_job(&bee_dir, "job-err-test", "w-claude", "agent-uuid-claude");
 
-        let cfg = serde_json::json!({
-            "herding": {
-                "agents": {
-                    "w-pi": {
-                        "paseo": {
-                            "provider": "pi"
-                        }
-                    }
-                }
-            }
-        });
-        std::fs::create_dir_all(&bee_dir).unwrap();
-        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
-
-        let job_dir = bee_dir.join("mailbox").join("job-pi-test");
-        std::fs::create_dir_all(&job_dir).unwrap();
-        let job_spec = serde_json::json!({
-            "job_id": "job-pi-test",
-            "transport": "paseo",
-            "agent": "w-pi",
-            "paseo_agent_id": "agent-uuid-pi",
-            "round": 1
-        });
-        std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
-
-        let runner = FakeSteerRunner::new(false);
-        let res = steer_job_with(tmp.path(), "job-pi-test", "steer prompt", &runner);
-        assert!(res.is_ok());
-        assert_eq!(runner.call_count(), 0);
-        assert!(job_dir.join("steer-1.json").is_file());
+        let cli = failing_cli("daemon unreachable");
+        let err = steer_job_with(tmp.path(), "job-err-test", "steer prompt", Some(&cli)).unwrap_err();
+        assert_eq!(err.code, "paseo_steer_failed");
+        assert!(err.message.contains("FIX: check the Paseo daemon"), "{}", err.message);
+        assert_eq!(cli.get_calls().len(), 1);
+        assert!(!job_dir.join("steer-1.json").exists());
     }
 
     #[test]
-    fn steer_job_with_unknown_provider() {
+    fn steer_paseo_job_without_paseo_config_is_unsupported() {
         let tmp = tempfile::tempdir().unwrap();
         let bee_dir = tmp.path().join(".bee");
+        seed_paseo_steer_config(&bee_dir, "w-other", "claude");
+        let job_dir = seed_steer_job(&bee_dir, "job-nocfg-test", "w-missing", "agent-uuid-missing");
 
-        let cfg = serde_json::json!({
-            "herding": {
-                "agents": {
-                    "w-other": {
-                        "paseo": {
-                            "provider": "unknown_provider"
-                        }
-                    }
-                }
-            }
-        });
-        std::fs::create_dir_all(&bee_dir).unwrap();
-        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
-
-        let job_dir = bee_dir.join("mailbox").join("job-other-test");
-        std::fs::create_dir_all(&job_dir).unwrap();
-        let job_spec = serde_json::json!({
-            "job_id": "job-other-test",
-            "transport": "paseo",
-            "agent": "w-other",
-            "paseo_agent_id": "agent-uuid-other",
-            "round": 1
-        });
-        std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
-
-        let runner = FakeSteerRunner::new(false);
-        let res = steer_job_with(tmp.path(), "job-other-test", "steer prompt", &runner);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
+        let cli = FakePaseoCli::new();
+        let err = steer_job_with(tmp.path(), "job-nocfg-test", "steer prompt", Some(&cli)).unwrap_err();
         assert_eq!(err.code, "paseo_steer_unsupported");
         assert!(err.message.contains("FIX:"));
-        assert_eq!(runner.call_count(), 0);
-        assert!(!job_dir.join("steer-1.json").exists());
-    }
-
-    #[test]
-    fn steer_job_with_runner_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        let bee_dir = tmp.path().join(".bee");
-        let fake_bin = setup_fake_cli(tmp.path());
-
-        let cfg = serde_json::json!({
-            "herding": {
-                "paseo": {
-                    "command": fake_bin.to_str().unwrap()
-                },
-                "agents": {
-                    "w-claude": {
-                        "paseo": {
-                            "provider": "claude"
-                        }
-                    }
-                }
-            }
-        });
-        std::fs::create_dir_all(&bee_dir).unwrap();
-        std::fs::write(bee_dir.join("config.json"), cfg.to_string()).unwrap();
-
-        let job_dir = bee_dir.join("mailbox").join("job-err-test");
-        std::fs::create_dir_all(&job_dir).unwrap();
-        let job_spec = serde_json::json!({
-            "job_id": "job-err-test",
-            "transport": "paseo",
-            "agent": "w-claude",
-            "paseo_agent_id": "agent-uuid-claude",
-            "round": 1
-        });
-        std::fs::write(job_dir.join("job.json"), job_spec.to_string()).unwrap();
-
-        let runner = FakeSteerRunner::new(true);
-        let res = steer_job_with(tmp.path(), "job-err-test", "steer prompt", &runner);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert_eq!(err.code, "paseo_steer_failed");
-        assert!(err.message.contains("FIX:"));
-        assert_eq!(runner.call_count(), 1);
+        assert!(cli.get_calls().is_empty());
         assert!(!job_dir.join("steer-1.json").exists());
     }
 

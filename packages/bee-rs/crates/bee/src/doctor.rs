@@ -1067,9 +1067,9 @@ fn paseo_ready_row_with_env_and_cli(
                 failures.push(format!(
                     "{cmd} is an AppImage CLI — FIX: set herding.paseo.command to the npm @getpaseo/cli paseo"
                 ));
-            } else if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {
+            } else if !crate::herding::paseo::version_at_least(&out, (0, 12, 0)) {
                 failures.push(format!(
-                    "{cmd} version is below 0.10.3 — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
+                    "{cmd} version is below 0.12.0 — FIX: upgrade to 0.12.0 with npm @getpaseo/cli"
                 ));
             }
         }
@@ -1080,7 +1080,7 @@ fn paseo_ready_row_with_env_and_cli(
                 ));
             } else {
                 failures.push(format!(
-                    "{cmd} --version failed ({e}) — FIX: upgrade to 0.10.3 with npm @getpaseo/cli"
+                    "{cmd} --version failed ({e}) — FIX: upgrade to 0.12.0 with npm @getpaseo/cli"
                 ));
             }
         }
@@ -1264,7 +1264,7 @@ fn paseo_ready_row_with_env_and_cli(
         Some(Row {
             key: KEY,
             ok: Some(true),
-            detail: "paseo daemon is reachable, version >= 0.10.3, and heartbeats ready".to_string(),
+            detail: "paseo daemon is reachable, version >= 0.12.0, and heartbeats ready".to_string(),
         })
     } else {
         Some(Row {
