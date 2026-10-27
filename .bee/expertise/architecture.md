@@ -21,6 +21,7 @@ is about a known trade-off rather than taste.
 | A class hierarchy is bending to share behavior | Composition over Inheritance |
 | The same fact lives in two places | Single Source of Truth |
 | Code is littered with "this can't happen" checks | Make Illegal States Unrepresentable |
+| Two actors write the same mutable state | One Writer for Shared State |
 | Tempted to extract on the second occurrence | The Rule of Three |
 | Judging whether a suspect module earns its complexity | The Deletion Test |
 | Wrapping a dependency behind an interface "just in case" | One Adapter, Two Adapters |
@@ -174,6 +175,19 @@ types over runtime checks, checks at the boundary over checks
 everywhere, and required constructor arguments over half-built
 objects patched up later. Every state the structure cannot express
 is a class of bug that cannot be written.
+
+### One Writer for Shared State
+
+When two actors — threads, workers, sessions, services — touch the
+same mutable thing → first ask whether they need the same thing at
+all. Most do not: give each its own copy, its own file, its own
+partition, and merge the results in one place afterwards. When they
+truly must share it, allow exactly one writer and make the structure
+enforce that — an owning task the others send messages to, a lock
+held by one component, a store with a single write path — never a
+convention every caller must remember. Two writers coordinated by
+care produce the bug that only shows up under load, and no test
+written in a quiet room catches it.
 
 ### The Rule of Three
 

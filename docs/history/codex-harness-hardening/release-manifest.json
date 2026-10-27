@@ -20,7 +20,7 @@
     },
     {
       "path": ".bee/expertise/architecture.md",
-      "sha256": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+      "sha256": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -32,7 +32,7 @@
     },
     {
       "path": ".bee/expertise/debugging.md",
-      "sha256": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+      "sha256": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -86,7 +86,7 @@
     },
     {
       "path": ".bee/expertise/planning.md",
-      "sha256": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
+      "sha256": "ad649f8ae8e8ae11c83d0c6b9cbc3c7f0430cf99ae1d8c0989e64b585c50d667",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "0cdc4b135071845ea5fabbc1b562975ba7611407155ddfb55de8babd97396446",
+      "sha256": "3e1efc82c3e8ecb950088ee292afa199d273e4001d014c76945208c52212372f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -504,6 +504,20 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-attack-the-premise/SKILL.md",
+      "sha256": "a15bab6bb2a8bb76e7534a5b47dd9b9f6c3892053e8bf812b89744a279ffad78",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-attack-the-premise/SKILL.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-principle-build-the-lever/SKILL.md",
+      "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-principle-build-the-lever/SKILL.md"
     },
     {
       "path": ".claude-plugin/skills/bee-principle-chestertons-fence/SKILL.md",
@@ -955,7 +969,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "75c20b1d6248f99ef3c1e03ea8e17fd099268f063e64c21783d402172e6ba251",
+      "sha256": "b7254f65d8d287689f2a15fd61065a35f2c0a06a531894c8cd78d741dfa4a37e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1323,6 +1337,20 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-attack-the-premise/SKILL.md",
+      "sha256": "a15bab6bb2a8bb76e7534a5b47dd9b9f6c3892053e8bf812b89744a279ffad78",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-attack-the-premise/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-principle-build-the-lever/SKILL.md",
+      "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-principle-build-the-lever/SKILL.md"
     },
     {
       "path": ".codex-plugin/skills/bee-principle-chestertons-fence/SKILL.md",
@@ -1899,7 +1927,7 @@
     },
     {
       "path": "expertise/architecture.md",
-      "sha256": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+      "sha256": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -1911,7 +1939,7 @@
     },
     {
       "path": "expertise/debugging.md",
-      "sha256": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+      "sha256": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -1965,7 +1993,7 @@
     },
     {
       "path": "expertise/planning.md",
-      "sha256": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
+      "sha256": "ad649f8ae8e8ae11c83d0c6b9cbc3c7f0430cf99ae1d8c0989e64b585c50d667",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -3466,6 +3494,20 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-attack-the-premise/SKILL.md",
+      "sha256": "a15bab6bb2a8bb76e7534a5b47dd9b9f6c3892053e8bf812b89744a279ffad78",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-attack-the-premise/SKILL.md"
+    },
+    {
+      "path": "skills/bee-principle-build-the-lever/SKILL.md",
+      "sha256": "9011542fb55aefd9ca156f4838a6d01533e06f6bf7372a18cce002daaa72eb3c",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-principle-build-the-lever/SKILL.md"
     },
     {
       "path": "skills/bee-principle-chestertons-fence/SKILL.md",
