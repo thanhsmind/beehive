@@ -1,0 +1,275 @@
+{
+  "id": "p13-1",
+  "feature": "paseo-013-compat",
+  "title": "Spawn with --no-wait, require Paseo 0.12.0 everywhere, steer through paseo send",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "5477c172",
+    "4236f83d",
+    "ad803822",
+    "dc38fecc",
+    "5ccde9fb",
+    "11719b08",
+    "87defaa3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/tests.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+    "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs"
+  ],
+  "read_first": [
+    "docs/history/paseo-013-compat/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+    "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "A. Run flag, per D1 (store 5477c172). In herding/paseo.rs `run_argv`, replace the token `\"-d\".to_string(),` (second element of the initial argv vec, right after `\"run\".to_string(),`) with `\"--no-wait\".to_string(),`. Update the three run_argv unit tests that pin it — `rg -n '\"-d\",' packages/bee-rs/crates/bee/src/herding/paseo.rs` hits `1239:                \"-d\",`, `1268:                \"-d\",`, `1306:                \"-d\",` — to expect `\"--no-wait\",`. B. Steer argv, per D3 (store ad803822) and D6 (store 11719b08). Directly below `send_argv` in paseo.rs add `pub fn send_steer_argv(id: &str, text: &str) -> Vec<String>` returning exactly [send, <id>, --behavior, steer, --no-wait, --, <text>] and add that shape to the existing `new_argv_builders_produce_expected_tokens` test. C. Version floor, per D2 (store 4236f83d) and D5 (store 5ccde9fb): every Paseo floor becomes 0.12.0. doctor.rs: the tuple at `} else if !crate::herding::paseo::version_at_least(&out, (0, 10, 3)) {` becomes (0, 12, 0); the two `upgrade to 0.10.3 with npm @getpaseo/cli` FIX strings and the ok detail `version >= 0.10.3` say 0.12.0. herding/run.rs: both `Ok(out) => paseo::version_at_least(&out, (0, 10, 3)),` sites (near the spawn and the continue path) become (0, 12, 0); the refusal strings `paseo version 0.10.3 or newer required — FIX: install or update paseo (npm @getpaseo/cli 0.10.3+)` (two sites) and `start the daemon with paseo daemon start (npm @getpaseo/cli 0.10.3+)` say 0.12.0. Tests: in run.rs the ~42 fixtures `Ok(\"0.10.3\\n\")` become `Ok(\"0.12.0\\n\")` (one bulk replace) and the asserts `assert!(msg.contains(\"0.10.3\"));` (two sites) and `...(npm @getpaseo/cli 0.10.3+)\"))` say 0.12.0; in doctor/tests.rs every `version_out: Ok(\"0.10.3\"...)` fixture (13 sites, including the AppImage string `[desktop] app startup { version: '0.10.3' }\\n0.10.3`) becomes 0.12.0, the old-version fixture `version_out: Ok(\"0.10.2\".to_string()),` becomes 0.11.4, and the two `.contains(\"upgrade to 0.10.3 with npm @getpaseo/cli\")` asserts say 0.12.0. Afterwards `rg -n '0\\.10\\.3' packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/doctor/tests.rs` must print nothing (paseo.rs's own `version_at_least_checks_semver` test may keep its 0.10.3 sample strings). D. Steer verb, per D3, D4 (store dc38fecc) and D7 (store 87defaa3). In herding/job_verbs.rs change `steer_job_with` to take `paseo_cli: Option<&dyn crate::herding::paseo::PaseoCli>` instead of `runner: &dyn crate::herding::paseo_steer::SteerRunner`; `steer_job` (hit `steer_job_with(main_root, job_id, text, &crate::herding::paseo_steer::RealSteerRunner)`) passes None. Inside the `is_paseo` branch keep the two `paseo_steer_unsupported` refusals (unreadable or missing paseo config) and the `paseo_steer_failed` refusal for a missing `paseo_agent_id`; delete the `if spec.provider != \"pi\"` split, the `steerable` check (hit `if !crate::herding::paseo_steer::steerable(&spec.provider) {`), the `cli_package_dir` lookup and the `runner.steer(...)` call. In their place, for EVERY provider: resolve the CLI lazily exactly as `interrupt` does (hit `real_cli = crate::herding::paseo::RealPaseoCli::new(cmd).with_timeout(Duration::from_secs(5));` — `Some(c)` uses it, `None` builds from `crate::herding::paseo::paseo_command(&cfg)` with a 5 s timeout, `cfg` is already read in this branch), call `cli.call(&crate::herding::paseo::send_steer_argv(paseo_agent_id, text))`, map Err to code `paseo_steer_failed` with message `herding steer: paseo steer failed: {e}. FIX: check the Paseo daemon`, and `return Ok(next_n)` — a Paseo job never writes the mailbox steer file. The non-Paseo path (the `steer_obj` / `steer-{next_n}.json` write) stays byte-for-byte. Delete `packages/bee-rs/crates/bee/src/herding/paseo_steer.rs` and `paseo_steer.mjs`, and remove `pub(crate) mod paseo_steer;` from herding.rs. Tests in job_verbs.rs: delete `FakeSteerRunner` and `setup_fake_cli` (hits `struct FakeSteerRunner {`, `impl crate::herding::paseo_steer::SteerRunner for FakeSteerRunner {`, `fn setup_fake_cli(tmp: &Path)`); reuse the in-file `FakePaseoCli` (hit `struct FakePaseoCli {`, with `calls` and a settable `result`) and rewrite the four steer tests (`steer_job_with_fake_runner_for_claude`, `steer_job_with_fake_runner_for_pi`, `steer_job_with_unknown_provider`, `steer_job_with_runner_error`) into: a pi Paseo job and a claude Paseo job each make exactly one call equal to `send_steer_argv(agent_id, text)` and write no `steer-1.json`; a provider name bee has never seen (e.g. `omp`) makes the same single call (no allow-list); a failing CLI yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; a job whose agent has no paseo config yields `paseo_steer_unsupported` (new case — today no test covers it). `steer_writes_text_verbatim_as_numbered_files` in herding/tests.rs (non-Paseo job) stays green; adjust only its call site if the signature forces it. Afterwards `rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)' packages/bee-rs/crates/bee/src` must print nothing (the error codes paseo_steer_failed / paseo_steer_unsupported stay). No code comments anywhere.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && ! rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)|0\\.10\\.3' packages/bee-rs/crates/bee/src/herding/job_verbs.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/herding.rs packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/doctor/tests.rs",
+  "must_haves": {
+    "truths": [
+      "run_argv starts with run, --no-wait, --json and never carries -d",
+      "send_steer_argv(id, text) is [send, id, --behavior, steer, --no-wait, --, text]",
+      "bee doctor and bee herding run refuse a Paseo CLI older than 0.12.0 with a FIX line naming 0.12.0 and accept 0.12.0 and 0.13.2",
+      "bee herding steer on a Paseo job of any provider makes one paseo send call equal to send_steer_argv and writes no mailbox steer file",
+      "a paseo send error yields paseo_steer_failed with FIX: check the Paseo daemon",
+      "a job whose agent has no paseo config yields paseo_steer_unsupported",
+      "a non-Paseo job still writes steer-N.json verbatim and makes no CLI call",
+      "no file under src refers to the paseo_steer module"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "substantive": "run_argv uses --no-wait; send_steer_argv exists with a unit test"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "both floors (0, 12, 0) and the three FIX strings name 0.12.0; fixtures moved"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+        "substantive": "floor tuple (0, 12, 0) and FIX/ok strings name 0.12.0"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "substantive": "steer_job_with takes Option<&dyn PaseoCli>, builds the real CLI lazily with 5 s, calls send_steer_argv; fake-CLI tests cover pi, claude, unknown provider, error and no-config"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+        "substantive": "deleted"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs",
+        "substantive": "deleted"
+      }
+    ],
+    "key_links": [
+      "job_verbs.rs steer path calls crate::herding::paseo::send_steer_argv",
+      "herding.rs no longer declares mod paseo_steer",
+      "doctor.rs and run.rs call version_at_least with (0, 12, 0)"
+    ],
+    "prohibitions": [
+      "no change to send_argv, logs_argv, permit_argv, the wait loop or the non-Paseo mailbox steer file format",
+      "no change to the semver sample strings inside paseo.rs's version_at_least_checks_semver test",
+      "no change outside the nine listed files"
+    ]
+  },
+  "trace": {
+    "worker": "p13-1-worker",
+    "outcome": "Paseo workers spawn with --no-wait, every floor is 0.12.0, steer goes through paseo send --behavior steer for every provider; Node helper deleted",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+      "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs",
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [
+      "herding/tests.rs listed in files but not edited — the non-Paseo steer test calls steer_job whose signature did not move — the plan was wrong about a fact",
+      "the spec binding in the Paseo branch became a match that keeps only the two paseo_steer_unsupported refusals — an unused let would be a dead variable — found a better route",
+      "sync-ack: skills/bee-herding describe the cockpit roles, not the paseo argv or version floor; the owning concept the-paseo-channel.md was updated in p13-2"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-27T13:29:30.559Z",
+    "behavior_change": true,
+    "verification_evidence": "leader re-ran all three parts in the worktree: herding 776 passed, doctor 67 passed, rg gate prints nothing; full suite not run here, CI runs it on push",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "80478409-d636-4470-9ad5-34b1f2403b58",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && ! rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)|0\\.10\\.3' packages/bee-rs/crates/bee/src/herding/job_verbs.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/herding.rs packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/doctor/tests.rs",
+    "claimed_at": "2026-10-27T13:16:59.915Z",
+    "sync_ack": "skills/bee-herding describe the cockpit roles, not the paseo argv or version floor; the owning concept the-paseo-channel.md was updated in p13-2",
+    "mistakes": [
+      {
+        "wrong": "worker ran bee from packages/bee-rs/crates/bee and left a stray .bee/logs/timings.jsonl under the crate",
+        "better": "run bee from the worktree root",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "paseo.rs run_argv spawns with --no-wait and send_steer_argv builds [send, id, --behavior, steer, --no-wait, --, text]; doctor.rs and run.rs floors are (0, 12, 0) with FIX lines naming 0.12.0 (fixtures moved, old-version fixture 0.11.4); job_verbs.rs steer_job_with takes Option PaseoCli, builds the real CLI lazily with 5 s and calls send_steer_argv for every provider, tests cover pi, claude, omp, CLI error and no-config; paseo_steer.rs and paseo_steer.mjs deleted and mod line removed from herding.rs; commit 3375ac35c by the Paseo herding worker",
+      "commit": "3375ac35c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/paseo.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/job_verbs.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/paseo_steer.rs",
+        "packages/bee-rs/crates/bee/src/herding/paseo_steer.mjs",
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding:: && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee doctor && ! rg -n 'paseo_steer::|mod paseo_steer|paseo_steer\\.(rs|mjs)|0\\.10\\.3' packages/bee-rs/crates/bee/src/herding/job_verbs.rs packages/bee-rs/crates/bee/src/herding/run.rs packages/bee-rs/crates/bee/src/herding.rs packages/bee-rs/crates/bee/src/doctor.rs packages/bee-rs/crates/bee/src/doctor/tests.rs — green:unit — leader re-ran all three parts in the worktree: herding 776 passed, doctor 67 passed, rg gate prints nothing; full suite not run here, CI runs it on push",
+      "deviations": [
+        "herding/tests.rs listed in files but not edited — the non-Paseo steer test calls steer_job whose signature did not move — the plan was wrong about a fact",
+        "the spec binding in the Paseo branch became a match that keeps only the two paseo_steer_unsupported refusals — an unused let would be a dead variable — found a better route"
+      ],
+      "mistakes": [
+        "worker ran bee from packages/bee-rs/crates/bee and left a stray .bee/logs/timings.jsonl under the crate — run bee from the worktree root — none"
+      ],
+      "baseline": "on base 8e97e73a7 the rg gate matches -d, (0, 10, 3) and paseo_steer:: and the steer tests assert the Node runner"
+    },
+    "baseline": "on base 8e97e73a7 the rg gate matches -d, (0, 10, 3) and paseo_steer:: and the steer tests assert the Node runner",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "run_argv starts with run, --no-wait, --json and never carries -d",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "send_steer_argv(id, text) is [send, id, --behavior, steer, --no-wait, --, text]",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/paseo.rs"
+          },
+          {
+            "requirement": "bee doctor and bee herding run refuse a Paseo CLI older than 0.12.0 with a FIX line naming 0.12.0 and accept 0.12.0 and 0.13.2",
+            "artifact": "packages/bee-rs/crates/bee/src/doctor.rs"
+          },
+          {
+            "requirement": "bee herding steer on a Paseo job of any provider makes one paseo send call equal to send_steer_argv and writes no mailbox steer file",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "a paseo send error yields paseo_steer_failed with FIX: check the Paseo daemon",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "a job whose agent has no paseo config yields paseo_steer_unsupported",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "a non-Paseo job still writes steer-N.json verbatim and makes no CLI call",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "no file under src refers to the paseo_steer module",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "job_verbs.rs steer path calls crate::herding::paseo::send_steer_argv",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/job_verbs.rs"
+          },
+          {
+            "requirement": "herding.rs no longer declares mod paseo_steer",
+            "artifact": "packages/bee-rs/crates/bee/src/herding.rs"
+          },
+          {
+            "requirement": "doctor.rs and run.rs call version_at_least with (0, 12, 0)",
+            "artifact": "packages/bee-rs/crates/bee/src/herding/run.rs"
+          }
+        ],
+        "recorded_at": "2026-10-27T13:29:33.999Z",
+        "recorded_by": "80478409-d636-4470-9ad5-34b1f2403b58",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-run-no-wait",
+            "status": "PASS",
+            "evidence": "paseo.rs run_argv second token is --no-wait (paseo.rs:219); three argv tests moved"
+          },
+          {
+            "id": "truth-send-steer-argv",
+            "status": "PASS",
+            "evidence": "paseo.rs:509-519 send_steer_argv = [send, id, --behavior, steer, --no-wait, --, text]; shape pinned in new_argv_builders_produce_expected_tokens"
+          },
+          {
+            "id": "truth-floor-0-12-0-everywhere",
+            "status": "PASS",
+            "evidence": "doctor.rs:1070 (0, 12, 0); run.rs:3637 and :3900 (0, 12, 0); rg 0.10.3 over doctor.rs, run.rs, doctor/tests.rs prints nothing"
+          },
+          {
+            "id": "truth-steer-every-provider",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:948 send_steer_argv for every provider; tests for pi, claude and omp assert one call and no steer-1.json"
+          },
+          {
+            "id": "truth-steer-failed-fix",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:960-961 paseo_steer_failed with FIX: check the Paseo daemon; test steer_paseo_job_failed_call_returns_paseo_steer_failed"
+          },
+          {
+            "id": "truth-no-config-unsupported",
+            "status": "PASS",
+            "evidence": "job_verbs.rs:1672-1676 no-config test asserts paseo_steer_unsupported"
+          },
+          {
+            "id": "truth-non-paseo-steer-file",
+            "status": "PASS",
+            "evidence": "herding/tests.rs steer_writes_text_verbatim_as_numbered_files unchanged and green"
+          },
+          {
+            "id": "link-module-gone",
+            "status": "PASS",
+            "evidence": "paseo_steer.rs and paseo_steer.mjs deleted; herding.rs mod line removed; rg paseo_steer:: prints nothing"
+          },
+          {
+            "id": "prohib-send-argv-untouched",
+            "status": "PASS",
+            "evidence": "paseo.rs:500-507 send_argv byte-identical"
+          },
+          {
+            "id": "prohib-no-comments",
+            "status": "PASS",
+            "evidence": "diff adds no comment lines"
+          },
+          {
+            "id": "tests-green",
+            "status": "PASS",
+            "evidence": "cargo test --release -p bee herding:: 776 passed; -p bee doctor 67 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-10-27T13:31:06.784Z"
+      }
+    ]
+  },
+  "status": "capped"
+}

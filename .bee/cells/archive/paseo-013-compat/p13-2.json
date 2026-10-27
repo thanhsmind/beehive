@@ -1,0 +1,115 @@
+{
+  "id": "p13-2",
+  "feature": "paseo-013-compat",
+  "title": "Document the --no-wait spawn, the 0.12.0 floor and the CLI steer",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "5477c172",
+    "4236f83d",
+    "ad803822",
+    "dc38fecc",
+    "5ccde9fb",
+    "11719b08",
+    "87defaa3"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "read_first": [
+    "docs/history/paseo-013-compat/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+  ],
+  "action": "Update docs/knowledge/areas/bee-herding/the-paseo-channel.md from the locked decisions in CONTEXT.md, in ASD-STE100 style like the rest of the file. (1) The line `The runner executes `paseo run -d --json` with the following arguments:` becomes `paseo run --no-wait --json`; add one sentence: `-d`/`--background` is deprecated since Paseo 0.12.0 (D1, store 5477c172). (2) Every `0.10.3` mention (`rg -n '0\\.10\\.3' docs/knowledge/areas/bee-herding/the-paseo-channel.md`: the spawn refusal text and its FIX line, the daemon-down FIX line, the doctor bare-version example, the paragraph `First, Paseo 0.10.3 is the minimum required version. It supports steering for the Pi provider.` and the paragraph `Second, the npm package `@getpaseo/cli` 0.10.3 can start the daemon.`) becomes 0.12.0, with the reason: 0.12.0 is the first release with `paseo run --no-wait` and `paseo send --behavior steer`, and the floor is one number at doctor and at the pre-spawn check (D2 store 4236f83d, D5 store 5ccde9fb). (3) Rewrite the `bee herding steer` paragraph (the one containing `This daemon helper requires Node.js and the npm package `@getpaseo/cli`.`): the command runs `paseo send <agent-id> --behavior steer --no-wait -- <text>` for every provider through the same CLI seam as the other calls with a 5 s timeout; the `--` separator keeps text that starts with a dash a positional (D6 store 11719b08); Paseo owns the capability check and a steer that reaches an idle worker opens a new turn, it is not dropped (D7 store 87defaa3); a Paseo job never writes a mailbox steer file; a CLI error yields `paseo_steer_failed` with `FIX: check the Paseo daemon`; `paseo_steer_unsupported` remains only for a job whose agent has no paseo config (D3 store ad803822, D4 store dc38fecc). Remove every mention of the Node helper, `activeTurnBehavior`, the WebSocket interface and the provider allow-list. (4) Delete or rewrite the paragraph `Third, the CLI command `paseo send` has no steer flag. Steering requires the daemon WebSocket interface.` — keep its last sentence about `.pi/extensions/` receiving `PASEO_AGENT_ID`. (5) Add the seven store ids (5477c172, 4236f83d, ad803822, dc38fecc, 5ccde9fb, 11719b08, 87defaa3) to the frontmatter `decisions` list as one `paseo-013-compat D1-D7` entry and `docs/history/paseo-013-compat/CONTEXT.md` to `sources`. Do not edit any other file.",
+  "verify": "! rg -n '0\\.10\\.3|paseo run -d|daemon helper|Node\\.js|activeTurnBehavior|has no steer flag|WebSocket interface' docs/knowledge/areas/bee-herding/the-paseo-channel.md && rg -q 'paseo-013-compat' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+  "must_haves": {
+    "truths": [
+      "the channel doc names paseo run --no-wait, the 0.12.0 floor at doctor and pre-spawn, and paseo send --behavior steer with the -- separator for every provider",
+      "the channel doc no longer names the Node helper, 0.10.3, the WebSocket interface or a pi-only steer file"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+        "substantive": "run argv, version floor and steer paragraphs rewritten; frontmatter cites paseo-013-compat D1-D7 and its CONTEXT.md"
+      }
+    ],
+    "key_links": [
+      "frontmatter decisions list carries the seven paseo-013-compat store ids"
+    ],
+    "prohibitions": [
+      "no edit outside the channel doc"
+    ]
+  },
+  "trace": {
+    "worker": "p13-2-worker",
+    "outcome": "Channel doc names paseo run --no-wait, the 0.12.0 floor at doctor and pre-spawn, and the CLI steer with -- for every provider",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+    ],
+    "deviations": [
+      "spawn refusal block quotes the real run.rs text (paseo version 0.12.0 or newer required, FIX: install or update paseo (npm @getpaseo/cli 0.12.0+)) instead of the old 'FIX: upgrade paseo to ... or newer' line — the old doc line never matched the code — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-27T13:19:23.283Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell, the cell verify parity check over the one edited file",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "80478409-d636-4470-9ad5-34b1f2403b58",
+    "verify_command": "! rg -n '0\\.10\\.3|paseo run -d|daemon helper|Node\\.js|activeTurnBehavior|has no steer flag|WebSocket interface' docs/knowledge/areas/bee-herding/the-paseo-channel.md && rg -q 'paseo-013-compat' docs/knowledge/areas/bee-herding/the-paseo-channel.md",
+    "claimed_at": "2026-10-27T13:16:32.248Z",
+    "mistakes": [
+      {
+        "wrong": "bee cells finish proof segment paraphrased the cell verify and was refused",
+        "better": "paste the verify command verbatim via --report-file",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "the-paseo-channel.md: run argv line (How a run executes) names --no-wait + D1; spawn refusal, daemon-down FIX, doctor version example and Environment facts First/Second name 0.12.0 + D2/D5; Third fact drops the no-steer-flag/WebSocket text, keeps the .pi/extensions sentence; bee herding steer paragraph rewritten to paseo send --behavior steer --no-wait -- <text> with D3/D4/D6/D7; frontmatter decisions gains paseo-013-compat D1-D7 with seven store ids, sources gains its CONTEXT.md",
+      "commit": "f4e33fea3",
+      "files": [
+        "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+      ],
+      "tests": "! rg -n '0\\.10\\.3|paseo run -d|daemon helper|Node\\.js|activeTurnBehavior|has no steer flag|WebSocket interface' docs/knowledge/areas/bee-herding/the-paseo-channel.md && rg -q 'paseo-013-compat' docs/knowledge/areas/bee-herding/the-paseo-channel.md — green:static — docs-only cell, the cell verify parity check over the one edited file",
+      "deviations": [
+        "spawn refusal block quotes the real run.rs text (paseo version 0.12.0 or newer required, FIX: install or update paseo (npm @getpaseo/cli 0.12.0+)) instead of the old 'FIX: upgrade paseo to ... or newer' line — the old doc line never matched the code — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "bee cells finish proof segment paraphrased the cell verify and was refused — paste the verify command verbatim via --report-file — none"
+      ],
+      "baseline": "on base the verify fails: rg matched 0.10.3, paseo run -d, daemon helper, Node.js, activeTurnBehavior, has no steer flag, WebSocket interface"
+    },
+    "baseline": "on base the verify fails: rg matched 0.10.3, paseo run -d, daemon helper, Node.js, activeTurnBehavior, has no steer flag, WebSocket interface",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the channel doc names paseo run --no-wait, the 0.12.0 floor at doctor and pre-spawn, and paseo send --behavior steer with the -- separator for every provider",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "the channel doc no longer names the Node helper, 0.10.3, the WebSocket interface or a pi-only steer file",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          },
+          {
+            "requirement": "frontmatter decisions list carries the seven paseo-013-compat store ids",
+            "artifact": "docs/knowledge/areas/bee-herding/the-paseo-channel.md"
+          }
+        ],
+        "recorded_at": "2026-10-27T13:19:54.045Z",
+        "recorded_by": "80478409-d636-4470-9ad5-34b1f2403b58",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

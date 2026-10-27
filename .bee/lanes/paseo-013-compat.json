@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"paseo-013-compat\" started at phase \"exploring\" (lane).",
   "next_action": "uat: user tests a Paseo worker spawn and steer on main, then approves uat",
   "created_at": "2026-10-27T13:04:34.160Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "feature",
