@@ -1249,7 +1249,7 @@ fn paseo_ready_ok_when_every_check_passes() {
         Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
     );
     let fake_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map,
     };
     let home_str = home.to_string_lossy().to_string();
@@ -1280,7 +1280,7 @@ fn paseo_ready_each_failing_check_named() {
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
 
@@ -1293,13 +1293,13 @@ fn paseo_ready_each_failing_check_named() {
     );
 
     let old_version_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.2".to_string()),
+        version_out: Ok("0.11.4".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let old_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&old_version_cli), Some(true)).expect("row");
     assert_eq!(old_version_row.ok, Some(false));
     assert!(
-        old_version_row.detail.contains("upgrade to 0.10.3 with npm @getpaseo/cli"),
+        old_version_row.detail.contains("upgrade to 0.12.0 with npm @getpaseo/cli"),
         "{}",
         old_version_row.detail
     );
@@ -1311,7 +1311,7 @@ fn paseo_ready_each_failing_check_named() {
     let fail_version_row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&fail_version_cli), Some(true)).expect("row");
     assert_eq!(fail_version_row.ok, Some(false));
     assert!(
-        fail_version_row.detail.contains("upgrade to 0.10.3 with npm @getpaseo/cli"),
+        fail_version_row.detail.contains("upgrade to 0.12.0 with npm @getpaseo/cli"),
         "{}",
         fail_version_row.detail
     );
@@ -1359,7 +1359,7 @@ fn paseo_ready_orphan_marker_named() {
         Ok(r#"{"Status": "closed", "Archived": true}"#.to_string()),
     );
     let cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map,
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
@@ -1402,7 +1402,7 @@ fn paseo_ready_delete_failed_marker_named() {
         Ok(r#"{"Status": "running", "Archived": false}"#.to_string()),
     );
     let cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map,
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&cli), Some(true)).expect("row");
@@ -1433,7 +1433,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_version_output_fails(
         _ => mock_herdr_env(k),
     };
     let appimage_cli = FakeDoctorPaseoCli {
-        version_out: Ok("[desktop] app startup { version: '0.10.3' }\n0.10.3".to_string()),
+        version_out: Ok("[desktop] app startup { version: '0.12.0' }\n0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&appimage_cli), Some(true)).expect("row");
@@ -1472,7 +1472,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_appimage_wrapper_script_fails(
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1511,7 +1511,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_npm_style_passes() {
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1546,7 +1546,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_isolated_folder_fails()
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1582,7 +1582,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_replaced_non_link_auth_fails()
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1618,7 +1618,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_broken_symlink_auth_fails() {
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1646,7 +1646,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_missing_folder_home_auth_prese
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");
@@ -1681,7 +1681,7 @@ fn paseo_ready_contract_doctor_paseo_cli_a79e3edc_good_isolated_folder_passes() 
         _ => mock_herdr_env(k),
     };
     let passing_cli = FakeDoctorPaseoCli {
-        version_out: Ok("0.10.3".to_string()),
+        version_out: Ok("0.12.0".to_string()),
         inspect_map: std::collections::HashMap::new(),
     };
     let row = paseo_ready_row_with_env_and_cli(&root, &env, Some(&passing_cli), Some(true)).expect("row");

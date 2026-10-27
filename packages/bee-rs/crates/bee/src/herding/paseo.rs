@@ -216,7 +216,7 @@ pub fn run_argv(
 ) -> Vec<String> {
     let mut argv = vec![
         "run".to_string(),
-        "-d".to_string(),
+        "--no-wait".to_string(),
         "--json".to_string(),
         "--provider".to_string(),
     ];
@@ -502,6 +502,18 @@ pub fn send_argv(id: &str, text: &str) -> Vec<String> {
         "send".to_string(),
         id.to_string(),
         "--no-wait".to_string(),
+        text.to_string(),
+    ]
+}
+
+pub fn send_steer_argv(id: &str, text: &str) -> Vec<String> {
+    vec![
+        "send".to_string(),
+        id.to_string(),
+        "--behavior".to_string(),
+        "steer".to_string(),
+        "--no-wait".to_string(),
+        "--".to_string(),
         text.to_string(),
     ]
 }
@@ -1236,7 +1248,7 @@ mod tests {
             argv,
             vec![
                 "run",
-                "-d",
+                "--no-wait",
                 "--json",
                 "--provider",
                 "pi/deepseek-flash",
@@ -1265,7 +1277,7 @@ mod tests {
             cell_argv,
             vec![
                 "run",
-                "-d",
+                "--no-wait",
                 "--json",
                 "--provider",
                 "pi/deepseek-flash",
@@ -1303,7 +1315,7 @@ mod tests {
             minimal_argv,
             vec![
                 "run",
-                "-d",
+                "--no-wait",
                 "--json",
                 "--provider",
                 "claude",
@@ -1530,6 +1542,18 @@ mod tests {
         assert_eq!(
             permit_argv("agent-1", false, None, true),
             vec!["permit", "deny", "agent-1", "--all"]
+        );
+        assert_eq!(
+            send_steer_argv("agent-1", "tighten the test"),
+            vec![
+                "send",
+                "agent-1",
+                "--behavior",
+                "steer",
+                "--no-wait",
+                "--",
+                "tighten the test"
+            ]
         );
     }
 
