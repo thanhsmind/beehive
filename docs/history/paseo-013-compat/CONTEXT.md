@@ -26,7 +26,7 @@ These are fixed. Planning must implement them exactly — cited, never reinterpr
 
 | ID | Decision | Rationale (only if it changes implementation) |
 |----|----------|-----------------------------------------------|
-| D1 | `bee herding run` starts a Paseo worker with `paseo run --no-wait --json ...`; the short flag `-d` is never passed. | 0.12.0 deprecated `--background`/`-d`; a later release may remove it and every worker spawn would fail. |
+| D1 | `bee herding run` starts a Paseo worker with `paseo run --no-wait --json ...`; the short flag `-d` is never passed. | 0.12.0 deprecated `--background`/`-d`; a future release can remove it and every worker spawn would fail. |
 | D2 | `bee doctor` requires Paseo CLI 0.12.0 or newer for the Paseo channel (was 0.10.3); the FIX lines name 0.12.0. | `--no-wait` and `--behavior steer` are the 0.12+ surface bee relies on. |
 | D3 | `bee herding steer` on a Paseo job steers every provider through the CLI: `paseo send <agent-id> --behavior steer --no-wait <text>`. The Node helper `paseo_steer.mjs`, the `@getpaseo/cli` package-dir lookup, the `SteerRunner` seam, the provider allow-list and the pi-specific mailbox steer file on Paseo jobs are removed. The send goes through the `PaseoCli` seam so tests use a fake CLI. Non-Paseo jobs keep writing the mailbox `steer-N.json` file unchanged. | Pi steering is native in Paseo since 0.7.2; no bee code reads the pi steer file on a Paseo job; the helper needed Node and the npm package directory. |
 | D4 | The steer verb fails with code `paseo_steer_failed` and the FIX line `check the Paseo daemon` when `paseo send` returns an error; `paseo_steer_unsupported` stays only for a job whose agent has no paseo config. | The provider check is gone, so its refusal code goes with it. |
