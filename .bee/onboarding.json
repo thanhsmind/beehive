@@ -11,9 +11,9 @@
       "INDEX.md": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
       "README.md": "3f9ad922145df53981bce91ae306dd96b7e48283918e7cd2da0074b2ce930e7d",
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
-      "architecture.md": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
+      "architecture.md": "0df001a4c6bfddd67c26517acc83c92cd0bbb3783b135e3c7a4ce7c76a1f4e83",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
-      "debugging.md": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
+      "debugging.md": "8b2d4018fc461c68f7582c53967f2d76bdbb9f17a4d9461579862959e1423572",
       "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
       "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
@@ -23,7 +23,7 @@
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
       "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
-      "planning.md": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
+      "planning.md": "ad649f8ae8e8ae11c83d0c6b9cbc3c7f0430cf99ae1d8c0989e64b585c50d667",
       "review.md": "320e48016138df67c3b4082bd8a588d190317e4f2623bfb370023ae914c0c681",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
       "tests.md": "f98ac132b9562658caa93cb50448cf96ac6d956002d804d556e833cc0c77ab25",
@@ -81,5 +81,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-10-25T00:28:52.704Z"
+  "updated_at": "2026-10-27T06:00:27.935Z"
 }
