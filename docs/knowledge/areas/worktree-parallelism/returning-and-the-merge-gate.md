@@ -166,6 +166,9 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
   never refuse the merge, both ride the JSON result and the printed text (`proof-carried:` beside
   `proof-stale:`), and both fail open — any git call that does not exit 0, an empty patch-id, or
   an empty range leaves the first-pass answer untouched and carries nothing.
+  The patch text is handed to the patch-id filter on its own thread while the door reads the
+  answer, so a long branch whose patch text exceeds the pipe buffer cannot deadlock the merge
+  (run-git-stdin-thread, decision `0154bcb7`, cell rgst-1); the fail-open rule above is unchanged.
 - **Keeping the worktree is the default outcome now; teardown is the opt-in
   (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
   commits something, the worktree, its branch, and its registration all stay in place, and the

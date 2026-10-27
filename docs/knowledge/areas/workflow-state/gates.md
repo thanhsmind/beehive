@@ -766,6 +766,8 @@ a malformed record has earned none.
 
 The plan preview accepts either documented flag spelling or the existing subcommand spelling. A following lane selector remains a separate argument. Preview records the current plan packet and hash. It preserves existing approval values, whether false or true, in both default and lane records.
 
+Adding cells checks each cell of the batch against the approved packet and refuses only a packet cell that is neither in the batch nor already stored, naming it; a batch smaller than the packet is accepted on its own, so a slice can land in several calls (open-issues-sweep, decision `01708244`, issue #127).
+
 ## Pointers (implementation)
 
 - Preview flag repair: `packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs` treats `preview` as a boolean. Seven actual CLI tests in `packages/bee-rs/crates/bee/tests/gate_preview.rs` verify aliases and the real `approved_gates` fields. Evidence: `docs/history/codex-reliability-closeout/preview.md` and `crc-4-judge-final.json` in the same directory, decision `be57302a`.

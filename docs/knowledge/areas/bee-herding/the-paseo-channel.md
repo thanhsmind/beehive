@@ -191,6 +191,8 @@ The config key `herding.paseo.on_model_mismatch` sets what a mismatch does (slp-
 In both modes the run envelope carries `model_mismatch: {configured: {model, thinking}, observed: {model, thinking}}`, read from `job.json`.
 The runner never retries a worker on a model mismatch.
 
+When the run's ceiling expires, the runner stops the agent with `paseo stop` — on the first round and on every `--continue` round alike — and ends the run with outcome `timed_out_ceiling`. The agent record stays for inspection and is not archived, so the leader can read what the worker left and prompt it again (open-issues-sweep, decision `438886cc`, issue #123).
+
 Today's flash route reports `thinking off` against a configured `thinking medium`, so every flash worker would be refused under `refuse`. That is why `warn` stays the default.
 
 ## Liveness states

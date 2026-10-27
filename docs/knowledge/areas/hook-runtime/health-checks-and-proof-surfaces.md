@@ -115,6 +115,10 @@ against isolated fixtures, asserting that a denied action changed nothing.
   `.bee/onboarding.json` `bee_version` first (null or absent is missing),
   falls back to the plugin manifest, and reports unknown with neither. Every
   host remedy names the bee installer, never cargo (host-packaging-gaps D1).
+  Reading the installed binary's version retries a short while when the
+  executable is reported busy — a freshly spawned worker may still be loading
+  it — so a transient busy file never reads as a stale or missing binary
+  (spawn-busy-retry, cell sbr-1, 2026-10-07).
   Herding transport validates configured agent pane transport readiness (tmux
   or direct) — except when every `team.pi` slot is a herding slot whose agent
   is a Pi process: those dispatch with `--no-pane`, so the row is ok with no

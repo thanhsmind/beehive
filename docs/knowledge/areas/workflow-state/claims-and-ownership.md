@@ -130,6 +130,14 @@ red.
 
 ## Business Rules
 
+- R160 — A refused claim never leaves a held lease on an open cell: the
+  post-lease unwind releases under the session the claim file recorded — an
+  adopted session included — not under the caller's current identity
+  (open-issues-sweep, decision `b364bcbe`, issue #125).
+- R161 — Whether a gate holder's process is dead is answered by the one shared
+  liveness probe on every platform; on Windows the earlier platform-specific
+  answer read live processes as dead (open-issues-sweep, decision `467fc36c`,
+  issue #96).
 - R17 — Concurrent ownership is decided by atomic exclusive creation, never by
   check-then-write; a live claim is mutated only under its own exclusive gate;
   reclaim requires expired lifetime AND stale heartbeat, re-verified under that

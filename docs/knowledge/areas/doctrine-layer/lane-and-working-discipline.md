@@ -22,6 +22,17 @@ govern the working residue of a cell rather than its content.
 
 ## Business Rules
 
+- **R40** — Three playbook rules live in their skill homes, one home each
+  (pstack-playbook-rules, decisions `e313792a`, `11984334`, `480ed73a`; cell
+  ppr-1, 2026-10-17): a worker-failure response table in bee-swarming (probe
+  read-only first, retry by failure mode, two retries then abandon and replan,
+  reconcile a late return); a CI-red classification in bee-herding's merge
+  role; and the PR shape in bee-technical-writing.
+- **R41** — A MEDIUM or HIGH row of a plan's risk map names the ONE fact it is
+  safe because of plus the run that proved it, and the live-drive map defines
+  "ready" as usable from an empty data directory with the evidence attached
+  (pstack-verify-trust, decisions `b2ded703`, `fcc20192`, `05a27950`; cell
+  pvt-1, 2026-10-17).
 - **R18** — A route class carries a PLAYBOOK, and a plan CITES it rather than
   copying it (pstack-adoption D1 as superseded by `132551fb`, D2, D3; cells
   psa-1..psa-6, 2026-09-01). `bee route --set --class` was a validated enum that

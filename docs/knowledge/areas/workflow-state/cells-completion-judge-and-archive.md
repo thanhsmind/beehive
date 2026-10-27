@@ -612,7 +612,10 @@ reminders are what fails today (knowledge-one-home D3/D4, decisions
   whose capped cells carry no `ok` mark, unless a `leader-check-deferral`
   decision names the feature. The mark is verified, not typed: a path-shaped
   artifact must exist on disk, and at least one answer must name a path from
-  the cell's own `trace.files_changed`. A `gap` verdict records without
+  the cell's own `trace.files_changed`. A directory entry in that list counts
+  as touched when the commit touched any file under it; a bare string prefix
+  that is not a directory is still refused (open-issues-sweep, decision
+  `cf4781e7`, issue #121). A `gap` verdict records without
   reopening the cell: every debt reader counts capped cells only, so a
   reopen would clear both doors and make a recorded gap the cheapest way
   past them.

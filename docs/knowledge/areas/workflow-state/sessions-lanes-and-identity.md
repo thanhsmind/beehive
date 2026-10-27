@@ -594,6 +594,11 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   is a refusal plus one forcing flag, never a second lane-naming flag, because
   the verb already spends that flag name on the triage classification
   (store-reach-gaps D1, 2026-08-21).
+- R135 — **An unbound session may name the lane record a route write targets.**
+  `route --set --lane-record <feature>` goes through the shared lane selector, so
+  a session with no lane binding can record a named lane's route without forcing
+  the default record; `--lane` stays the triage lane classification and never
+  selects a record (open-issues-sweep, decision `32712b8e`, issue #124).
 
 ## Edge Cases Settled
 

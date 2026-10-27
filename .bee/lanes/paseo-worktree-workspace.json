@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Đang chờ 2 việc chạy nền: kiểm chứng (cargo test + pi one-shot) và worker pi commit. Trong lúc đó tôi đọc mẫu `--report` để cap cell.",
-    "asked_at": "2026-10-27T14:21:09.440Z",
+    "subject": "Trong lúc 4 reader chạy, tôi đóng 41 proposal không gắn area (chỉ có bản delivery và pattern candidate). Thử trên 1 feature trước, rồi làm đ",
+    "asked_at": "2026-10-27T14:43:34.737Z",
     "session": "4694b993-475c-4851-8570-7fc0a93483b0"
   }
 }
