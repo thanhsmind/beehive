@@ -1733,5 +1733,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-27T18:31:02.742Z"
+  },
+  "owner-brief": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-10-28T10:20:20.591Z"
   }
 }

@@ -1,0 +1,119 @@
+{
+  "id": "ob-3",
+  "feature": "owner-brief",
+  "title": "Keep the full suite green after the briefs verb lands",
+  "lane": "standard",
+  "role": "code",
+  "deps": [
+    "ob-1",
+    "ob-2"
+  ],
+  "decisions": [
+    "344df11d-8580-4f39-ae29-d2b37b96143e",
+    "35853825-ede5-40c2-8598-a6beffa5acdd"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Two reds in the declared suite after ob-1 and ob-2. (1) hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget: the new briefs verb puts the command surface at 2603 characters over the 2600 budget. Keep the budget; in budget.rs shorten the header sentence by dropping the redundant clause \", never re-read\" after \"one read per verb\". (2) hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard: the fenced cells JSON of this frozen plan quotes four partial spellings as prose. Pin them in KNOWN_HISTORICAL_EXCEPTIONS (raise the array length to match), exactly as the test prints them, with no comment. Prove with the verify command. No comment of any form in what you add.",
+  "must_haves": {
+    "truths": [
+      "the command surface section fits its 2600-character budget with the budget unchanged",
+      "the documented-invocations test passes with the four owner-brief plan spans pinned"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "shorter command surface header"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "substantive": "four pinned owner-brief plan spans"
+      }
+    ],
+    "key_links": [
+      "the plan cells JSON is the source of the four spans"
+    ],
+    "prohibitions": [
+      "No change to COMMAND_SURFACE_BUDGET_CHARS",
+      "No code comment of any form"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- session_preamble cli_shape",
+  "status": "capped",
+  "trace": {
+    "worker": "ob-3-w",
+    "outcome": "Command surface fits its budget; owner-brief plan spans pinned",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [
+      "the leader capped the cell — the herding worker committed and exited before running finish — something else had to be fixed first",
+      "sync-ack: no skill owns these two test-guard files for this feature"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-28T08:08:56.247Z",
+    "behavior_change": false,
+    "verification_evidence": "leader re-ran the cell verify after the herding worker committed and stopped before cap: 110 passed, 0 failed",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- session_preamble cli_shape",
+    "claimed_at": "2026-10-28T07:56:09.700Z",
+    "sync_ack": "no skill owns these two test-guard files for this feature",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Command surface header shortened to fit its 2600-character budget; four owner-brief plan spans pinned as historical exceptions",
+      "commit": "f26fef432",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- session_preamble cli_shape — green:unit — leader re-ran the cell verify after the herding worker committed and stopped before cap: 110 passed, 0 failed",
+      "deviations": [
+        "the leader capped the cell — the herding worker committed and exited before running finish — something else had to be fixed first"
+      ],
+      "mistakes": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the command surface section fits its 2600-character budget with the budget unchanged",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "the documented-invocations test passes with the four owner-brief plan spans pinned",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+          },
+          {
+            "requirement": "the plan cells JSON is the source of the four spans",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+          }
+        ],
+        "recorded_at": "2026-10-28T08:09:01.927Z",
+        "recorded_by": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

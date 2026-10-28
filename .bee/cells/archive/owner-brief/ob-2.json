@@ -1,0 +1,237 @@
+{
+  "id": "ob-2",
+  "feature": "owner-brief",
+  "title": "Teach agents to write owner briefs at Lock and at deferral",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "35853825-ede5-40c2-8598-a6beffa5acdd",
+    "fb0d79e9-7787-472d-953a-c50095b5e7e0",
+    "701b2139-2e9c-487a-a874-2faff0c020ab",
+    "95917163-6c3f-4dbb-bb0f-3c004c7545f7",
+    "357417c6-e763-4739-a479-90c6a4429370",
+    "344df11d-8580-4f39-ae29-d2b37b96143e",
+    "3ace608d-e4f2-4f73-92cb-fd0c7975a88a",
+    "f2985740-2550-4d4a-b85e-c267d04bbb60",
+    "086e81a7-ed93-4739-af04-6b36eea1407e"
+  ],
+  "files": [
+    "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+    "docs/knowledge/areas/decision-memory/index.md",
+    "docs/knowledge/areas/decision-memory/backlog-store.md",
+    "docs/briefs/owner-brief.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    ".claude/skills/*",
+    ".agents/skills/*",
+    ".opencode/skills/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/owner-brief/CONTEXT.md",
+    "docs/history/owner-brief/spec.md",
+    "docs/history/owner-brief/brief-draft.md",
+    "docs/knowledge/areas/decision-memory/backlog-store.md",
+    "skills/bee-shaping/SKILL.md"
+  ],
+  "affects_skills": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+  ],
+  "action": "Write every sentence through the bee-technical-writing skill. Per D1-D12 of docs/history/owner-brief/CONTEXT.md.\n\n1. New knowledge concept docs/knowledge/areas/decision-memory/owner-brief-contract.md, in the frontmatter and section shape of backlog-store.md beside it. It is the ONE home of the contract: the path, the frontmatter keys and enums, the six labels for vi and en and the `brief.language` key (D3), the 120-220 word rule and how words are counted (D1), the forbidden body content (D2), who writes it and when (the adding agent through `bee backlog pbi add --brief-file` or `bee backlog propose --brief-file`; bee-shaping Lock for `docs/briefs/<feature>.md`; deferral with the reason and cost in the cost paragraph — D4, D11), what happens with no brief (added and flagged), the check `bee backlog briefs [--id <id>] [--json]` and its exit code (D8), the doctor note (D9), the live and active definitions (D5, D6), and the folding rule stated for consumers in one plain paragraph (D7) — consumers such as waggledance and agent-works apply the same rule; `docs/backlog.md` is the internal ledger (D10). Include one GOOD example: the full text of docs/history/owner-brief/brief-draft.md in a fenced block. Include one BAD example: the one-line CoS `A comment by a person on a mirrored task reaches the mapped project's leader as a dispatch; deferred from wd-mirror shaping`, followed by why it fails (no why, no cost, no reason for the deferral, no ask, an internal slug the owner cannot read). Pointers section names packages/bee-rs/crates/bee/src/verbs/brief.rs, verbs/backlog.rs and doctor.rs. Add its index line to docs/knowledge/areas/decision-memory/index.md in the existing list style, and one sentence plus link in backlog-store.md where the PBI add door is described.\n\n2. skills/bee-shaping/SKILL.md: in `## Lock (single writer)`, add a short paragraph: Lock also writes `docs/briefs/<feature>.md`, the owner brief, drawn from the Feature Boundary and the Locked Decisions in the owner language, and checks it with `bee backlog briefs --id <feature>`; the contract lives in the concept (link it by repo-relative path). Replace the two `bee backlog add` deferral mentions that defer product scope (the `Defer scope creep with` line in Explore and the `Deferred ideas that are real future work get` line in Lock) with `bee backlog pbi add --brief-file <draft>` whose cost paragraph says why the scope moved out and what waiting costs. Keep the Qualify and Brief sections as they are.\n\n3. skills/bee-planning/SKILL.md: in `## Scope integrity`, add one or two sentences: scope that moves out of the plan into the backlog goes through `bee backlog pbi add --brief-file <draft>`, with the reason for moving it and its cost in the cost paragraph; link the concept.\n\n4. skills/bee-capturing/SKILL.md: the deferral bullet in `## Capture the moment it settles` that sends user-deferred work to `bee backlog add` sends product work to `bee backlog pbi add --brief-file <draft>` instead (friction and findings keep `bee backlog add`); link the concept.\n\n5. Copy docs/history/owner-brief/brief-draft.md byte-identical to docs/briefs/owner-brief.md.\n\n6. Run `.bee/bin/bee dev regen` (render-skill-trees, onboard --apply, release-manifest --write) so every rendered skill copy and docs/history/codex-harness-hardening/release-manifest.json match (never hand-edit a rendered copy); commit the regen output with the rest. Then prove: `.bee/bin/bee dev release-manifest --check` green, `rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md` prints four paths, and `cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md` exits 0. One commit, imperative subject, trailer `cell: ob-2`.",
+  "must_haves": {
+    "truths": [
+      "the knowledge concept states the full brief contract, the check verb, the doctor note, the live and active definitions and the folding rule for consumers",
+      "the concept carries one good example and the p-bea1cb2a one-line CoS as the bad example with why it fails",
+      "bee-shaping Lock writes docs/briefs/<feature>.md and checks it with bee backlog briefs --id",
+      "shaping, planning and capturing send deferred product scope through bee backlog pbi add --brief-file with the reason and cost in the cost paragraph",
+      "docs/briefs/owner-brief.md exists and equals the draft",
+      "rendered skill copies match their sources after bee dev regen"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+        "substantive": "the one home of the owner brief contract with a good and a bad example"
+      },
+      {
+        "path": "docs/briefs/owner-brief.md",
+        "substantive": "this feature's own owner brief"
+      }
+    ],
+    "key_links": [
+      "the three skills link docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+      "docs/knowledge/areas/decision-memory/index.md lists the concept"
+    ],
+    "prohibitions": [
+      "No hand edit of a rendered skill copy",
+      "No second copy of the label set or word rule outside the concept",
+      "No claim about CLI behavior that D4, D8 or D9 does not lock",
+      "No edit to code"
+    ]
+  },
+  "verify": ".bee/bin/bee dev release-manifest --check && rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md && cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md",
+  "status": "capped",
+  "trace": {
+    "worker": "ob-2-w",
+    "outcome": "Owner brief contract concept, Lock brief step, brief-file deferral in three skills, own brief placed, renders regenerated",
+    "files_changed": [
+      "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+      "docs/knowledge/areas/decision-memory/index.md",
+      "docs/knowledge/areas/decision-memory/backlog-store.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md",
+      "docs/briefs/owner-brief.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "index.md lines were written by bee knowledge index, not by hand, and it also bumped the concept counts in docs/knowledge/areas/index.md and docs/knowledge/index.md — index.md is a generated file — the plan was wrong about a fact",
+      "docs/knowledge/areas/index.md and docs/knowledge/index.md were reserved under ob-2-w and committed — the generator changes them with the decision-memory index — something else had to be fixed first",
+      "bee dev regen also changed .bee/onboarding.json (updated_at only); left uncommitted per the leader note — not skill or manifest output — something else had to be fixed first",
+      "docs/history/owner-brief/brief-staleness-draft.md is untracked in the worktree and is not this cell's; left untouched — another writer owns it — something else had to be fixed first"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-28T07:15:42.276Z",
+    "behavior_change": false,
+    "verification_evidence": "docs and skill cell: manifest parity, four brief-file paths printed, cmp exit 0; also bee knowledge index --check (0 stale) and bee knowledge check (0 errors, new concept canonical, not orphan)",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+    "verify_command": ".bee/bin/bee dev release-manifest --check && rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md && cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md",
+    "claimed_at": "2026-10-28T07:12:47.530Z",
+    "mistakes": [
+      {
+        "wrong": "owner-brief-contract.md frontmatter first quoted a decisions entry that needed no quotes, so bee knowledge check warned not_canonical",
+        "better": "run bee knowledge check on a new concept right after writing it, and quote a list entry only where a comma or colon needs it",
+        "fix_at": "check"
+      }
+    ],
+    "report": {
+      "outcome": "Owner brief contract concept (good + bad example, D1-D12) added; shaping Lock writes and checks docs/briefs/<feature>.md; shaping, planning and capturing defer product scope through bee backlog pbi add --brief-file; docs/briefs/owner-brief.md placed; rendered skill trees and release manifest regenerated",
+      "commit": "1342b155e07810134620deb6640d170a617194d7",
+      "files": [
+        "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+        "docs/knowledge/areas/decision-memory/index.md",
+        "docs/knowledge/areas/decision-memory/backlog-store.md",
+        "docs/knowledge/areas/index.md",
+        "docs/knowledge/index.md",
+        "docs/briefs/owner-brief.md",
+        "skills/bee-shaping/SKILL.md",
+        "skills/bee-planning/SKILL.md",
+        "skills/bee-capturing/SKILL.md",
+        ".claude-plugin/skills/*",
+        ".codex-plugin/skills/*",
+        ".claude/skills/*",
+        ".agents/skills/*",
+        ".opencode/skills/*",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check && rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md && cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md — green:static — docs and skill cell: manifest parity, four brief-file paths printed, cmp exit 0; also bee knowledge index --check (0 stale) and bee knowledge check (0 errors, new concept canonical, not orphan)",
+      "deviations": [
+        "index.md lines were written by bee knowledge index, not by hand, and it also bumped the concept counts in docs/knowledge/areas/index.md and docs/knowledge/index.md — index.md is a generated file — the plan was wrong about a fact",
+        "docs/knowledge/areas/index.md and docs/knowledge/index.md were reserved under ob-2-w and committed — the generator changes them with the decision-memory index — something else had to be fixed first",
+        "bee dev regen also changed .bee/onboarding.json (updated_at only); left uncommitted per the leader note — not skill or manifest output — something else had to be fixed first",
+        "docs/history/owner-brief/brief-staleness-draft.md is untracked in the worktree and is not this cell's; left untouched — another writer owns it — something else had to be fixed first"
+      ],
+      "mistakes": [
+        "owner-brief-contract.md frontmatter first quoted a decisions entry that needed no quotes, so bee knowledge check warned not_canonical — run bee knowledge check on a new concept right after writing it, and quote a list entry only where a comma or colon needs it — check"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 402 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "the knowledge concept states the full brief contract, the check verb, the doctor note, the live and active definitions and the folding rule for consumers",
+            "artifact": "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+          },
+          {
+            "requirement": "the concept carries one good example and the p-bea1cb2a one-line CoS as the bad example with why it fails",
+            "artifact": "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+          },
+          {
+            "requirement": "bee-shaping Lock writes docs/briefs/<feature>.md and checks it with bee backlog briefs --id",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "shaping, planning and capturing send deferred product scope through bee backlog pbi add --brief-file with the reason and cost in the cost paragraph",
+            "artifact": "skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": "docs/briefs/owner-brief.md exists and equals the draft",
+            "artifact": "docs/briefs/owner-brief.md"
+          },
+          {
+            "requirement": "rendered skill copies match their sources after bee dev regen",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          },
+          {
+            "requirement": "the three skills link docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+            "artifact": "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/index.md lists the concept",
+            "artifact": "docs/knowledge/areas/decision-memory/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+            "artifact": "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/index.md",
+            "artifact": "docs/knowledge/areas/decision-memory/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/decision-memory/backlog-store.md",
+            "artifact": "docs/knowledge/areas/decision-memory/backlog-store.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/index.md",
+            "artifact": "docs/knowledge/areas/index.md"
+          },
+          {
+            "requirement": "docs/knowledge/index.md",
+            "artifact": "docs/knowledge/index.md"
+          },
+          {
+            "requirement": "docs/briefs/owner-brief.md",
+            "artifact": "docs/briefs/owner-brief.md"
+          },
+          {
+            "requirement": "skills/bee-shaping/SKILL.md",
+            "artifact": "skills/bee-shaping/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-planning/SKILL.md",
+            "artifact": "skills/bee-planning/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-capturing/SKILL.md",
+            "artifact": "skills/bee-capturing/SKILL.md"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-10-28T07:57:43.260Z",
+        "recorded_by": "172917c8-4be5-4077-8e98-d3bd61f8b912",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
