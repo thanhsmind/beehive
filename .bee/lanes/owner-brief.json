@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"owner-brief\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 628f4e6; reload the product and test \"owner-brief\", then either approve uat (\"bee gate --name uat --approved true --lane owner-brief\") or fix it in the worktree and merge again.",
+  "next_action": "Merge owner-brief and hand main to the user for uat",
   "created_at": "2026-10-28T07:04:44.080Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: owner-brief",
-    "asked_at": "2026-10-28T08:10:41.921Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
