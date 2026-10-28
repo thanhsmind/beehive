@@ -42,8 +42,11 @@ announce what settled, then record it:
   `--skill-answer "changed: <path>"` or `--skill-answer "not: <why>"`,
   or the stub is refused. Mechanism:
   docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md.
-- The user defers work ("later", "phase 2") → `bee backlog add` the
-  same turn, announce-then-do.
+- The user defers product work ("later", "phase 2") → `bee backlog pbi
+  add --brief-file <draft>` the same turn, announce-then-do; the cost
+  paragraph names why it waits and what waiting costs
+  (`docs/knowledge/areas/decision-memory/owner-brief-contract.md`).
+  Friction and findings keep `bee backlog add`.
 - A settlement that contradicts shipped behavior is recorded as "not
   yet implemented — see backlog", never stated as current.
 
