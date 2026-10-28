@@ -611,7 +611,7 @@ pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
 }
 
 pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
-    let problems = crate::verbs::brief::owner_view(root)["problems"].as_u64().unwrap_or(0);
+    let problems = crate::verbs::brief::owner_view(root, root)["problems"].as_u64().unwrap_or(0);
     if problems == 0 {
         return None;
     }

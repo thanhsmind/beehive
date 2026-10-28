@@ -283,10 +283,10 @@ fn brief_value(id: &str, status: &BriefStatus) -> Value {
     json!({"status": status.word(), "path": brief_rel(id), "defects": status.defects()})
 }
 
-pub(crate) fn owner_view(root: &Path) -> Value {
-    let (language, unknown) = brief_language(root);
-    let features = active_features(root);
-    let pbis = super::backlog::fold_pbi_records(root).unwrap_or_default();
+pub(crate) fn owner_view(store_root: &Path, docs_root: &Path) -> Value {
+    let (language, unknown) = brief_language(docs_root);
+    let features = active_features(store_root);
+    let pbis = super::backlog::fold_pbi_records(store_root).unwrap_or_default();
     let field = |p: &Value, k: &str| p.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let folds_into = |p: &Value| {
         field(p, "status") == "in-flight" && features.contains_key(&field(p, "feature"))
@@ -294,9 +294,9 @@ pub(crate) fn owner_view(root: &Path) -> Value {
     let mut items = Vec::new();
     let mut problems = 0usize;
     for (slug, phase) in &features {
-        let status = brief_status(root, slug);
+        let status = brief_status(docs_root, slug);
         let title = match status {
-            BriefStatus::Ok => std::fs::read_to_string(root.join(brief_rel(slug)))
+            BriefStatus::Ok => std::fs::read_to_string(docs_root.join(brief_rel(slug)))
                 .ok()
                 .and_then(|t| frontmatter_title(&t))
                 .unwrap_or_else(|| slug.clone()),
@@ -323,7 +323,7 @@ pub(crate) fn owner_view(root: &Path) -> Value {
             continue;
         }
         let id = field(p, "id");
-        let status = brief_status(root, &id);
+        let status = brief_status(docs_root, &id);
         problems += usize::from(!matches!(status, BriefStatus::Ok));
         items.push(json!({
             "kind": "pbi",
@@ -480,7 +480,7 @@ ask: build
         std::fs::create_dir_all(root.join("docs/briefs")).unwrap();
         std::fs::write(root.join("docs/briefs/alpha.md"), VI_DRAFT).unwrap();
 
-        let view = owner_view(root);
+        let view = owner_view(root, root);
         let items = view["items"].as_array().unwrap();
         let ids: Vec<&str> = items.iter().map(|i| i["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["alpha", "p-00000002", "p-00000006"]);
@@ -495,5 +495,24 @@ ask: build
         assert_eq!(view["problems"], 2);
         assert_eq!(view["language"], "vi");
         assert_eq!(view["unknown_language"], Value::Null);
+    }
+
+    #[test]
+    fn owner_view_reads_briefs_from_the_docs_root_and_records_from_the_store_root() {
+        let store = root_with_config(None);
+        let docs = root_with_config(None);
+        std::fs::write(store.path().join(".bee/state.json"), r#"{"feature":"alpha","phase":"executing"}"#)
+            .unwrap();
+        std::fs::create_dir_all(docs.path().join("docs/briefs")).unwrap();
+        std::fs::write(docs.path().join("docs/briefs/alpha.md"), VI_DRAFT).unwrap();
+
+        let view = owner_view(store.path(), docs.path());
+        assert_eq!(view["items"][0]["id"], "alpha");
+        assert_eq!(view["items"][0]["brief"]["status"], "ok");
+        assert_eq!(view["problems"], 0);
+
+        let view = owner_view(store.path(), store.path());
+        assert_eq!(view["items"][0]["brief"]["status"], "missing");
+        assert_eq!(view["problems"], 1);
     }
 }

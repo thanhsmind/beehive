@@ -620,6 +620,7 @@ fn lock_busy_message(holder: &Option<Value>) -> String {
 
 struct Ctx {
     root: PathBuf,
+    docs: PathBuf,
     drift: Drift,
 }
 
@@ -636,13 +637,15 @@ fn preamble_at(
     pre_json: bool,
     t0: Instant,
 ) -> Result<Option<Ctx>, ExitCode> {
-    let root = match resolve_root_serving_granted(cwd).0 {
+    let (resolved, here) = resolve_root_serving_granted(cwd);
+    let root = match resolved {
         Roots::Ordinary(r) => r,
         Roots::Unsupported(why) => return Err(emit_unsupported_root(cwd, cmd, pre_json, t0, &why)),
         Roots::None => return Err(emit_no_root_error(cwd, cmd, pre_json, t0)),
     };
     let drift = check_manifest_drift(&root);
-    Ok(Some(Ctx { root, drift }))
+    let docs = here.unwrap_or_else(|| root.clone());
+    Ok(Some(Ctx { root, docs, drift }))
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -954,7 +957,7 @@ fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     row.insert("story".into(), Value::String(item.title.clone()));
     row.insert("cos".into(), Value::String(item.cos.clone()));
     row.insert("feature".into(), Value::String(feature_out.clone()));
-    let warning = store_brief(&ctx.root, &item.id, draft.as_deref(), &mut row);
+    let warning = store_brief(&ctx.docs, &item.id, draft.as_deref(), &mut row);
     let text = format!("Proposed {}: \"{}\" (feature: {feature_out}){warning}", item.id, item.title);
     Some(emit_success(
         &ctx.root,
@@ -997,7 +1000,7 @@ fn run_pbi_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let mut value = pbi_value(&item);
     let warning = match value.as_object_mut() {
-        Some(m) => store_brief(&ctx.root, &item.id, draft.as_deref(), m),
+        Some(m) => store_brief(&ctx.docs, &item.id, draft.as_deref(), m),
         None => String::new(),
     };
     let text = format!("Added PBI {}: \"{}\"{warning}", item.id, item.title);
@@ -1059,7 +1062,7 @@ fn run_briefs(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let (result, text, ok) = match parsed.flags.get("id") {
         Some(id) => {
-            let status = brief::brief_status(&ctx.root, id);
+            let status = brief::brief_status(&ctx.docs, id);
             let rel = brief::brief_rel(id);
             let lines = brief_lines(&status, format!("{} {rel}", status.mark()));
             let value = serde_json::json!({
@@ -1071,7 +1074,7 @@ fn run_briefs(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
             (value, lines.join("\n"), matches!(status, brief::BriefStatus::Ok))
         }
         None => {
-            let view = brief::owner_view(&ctx.root);
+            let view = brief::owner_view(&ctx.root, &ctx.docs);
             let mut lines = Vec::new();
             if let Some(unknown) = view["unknown_language"].as_str() {
                 lines.push(format!("warning: brief.language \"{unknown}\" is unknown — checked with the vi labels"));
