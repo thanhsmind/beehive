@@ -153,6 +153,9 @@ scoping detail in `references/planning-reference.md` ("Test scoping"). Then
 When the shape cannot fit the budget, never quietly shrink a locked decision
 or drop a must-have. Answer SPLIT RECOMMENDED — slice boundaries honoring
 every decision, the user choosing what waits; a cheaper swap needs a supersede.
+Scope that moves out of the plan into the backlog goes through `bee backlog
+pbi add --brief-file <draft>`, its cost paragraph naming why it moved and what
+waiting costs (`docs/knowledge/areas/decision-memory/owner-brief-contract.md`).
 
 ## Headless
 

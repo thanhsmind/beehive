@@ -16,6 +16,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 pub mod backlog;
+pub mod brief;
 pub mod blind;
 pub mod capture;
 pub mod cells;

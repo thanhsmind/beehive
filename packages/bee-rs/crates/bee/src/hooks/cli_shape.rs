@@ -1191,7 +1191,7 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 15] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 19] = [
         // prd-1 (pi-relocation-delivery): the fenced cells JSON of that closed
         // plan carries this span as a cell TITLE naming the verb the cell adds
         // ("Add bee cells rebind-session --from --to") — a name for the flag
@@ -1239,6 +1239,10 @@ mod documented_invocations {
         // ran or should copy; the plan is frozen, so the line is pinned here
         // instead of rewritten.
         r#"bee cells dissent passes --new-evidence to the sibling", "registry_payload.json declares --new-evidence on cells dissent""#,
+        r#"bee backlog pbi add --brief-file"#,
+        r#"bee backlog propose --brief-file"#,
+        r#"bee backlog briefs --id""#,
+        r#"bee backlog pbi add --brief-file with the reason and cost in the cost paragraph""#,
     ];
 
     #[test]

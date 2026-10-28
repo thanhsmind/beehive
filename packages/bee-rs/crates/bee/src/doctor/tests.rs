@@ -1807,3 +1807,28 @@ fn the_opencode_row_reports_the_belt_contract_check() {
     let (detail, fix) = opencode(&root);
     assert!(fix.is_none() && detail.contains("belt contract unknown"), "{detail}");
 }
+
+#[test]
+fn a_missing_owner_brief_is_a_note_that_never_moves_the_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = claude_ready_repo(tmp.path());
+    let env = |_: &str| -> Option<String> { None };
+    let (before, _) = doctor_report(&root, Runtime::Claude, &env);
+    assert!(owner_briefs_advisory(&root).is_none());
+    std::fs::write(
+        root.join(".bee/backlog.jsonl"),
+        "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-0000000a\",\"title\":\"t\",\"status\":\"proposed\"}\n",
+    )
+    .unwrap();
+    let (after, lines) = doctor_report(&root, Runtime::Claude, &env);
+    assert_eq!(after["overall_status"], before["overall_status"]);
+    let row = after["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["row"] == "owner_briefs")
+        .expect("the owner_briefs row");
+    assert_eq!(row["status"], "note");
+    assert!(row["detail"].as_str().unwrap().starts_with("1 live item(s)"), "{row}");
+    assert!(lines.iter().any(|l| l.starts_with("  note owner_briefs") && l.contains("bee backlog briefs")), "{lines:?}");
+}

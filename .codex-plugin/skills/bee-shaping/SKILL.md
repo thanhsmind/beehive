@@ -64,8 +64,9 @@ Make each reasoning move in plain words — "let me check what we're
 assuming", not "applying First Principles"; the method names in
 `.bee/expertise/thinking.md` are your routing table, not conversation
 vocabulary. `bee decisions log` the moment each answer settles — never
-batched at the end. Defer scope creep with `bee backlog add`, then
-return to the current question. Never answer your own question.
+batched at the end. Defer scope creep with `bee backlog pbi add
+--brief-file <draft>`, whose cost paragraph says why the scope moved out
+and what waiting costs, then return to the current question. Never answer your own question.
 
 Stop when every locked decision can be written without inventing intent
 and each remaining unknown is a named Open Question; past that,
@@ -128,12 +129,19 @@ is the one decision record, written here for both paths. Lock renders
 what Explore or Qualify resolved — it never originates a decision, term,
 boundary, or scope note; a section the input left silent is an Open
 Question, never a guess. Concrete language only. Deferred ideas that are
-real future work get `bee backlog add` in the same turn. Downstream work
+real future work get `bee backlog pbi add --brief-file <draft>` in the
+same turn, the cost paragraph saying why the scope moved out and what
+waiting costs. Downstream work
 cites D-IDs, never reinterprets them (AGENTS.md). When a
 `docs/discovery/<effort>/` map backs the feature, Lock consumes the
 map's Decisions so far — the settled answers and their D-IDs — straight
 into CONTEXT.md, citing them; it never re-asks a question the map
 already resolved (D8).
+
+Lock also writes `docs/briefs/<feature>.md`, the owner brief, drawn from
+the Feature Boundary and the Locked Decisions in the owner language, and
+checks it with `bee backlog briefs --id <feature>`. The contract lives in
+`docs/knowledge/areas/decision-memory/owner-brief-contract.md`.
 
 **The `tiny`/`docs` brief (D1, traceable-runs).** Every file-touching
 request, at every lane, needs a brief written before any source edit —

@@ -610,6 +610,17 @@ pub(crate) fn team_config_advisory(root: &Path) -> Option<(Value, String)> {
     ))
 }
 
+pub(crate) fn owner_briefs_advisory(root: &Path) -> Option<(Value, String)> {
+    let problems = crate::verbs::brief::owner_view(root, root)["problems"].as_u64().unwrap_or(0);
+    if problems == 0 {
+        return None;
+    }
+    let detail = format!(
+        "{problems} live item(s) or active feature(s) have no valid owner brief — run: bee backlog briefs"
+    );
+    Some((json!({"row": "owner_briefs", "status": "note", "detail": detail.clone()}), detail))
+}
+
 /// Source that ships without reinstalling the binary the hooks call is
 /// inert — a pattern this repo has paid for more than once (four features
 /// shipped to main in one session with `.bee/bin/bee` never rebuilt). This
@@ -1506,6 +1517,10 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     if let Some((row, _)) = &team_advisory {
         all.push(row.clone());
     }
+    let briefs_advisory = owner_briefs_advisory(root);
+    if let Some((row, _)) = &briefs_advisory {
+        all.push(row.clone());
+    }
     let runtime_checks = runtime_checks_with_env(root, env);
     all.extend(runtime_checks.iter().map(RuntimeCheck::value));
 
@@ -1545,6 +1560,9 @@ fn doctor_report(root: &Path, runtime: Runtime, env: &dyn Fn(&str) -> Option<Str
     }
     if let Some((_, detail)) = &team_advisory {
         lines.push(format!("  note {:<22} {}", "legacy_models_key", detail));
+    }
+    if let Some((_, detail)) = &briefs_advisory {
+        lines.push(format!("  note {:<22} {}", "owner_briefs", detail));
     }
     for check in &runtime_checks {
         lines.extend(check.lines());
