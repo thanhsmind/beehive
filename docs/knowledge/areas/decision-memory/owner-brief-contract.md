@@ -77,6 +77,10 @@ agent-works (`mirror.mjs`) parse it byte for byte, so the format below never cha
   door validates the draft against this contract. A valid draft is copied unchanged to
   `docs/briefs/<id>.md` under the new id. A malformed draft refuses the add, names every defect,
   and writes nothing: no PBI event and no brief.
+- **Brief files live in the checkout the command runs in.** Inside a feature worktree, the
+  stored brief and every brief check read and write that worktree's `docs/briefs/`, so the
+  brief merges with the branch. The PBI record and the lane records stay in the main
+  checkout's store (D14).
 - **No brief is recorded and flagged, never silent.** With no `--brief-file`, the PBI is still
   added. The result carries `brief: "missing"` in JSON, plus a warning line that names
   `docs/briefs/<id>.md` and `bee backlog briefs`.
