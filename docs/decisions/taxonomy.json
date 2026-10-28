@@ -762,6 +762,7 @@
     "issue-sweep",
     "contract:issue-sweep-1024",
     "principles",
-    "contract:pi-belt-before-agent-start"
+    "contract:pi-belt-before-agent-start",
+    "contract:owner-brief"
   ]
 }
