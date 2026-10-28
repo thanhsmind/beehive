@@ -27,6 +27,7 @@ Every new backlog item and every shaped feature is born with a decision-ready ow
 | D11 | bee-shaping's Lock writes `docs/briefs/<feature>.md` from the Feature Boundary and the Locked Decisions and checks it with `bee backlog briefs --id <feature>`. When shaping or planning defers scope into a backlog item, it adds the PBI with `--brief-file`, and `Chi phí và rủi ro` carries the reason for the deferral and its cost. | This is the gap behind agent-works p-bea1cb2a. |
 | D12 | Skills (bee-shaping, bee-planning, bee-capturing deferral line) and one knowledge concept teach the contract with one good example and one bad example; the bad example is the one-sentence CoS of agent-works p-bea1cb2a. | Cold agents copy examples. |
 | D13 | The staleness digest (`sources_digest`) is out of scope; it is deferred as a proposed PBI that carries its own brief. No other repo is backfilled; this repo's own backfill of existing items is left to its leader after the release. | Spec marked the digest optional and forbade backfill. |
+| D14 | Brief files — the draft read, the stored brief and every brief status read — resolve against the checkout the command runs in (the feature worktree when inside one); the PBI store and lane records stay at the control root. Added during execution after a live run from the worktree reported an existing brief as missing. | Lock writes the feature brief inside the worktree and it merges with the branch. |
 
 ### Agent's Discretion
 

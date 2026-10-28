@@ -88,6 +88,8 @@ Slice queue: S1 only.
 |---|---|---|---|---|---|
 | ob-1 | Check owner briefs at the add door and list the owner view | `verbs/brief.rs` (new), `verbs/backlog.rs`, `verbs/mod.rs`, `doctor.rs`, `router.rs`, `generated/registry_payload.json` | — | `bee backlog pbi add --brief-file x.md` stores `docs/briefs/<id>.md` or refuses with every defect; with no brief it warns; `bee backlog briefs` lists features with folded items and names missing briefs | crate tests for brief, backlog, doctor and the registry green |
 | ob-2 | Teach agents to write owner briefs at Lock and at deferral | skills (shaping, planning, capturing), knowledge concept, `docs/briefs/owner-brief.md`, regen output, release manifest | — | the Lock step and the deferral line name `--brief-file` and `bee backlog briefs`; the concept shows one good and one bad brief | regen clean, release-manifest check green, pointer check |
+| ob-3 | Keep the full suite green after the briefs verb lands | `hooks/session_preamble/budget.rs`, `hooks/cli_shape.rs` | ob-1, ob-2 | the session preamble command list fits its budget again; the plan spans no longer red the shipped-spelling test | session_preamble and cli_shape tests green |
+| ob-4 | Read and write owner briefs in the checkout the command runs in | `verbs/brief.rs`, `verbs/backlog.rs`, `doctor.rs` | ob-1 | a brief written inside the feature worktree reads as present there | brief, backlog and doctor tests green, live run from the worktree |
 
 ```json
 [
@@ -98,7 +100,18 @@ Slice queue: S1 only.
     "lane": "standard",
     "role": "code",
     "deps": [],
-    "decisions": ["35853825-ede5-40c2-8598-a6beffa5acdd", "fb0d79e9-7787-472d-953a-c50095b5e7e0", "701b2139-2e9c-487a-a874-2faff0c020ab", "95917163-6c3f-4dbb-bb0f-3c004c7545f7", "f14f8d2e-6140-4a66-bd96-b93295b07b54", "1bf04c53-dfc9-46ed-897e-e3ff0a3150c3", "357417c6-e763-4739-a479-90c6a4429370", "344df11d-8580-4f39-ae29-d2b37b96143e", "68bdb614-3607-481a-b6f6-30b3ee8449af", "3ace608d-e4f2-4f73-92cb-fd0c7975a88a"],
+    "decisions": [
+      "35853825-ede5-40c2-8598-a6beffa5acdd",
+      "fb0d79e9-7787-472d-953a-c50095b5e7e0",
+      "701b2139-2e9c-487a-a874-2faff0c020ab",
+      "95917163-6c3f-4dbb-bb0f-3c004c7545f7",
+      "f14f8d2e-6140-4a66-bd96-b93295b07b54",
+      "1bf04c53-dfc9-46ed-897e-e3ff0a3150c3",
+      "357417c6-e763-4739-a479-90c6a4429370",
+      "344df11d-8580-4f39-ae29-d2b37b96143e",
+      "68bdb614-3607-481a-b6f6-30b3ee8449af",
+      "3ace608d-e4f2-4f73-92cb-fd0c7975a88a"
+    ],
     "files": [
       "packages/bee-rs/crates/bee/src/verbs/brief.rs",
       "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
@@ -130,10 +143,22 @@ Slice queue: S1 only.
         "docs/backlog.md rendering is unchanged"
       ],
       "artifacts": [
-        {"path": "packages/bee-rs/crates/bee/src/verbs/brief.rs", "substantive": "brief_rel, brief_language, validate_brief, BriefStatus, brief_status, owner_view and their unit tests"},
-        {"path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs", "substantive": "--brief-file on pbi add and propose, run_briefs, and their tests"},
-        {"path": "packages/bee-rs/crates/bee/src/doctor.rs", "substantive": "owner_briefs_advisory wired into doctor_report as a note"},
-        {"path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json", "substantive": "brief-file parameters and the backlog.briefs entry"}
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+          "substantive": "brief_rel, brief_language, validate_brief, BriefStatus, brief_status, owner_view and their unit tests"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+          "substantive": "--brief-file on pbi add and propose, run_briefs, and their tests"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/doctor.rs",
+          "substantive": "owner_briefs_advisory wired into doctor_report as a note"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "substantive": "brief-file parameters and the backlog.briefs entry"
+        }
       ],
       "key_links": [
         "run_pbi_add and run_propose call validate_brief before add_pbi",
@@ -155,7 +180,17 @@ Slice queue: S1 only.
     "lane": "standard",
     "role": "docs",
     "deps": [],
-    "decisions": ["35853825-ede5-40c2-8598-a6beffa5acdd", "fb0d79e9-7787-472d-953a-c50095b5e7e0", "701b2139-2e9c-487a-a874-2faff0c020ab", "95917163-6c3f-4dbb-bb0f-3c004c7545f7", "357417c6-e763-4739-a479-90c6a4429370", "344df11d-8580-4f39-ae29-d2b37b96143e", "3ace608d-e4f2-4f73-92cb-fd0c7975a88a", "f2985740-2550-4d4a-b85e-c267d04bbb60", "086e81a7-ed93-4739-af04-6b36eea1407e"],
+    "decisions": [
+      "35853825-ede5-40c2-8598-a6beffa5acdd",
+      "fb0d79e9-7787-472d-953a-c50095b5e7e0",
+      "701b2139-2e9c-487a-a874-2faff0c020ab",
+      "95917163-6c3f-4dbb-bb0f-3c004c7545f7",
+      "357417c6-e763-4739-a479-90c6a4429370",
+      "344df11d-8580-4f39-ae29-d2b37b96143e",
+      "3ace608d-e4f2-4f73-92cb-fd0c7975a88a",
+      "f2985740-2550-4d4a-b85e-c267d04bbb60",
+      "086e81a7-ed93-4739-af04-6b36eea1407e"
+    ],
     "files": [
       "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
       "docs/knowledge/areas/decision-memory/index.md",
@@ -178,8 +213,14 @@ Slice queue: S1 only.
       "docs/knowledge/areas/decision-memory/backlog-store.md",
       "skills/bee-shaping/SKILL.md"
     ],
-    "affects_skills": ["skills/bee-shaping/SKILL.md", "skills/bee-planning/SKILL.md", "skills/bee-capturing/SKILL.md"],
-    "affects_specs": ["docs/knowledge/areas/decision-memory/owner-brief-contract.md"],
+    "affects_skills": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-capturing/SKILL.md"
+    ],
+    "affects_specs": [
+      "docs/knowledge/areas/decision-memory/owner-brief-contract.md"
+    ],
     "action": "Write every sentence through the bee-technical-writing skill. Per D1-D12 of docs/history/owner-brief/CONTEXT.md.\n\n1. New knowledge concept docs/knowledge/areas/decision-memory/owner-brief-contract.md, in the frontmatter and section shape of backlog-store.md beside it. It is the ONE home of the contract: the path, the frontmatter keys and enums, the six labels for vi and en and the `brief.language` key (D3), the 120-220 word rule and how words are counted (D1), the forbidden body content (D2), who writes it and when (the adding agent through `bee backlog pbi add --brief-file` or `bee backlog propose --brief-file`; bee-shaping Lock for `docs/briefs/<feature>.md`; deferral with the reason and cost in the cost paragraph — D4, D11), what happens with no brief (added and flagged), the check `bee backlog briefs [--id <id>] [--json]` and its exit code (D8), the doctor note (D9), the live and active definitions (D5, D6), and the folding rule stated for consumers in one plain paragraph (D7) — consumers such as waggledance and agent-works apply the same rule; `docs/backlog.md` is the internal ledger (D10). Include one GOOD example: the full text of docs/history/owner-brief/brief-draft.md in a fenced block. Include one BAD example: the one-line CoS `A comment by a person on a mirrored task reaches the mapped project's leader as a dispatch; deferred from wd-mirror shaping`, followed by why it fails (no why, no cost, no reason for the deferral, no ask, an internal slug the owner cannot read). Pointers section names packages/bee-rs/crates/bee/src/verbs/brief.rs, verbs/backlog.rs and doctor.rs. Add its index line to docs/knowledge/areas/decision-memory/index.md in the existing list style, and one sentence plus link in backlog-store.md where the PBI add door is described.\n\n2. skills/bee-shaping/SKILL.md: in `## Lock (single writer)`, add a short paragraph: Lock also writes `docs/briefs/<feature>.md`, the owner brief, drawn from the Feature Boundary and the Locked Decisions in the owner language, and checks it with `bee backlog briefs --id <feature>`; the contract lives in the concept (link it by repo-relative path). Replace the two `bee backlog add` deferral mentions that defer product scope (the `Defer scope creep with` line in Explore and the `Deferred ideas that are real future work get` line in Lock) with `bee backlog pbi add --brief-file <draft>` whose cost paragraph says why the scope moved out and what waiting costs. Keep the Qualify and Brief sections as they are.\n\n3. skills/bee-planning/SKILL.md: in `## Scope integrity`, add one or two sentences: scope that moves out of the plan into the backlog goes through `bee backlog pbi add --brief-file <draft>`, with the reason for moving it and its cost in the cost paragraph; link the concept.\n\n4. skills/bee-capturing/SKILL.md: the deferral bullet in `## Capture the moment it settles` that sends user-deferred work to `bee backlog add` sends product work to `bee backlog pbi add --brief-file <draft>` instead (friction and findings keep `bee backlog add`); link the concept.\n\n5. Copy docs/history/owner-brief/brief-draft.md byte-identical to docs/briefs/owner-brief.md.\n\n6. Run `.bee/bin/bee dev regen` (render-skill-trees, onboard --apply, release-manifest --write) so every rendered skill copy and docs/history/codex-harness-hardening/release-manifest.json match (never hand-edit a rendered copy); commit the regen output with the rest. Then prove: `.bee/bin/bee dev release-manifest --check` green, `rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md` prints four paths, and `cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md` exits 0. One commit, imperative subject, trailer `cell: ob-2`.",
     "must_haves": {
       "truths": [
@@ -191,8 +232,14 @@ Slice queue: S1 only.
         "rendered skill copies match their sources after bee dev regen"
       ],
       "artifacts": [
-        {"path": "docs/knowledge/areas/decision-memory/owner-brief-contract.md", "substantive": "the one home of the owner brief contract with a good and a bad example"},
-        {"path": "docs/briefs/owner-brief.md", "substantive": "this feature's own owner brief"}
+        {
+          "path": "docs/knowledge/areas/decision-memory/owner-brief-contract.md",
+          "substantive": "the one home of the owner brief contract with a good and a bad example"
+        },
+        {
+          "path": "docs/briefs/owner-brief.md",
+          "substantive": "this feature's own owner brief"
+        }
       ],
       "key_links": [
         "the three skills link docs/knowledge/areas/decision-memory/owner-brief-contract.md",
@@ -206,6 +253,111 @@ Slice queue: S1 only.
       ]
     },
     "verify": ".bee/bin/bee dev release-manifest --check && rg -l 'brief-file' skills/bee-shaping/SKILL.md skills/bee-planning/SKILL.md skills/bee-capturing/SKILL.md docs/knowledge/areas/decision-memory/owner-brief-contract.md && cmp docs/briefs/owner-brief.md docs/history/owner-brief/brief-draft.md"
+  },
+  {
+    "id": "ob-3",
+    "feature": "owner-brief",
+    "title": "Keep the full suite green after the briefs verb lands",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ob-1",
+      "ob-2"
+    ],
+    "decisions": [
+      "344df11d-8580-4f39-ae29-d2b37b96143e",
+      "35853825-ede5-40c2-8598-a6beffa5acdd"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Two reds in the declared suite after ob-1 and ob-2. (1) hooks::session_preamble::tests::the_command_surface_section_stays_inside_its_character_budget: the new briefs verb puts the command surface at 2603 characters over the 2600 budget. Keep the budget; in budget.rs shorten the header sentence by dropping the redundant clause \", never re-read\" after \"one read per verb\". (2) hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard: the fenced cells JSON of this frozen plan quotes four partial spellings as prose. Pin them in KNOWN_HISTORICAL_EXCEPTIONS (raise the array length to match), exactly as the test prints them, with no comment. Prove with the verify command. No comment of any form in what you add.",
+    "must_haves": {
+      "truths": [
+        "the command surface section fits its 2600-character budget with the budget unchanged",
+        "the documented-invocations test passes with the four owner-brief plan spans pinned"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+          "substantive": "shorter command surface header"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+          "substantive": "four pinned owner-brief plan spans"
+        }
+      ],
+      "key_links": [
+        "the plan cells JSON is the source of the four spans"
+      ],
+      "prohibitions": [
+        "No change to COMMAND_SURFACE_BUDGET_CHARS",
+        "No code comment of any form"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- session_preamble cli_shape"
+  },
+  {
+    "id": "ob-4",
+    "feature": "owner-brief",
+    "title": "Read and write owner briefs in the checkout the command runs in",
+    "lane": "standard",
+    "role": "code",
+    "deps": [
+      "ob-1"
+    ],
+    "decisions": [
+      "e47e9f57-17aa-4697-ac22-7738537cf763",
+      "344df11d-8580-4f39-ae29-d2b37b96143e",
+      "95917163-6c3f-4dbb-bb0f-3c004c7545f7"
+    ],
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/doctor.rs"
+    ],
+    "read_first": [
+      "docs/history/owner-brief/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "action": "Per D14 of docs/history/owner-brief/CONTEXT.md. Today the backlog preamble resolves ctx.root through resolve_root_serving_granted(cwd).0, which is the MAIN checkout when the command runs in a granted feature worktree, and the brief code reads and writes docs/briefs under that root; so a brief that Lock wrote inside the worktree reads as MISSING. Fix: the backlog verbs keep ctx.root for the PBI store, and gain a docs root = resolve_root_serving_granted(cwd).1 (the worktree root) when it is Some, else ctx.root. store_brief, the briefs verb (single id and listing) and the brief status inside the add doors use the docs root. Change owner_view to take two roots, owner_view(store_root, docs_root): lanes, state and the PBI fold come from store_root, brief files from docs_root; brief_status takes the docs root. doctor.rs passes its root for both. RED FIRST: a unit test in brief.rs where the store root and the docs root are two different temp dirs, a brief exists only under the docs root, and owner_view reports it ok (and reports missing when the roots are swapped). Keep every existing test green. No comment of any form in what you add. One commit, imperative subject, trailer cell: ob-4.",
+    "must_haves": {
+      "truths": [
+        "from a granted feature worktree, a brief that exists only in that worktree reads as ok in the single-id check and in the listing",
+        "a brief stored by an add door run inside a worktree lands in that worktree",
+        "the PBI store and lane records are still read from the control root",
+        "doctor still shows the owner_briefs note without changing overall_status"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/brief.rs",
+          "substantive": "owner_view takes a store root and a docs root, with the two-root test"
+        },
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+          "substantive": "docs root resolved from the granted worktree and used for every brief read and write"
+        }
+      ],
+      "key_links": [
+        "backlog.rs derives the docs root from resolve_root_serving_granted"
+      ],
+      "prohibitions": [
+        "No change to where PBI events are written",
+        "No code comment of any form"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee -- brief backlog doctor"
   }
 ]
 ```
