@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [decision-memory]
   required_context: [areas/decision-memory/backlog-store.md]
-  decisions: [owner-brief D1 35853825 (contract), "D2-D12 of docs/history/owner-brief/CONTEXT.md (forbidden content, language, the add door, live and active, folding, the check, the doctor note, the ledger, Lock and deferral, examples)"]
+  decisions: [owner-brief D1 35853825 (contract), "owner-brief D2-D14 of docs/history/owner-brief/CONTEXT.md (forbidden content, language, the add door, live and active, folding, the check, the doctor note, the ledger, Lock and deferral, examples, the out-of-scope digest, where brief files live)"]
   sources: [docs/history/owner-brief/CONTEXT.md, docs/history/owner-brief/spec.md, docs/briefs/owner-brief.md]
   authoritative_for: "decision-memory: the owner brief contract"
 ---
@@ -17,10 +17,12 @@ bee:
 
 ## Purpose
 
+<!-- bee:not-a-deferral: describes deferral as the subject of the brief contract, promises no later work -->
 The owner reads every bee project's work on an external board, and decides from what the board
 shows. A backlog item that carries only a title and a one-line `cos` gives the owner no reason,
 no cost and no choice, so the owner cannot approve it or act on it. The why lives in the
 deferring feature's `CONTEXT.md` and `plan.md`, which the owner never reads.
+<!-- /bee:not-a-deferral -->
 
 An owner brief closes that gap. It is written once, at creation, by the agent that holds the
 context, in the owner's language. Consumers such as waggledance (`/api work-items`) and
@@ -160,12 +162,14 @@ A comment by a person on a mirrored task reaches the mapped project's leader as 
 
 It fails the owner in five ways:
 
+<!-- bee:not-a-deferral: describes deferral as the subject of the brief contract, promises no later work -->
 - No why: it never says whose pain the work removes.
 - No cost: it gives no size, no risk and no dependency.
 - No reason for the deferral: "deferred" with nothing about why the scope moved out or what
   waiting costs.
 - No ask: the owner cannot tell whether to build, park, drop or answer.
 - An internal slug: `wd-mirror` names a feature the owner has never seen.
+<!-- /bee:not-a-deferral -->
 
 ## Pointers (implementation)
 

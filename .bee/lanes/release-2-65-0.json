@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-65-0",
   "mode": "tiny",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": false
   },
   "summary": "Feature \"release-2-65-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Run the release",
+  "next_action": "bee close finished \"release-2-65-0\" — feature is closed.",
   "created_at": "2026-10-28T08:49:10.509Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Kế hoạch phát hành đã duyệt. Tôi lấy giấy phép deploy rồi chạy script phát hành.",
-    "asked_at": "2026-10-28T08:49:55.567Z",
-    "session": "172917c8-4be5-4077-8e98-d3bd61f8b912"
-  },
+  "waiting_on": null,
   "gate_preview": {
     "feature": "release-2-65-0",
     "plan_sha256": "a145e12f5baecdccd5a2ca7455cdc471c5de730433e54769db158effd2b36225",

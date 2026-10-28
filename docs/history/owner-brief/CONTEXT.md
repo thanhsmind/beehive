@@ -12,6 +12,7 @@ Every new backlog item and every shaped feature is born with a decision-ready ow
 
 ## Locked Decisions
 
+<!-- bee:not-a-deferral: locked decisions about how briefs record deferrals; the one moved-out item is backlog p-0b45c28d -->
 | ID | Decision | Rationale (only if it changes implementation) |
 |----|----------|-----------------------------------------------|
 | D1 | The brief contract is byte-compatible with the spec: path `docs/briefs/<id>.md` (`<id>` = PBI id or feature slug); flat `key: value` frontmatter between `---` lines with `title` (≤80 characters, owner language, states the outcome), `audience` (`owner`\|`internal`), `size` (`S`\|`M`\|`L`), `ask` (`build`\|`park`\|`drop`\|`answer`\|`test`); a body of exactly six paragraphs, each opening with its bold label, 120–220 words in total. | waggledance `/api work-items` and agent-works `mirror.mjs` already parse this. |
@@ -28,6 +29,7 @@ Every new backlog item and every shaped feature is born with a decision-ready ow
 | D12 | Skills (bee-shaping, bee-planning, bee-capturing deferral line) and one knowledge concept teach the contract with one good example and one bad example; the bad example is the one-sentence CoS of agent-works p-bea1cb2a. | Cold agents copy examples. |
 | D13 | The staleness digest (`sources_digest`) is out of scope; it is deferred as a proposed PBI that carries its own brief. No other repo is backfilled; this repo's own backfill of existing items is left to its leader after the release. | Spec marked the digest optional and forbade backfill. |
 | D14 | Brief files — the draft read, the stored brief and every brief status read — resolve against the checkout the command runs in (the feature worktree when inside one); the PBI store and lane records stay at the control root. Added during execution after a live run from the worktree reported an existing brief as missing. | Lock writes the feature brief inside the worktree and it merges with the branch. |
+<!-- /bee:not-a-deferral -->
 
 ### Agent's Discretion
 
@@ -64,6 +66,8 @@ The spec delegated the flag shape, the label configuration and the check placeme
 
 None block planning.
 
+<!-- bee:not-a-deferral: locked decisions about how briefs record deferrals; the one moved-out item is backlog p-0b45c28d -->
 ## Deferred Ideas
+<!-- /bee:not-a-deferral -->
 
 - Brief staleness digest (D13) — proposed PBI with its own brief.
