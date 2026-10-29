@@ -2854,6 +2854,13 @@
       "packagePath": "packages/bee/design/bee-design-web/THIRD_PARTY_LICENSES.md"
     },
     {
+      "path": "packages/bee/design/bee-design/additions/wcag-2-2.md",
+      "sha256": "e4662f71fa848d236eb65d2fbdc6aa413555a28033a6510dc656d363e3cc7751",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/additions/wcag-2-2.md"
+    },
+    {
       "path": "packages/bee/design/bee-design/LICENSE.md",
       "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
       "mode": "644",
@@ -3037,7 +3044,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "af642c0fa812007e5ee1629544d77680fcd61182b98f964e11b48acc8a7b315d",
+      "sha256": "73be506b34bf2d829529c08c669247325ba6d3bee38ef97a64b09a21a0e09a35",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"
