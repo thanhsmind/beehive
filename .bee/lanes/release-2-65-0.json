@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"release-2-65-0\" — feature is closed.",
   "created_at": "2026-10-28T08:49:10.509Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-28T10:20:36.320Z",
+    "session": "172917c8-4be5-4077-8e98-d3bd61f8b912"
+  },
   "gate_preview": {
     "feature": "release-2-65-0",
     "plan_sha256": "a145e12f5baecdccd5a2ca7455cdc471c5de730433e54769db158effd2b36225",
