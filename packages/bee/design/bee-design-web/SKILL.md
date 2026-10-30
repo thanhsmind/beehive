@@ -22,4 +22,7 @@ its workflow, rules, path names and gate check apply to every page you build wit
 | The DESIGN.md contract: YAML token front matter plus the eight fixed sections | [designmd-format.md](references/designmd-format.md) |
 | Build, verify and adopt an owner component kit on React, shadcn and Tailwind | [ds-kit-onboarding.md](references/ds-kit-onboarding.md) |
 
+Commands: this pack adds the `ui` commands in [contract.md](references/contract.md) to the core contract. Call
+them only with this pack loaded. Do not run the commands in its "Not for host work" section in a host.
+
 License: the design-os taste in this skill is PolyForm Shield 1.0.0 — [LICENSE.md](LICENSE.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) in this skill; upstream https://github.com/jangtrinh/design-os.

@@ -19,4 +19,7 @@ render built from a Figma frame comes back to its Check step. When `bee-design` 
 | Drive the figma-agent CLI, the optional Figma hand | [figma-agent-hand.md](references/figma-agent-hand.md) |
 | Install and verify the design:os Figma plugin, then read an owner's design system into local stores | [figma-ds-onboarding.md](references/figma-ds-onboarding.md) |
 
+Commands: this pack adds the `ui` commands in [contract.md](references/contract.md) to the core contract. Call
+them only with this pack loaded. Do not run the commands in its "Not for host work" section in a host.
+
 License: the design-os taste in this skill is PolyForm Shield 1.0.0 — [LICENSE.md](LICENSE.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) in this skill; upstream https://github.com/jangtrinh/design-os.

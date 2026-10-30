@@ -1,8 +1,8 @@
 # Rules and their homes
 
 Every numbered rule names the place that enforces it. Mechanical rules are enforced by
-[validate.mjs](https://github.com/jangtrinh/design-os/blob/a7ad5f1/skills/design-os-designer/validate.mjs) (`<check>: <what to fix>` lines) or by the machine items of
-[look.md](https://github.com/jangtrinh/design-os/blob/a7ad5f1/skills/design-os-designer/look.md) (`L1`-`L5`, printed by [look.mjs](https://github.com/jangtrinh/design-os/blob/a7ad5f1/skills/design-os-designer/look.mjs)). Rules that only eyes can judge are
+[validate.mjs](https://github.com/jangtrinh/design-os/blob/369b041/skills/design-os-designer/validate.mjs) (`<check>: <what to fix>` lines) or by the machine items of
+[look.md](https://github.com/jangtrinh/design-os/blob/369b041/skills/design-os-designer/look.md) (`L1`-`L5`, printed by [look.mjs](https://github.com/jangtrinh/design-os/blob/369b041/skills/design-os-designer/look.mjs)). Rules that only eyes can judge are
 the eye items `L6`-`L10`. Nothing here is a taste score: the validator rejects facts, a person or a
 fresh-context critic judges the rest.
 
@@ -13,7 +13,7 @@ Rejected when: `contract` finds the file missing, without its sha256 header, wit
 match the header, or differing from what the installed `ui` generates now (an edited or stale copy).
 
 ## 2. Check what you built
-Statement: every check runs on an evidence folder made by [build.mjs](https://github.com/jangtrinh/design-os/blob/a7ad5f1/skills/design-os-designer/build.mjs), not on a working copy.
+Statement: every check runs on an evidence folder made by [build.mjs](https://github.com/jangtrinh/design-os/blob/369b041/skills/design-os-designer/build.mjs), not on a working copy.
 Keep it (API): `node build.mjs --target <page.html|folder>` prints the folder; a new run gets a new folder.
 Rejected when: `manifest` finds no manifest, a wrong schema, a missing entry, or a manifest built
 against a different contract.
@@ -52,7 +52,7 @@ Warnings and advisories stay visible but do not reject.
 
 ## 7. Fit every width
 Statement: no sideways page scroll at 375, 768 and 1440 px; wide tables scroll inside their own region.
-Keep it (API): [look.mjs](https://github.com/jangtrinh/design-os/blob/a7ad5f1/skills/design-os-designer/look.mjs) measures `scrollWidth` against `clientWidth` per width.
+Keep it (API): [look.mjs](https://github.com/jangtrinh/design-os/blob/369b041/skills/design-os-designer/look.mjs) measures `scrollWidth` against `clientWidth` per width.
 Rejected when: `L1` finds the page wider than the viewport.
 
 ## 8. Make targets reachable

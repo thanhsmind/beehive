@@ -1,7 +1,7 @@
 {
   "repo": "https://github.com/jangtrinh/design-os",
-  "commit": "a7ad5f1",
-  "version": "0.6.1",
+  "commit": "369b041",
+  "version": "0.6.2",
   "excluded": [
     { "path": "knowledge/README.md", "reason": "upstream's own agent tooling and governance, not taste" },
     { "path": "knowledge/index.json", "reason": "upstream's own agent tooling and governance, not taste" },

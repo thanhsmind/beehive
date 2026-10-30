@@ -22,6 +22,17 @@ entries_bee_design_apple="apple-swiftui-craft.md native-ios-craft.md native-ios/
 entries_bee_design_figma="figma-craft/ figma-agent-hand.md figma-ds-onboarding.md"
 designer_copied="concepts.md rules.md contract.md"
 
+contract_bee_design_charts=(chart:lint diagram:lint flow:lint ds-usage-lint)
+contract_bee_design_motion=(ds-usage-lint tenant-lint tenant-scaffold scrub-lint scrub-scaffold scroll-story
+  --not-for-host "knowledge:check|it lints upstream's own knowledge folder, not host work"
+  --not-for-host "knowledge:effect-matrix|it lints upstream's own knowledge folder, not host work"
+  --not-for-host "gflow:i2v|it drives a paid video service on the owner's account")
+contract_bee_design_web=(designmd:extract-tokens ds:change-token ds:kit pattern:lint registry:register schema
+  --not-for-host "designmd:export|upstream names it as future work; this version has no such command")
+contract_bee_design_figma=(color:contrast critique-coverage doctor ds:a11y ds:init ds:preview ds:specimen ds:status
+  ingest-figma-ds memory:record schema synthesize-conventions
+  --not-for-host "init|it writes design-os's own adapter skills and commands, which bee's packs replace")
+
 tooling="upstream's own agent tooling and governance, not taste"
 research="research inputs, not taste"
 scripts_reason="designer Node script: bee's check is the ui gate, and the three-width look sheet is deferred to the bee backlog"
@@ -86,6 +97,7 @@ fi
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+npx --yes "ease-design@$version" schema --json > "$work/schema.json"
 
 for d in "${skills[@]}"; do
   prog="$work/$d.sed"
@@ -136,6 +148,11 @@ for d in "${skills[@]}"; do
     sed -f "$prog" "$f" > "$work/out"
     cat "$work/out" > "$f"
   done
+  contract="contract_${d//-/_}"
+  if declare -p "$contract" > /dev/null 2>&1; then
+    contract="$contract[@]"
+    node "$(dirname "$0")/design-os-contract.mjs" "$d" "${!contract}" < "$work/schema.json" > "$dest/$d/references/contract.md"
+  fi
   cp "$src/LICENSE" "$dest/$d/LICENSE.md"
   cp "$src/THIRD_PARTY_LICENSES.md" "$dest/$d/THIRD_PARTY_LICENSES.md"
 done

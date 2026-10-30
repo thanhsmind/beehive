@@ -14,7 +14,7 @@ metadata:
 
 # bee-design — design taste for rendered UI
 
-This skill carries the design-os taste (ease-design 0.6.1) inside bee. One workflow: Concept → Build →
+This skill carries the design-os taste (ease-design 0.6.2) inside bee. One workflow: Concept → Build →
 Check → Hand over → Adjust. The taste is in `references/`; this file routes you to it. The check is
 `bee design gate`, the ease-design `ui gate` held to a baseline; this skill never grades taste by script.
 
@@ -38,16 +38,17 @@ A pack adds the taste for one project type. A host has only the packs it picked.
   when the pack is not installed.
 - `design-os:<path>` is a file in the upstream design-os knowledge folder that bee does not carry
   (upstream tooling, governance or research inputs). Read it at https://github.com/jangtrinh/design-os.
-- `ui <command>` is the ease-design CLI. Run it as `npx --yes ease-design@0.6.1 <command>`, and only with
-  the commands and flags in [contract.md](references/contract.md). The gate is the exception: run it as
-  `bee design gate` (step 3), never through `npx`.
+- `ui <command>` is the ease-design CLI. Run it as `npx --yes ease-design@0.6.2 <command>`, and only with
+  the commands and flags in [contract.md](references/contract.md) and in `references/contract.md` of each
+  pack you loaded. The gate is the exception: run it as `bee design gate` (step 3), never through `npx`.
 
 ## 1. Concept
 
 Read [concepts.md](references/concepts.md) and write the one-sentence concept (surface, primary action,
 shape, mode, data, states, widths). Pick a verb from its table and read only that reference, end to end.
 Read the numbered [rules.md](references/rules.md) before writing markup. [contract.md](references/contract.md)
-lists every `ui` command and flag this skill uses; call nothing that is not there.
+lists every `ui` command and flag this skill uses, and each loaded pack adds its own `references/contract.md`.
+Call only the commands in these contracts; call nothing that is not there.
 
 | Need | Verb | Read |
 | --- | --- | --- |
@@ -80,8 +81,11 @@ bee design gate
 
 It runs `ui gate` on every page (the project's `design.pages` globs, or every `*.html`) and compares
 each page with the baseline in `.bee/design/gate-baseline.json`. Exit 0 means no page gained errors or
-lost design-token coverage, and every page with no baseline has 0 errors. Exit 1 names each page that
-regressed, with its numbers. Fix the page, never the baseline: recording a baseline
+lost design-token coverage, and every page with no baseline has 0 errors. The gate also lints the chart,
+diagram, motion and flow artifacts it finds by marker: `data-chart-owned="true"`, `data-diagram-owned="true"`,
+an element of class `scrub`, and a file named `flow.json` or `*.flow.json`. When the baseline predates a
+check family or the artifact checks, the gate reports those findings and does not fail on them, until a
+person records the baseline again. Exit 1 names each page or artifact that regressed, with its numbers. Fix the page, never the baseline: recording a baseline
 (`bee design gate --write`) is a person's act, and bee refuses it while any cell is claimed. Warnings
 and advisories stay visible but do not reject.
 
