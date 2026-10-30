@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "bee-deploying-skill",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"bee-deploying-skill\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c56c7a3; reload the product and test \"bee-deploying-skill\", then either approve uat (\"bee gate --name uat --approved true --lane bee-deploying-skill\") or fix it in the worktree and merge again.",
+  "next_action": "bee close finished \"bee-deploying-skill\" — feature is closed.",
   "created_at": "2026-10-30T10:06:36.120Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
