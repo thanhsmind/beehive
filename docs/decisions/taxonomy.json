@@ -767,6 +767,10 @@
     "bee-design",
     "accessibility",
     "contract:onboard-skillstation",
-    "contract:skill-triggers-bee-deploying"
+    "contract:skill-triggers-bee-deploying",
+    "contract:pack-contracts",
+    "design-gate",
+    "contract:design-gate-artifacts",
+    "contract:design-gate-families"
   ]
 }

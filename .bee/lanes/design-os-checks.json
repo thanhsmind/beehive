@@ -1,0 +1,668 @@
+{
+  "schema_version": "1.0",
+  "feature": "design-os-checks",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"design-os-checks\" started at phase \"planning\" (lane).",
+  "next_action": "Merge the worktree, then the owner tests and approves uat",
+  "created_at": "2026-10-30T14:03:22.035Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems",
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": null,
+    "updated_at": "2026-10-30T14:03:25.672Z",
+    "feature": "design-os-checks"
+  },
+  "gate_preview": {
+    "feature": "design-os-checks",
+    "plan_sha256": "ad7719fdb9d7ced28b6aece5b9e998322134ec0f6bd337a45b812e44c87d785e",
+    "previewed_at": "2026-10-30T14:49:52.935Z",
+    "cells": [
+      {
+        "id": "doc-1",
+        "feature": "design-os-checks",
+        "title": "Check chart, diagram, flow and motion artifacts in the design gate at 0.6.2",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D12"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: add the failing tests to the existing tests module of design_group.rs (fake node and fake cli, canned JSON per page) and watch each fail for its own reason, then change the code. (1) Per D1 set PIN to ease-design@0.6.2. (2) Per D9 read data.families from ui gate output: for each page, the compared error count is the sum of families.<name>.errorCount over the baseline's family set; the baseline written by --write gains a top-level families array (sorted names the run returned); a baseline with no families key counts the 0.6.1 set a11y, autofix, content, layout, taste, tell; when the run returned any family outside the baseline's set, print one advisory line naming those families and saying they are not counted until a person re-records with bee design gate --write. A ui gate output with no families object falls back to data.errorCount. Keep recording warnings and coverage as today. (3) Per D6 detect artifacts: among the HTML pages the gate already scores, a page whose text contains data-chart-owned=\"true\" also runs ui chart lint <page> --json, data-diagram-owned=\"true\" runs ui diagram lint, an element whose class attribute has the token scrub runs ui tenant-lint; from the same walk (same skipped dirs, ignoring design.pages globs) a file named flow.json or ending in .flow.json runs ui flow lint. Read data.errorCount (required) and data.warningCount (missing counts as 0: tenant-lint returns none). A linter that does not start or returns other JSON is a failure line naming the kind and path, like the page case. (4) Per D7 the baseline gains an artifacts object keyed by kind (chart, diagram, motion, flow) then path, each {errors, warnings}; a known artifact may not gain errors; one with no entry must have 0 errors; regression lines read design gate: <kind> <path> — errors rose a -> b or design gate: <kind> <path> — new <kind> has n errors, must have 0. Per D12, when the baseline file exists but has no artifacts key, artifact errors are not failures: the advisory line also names the artifacts with errors. The advisory line prints at most once per run, before the summary, also under --write; it never counts as a failure, never sets exit 1, never enters last-run.json regressions, and never blocks --write. --json output gains an artifacts object only when an artifact was found. When no artifact is found, every output line, the JSON object and the baseline pages object stay byte-identical to today; with artifacts the summary reads no regressions on N pages and M artifacts. (5) Per D8 never run scrub-lint or scroll-story. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_group",
+        "must_haves": {
+          "truths": [
+            "An old baseline with no families key and a run whose only new errors are in ds-usage exits 0 and prints one line naming ds-usage and bee design gate --write",
+            "A page with data-chart-owned=\"true\" whose chart lint errors rose against the baseline exits 1 naming the page and the counts",
+            "A flow.json with errors and no baseline entry exits 1",
+            "A project with no artifacts prints exactly the same lines as before",
+            "The advisory line never counts as a regression in last-run.json and never blocks --write",
+            "A baseline with no artifacts key and a marked chart page with chart lint errors exits 0 and the advisory line names that page"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+              "substantive": "PIN 0.6.2, family-scoped compare, artifact lint and ratchet, tests for each truth"
+            }
+          ],
+          "key_links": [
+            "bee design gate --write records families and artifacts in .bee/design/gate-baseline.json"
+          ],
+          "prohibitions": [
+            "No new config key",
+            "No change to the --write refusal while a cell is claimed",
+            "No change to the not-run line"
+          ]
+        }
+      },
+      {
+        "id": "doc-2",
+        "feature": "design-os-checks",
+        "title": "Count flow models as UI files in the design cap rule",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D10"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, next to the existing design cap tests (search for the string FIX: add `bee design gate` to the cell's verify), add a test whose name starts with design_rule_ (so the verify filter runs it) that a cell whose files list only flows/signup.flow.json, and one whose files list only flow.json, in a host whose config has design.packs [\"charts\"], is refused at cap when its verify lacks bee design gate; watch it fail. Then per D10 add flow.json and *.flow.json to DEFAULT_UI_GLOBS in design_rule.rs. A host's design.ui_globs still replaces the default. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_rule",
+        "must_haves": {
+          "truths": [
+            "A cell that changes only a flow.json or *.flow.json file in a host that picked design packs is refused at cap unless its verify runs bee design gate"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+              "substantive": "DEFAULT_UI_GLOBS includes flow.json and *.flow.json"
+            }
+          ],
+          "key_links": [
+            "design_cap_refusal uses DEFAULT_UI_GLOBS when design.ui_globs is absent"
+          ],
+          "prohibitions": [
+            "No change to behavior in a host with no design pick"
+          ]
+        }
+      },
+      {
+        "id": "doc-3",
+        "feature": "design-os-checks",
+        "title": "Give every design pack that calls ui its own command contract at 0.6.2",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D8"
+        ],
+        "files": [
+          "scripts/sync-design-os.sh",
+          "scripts/design-os-contract.mjs",
+          "packages/bee/design/*",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "scripts/sync-design-os.sh",
+          "packages/bee/design/bee-design/SKILL.md",
+          "packages/bee/design/bee-design/references/contract.md",
+          "/mnt/data/Projects/goglbe/design-os/skills/design-os-designer/contract-render.mjs"
+        ],
+        "affects_skills": [
+          "packages/bee/design/bee-design/SKILL.md",
+          "packages/bee/design/bee-design-charts/SKILL.md",
+          "packages/bee/design/bee-design-motion/SKILL.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: in the tests module of packages/bee-rs/crates/bee/src/onboard/skills.rs, next to the_shipped_design_root_holds_the_core_and_one_dir_per_pack, add a test whose name contains shipped_design (so the verify filter runs it) that, for every pack dir under packages/bee/design whose name starts with bee-design- (all packs, not the core), scans the pack's .md files for backticked `ui <word>[ <word>]` mentions (words are [a-z][a-z0-9-]*) and fails naming pack, file and command when the command is in neither the core contract (## ui headings of bee-design/references/contract.md), the pack's references/contract.md (its ## ui headings), nor that contract's Not for host work bullets; a pack with no contract counts as an empty one, so any uncovered mention fails; a first word that is a group (some listed entry starts with it plus a space) needs its second word to complete a listed entry, unless the mention has no second word; a first word that is a listed leaf command passes whatever follows it. Watch it fail (no pack contract yet). Then: (1) per D3 write scripts/design-os-contract.mjs (Node, no comments, no dependencies): reads ui schema --json on stdin, takes the command refs as arguments (name or name:sub), and writes the same format as upstream contract-render.mjs (sha256 header line over the body, # Generated command contract, one ## ui section per ref with summary, Usage, flag table, Error codes), with the heading text naming the pack, plus, per D4, a final ## Not for host work section whose bullets (one `ui <ref>` plus its reason each) come from arguments of the form --not-for-host 'ref|reason'; a not-for-host ref needs no schema entry, every listed ref does (the renderer exits non-zero naming a missing one). (2) Extend scripts/sync-design-os.sh: a per-pack contract list beside the entries lists, the single home per D3 — charts: chart:lint diagram:lint flow:lint ds-usage-lint; motion: ds-usage-lint tenant-lint tenant-scaffold scrub-lint scrub-scaffold scroll-story (D8) with not-for-host knowledge:check and knowledge:effect-matrix (they lint upstream's own knowledge folder) and gflow:i2v (drives a paid video service on the owner's account); web: designmd:extract-tokens ds:change-token ds:kit pattern:lint registry:register schema with not-for-host designmd:export (upstream names it as future work; 0.6.2 has no such command); figma: color:contrast critique-coverage doctor ds:a11y ds:init ds:preview ds:specimen ds:status ingest-figma-ds memory:record schema synthesize-conventions with not-for-host init (it writes design-os's own adapter skills and commands, which bee's packs replace); apple calls no ui command and gets no contract; after copying references, render each listed pack's references/contract.md from npx --yes ease-design@<version> schema --json where version is the one read from the checkout's package.json. (3) Per D2 run scripts/sync-design-os.sh /mnt/data/Projects/goglbe/design-os (its HEAD is 369b041, tag v0.6.2) and keep its whole output, UPSTREAM.json included. (4) Per D1 and D5 edit packages/bee/design/bee-design/SKILL.md: taste version line and npx line say 0.6.2; the contract rule says call only commands in references/contract.md and in references/contract.md of each pack you loaded. In the Check step, add that the gate also lints chart, diagram, motion and flow artifacts it finds by marker (data-chart-owned, data-diagram-owned, class scrub, flow.json or *.flow.json) and that families a baseline predates are reported, not failed, until a person re-records. Edit the SKILL.md of bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma to point at their contract and say the Not for host work commands are not run in a host. In bee-design-charts/SKILL.md also say: mark the root of a chart with data-chart-owned=\"true\" and of a diagram with data-diagram-owned=\"true\", and name a flow model flow.json or <name>.flow.json, or the design gate never checks it. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml shipped_design && rg -q '\"version\": \"0.6.2\"' packages/bee/design/UPSTREAM.json && rg -q 'ease-design@0.6.2' packages/bee/design/bee-design/SKILL.md && ! rg -q a7ad5f1 packages/bee/design",
+        "must_haves": {
+          "truths": [
+            "bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma each ship references/contract.md generated from ease-design 0.6.2 ui schema --json",
+            "The parity test fails when a pack names a ui command in no contract, and passes on the shipped text",
+            "packages/bee/design/UPSTREAM.json records version 0.6.2 and commit 369b041",
+            "The core skill names ease-design 0.6.2 and allows core plus loaded pack contracts"
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/design-os-contract.mjs",
+              "substantive": "renders a pack contract with a Not for host work section"
+            },
+            {
+              "path": "packages/bee/design/bee-design-charts/references/contract.md",
+              "substantive": "chart lint, diagram lint, flow lint, ds-usage-lint with 0.6.2 flags"
+            },
+            {
+              "path": "packages/bee/design/bee-design-motion/references/contract.md",
+              "substantive": "motion commands plus Not for host work"
+            }
+          ],
+          "key_links": [
+            "sync-design-os.sh calls design-os-contract.mjs with the per-pack lists"
+          ],
+          "prohibitions": [
+            "No hand edit of synced reference files",
+            "No change to the core contract.md beyond what the sync writes"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "plan-hat-wave",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "Standard lane with more than five product files opens the wave at its three default seats."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Default seat; carries MANDATE 1."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Every claim was read or run by the leader."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A narrow fact is needed from a known file during execution.",
+          "reason": "Cheap narrow lookups."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A multi-file hunt is needed that the leader does not hold.",
+          "reason": "Mechanical reads delegate down-tier."
+        },
+        {
+          "stage": "cell-execution",
+          "classification": "required",
+          "role": "test",
+          "reason": "All three cells are red-first changes; the code role's herding worker went idle twice on the prior design feature (decision db4d5464)."
+        },
+        {
+          "stage": "code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "See cell-execution."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No cell builds rendered UI; the cells change the checker, not a page."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "Skill text rides doc-3; the area spec rides capture."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The slice judge runs.",
+          "reason": "Goal-check judge for behavior_change cells."
+        },
+        {
+          "stage": "plan",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "One slice."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every writing stage resolves to a named role above."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No open design shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "See blind-lane-1."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "See blind-lane-1."
+        }
+      ]
+    }
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-10-30T14:49:52.261Z",
+    "feature": "design-os-checks",
+    "newest_decision_id": "d1093071-d396-4c77-9369-8008e11316a0",
+    "plan_sha256": "ad7719fdb9d7ced28b6aece5b9e998322134ec0f6bd337a45b812e44c87d785e",
+    "advisor": "hat-wave: hat-facts-gaps, hat-alternatives, hat-user-impact (opus)",
+    "digest_head": "# Plan check — hat wave, design-os-checks\n\nSeats: hat-facts-gaps, hat-alternatives, hat-user-impact (opus, advisor kind). All three hit the\n5-hour rate limit on first dispatch and were resumed after it reset.\n\n```text\nPLAN CHECK\nWork: slice 1 (doc-1, doc-2, doc-3)\n\nSTRUCTURE\nBLOCKERS:\n- coverage: D3/D5 left web and figma packs uncovered / plan \"Out of scope\" / FIXED: doc-3 adds web and figma lists; parity scans every pack, no contract counts as empty.\n- deps: doc-2 verify filter `design` also ra"
+  },
+  "approved_cell_packet": {
+    "feature": "design-os-checks",
+    "plan_sha256": "ad7719fdb9d7ced28b6aece5b9e998322134ec0f6bd337a45b812e44c87d785e",
+    "previewed_at": "2026-10-30T14:49:52.935Z",
+    "cells": [
+      {
+        "id": "doc-1",
+        "feature": "design-os-checks",
+        "title": "Check chart, diagram, flow and motion artifacts in the design gate at 0.6.2",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "D12"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/design_group.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: add the failing tests to the existing tests module of design_group.rs (fake node and fake cli, canned JSON per page) and watch each fail for its own reason, then change the code. (1) Per D1 set PIN to ease-design@0.6.2. (2) Per D9 read data.families from ui gate output: for each page, the compared error count is the sum of families.<name>.errorCount over the baseline's family set; the baseline written by --write gains a top-level families array (sorted names the run returned); a baseline with no families key counts the 0.6.1 set a11y, autofix, content, layout, taste, tell; when the run returned any family outside the baseline's set, print one advisory line naming those families and saying they are not counted until a person re-records with bee design gate --write. A ui gate output with no families object falls back to data.errorCount. Keep recording warnings and coverage as today. (3) Per D6 detect artifacts: among the HTML pages the gate already scores, a page whose text contains data-chart-owned=\"true\" also runs ui chart lint <page> --json, data-diagram-owned=\"true\" runs ui diagram lint, an element whose class attribute has the token scrub runs ui tenant-lint; from the same walk (same skipped dirs, ignoring design.pages globs) a file named flow.json or ending in .flow.json runs ui flow lint. Read data.errorCount (required) and data.warningCount (missing counts as 0: tenant-lint returns none). A linter that does not start or returns other JSON is a failure line naming the kind and path, like the page case. (4) Per D7 the baseline gains an artifacts object keyed by kind (chart, diagram, motion, flow) then path, each {errors, warnings}; a known artifact may not gain errors; one with no entry must have 0 errors; regression lines read design gate: <kind> <path> — errors rose a -> b or design gate: <kind> <path> — new <kind> has n errors, must have 0. Per D12, when the baseline file exists but has no artifacts key, artifact errors are not failures: the advisory line also names the artifacts with errors. The advisory line prints at most once per run, before the summary, also under --write; it never counts as a failure, never sets exit 1, never enters last-run.json regressions, and never blocks --write. --json output gains an artifacts object only when an artifact was found. When no artifact is found, every output line, the JSON object and the baseline pages object stay byte-identical to today; with artifacts the summary reads no regressions on N pages and M artifacts. (5) Per D8 never run scrub-lint or scroll-story. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_group",
+        "must_haves": {
+          "truths": [
+            "An old baseline with no families key and a run whose only new errors are in ds-usage exits 0 and prints one line naming ds-usage and bee design gate --write",
+            "A page with data-chart-owned=\"true\" whose chart lint errors rose against the baseline exits 1 naming the page and the counts",
+            "A flow.json with errors and no baseline entry exits 1",
+            "A project with no artifacts prints exactly the same lines as before",
+            "The advisory line never counts as a regression in last-run.json and never blocks --write",
+            "A baseline with no artifacts key and a marked chart page with chart lint errors exits 0 and the advisory line names that page"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/design_group.rs",
+              "substantive": "PIN 0.6.2, family-scoped compare, artifact lint and ratchet, tests for each truth"
+            }
+          ],
+          "key_links": [
+            "bee design gate --write records families and artifacts in .bee/design/gate-baseline.json"
+          ],
+          "prohibitions": [
+            "No new config key",
+            "No change to the --write refusal while a cell is claimed",
+            "No change to the not-run line"
+          ]
+        }
+      },
+      {
+        "id": "doc-2",
+        "feature": "design-os-checks",
+        "title": "Count flow models as UI files in the design cap rule",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D10"
+        ],
+        "files": [
+          "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+          "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"
+        ],
+        "affects_skills": [],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, next to the existing design cap tests (search for the string FIX: add `bee design gate` to the cell's verify), add a test whose name starts with design_rule_ (so the verify filter runs it) that a cell whose files list only flows/signup.flow.json, and one whose files list only flow.json, in a host whose config has design.packs [\"charts\"], is refused at cap when its verify lacks bee design gate; watch it fail. Then per D10 add flow.json and *.flow.json to DEFAULT_UI_GLOBS in design_rule.rs. A host's design.ui_globs still replaces the default. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_rule",
+        "must_haves": {
+          "truths": [
+            "A cell that changes only a flow.json or *.flow.json file in a host that picked design packs is refused at cap unless its verify runs bee design gate"
+          ],
+          "artifacts": [
+            {
+              "path": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+              "substantive": "DEFAULT_UI_GLOBS includes flow.json and *.flow.json"
+            }
+          ],
+          "key_links": [
+            "design_cap_refusal uses DEFAULT_UI_GLOBS when design.ui_globs is absent"
+          ],
+          "prohibitions": [
+            "No change to behavior in a host with no design pick"
+          ]
+        }
+      },
+      {
+        "id": "doc-3",
+        "feature": "design-os-checks",
+        "title": "Give every design pack that calls ui its own command contract at 0.6.2",
+        "lane": "standard",
+        "role": "test",
+        "deps": [],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D8"
+        ],
+        "files": [
+          "scripts/sync-design-os.sh",
+          "scripts/design-os-contract.mjs",
+          "packages/bee/design/*",
+          "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+        ],
+        "read_first": [
+          "docs/history/design-os-checks/CONTEXT.md",
+          "scripts/sync-design-os.sh",
+          "packages/bee/design/bee-design/SKILL.md",
+          "packages/bee/design/bee-design/references/contract.md",
+          "/mnt/data/Projects/goglbe/design-os/skills/design-os-designer/contract-render.mjs"
+        ],
+        "affects_skills": [
+          "packages/bee/design/bee-design/SKILL.md",
+          "packages/bee/design/bee-design-charts/SKILL.md",
+          "packages/bee/design/bee-design-motion/SKILL.md"
+        ],
+        "affects_specs": [
+          "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+        ],
+        "action": "RED FIRST: in the tests module of packages/bee-rs/crates/bee/src/onboard/skills.rs, next to the_shipped_design_root_holds_the_core_and_one_dir_per_pack, add a test whose name contains shipped_design (so the verify filter runs it) that, for every pack dir under packages/bee/design whose name starts with bee-design- (all packs, not the core), scans the pack's .md files for backticked `ui <word>[ <word>]` mentions (words are [a-z][a-z0-9-]*) and fails naming pack, file and command when the command is in neither the core contract (## ui headings of bee-design/references/contract.md), the pack's references/contract.md (its ## ui headings), nor that contract's Not for host work bullets; a pack with no contract counts as an empty one, so any uncovered mention fails; a first word that is a group (some listed entry starts with it plus a space) needs its second word to complete a listed entry, unless the mention has no second word; a first word that is a listed leaf command passes whatever follows it. Watch it fail (no pack contract yet). Then: (1) per D3 write scripts/design-os-contract.mjs (Node, no comments, no dependencies): reads ui schema --json on stdin, takes the command refs as arguments (name or name:sub), and writes the same format as upstream contract-render.mjs (sha256 header line over the body, # Generated command contract, one ## ui section per ref with summary, Usage, flag table, Error codes), with the heading text naming the pack, plus, per D4, a final ## Not for host work section whose bullets (one `ui <ref>` plus its reason each) come from arguments of the form --not-for-host 'ref|reason'; a not-for-host ref needs no schema entry, every listed ref does (the renderer exits non-zero naming a missing one). (2) Extend scripts/sync-design-os.sh: a per-pack contract list beside the entries lists, the single home per D3 — charts: chart:lint diagram:lint flow:lint ds-usage-lint; motion: ds-usage-lint tenant-lint tenant-scaffold scrub-lint scrub-scaffold scroll-story (D8) with not-for-host knowledge:check and knowledge:effect-matrix (they lint upstream's own knowledge folder) and gflow:i2v (drives a paid video service on the owner's account); web: designmd:extract-tokens ds:change-token ds:kit pattern:lint registry:register schema with not-for-host designmd:export (upstream names it as future work; 0.6.2 has no such command); figma: color:contrast critique-coverage doctor ds:a11y ds:init ds:preview ds:specimen ds:status ingest-figma-ds memory:record schema synthesize-conventions with not-for-host init (it writes design-os's own adapter skills and commands, which bee's packs replace); apple calls no ui command and gets no contract; after copying references, render each listed pack's references/contract.md from npx --yes ease-design@<version> schema --json where version is the one read from the checkout's package.json. (3) Per D2 run scripts/sync-design-os.sh /mnt/data/Projects/goglbe/design-os (its HEAD is 369b041, tag v0.6.2) and keep its whole output, UPSTREAM.json included. (4) Per D1 and D5 edit packages/bee/design/bee-design/SKILL.md: taste version line and npx line say 0.6.2; the contract rule says call only commands in references/contract.md and in references/contract.md of each pack you loaded. In the Check step, add that the gate also lints chart, diagram, motion and flow artifacts it finds by marker (data-chart-owned, data-diagram-owned, class scrub, flow.json or *.flow.json) and that families a baseline predates are reported, not failed, until a person re-records. Edit the SKILL.md of bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma to point at their contract and say the Not for host work commands are not run in a host. In bee-design-charts/SKILL.md also say: mark the root of a chart with data-chart-owned=\"true\" and of a diagram with data-diagram-owned=\"true\", and name a flow model flow.json or <name>.flow.json, or the design gate never checks it. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+        "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml shipped_design && rg -q '\"version\": \"0.6.2\"' packages/bee/design/UPSTREAM.json && rg -q 'ease-design@0.6.2' packages/bee/design/bee-design/SKILL.md && ! rg -q a7ad5f1 packages/bee/design",
+        "must_haves": {
+          "truths": [
+            "bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma each ship references/contract.md generated from ease-design 0.6.2 ui schema --json",
+            "The parity test fails when a pack names a ui command in no contract, and passes on the shipped text",
+            "packages/bee/design/UPSTREAM.json records version 0.6.2 and commit 369b041",
+            "The core skill names ease-design 0.6.2 and allows core plus loaded pack contracts"
+          ],
+          "artifacts": [
+            {
+              "path": "scripts/design-os-contract.mjs",
+              "substantive": "renders a pack contract with a Not for host work section"
+            },
+            {
+              "path": "packages/bee/design/bee-design-charts/references/contract.md",
+              "substantive": "chart lint, diagram lint, flow lint, ds-usage-lint with 0.6.2 flags"
+            },
+            {
+              "path": "packages/bee/design/bee-design-motion/references/contract.md",
+              "substantive": "motion commands plus Not for host work"
+            }
+          ],
+          "key_links": [
+            "sync-design-os.sh calls design-os-contract.mjs with the per-pack lists"
+          ],
+          "prohibitions": [
+            "No hand edit of synced reference files",
+            "No change to the core contract.md beyond what the sync writes"
+          ]
+        }
+      }
+    ],
+    "role_plan": {
+      "schema_version": "1.0",
+      "runtime": "claude",
+      "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+      "stages": [
+        {
+          "stage": "plan-hat-wave",
+          "classification": "required",
+          "role": "advisor",
+          "reason": "Standard lane with more than five product files opens the wave at its three default seats."
+        },
+        {
+          "stage": "hat-facts-gaps",
+          "classification": "required",
+          "role": "hat-facts-gaps",
+          "reason": "Default seat; carries MANDATE 1."
+        },
+        {
+          "stage": "hat-alternatives",
+          "classification": "required",
+          "role": "hat-alternatives",
+          "reason": "Default seat."
+        },
+        {
+          "stage": "hat-user-impact",
+          "classification": "required",
+          "role": "hat-user-impact",
+          "reason": "Default seat."
+        },
+        {
+          "stage": "hat-risks",
+          "classification": "not-applicable",
+          "role": "hat-risks",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "hat-value",
+          "classification": "not-applicable",
+          "role": "hat-value",
+          "reason": "Not high-risk."
+        },
+        {
+          "stage": "research",
+          "classification": "not-applicable",
+          "role": "read",
+          "reason": "Every claim was read or run by the leader."
+        },
+        {
+          "stage": "extraction",
+          "classification": "conditional",
+          "role": "extraction",
+          "condition": "A narrow fact is needed from a known file during execution.",
+          "reason": "Cheap narrow lookups."
+        },
+        {
+          "stage": "gather",
+          "classification": "conditional",
+          "role": "read",
+          "condition": "A multi-file hunt is needed that the leader does not hold.",
+          "reason": "Mechanical reads delegate down-tier."
+        },
+        {
+          "stage": "cell-execution",
+          "classification": "required",
+          "role": "test",
+          "reason": "All three cells are red-first changes; the code role's herding worker went idle twice on the prior design feature (decision db4d5464)."
+        },
+        {
+          "stage": "code",
+          "classification": "not-applicable",
+          "role": "code",
+          "reason": "See cell-execution."
+        },
+        {
+          "stage": "design",
+          "classification": "not-applicable",
+          "role": "design",
+          "reason": "No cell builds rendered UI; the cells change the checker, not a page."
+        },
+        {
+          "stage": "docs",
+          "classification": "not-applicable",
+          "role": "docs",
+          "reason": "Skill text rides doc-3; the area spec rides capture."
+        },
+        {
+          "stage": "review",
+          "classification": "conditional",
+          "role": "review",
+          "condition": "The slice judge runs.",
+          "reason": "Goal-check judge for behavior_change cells."
+        },
+        {
+          "stage": "plan",
+          "classification": "not-applicable",
+          "role": "plan",
+          "reason": "One slice."
+        },
+        {
+          "stage": "supervisor",
+          "classification": "not-applicable",
+          "role": "supervisor",
+          "reason": "Attended session."
+        },
+        {
+          "stage": "deploy",
+          "classification": "not-applicable",
+          "role": "deploy",
+          "reason": "No release in this feature."
+        },
+        {
+          "stage": "generation",
+          "classification": "not-applicable",
+          "role": "generation",
+          "reason": "Every writing stage resolves to a named role above."
+        },
+        {
+          "stage": "blind-lane-1",
+          "classification": "not-applicable",
+          "role": "lane-1",
+          "reason": "No open design shape."
+        },
+        {
+          "stage": "blind-lane-2",
+          "classification": "not-applicable",
+          "role": "lane-2",
+          "reason": "See blind-lane-1."
+        },
+        {
+          "stage": "blind-lane-3",
+          "classification": "not-applicable",
+          "role": "lane-3",
+          "reason": "See blind-lane-1."
+        }
+      ]
+    }
+  },
+  "merge_ready": {
+    "since": "2026-10-30T15:01:46.582Z",
+    "branch": "wt/design-os-checks",
+    "worktree_id": "beehive--wt--design-os-checks",
+    "uat": "pending",
+    "blocked_by": []
+  },
+  "last_scribing_run": {
+    "feature": "design-os-checks",
+    "date": "2026-10-30",
+    "at": "2026-10-30T15:15:22.453Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "Merge the worktree, then the owner tests and approves uat"
+  }
+}
