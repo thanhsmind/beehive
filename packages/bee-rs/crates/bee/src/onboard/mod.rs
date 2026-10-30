@@ -117,6 +117,7 @@ struct Args {
     repo_hooks: bool,
     claude_md: bool,
     global_skills: bool,
+    skillstation: bool,
     plugin_source: bool,
     force_downgrade: bool,
     statusline: bool,
@@ -135,6 +136,7 @@ impl Default for Args {
             // opts out. --claude-md is still accepted, a no-op alias.
             claude_md: true,
             global_skills: false,
+            skillstation: false,
             plugin_source: false,
             force_downgrade: false,
             // 4cac0774: the status display is a DEFAULT onboarding artifact;
@@ -209,6 +211,8 @@ fn parse_args(argv: &[String]) -> ParseOutcome {
             args.statusline = false;
         } else if arg == "--global-skills" {
             args.global_skills = true;
+        } else if arg == "--skillstation" {
+            args.skillstation = true;
         } else if arg == "--plugin-source" {
             args.plugin_source = true;
         } else if arg == "--force-downgrade" {
@@ -416,6 +420,7 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
         },
         claude_md: args.claude_md,
         global_skills: args.global_skills,
+        skillstation: args.skillstation,
         sync_skills: !args.plugin_source,
         force_downgrade: args.force_downgrade,
         plugin_source: args.plugin_source,

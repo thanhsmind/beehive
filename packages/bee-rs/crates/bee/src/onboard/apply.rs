@@ -195,6 +195,142 @@ fn utc_now() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
+const SKILLSTATION_PUBLISH_STAGE: &str = ".bee/tmp/skillstation-publish";
+const SKILLSTATION_REASON_LIMIT: usize = 200;
+
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in super::util::read_dir_sorted(from) {
+        let source = from.join(&entry.name);
+        let target = to.join(&entry.name);
+        if entry.is_dir {
+            copy_tree(&source, &target)?;
+        } else if entry.is_file {
+            std::fs::copy(&source, &target)?;
+        }
+    }
+    Ok(())
+}
+
+fn skillstation_reason(text: &str) -> String {
+    let joined = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if joined.chars().count() <= SKILLSTATION_REASON_LIMIT {
+        return joined;
+    }
+    let cut: String = joined.chars().take(SKILLSTATION_REASON_LIMIT).collect();
+    format!("{cut}...")
+}
+
+fn skillstation_failure_text(out: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !stderr.trim().is_empty() {
+        return skillstation_reason(&stderr);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if let Ok(v) = serde_json::from_str::<Value>(&stdout) {
+        if let Some(why) = v
+            .get("error")
+            .and_then(|e| e.get("render"))
+            .and_then(|r| r.get("WHY"))
+            .and_then(Value::as_str)
+        {
+            return skillstation_reason(why);
+        }
+        if let Some(summary) = v.get("summary").and_then(Value::as_str) {
+            return skillstation_reason(summary);
+        }
+    }
+    skillstation_reason(&stdout)
+}
+
+fn run_skillstation(cwd: &Path, args: &[&str]) -> Result<Value, String> {
+    let out = std::process::Command::new("skillstation")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "skillstation is not on PATH".to_string()
+            } else {
+                format!("skillstation could not be started - {e}")
+            }
+        })?;
+    if !out.status.success() {
+        let said = skillstation_failure_text(&out);
+        let said = if said.is_empty() {
+            format!("skillstation exited {}", out.status)
+        } else {
+            said
+        };
+        return Err(said);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    serde_json::from_str::<Value>(&stdout)
+        .map_err(|_| format!("skillstation printed no JSON - {}", skillstation_reason(&stdout)))
+}
+
+fn skillstation_commit_hash(v: &Value) -> Option<String> {
+    v.get("commit")
+        .and_then(|c| c.get("hash"))
+        .and_then(Value::as_str)
+        .or_else(|| v.get("hub_commit").and_then(Value::as_str))
+        .map(str::to_string)
+}
+
+fn apply_publish_skillstation(
+    repo_root: &Path,
+    skill: &str,
+    item_path: &str,
+) -> Result<Option<String>, String> {
+    let source_dir = join_rel(repo_root, item_path);
+    if !lstat_if_exists(&source_dir).is_some_and(|s| !s.is_symlink && s.is_dir) {
+        return Err("rendered skill folder is absent - run the skill sync first".to_string());
+    }
+    let stage = repo_root.join(SKILLSTATION_PUBLISH_STAGE);
+    let staged = stage.join(skill);
+    let _ = std::fs::remove_dir_all(&staged);
+    copy_tree(&source_dir, &staged)
+        .map_err(|e| format!("could not stage the rendered skill for the hub - {e}"))?;
+    let run = |args: &[&str]| run_skillstation(&stage, args);
+
+    let committed = run(&["skill", "commit", &staged.to_string_lossy(), "--yes", "--json"])
+        .map_err(|reason| format!("skill commit - {reason}"))?;
+    let hub_commit = skillstation_commit_hash(&committed);
+    let activated = committed.get("activated").and_then(Value::as_bool) == Some(true);
+
+    if !activated {
+        let activate = run(&["skill", "activate", skill, "--json"])
+            .map_err(|reason| format!("skill activate - {reason}"))?;
+        if activate.get("activated").and_then(Value::as_bool) != Some(true) {
+            let bind = activate
+                .get("cli")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| "skill activate - the CLI returned no confirm command".to_string())?;
+            let argv: Vec<&str> = bind.split_whitespace().collect();
+            let (program, rest) = argv
+                .split_first()
+                .ok_or_else(|| "skill activate - the confirm command was empty".to_string())?;
+            if *program != "skillstation" {
+                return Err(format!("skill activate - the confirm command runs {program}"));
+            }
+            let confirmed = run(rest).map_err(|reason| format!("skill confirm - {reason}"))?;
+            if confirmed.get("activated").and_then(Value::as_bool) == Some(false) {
+                return Err("skill confirm - the hub did not report the skill active".to_string());
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&staged);
+    Ok(hub_commit)
+}
+
 pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOutcome {
     let computed = compute_plan(engine, repo_root, opts);
     apply_computed_plan(engine, repo_root, opts, computed)
@@ -695,6 +831,27 @@ pub fn apply_computed_plan(
                 if let Some(reason) = apply_sync_skill(source, &root, skill, runtime_for_target_kind(kind)) {
                     skipped_skills.push(json!({"skill": skill, "target": kind, "reason": reason}));
                     continue;
+                }
+            }
+            "publish_skillstation" => {
+                let skill = item["skill"].as_str().unwrap_or("");
+                match apply_publish_skillstation(repo_root, skill, rel) {
+                    Err(reason) => {
+                        skipped_skills.push(json!({
+                            "skill": skill, "target": "skillstation", "reason": reason
+                        }));
+                        continue;
+                    }
+                    Ok(hub_commit) => {
+                        let mut landed = item.clone();
+                        if let (Some(hash), Some(obj)) =
+                            (hub_commit, landed.as_object_mut())
+                        {
+                            obj.insert("hub_commit".into(), json!(hash));
+                        }
+                        applied.push(landed);
+                        continue;
+                    }
                 }
             }
             "remove_skill" => {

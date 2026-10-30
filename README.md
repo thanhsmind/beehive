@@ -563,7 +563,7 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/inst
 
 **Update to the latest bee:** re-run the same install command (or `bee onboard --apply`) — drift detection refreshes `AGENTS.md`, `CLAUDE.md`, helpers, hooks, and both skill trees in place; your state and everything outside the managed markers stay untouched.
 
-Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-statusline`/`-NoStatusline`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`, `--design-packs <list|none>`/`-DesignPacks` (the design skill packs to install: `web`, `charts`, `motion`, `apple`, `figma`, or `none`). Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
+Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-statusline`/`-NoStatusline`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`, `--design-packs <list|none>`/`-DesignPacks` (the design skill packs to install: `web`, `charts`, `motion`, `apple`, `figma`, or `none`). On `bee onboard` only, `--skillstation` also publishes the `bee-deploying` skill into your skillstation hub through the `skillstation` CLI (commit, then activate); without the CLI the onboard still succeeds and reports one skipped entry with target `skillstation`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -633,7 +633,7 @@ Copied into every onboarded repo, so enforcement works even for agents that igno
 ### Onboarding — `bee onboard`
 
 ```bash
-bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|pi|both] [--no-claude-md] [--claude-md] [--no-statusline] [--global-skills] [--design-packs <list|none>] [--force-downgrade]
+bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|pi|both] [--no-claude-md] [--claude-md] [--no-statusline] [--global-skills] [--skillstation] [--design-packs <list|none>] [--force-downgrade]
 ```
 
 Without `--apply` it only reports the plan. With `--apply` it installs/refreshes the AGENTS.md BEE block, `.bee/` runtime files, and the vendored helpers — **never** overwriting your `state.json`, `decisions.jsonl`, or `cells/`. Re-run after pulling a new bee version; it detects drift via managed hashes in `.bee/onboarding.json`.

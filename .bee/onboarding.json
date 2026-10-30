@@ -46,6 +46,59 @@
     },
     "statusline": {
       "statusline-command.sh": "8d08e709c818639afd7821fb74c51e31a0bc29ceeb96a8d6cb5be0fe7241e8d1"
+    },
+    "verify_skills": {
+      ".claude/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      },
+      ".agents/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      },
+      ".opencode/skills/verify-app": {
+        "SKILL.md": "2003014d03cbe5d1c1a997d4ad32b12b554410b57b2b1c71b4bdacee64be2c80",
+        "control-bee": "ecccd960bd9d51dfbc6baf11740c438e3017623758853498a4c84ae7ddc3276d",
+        "features/README.md": "8de45c0913f913fa08972366a3aba1be21d4d7f0011dade1070bc2e816b195f6",
+        "features/cells-and-proof.md": "f965e837f0a5dba6f1e848f80568e5b6513af2a2bb2f060bfe5d1ed0f9095cb0",
+        "features/codex-runtime.md": "ede44ab27afaaddf382b5636182b999825a9df90dcbbf913fe89896b6eba6d97",
+        "features/comment-guard.md": "366c01e6636cb4cd3b693fd1d6df2efe0c55913c49c93a1b4f24509b86941291",
+        "features/feature-gates.md": "11eda52945990a1082cab1eb50e6a8ade3eafa23a44d683e66da88cd473d2b1d",
+        "features/onboard.md": "b10ee89885ef0e7d3795fc2fdff40a7b4f768d0dc9696c5854411c6033b65e7e",
+        "features/orient-and-status.md": "d6eb487c37f268f0abbc5a2e9376c5cdee49eaf7c73627fcc107e975663d2684",
+        "features/pi-harness-dispatch.md": "40db8a36b1867d6698d652c1d98f78e6eda29ee9e5234fdeb3fef05ef7075da9",
+        "features/pi-hat-wave.md": "6b32d115c7b8f9e4cfebf78cb1140b33b2c78b8f8402fd51bc56225e4af0f72c",
+        "features/pi-runtime.md": "802c0211a526550c21f8d6cb2ab9fee9539b94fb57221d874c8910a538b30c81",
+        "features/semantic-role-routing.md": "0402fd2f9ce7275c4f9be08c6094925595f860818e7685efaa5467a2ca404f08",
+        "features/worker-outward-guard.md": "2ced9c47dd5346173c3f05012e155304690c34d994cbffbd24f7e6e2719cf27a",
+        "features/worktree-and-close.md": "c65169b5e255f02ca567d66ffa651f910a21e5416f5cc46c28234f65a6b4e264"
+      }
     }
   },
   "agents_sync": {
@@ -81,5 +134,5 @@
   },
   "design_role_offered": true,
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-10-29T15:30:26.639Z"
+  "updated_at": "2026-10-30T10:46:14.414Z"
 }
