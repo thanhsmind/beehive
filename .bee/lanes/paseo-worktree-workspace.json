@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Ghi lại điều đã chốt, rồi gộp nhánh.",
-    "asked_at": "2026-10-29T15:27:43.264Z",
-    "session": "f40e9c91-c8a3-427e-a2ed-e2b2dfd128d5"
+    "kind": "question",
+    "subject": "Duyệt đưa skill deploy-runbook vào hub skillstation và bật nó",
+    "asked_at": "2026-10-30T09:50:29.232Z",
+    "session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7"
   }
 }
