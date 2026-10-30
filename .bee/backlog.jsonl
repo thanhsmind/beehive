@@ -1658,3 +1658,5 @@
 {"ts":"2026-10-30T15:19:07.750Z","kind":"pbi","event":"status","id":"sup-20261030-edb1","status":"in-flight"}
 {"ts":"2026-10-30T15:19:07.757Z","kind":"pbi","event":"status","id":"sup-20261030-76ac","status":"in-flight"}
 {"ts":"2026-10-30T15:19:07.769Z","kind":"pbi","event":"add","id":"p-9b2e8ee4","title":"Stop the dispatch authorize tests writing timings into packages/bee-rs/crates/bee/.bee","status":"proposed","cos":"A full cargo test run on 2026-10-30 left packages/bee-rs/crates/bee/.bee/logs/timings.jsonl with two dispatch authorize rows; the stray folder made a worktree dirty and blocked bee worktree merge"}
+{"ts":"2026-10-30T15:48:18.508Z","kind":"pbi","event":"status","id":"sup-20261030-edb1","status":"done"}
+{"ts":"2026-10-30T15:48:18.516Z","kind":"pbi","event":"status","id":"sup-20261030-76ac","status":"done"}
