@@ -174,6 +174,9 @@ fn parse_args_mirrors_the_engine_flag_set() {
     // this run out.
     assert!(ok(&["--repo-root", "/x"]).statusline, "on by default");
     assert!(!ok(&["--no-statusline"]).statusline);
+
+    assert!(!ok(&["--repo-root", "/x"]).skillstation, "off by default");
+    assert!(ok(&["--skillstation"]).skillstation);
 }
 
 #[test]
@@ -563,6 +566,128 @@ fn design_offer_is_absent_for_a_host_with_no_ui_file() {
     assert_eq!(notices::design_offer_due(&fx.repo), false);
     assert_eq!(plan(&fx, &[])["design_offer"], false);
     assert_eq!(apply(&fx, &[])["design_offer"], false);
+}
+
+#[test]
+fn skillstation_flag_names_the_publish_in_the_registry_payload() {
+    let raw = include_str!("../generated/registry_payload.json");
+    let payload: Value = serde_json::from_str(raw).expect("the embedded registry payload parses");
+    let onboard = payload["commands"]
+        .as_array()
+        .expect("commands is an array")
+        .iter()
+        .find(|c| c["name"] == "onboard")
+        .expect("onboard is registered");
+    let declared = &onboard["parameters"]["properties"]["skillstation"];
+    assert_eq!(declared["type"], "boolean", "--skillstation is a flag");
+    let described = declared["description"].as_str().unwrap_or_default();
+    assert!(described.contains("bee-deploying"), "names the skill: {described}");
+    assert!(described.contains("skipped"), "names the loud-skip outcome: {described}");
+}
+
+fn with_bee_deploying(fx: &Fixture) {
+    write(&fx.root.join("skills").join("bee-deploying").join("SKILL.md"), "deploy\n");
+}
+
+fn publish_items(payload: &Value, key: &str) -> Vec<Value> {
+    payload[key]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["action"] == "publish_skillstation")
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn the_plan_publishes_exactly_the_hub_skills_and_only_when_asked() {
+    let fx = fixture();
+    with_bee_deploying(&fx);
+
+    let without = plan(&fx, &[]);
+    assert!(
+        publish_items(&without, "plan").is_empty(),
+        "without the flag no item appears: {:?}",
+        publish_items(&without, "plan")
+    );
+
+    let with = plan(&fx, &["--skillstation"]);
+    let published = publish_items(&with, "plan");
+    assert_eq!(published.len(), 1, "one item per HUB_SKILLS entry: {published:?}");
+    assert_eq!(published[0]["skill"], "bee-deploying");
+    assert_eq!(published[0]["target"], "skillstation");
+    assert_eq!(
+        published[0]["path"],
+        ".claude/skills/bee-deploying",
+        "the path is the repo-claude rendered root, never a second hand-written copy"
+    );
+    assert!(!fx.repo.join(".claude").exists(), "plan mode stays read-only");
+    assert_eq!(published.len(), super::plan::HUB_SKILLS.len());
+}
+
+#[test]
+fn the_plan_withholds_the_publish_when_the_skill_sync_is_off() {
+    let fx = fixture();
+    with_bee_deploying(&fx);
+    let p = plan(&fx, &["--skillstation", "--plugin-source"]);
+    assert!(
+        publish_items(&p, "plan").is_empty(),
+        "no sync means no rendered folder to publish: {:?}",
+        publish_items(&p, "plan")
+    );
+}
+
+#[test]
+fn an_absent_skillstation_cli_is_a_loud_skip_and_the_onboard_still_applies() {
+    struct RestorePath(Option<std::ffi::OsString>);
+    impl Drop for RestorePath {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => unsafe { std::env::set_var("PATH", v) },
+                None => unsafe { std::env::remove_var("PATH") },
+            }
+        }
+    }
+
+    let fx = fixture();
+    with_bee_deploying(&fx);
+    let empty_path = tempfile::tempdir().unwrap();
+    let _restore = RestorePath(std::env::var_os("PATH"));
+    unsafe { std::env::set_var("PATH", empty_path.path()) };
+
+    let a = apply(&fx, &["--skillstation"]);
+
+    assert_eq!(a["status"], "applied", "an absent CLI never reds the onboard");
+    let skipped: Vec<Value> = a["skills"]["skipped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["target"] == "skillstation")
+        .cloned()
+        .collect();
+    assert_eq!(skipped.len(), 1, "exactly one loud skip: {skipped:?}");
+    assert_eq!(skipped[0]["skill"], "bee-deploying");
+    let reason = skipped[0]["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("PATH"), "the reason names PATH: {reason}");
+    assert!(!reason.contains('\n'), "the reason stays one line: {reason}");
+    assert!(
+        publish_items(&a, "applied").is_empty(),
+        "a skipped publish is never also applied"
+    );
+    assert!(
+        fx.repo.join(".claude").join("skills").join("bee-deploying").join("SKILL.md").exists(),
+        "the per-project copy is the default install and is never withheld"
+    );
+
+    let off = apply(&fx, &[]);
+    assert!(
+        !off["skills"]["skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["target"] == "skillstation"),
+        "without the flag no skip appears"
+    );
 }
 
 #[test]
@@ -1061,6 +1186,7 @@ fn remove_pi_extension_arm_refuses_out_of_scope_paths() {
         repo_hooks: false,
         claude_md: false,
         global_skills: false,
+        skillstation: false,
         sync_skills: false,
         force_downgrade: false,
         plugin_source: false,

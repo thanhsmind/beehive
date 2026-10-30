@@ -99,7 +99,8 @@ pub const PORTED: &[&str] = &[
     "worktree list|register|unregister",
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
-     [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--force-downgrade] \
+     [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--skillstation] \
+     [--force-downgrade] \
      [--no-statusline] [--design-packs <list|none>]",
     "dev render-skill-trees",
     "dev render-prompt <name> [--var K=V]",

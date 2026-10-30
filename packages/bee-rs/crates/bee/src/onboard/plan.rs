@@ -42,6 +42,7 @@ pub struct Options {
     pub repo_hooks: bool,
     pub claude_md: bool,
     pub global_skills: bool,
+    pub skillstation: bool,
     pub sync_skills: bool,
     pub force_downgrade: bool,
     pub plugin_source: bool,
@@ -64,6 +65,31 @@ pub struct ComputedPlan {
     pub skill_sync: SkillSync,
     pub codex_hybrid: bool,
     pub worktree_migration: WorktreeMigration,
+}
+
+pub const HUB_SKILLS: [&str; 1] = ["bee-deploying"];
+
+fn repo_claude_root() -> String {
+    T::REPO_SKILL_TARGETS
+        .iter()
+        .find(|(kind, _)| *kind == "repo-claude")
+        .map(|(_, segments)| segments.join("/"))
+        .unwrap_or_default()
+}
+
+fn publish_skillstation_items() -> Vec<Value> {
+    let root = repo_claude_root();
+    HUB_SKILLS
+        .iter()
+        .map(|skill| {
+            json!({
+                "action": "publish_skillstation",
+                "skill": skill,
+                "path": format!("{root}/{skill}"),
+                "target": "skillstation",
+            })
+        })
+        .collect()
 }
 
 fn plan_item(action: &str, path: &str) -> Value {
@@ -1260,6 +1286,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         if let Some(lr) = &skill_sync.legacy_refresh {
             plan.extend(lr.items.iter().cloned());
         }
+    }
+
+    if opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none() {
+        plan.extend(publish_skillstation_items());
     }
 
     // 8. host-generated verification skills (verification-ships-to-hosts D3).
