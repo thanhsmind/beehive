@@ -10,6 +10,13 @@
    walks the path, never the unit.
 5. Sync `docs/knowledge/` in the SAME change when behavior moves — it is the
    state layer, not a write-up.
+6. Model an event-order flow with the `statechart` skill, so that TLC walks
+   every step order and finds the stuck state a unit test never reaches —
+   payment hold, capture and refund with retry, a message queue, a re-run or
+   idempotent job, a multi-state workflow, a lock or lease. Do it before the
+   flow's code, when the host has that skill. Each break it reports stays a
+   guess until a test on the real code fails the same way. With no
+   `statechart` skill on the host, skip this step and say so.
 
 A green unit behind a path nobody can walk is not a result.
 
