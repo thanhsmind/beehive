@@ -95,7 +95,7 @@ every group and every chart, diagram, flow and motion file counts in full.
 
 **Command lists per pack.** Each pack that runs design-os commands carries
 its own list of the commands it may run, generated from the pinned tool, with
-the commands it mentions but must not run in a project named apart (design-os-checks D3, D4, D5).
+the commands it mentions but must not run in a project named apart (design-os-checks D3/D4/D5).
 A suite check fails when a pack mentions a command no list covers.
 
 **When the checker cannot run.** The checker needs Node 20 or newer. Without
@@ -154,7 +154,7 @@ flowchart TD
 - Taste: `packages/bee/design/` (core `bee-design`, packs `bee-design-*`,
   `LICENSE.md`, `THIRD_PARTY_LICENSES.md`, `UPSTREAM.json`); refresh with
   `scripts/sync-design-os.sh` — pinned at ease-design 0.6.2, upstream commit
-  `369b041` (design-os-checks D1, D2) — which also renders each pack's
+  `369b041` (design-os-checks D1/D2) — which also renders each pack's
   `references/contract.md` through `scripts/design-os-contract.mjs`.
 - Pick, install, prune, offer, role upgrade: `packages/bee-rs/crates/bee/src/onboard/`
   (`source.rs` design root, `skills.rs` sources, `plan.rs`, `apply.rs`,
