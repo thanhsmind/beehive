@@ -99,6 +99,20 @@ worktree tools bee's own worktree-first rule calls, without either the user's
 `~/.claude/settings.json` or a foreign settings entry being touched. Re-runs
 converge: a second apply plans nothing. (Decision 5fd24d1b.)
 
+**Publish the deploy skill to the skillstation hub (only with `--skillstation`).**
+Trigger: an onboard run with `--skillstation` while the skill sync is on and not
+blocked. What changes: the plan gains one `publish_skillstation` item per entry of
+the constant `HUB_SKILLS`, which holds only `bee-deploying`; the item names the
+skill, its rendered `.claude/skills/<name>` path and target `skillstation`. The
+apply runs `skillstation skill commit <folder> --yes --json`, then
+`skillstation skill activate <skill> --json` and the confirm command it returns.
+bee never writes a hub file itself. What blocks it: nothing — a missing
+`skillstation` binary, a non-zero exit or an absent rendered folder is a loud
+skip, one `skipped_skills` entry `{skill, target: "skillstation", reason}`, and
+the onboard still reports `applied`. What the human observes: the per-project
+copy is always written; the hub copy is the opt-in second home. Without the flag
+no item and no skip appear (decisions 6855564f, 464c2cca).
+
 ## Business Rules
 
 - **R13** — The assistant-instructions import artifact is created by default on
@@ -218,3 +232,9 @@ not thereby agreed that every future commit should become slower.
   `a_host_authored_verify_skill_is_byte_identical_after_apply` — the only test
   that goes red when a prune arm is injected. Provenance: cells `vsh-1`..`vsh-4`,
   commits 55b9c9ea, 4721ad4c, 25370f52, 228be6ff, eb228cf0.
+
+- Skillstation hub publish: constant `HUB_SKILLS` and the `publish_skillstation`
+  plan item in `packages/bee-rs/crates/bee/src/onboard/plan.rs`; the
+  `publish_skillstation` arm of `onboard/apply.rs` runs the commit, activate and
+  confirm calls and pushes the loud `skipped_skills` entry. Flag parse in
+  `onboard/mod.rs`. Provenance: feature `bee-deploying-skill`, cell `dep-2`.

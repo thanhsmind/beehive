@@ -62,6 +62,8 @@ bee installs in two layers:
 1. **Repo layer** (once per project, the default): onboarding installs the `AGENTS.md` BEE block, the `.bee/` runtime directory, the vendored `bee` binary, a `CLAUDE.md` `@AGENTS.md` import, and a per-project copy of the `bee-*` skills into the repo itself — `<repo>/.claude/skills` for Claude Code, `<repo>/.agents/skills` for Codex. These skill trees are committed to the host repo (same policy as the vendored CLI), so every teammate and CI job sees identical skills without any machine-wide install; re-onboarding refreshes them.
 2. **Runtime layer** (opt-in, once per machine): a legacy global copy of the `bee-*` skills into `~/.claude/skills` and/or `~/.codex/skills`. Nothing in this layer is touched unless you pass `--global-skills` (`-GlobalSkills`) — the per-project copy above is what agents actually discover by default. On Claude Code, the hook skeleton still needs one of the routes below (the plugin, or `--repo-hooks` during onboarding).
 
+The deploy skill (`bee-deploying`) installs in one of two ways. The default is the per-project copy: every onboard writes it into the repo's skill folders with the other `bee-*` skills. The other way is your skillstation hub: run `bee onboard --apply --skillstation` and onboard also publishes the skill there through the `skillstation` CLI. The install scripts do not pass `--skillstation` through yet, so run `bee onboard` for it.
+
 Requirement for both on x86_64 Linux/Windows, macOS (Apple silicon and Intel) and ARM64 Linux (glibc 2.35+): **none** — each installer downloads the release binary for the platform, checks it against the release `SHA256SUMS`, and falls back to a source build only if no asset fits or `--build-from-source` / `-BuildFromSource` is given. For that fallback: **a Rust toolchain** (`cargo --version`, stable). bee ships
 as a single native binary and, by decision 1f4262ca, no prebuilt binaries live in
 the repo — you build it once per machine from the source checkout:
@@ -189,6 +191,7 @@ Flags:
 | `--no-statusline` | Skip vendoring the status-display script and adding the statusLine entry (written by default)                                                                                        |
 | `--design-packs <list\|none>` | Install `bee-design` plus these design skill packs (a comma list of `web`, `charts`, `motion`, `apple`, `figma`) and record the pick; `none` removes them and stops the offer |
 | `--global-skills` | Also sync the legacy global`~/.claude/skills` root (Claude Code only — Codex's `~/.codex/skills` global copy is handled by the install scripts, not this script). Off by default |
+| `--skillstation`  | Also publish the `bee-deploying` skill into your skillstation hub through the `skillstation` CLI (commit, then activate). Without the CLI the onboard still succeeds and reports one skipped entry with target `skillstation`. Off by default. Not yet wired in `install.sh` or `install.ps1` (no `-Skillstation`) |
 | `--json`          | Machine-readable output                                                                                                                                                               |
 
 What onboarding installs:

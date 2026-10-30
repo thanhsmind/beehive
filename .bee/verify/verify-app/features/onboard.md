@@ -11,6 +11,8 @@ idempotent, and without `--apply` it is a read-only plan that changes nothing.
 - `onboard-apply` writes the frame and reports what it wrote.
 - `onboard-idempotent` a second run over an unchanged repo needs no changes.
 - `onboard-target` `--repo-root` installs into a repo other than the cwd.
+- `onboard-skillstation` `--skillstation` also publishes `bee-deploying` to the
+  skillstation hub, or reports one skipped entry with target `skillstation`.
 
 ## How to get to it (user POV)
 
@@ -18,6 +20,9 @@ idempotent, and without `--apply` it is a read-only plan that changes nothing.
   the plan.
 - Run `bee onboard --repo-root <path> --apply --json` to install.
 - Run `bee onboard --json` with no `--repo-root` to target the current directory.
+- Run `bee onboard --repo-root <path> --apply --skillstation --json` to also
+  publish `bee-deploying` to the skillstation hub. Without the `skillstation` CLI
+  on PATH, `skipped_skills` carries one entry with target `skillstation`.
 
 ## Driving it with control-bee
 

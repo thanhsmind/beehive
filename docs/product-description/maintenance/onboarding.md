@@ -50,7 +50,7 @@ stateDiagram-v2
 
 ### Invoke
 
-`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|pi|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
+`onboard` is a maintenance surface, not a flow verb, so the router probes it *before* the verb tree and nothing in the verb tree can claim the word. It parses its own argv: `--repo-root <path>`, `--apply`, `--json`, `--repo-hooks`, `--plugin-source`, `--runtime claude|codex|pi|both` (default `both`), `--no-claude-md` (the import is written by default), `--claude-md` (a no-op alias of the default), `--global-skills`, `--skillstation`, `--force-downgrade`. `--help` and `-h` are handed back to the shared help surface.
 
 Two things are settled before any work:
 
@@ -122,7 +122,7 @@ One thing is **not** installed: the binary. `.bee/bin/bee` is machine-local, ign
 
 With `--repo-hooks` — which the install script passes by default — `.claude/settings.json` also gains bee's hook rows (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, SubagentStop, PreCompact, Stop, Notification, SessionEnd), with a `.bak` copy taken first, foreign entries preserved verbatim, and stale bee entries replaced rather than stacked. `.codex/hooks.json` gets the Codex projection of the same set unless the repo owns its own catalog. On Pi, onboarding vendors `.pi/extensions/bee-guard/` and removes legacy `.pi/extensions/bee-guard.ts` before copying module files. Each wired command probes `.bee/bin/bee`, then the main checkout's copy through git, and if neither exists prints `bee: hook binary missing (.bee/bin/bee)` and exits 0 — fail-open, as [guards](../foundations/guards.md) requires.
 
-Two artifacts reach outside the repo: `~/.codex/config.toml` gets a status-line block added if it has none, and `--global-skills` refreshes `~/.claude/skills` — but only entries that already exist there as plain directories; it never creates the legacy global copy.
+Two artifacts reach outside the repo: `~/.codex/config.toml` gets a status-line block added if it has none, and `--global-skills` refreshes `~/.claude/skills` — but only entries that already exist there as plain directories; it never creates the legacy global copy. `--skillstation` also publishes the `bee-deploying` skill into the user's skillstation hub through the `skillstation` CLI (commit, then activate); without the CLI the onboard still succeeds and reports one skipped entry with target `skillstation`.
 
 ## Modifiers
 
