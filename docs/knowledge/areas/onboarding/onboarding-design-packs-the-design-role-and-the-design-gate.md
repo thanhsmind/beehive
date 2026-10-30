@@ -3,7 +3,7 @@ type: bee.area
 title: "Onboarding — design packs, the design role, and the design gate"
 description: "bee carries the design-os taste as a core set and five packs that reach a project only by pick, a design team role that runs UI work with that taste, and a design gate whose baseline ratchet a UI unit of work must pass before it may close in a project that picked packs."
 tags: [design-os, design-packs, design-gate]
-timestamp: 2026-10-24
+timestamp: 2026-10-30
 bee:
   id: onboarding-onboarding-design-packs-the-design-role-and-the-design-gate
   lifecycle: active
@@ -74,6 +74,30 @@ not fall. A clean run exits successfully with one summary line; a regression
 fails and names each page with its numbers. Recording a new baseline is a
 person's act: it is refused while any unit of work is in flight.
 
+**Charts, diagrams, flows and motion sections.** The gate also checks the
+files that design-os's own dedicated checkers own, found by the marks those
+checkers expect (design-os-checks D6): a page whose chart root carries
+`data-chart-owned="true"`, a page whose diagram root carries
+`data-diagram-owned="true"`, a page with an embedded scroll section (an
+element of class `scrub`), and a screen-flow model named `flow.json` or
+`<name>.flow.json`. Each is held to the saved baseline like a page: it may not
+gain errors, and a new one must have none (design-os-checks D7). Clip
+encoding and scroll capture checks stay manual (design-os-checks D8). A project with none of these files sees the
+same output as before.
+
+**When the checker grows.** The baseline remembers which groups of checks it
+counted (design-os-checks D9). When a newer checker adds a group — ease-design 0.6.2 added the
+design-system usage group — the gate compares only the groups the baseline
+knows and prints one note naming the new group and the command to re-record.
+A baseline saved before chart and diagram checking existed treats their errors
+the same way (design-os-checks D12). The note never fails the run. Once a person re-records,
+every group and every chart, diagram, flow and motion file counts in full.
+
+**Command lists per pack.** Each pack that runs design-os commands carries
+its own list of the commands it may run, generated from the pinned tool, with
+the commands it mentions but must not run in a project named apart (design-os-checks D3–D5).
+A suite check fails when a pack mentions a command no list covers.
+
 **When the checker cannot run.** The checker needs Node 20 or newer. Without
 it the gate prints `design gate: not run — Node 20 or newer is missing`, records
 that it did not run, and succeeds, so work does not jam (owner answer recorded
@@ -81,7 +105,7 @@ that it did not run, and succeeds, so work does not jam (owner answer recorded
 
 **The close rule for interface work.** Only in a project that picked at least
 one pack (owner answer recorded 2026-10-24), a unit of work that changes
-interface files must name the design gate in its approved proof command, or its
+interface files — screen-flow models included (design-os-checks D10) — must name the design gate in its approved proof command, or its
 close is refused with the fix named (design-os-in-bee D6). When the last gate
 run recorded that it did not run, the close is accepted only if the proof says
 the design gate did not run, so the gap stays on the record. A unit of work that
@@ -118,12 +142,19 @@ flowchart TD
   pages from a build is the project's to wire.
 - The design-os license text calls the project MIT in one file and PolyForm
   Shield 1.0.0 in another; bee carries both verbatim.
+- The core taste's own references name design-os commands outside the core
+  command list (backlog p-982de3cf).
+- The gate's machine-readable output names uncounted check groups only in its
+  text lines, not as a field of their own.
+- A project that sets its own interface file patterns does not gain the
+  screen-flow patterns; it adds them itself.
 
 ## Pointers
 
 - Taste: `packages/bee/design/` (core `bee-design`, packs `bee-design-*`,
   `LICENSE.md`, `THIRD_PARTY_LICENSES.md`, `UPSTREAM.json`); refresh with
-  `scripts/sync-design-os.sh`.
+  `scripts/sync-design-os.sh`, which also renders each pack's
+  `references/contract.md` through `scripts/design-os-contract.mjs`.
 - Pick, install, prune, offer, role upgrade: `packages/bee-rs/crates/bee/src/onboard/`
   (`source.rs` design root, `skills.rs` sources, `plan.rs`, `apply.rs`,
   `notices.rs` `design_offer_due`, `templates.rs` `DESIGN_PACKS_OFFER`); flag
