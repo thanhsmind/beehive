@@ -7,6 +7,10 @@
       "sha256": "439c0304614a528ef189e976cf07cea7693b8805910dd4a1dd6eb9bf90bc3e85"
     },
     {
+      "name": "bee-deploying",
+      "sha256": "8378c4adfbb6cec4533229bc3e5a9786818fca25e561ad271b1cef11846070ad"
+    },
+    {
       "name": "bee-evolving",
       "sha256": "231162e2eb8d3de61bba8b07594b17bab24420643a259273627d913287fb5448"
     },
@@ -24,7 +28,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "a469da412f5176d48ed51ea2592948bd335b3f3015931e9608b0d3e676573e35"
+      "sha256": "fb5ed6aad07665457fb3e267e326a00298eff924c427785454c5f6f143a57823"
     },
     {
       "name": "bee-how",

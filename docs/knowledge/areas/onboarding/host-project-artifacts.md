@@ -104,9 +104,14 @@ Trigger: an onboard run with `--skillstation` while the skill sync is on and not
 blocked. What changes: the plan gains one `publish_skillstation` item per entry of
 the constant `HUB_SKILLS`, which holds only `bee-deploying`; the item names the
 skill, its rendered `.claude/skills/<name>` path and target `skillstation`. The
-apply runs `skillstation skill commit <folder> --yes --json`, then
-`skillstation skill activate <skill> --json` and the confirm command it returns.
-bee never writes a hub file itself. What blocks it: nothing — a missing
+apply copies that rendered folder to a staging copy under
+`.bee/tmp/skillstation-publish/<name>` and points the CLI at the copy, because
+`skillstation skill commit <folder> --yes` (measured on skillstation 0.9.0)
+closes and unlinks the folder it is given, which would delete the per-project
+copy the same onboard just wrote. It then runs
+`skillstation skill commit <copy> --yes --json`, then
+`skillstation skill activate <skill> --json` and the confirm command it returns,
+and removes the staging copy. bee never writes a hub file itself. What blocks it: nothing — a missing
 `skillstation` binary, a non-zero exit or an absent rendered folder is a loud
 skip, one `skipped_skills` entry `{skill, target: "skillstation", reason}`, and
 the onboard still reports `applied`. What the human observes: the per-project
