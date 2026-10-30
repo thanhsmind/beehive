@@ -1,0 +1,280 @@
+{
+  "id": "doc-3",
+  "feature": "design-os-checks",
+  "title": "Give every design pack that calls ui its own command contract at 0.6.2",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D8",
+    "f483d21f-1de2-4662-8692-2565e6af8702"
+  ],
+  "files": [
+    "scripts/sync-design-os.sh",
+    "scripts/design-os-contract.mjs",
+    "packages/bee/design/*",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+  ],
+  "read_first": [
+    "docs/history/design-os-checks/CONTEXT.md",
+    "scripts/sync-design-os.sh",
+    "packages/bee/design/bee-design/SKILL.md",
+    "packages/bee/design/bee-design/references/contract.md",
+    "/mnt/data/Projects/goglbe/design-os/skills/design-os-designer/contract-render.mjs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+  ],
+  "action": "RED FIRST: in the tests module of packages/bee-rs/crates/bee/src/onboard/skills.rs, next to the_shipped_design_root_holds_the_core_and_one_dir_per_pack, add a test whose name contains shipped_design (so the verify filter runs it) that, for every pack dir under packages/bee/design whose name starts with bee-design- (all packs, not the core), scans the pack's .md files for backticked `ui <word>[ <word>]` mentions (words are [a-z][a-z0-9-]*) and fails naming pack, file and command when the command is in neither the core contract (## ui headings of bee-design/references/contract.md), the pack's references/contract.md (its ## ui headings), nor that contract's Not for host work bullets; a pack with no contract counts as an empty one, so any uncovered mention fails; a first word that is a group (some listed entry starts with it plus a space) needs its second word to complete a listed entry, unless the mention has no second word; a first word that is a listed leaf command passes whatever follows it. Watch it fail (no pack contract yet). Then: (1) per D3 write scripts/design-os-contract.mjs (Node, no comments, no dependencies): reads ui schema --json on stdin, takes the command refs as arguments (name or name:sub), and writes the same format as upstream contract-render.mjs (sha256 header line over the body, # Generated command contract, one ## ui section per ref with summary, Usage, flag table, Error codes), with the heading text naming the pack, plus, per D4, a final ## Not for host work section whose bullets (one `ui <ref>` plus its reason each) come from arguments of the form --not-for-host 'ref|reason'; a not-for-host ref needs no schema entry, every listed ref does (the renderer exits non-zero naming a missing one). (2) Extend scripts/sync-design-os.sh: a per-pack contract list beside the entries lists, the single home per D3 — charts: chart:lint diagram:lint flow:lint ds-usage-lint; motion: ds-usage-lint tenant-lint tenant-scaffold scrub-lint scrub-scaffold scroll-story (D8) with not-for-host knowledge:check and knowledge:effect-matrix (they lint upstream's own knowledge folder) and gflow:i2v (drives a paid video service on the owner's account); web: designmd:extract-tokens ds:change-token ds:kit pattern:lint registry:register schema with not-for-host designmd:export (upstream names it as future work; 0.6.2 has no such command); figma: color:contrast critique-coverage doctor ds:a11y ds:init ds:preview ds:specimen ds:status ingest-figma-ds memory:record schema synthesize-conventions with not-for-host init (it writes design-os's own adapter skills and commands, which bee's packs replace); apple calls no ui command and gets no contract; after copying references, render each listed pack's references/contract.md from npx --yes ease-design@<version> schema --json where version is the one read from the checkout's package.json. (3) Per D2 run scripts/sync-design-os.sh /mnt/data/Projects/goglbe/design-os (its HEAD is 369b041, tag v0.6.2) and keep its whole output, UPSTREAM.json included. (4) Per D1 and D5 edit packages/bee/design/bee-design/SKILL.md: taste version line and npx line say 0.6.2; the contract rule says call only commands in references/contract.md and in references/contract.md of each pack you loaded. In the Check step, add that the gate also lints chart, diagram, motion and flow artifacts it finds by marker (data-chart-owned, data-diagram-owned, class scrub, flow.json or *.flow.json) and that families a baseline predates are reported, not failed, until a person re-records. Edit the SKILL.md of bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma to point at their contract and say the Not for host work commands are not run in a host. In bee-design-charts/SKILL.md also say: mark the root of a chart with data-chart-owned=\"true\" and of a diagram with data-diagram-owned=\"true\", and name a flow model flow.json or <name>.flow.json, or the design gate never checks it. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml shipped_design && rg -q '\"version\": \"0.6.2\"' packages/bee/design/UPSTREAM.json && rg -q 'ease-design@0.6.2' packages/bee/design/bee-design/SKILL.md && ! rg -q a7ad5f1 packages/bee/design",
+  "must_haves": {
+    "truths": [
+      "bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma each ship references/contract.md generated from ease-design 0.6.2 ui schema --json",
+      "The parity test fails when a pack names a ui command in no contract, and passes on the shipped text",
+      "packages/bee/design/UPSTREAM.json records version 0.6.2 and commit 369b041",
+      "The core skill names ease-design 0.6.2 and allows core plus loaded pack contracts"
+    ],
+    "artifacts": [
+      {
+        "path": "scripts/design-os-contract.mjs",
+        "substantive": "renders a pack contract with a Not for host work section"
+      },
+      {
+        "path": "packages/bee/design/bee-design-charts/references/contract.md",
+        "substantive": "chart lint, diagram lint, flow lint, ds-usage-lint with 0.6.2 flags"
+      },
+      {
+        "path": "packages/bee/design/bee-design-motion/references/contract.md",
+        "substantive": "motion commands plus Not for host work"
+      }
+    ],
+    "key_links": [
+      "sync-design-os.sh calls design-os-contract.mjs with the per-pack lists"
+    ],
+    "prohibitions": [
+      "No hand edit of synced reference files",
+      "No change to the core contract.md beyond what the sync writes"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-doc-3",
+    "outcome": "Charts, motion, web and figma packs ship a contract.md rendered from ease-design 0.6.2 ui schema; the sync is at v0.6.2 (369b041); a suite test fails on any pack ui command in no contract",
+    "files_changed": [
+      "scripts/sync-design-os.sh",
+      "scripts/design-os-contract.mjs",
+      "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+      "packages/bee/design/UPSTREAM.json",
+      "packages/bee/design/bee-design/SKILL.md",
+      "packages/bee/design/bee-design-charts/SKILL.md",
+      "packages/bee/design/bee-design-motion/SKILL.md",
+      "packages/bee/design/bee-design-web/SKILL.md",
+      "packages/bee/design/bee-design-figma/SKILL.md",
+      "packages/bee/design/bee-design-charts/references/contract.md",
+      "packages/bee/design/bee-design-motion/references/contract.md",
+      "packages/bee/design/bee-design-web/references/contract.md",
+      "packages/bee/design/bee-design-figma/references/contract.md",
+      "packages/bee/design/bee-design/references/ds-guidelines.md",
+      "packages/bee/design/bee-design/references/page-structures.md",
+      "packages/bee/design/bee-design/references/rules.md"
+    ],
+    "deviations": [
+      "The contract intro names the ease-design schema --json output instead of a backticked ui schema — the parity test flagged that intro in the charts and motion contracts, which do not list schema — found a better route"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T15:00:22.248Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify: 3 shipped_design tests pass (the parity test was red first, listing every uncovered pack command), UPSTREAM.json 0.6.2, skill pin 0.6.2, no a7ad5f1; renderer exit 1 on a missing ref driven by hand; full suite not run (CI runs it)",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml shipped_design && rg -q '\"version\": \"0.6.2\"' packages/bee/design/UPSTREAM.json && rg -q 'ease-design@0.6.2' packages/bee/design/bee-design/SKILL.md && ! rg -q a7ad5f1 packages/bee/design",
+    "claimed_at": "2026-10-30T14:50:39.447Z",
+    "mistakes": [
+      {
+        "wrong": "scripts/sync-design-os.sh first run tested an array ref with ${!var+set}, which reads as set for an unset array, so the renderer ran for bee-design with no refs and truncated the core references/contract.md before it failed",
+        "better": "test the variable with declare -p before the redirect, as the final script does",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Pack contracts at 0.6.2: renderer scripts/design-os-contract.mjs; per-pack lists contract_bee_design_* in scripts/sync-design-os.sh (one home, D3/D4/D8); sync run from design-os 369b041 (UPSTREAM.json 0.6.2/369b041, links rewritten, no a7ad5f1); core SKILL.md pin 0.6.2, core-plus-pack contract rule, Check step artifact markers and predated-family note; pack SKILL.md pointers plus charts marker line; parity test the_shipped_design_packs_name_only_ui_commands_their_contracts_list and unit test a_shipped_design_contract_check_covers_groups_leaves_and_not_for_host_bullets in onboard/skills.rs",
+      "commit": "b08fd2a30",
+      "files": [
+        "scripts/sync-design-os.sh",
+        "scripts/design-os-contract.mjs",
+        "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+        "packages/bee/design/UPSTREAM.json",
+        "packages/bee/design/bee-design/SKILL.md",
+        "packages/bee/design/bee-design-charts/SKILL.md",
+        "packages/bee/design/bee-design-motion/SKILL.md",
+        "packages/bee/design/bee-design-web/SKILL.md",
+        "packages/bee/design/bee-design-figma/SKILL.md",
+        "packages/bee/design/bee-design-charts/references/contract.md",
+        "packages/bee/design/bee-design-motion/references/contract.md",
+        "packages/bee/design/bee-design-web/references/contract.md",
+        "packages/bee/design/bee-design-figma/references/contract.md",
+        "packages/bee/design/bee-design/references/ds-guidelines.md",
+        "packages/bee/design/bee-design/references/page-structures.md",
+        "packages/bee/design/bee-design/references/rules.md"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml shipped_design && rg -q '\"version\": \"0.6.2\"' packages/bee/design/UPSTREAM.json && rg -q 'ease-design@0.6.2' packages/bee/design/bee-design/SKILL.md && ! rg -q a7ad5f1 packages/bee/design — green:unit — the cell verify: 3 shipped_design tests pass (the parity test was red first, listing every uncovered pack command), UPSTREAM.json 0.6.2, skill pin 0.6.2, no a7ad5f1; renderer exit 1 on a missing ref driven by hand; full suite not run (CI runs it)",
+      "deviations": [
+        "The contract intro names the ease-design schema --json output instead of a backticked ui schema — the parity test flagged that intro in the charts and motion contracts, which do not list schema — found a better route"
+      ],
+      "mistakes": [
+        "scripts/sync-design-os.sh first run tested an array ref with ${!var+set}, which reads as set for an unset array, so the renderer ran for bee-design with no refs and truncated the core references/contract.md before it failed — test the variable with declare -p before the redirect, as the final script does — none"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 618 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee-design-charts, bee-design-motion, bee-design-web and bee-design-figma each ship references/contract.md generated from ease-design 0.6.2 ui schema --json",
+            "artifact": "packages/bee/design/bee-design-charts/references/contract.md"
+          },
+          {
+            "requirement": "The parity test fails when a pack names a ui command in no contract, and passes on the shipped text",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          },
+          {
+            "requirement": "packages/bee/design/UPSTREAM.json records version 0.6.2 and commit 369b041",
+            "artifact": "packages/bee/design/UPSTREAM.json"
+          },
+          {
+            "requirement": "The core skill names ease-design 0.6.2 and allows core plus loaded pack contracts",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "sync-design-os.sh calls design-os-contract.mjs with the per-pack lists",
+            "artifact": "scripts/sync-design-os.sh"
+          },
+          {
+            "requirement": "scripts/sync-design-os.sh",
+            "artifact": "scripts/sync-design-os.sh"
+          },
+          {
+            "requirement": "scripts/design-os-contract.mjs",
+            "artifact": "scripts/design-os-contract.mjs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/skills.rs"
+          },
+          {
+            "requirement": "packages/bee/design/UPSTREAM.json",
+            "artifact": "packages/bee/design/UPSTREAM.json"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/SKILL.md",
+            "artifact": "packages/bee/design/bee-design/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-charts/SKILL.md",
+            "artifact": "packages/bee/design/bee-design-charts/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/SKILL.md",
+            "artifact": "packages/bee/design/bee-design-motion/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-web/SKILL.md",
+            "artifact": "packages/bee/design/bee-design-web/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-figma/SKILL.md",
+            "artifact": "packages/bee/design/bee-design-figma/SKILL.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-charts/references/contract.md",
+            "artifact": "packages/bee/design/bee-design-charts/references/contract.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/references/contract.md",
+            "artifact": "packages/bee/design/bee-design-motion/references/contract.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-web/references/contract.md",
+            "artifact": "packages/bee/design/bee-design-web/references/contract.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-figma/references/contract.md",
+            "artifact": "packages/bee/design/bee-design-figma/references/contract.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/references/ds-guidelines.md",
+            "artifact": "packages/bee/design/bee-design/references/ds-guidelines.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/references/page-structures.md",
+            "artifact": "packages/bee/design/bee-design/references/page-structures.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design/references/rules.md",
+            "artifact": "packages/bee/design/bee-design/references/rules.md"
+          }
+        ],
+        "recorded_at": "2026-10-30T15:00:56.300Z",
+        "recorded_by": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "contract.md in charts, motion, web, figma, none in apple; fresh render from the 0.6.2 schema matches all four byte for byte (schema from design-os dist/cli.js at 369b041, not npx)"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "skills.rs:1228 parity test passes on shipped text; negative helper case at :1264-1265 ok"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "UPSTREAM.json commit 369b041 version 0.6.2; no a7ad5f1 under packages/bee/design"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "bee-design/SKILL.md names ease-design 0.6.2 and allows core plus each loaded pack contract"
+          },
+          {
+            "id": "t5-key-link",
+            "status": "PASS",
+            "evidence": "sync-design-os.sh:151-155 calls design-os-contract.mjs with the arrays at :25-34"
+          },
+          {
+            "id": "t6-prohibitions",
+            "status": "PASS",
+            "evidence": "core contract.md unchanged; rules.md and page-structures.md changes are sync output"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-30T15:14:23.590Z"
+      }
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier"
+}

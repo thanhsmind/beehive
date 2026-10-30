@@ -1763,5 +1763,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-30T11:13:07.709Z"
+  },
+  "design-os-checks": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-30T15:48:16.223Z"
   }
 }

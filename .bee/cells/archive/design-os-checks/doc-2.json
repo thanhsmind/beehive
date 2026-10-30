@@ -1,0 +1,142 @@
+{
+  "id": "doc-2",
+  "feature": "design-os-checks",
+  "title": "Count flow models as UI files in the design cap rule",
+  "lane": "standard",
+  "role": "test",
+  "deps": [],
+  "decisions": [
+    "D10",
+    "11eba13b-839e-4604-99ed-1dbc22f1bac2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/design-os-checks/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/onboarding-design-packs-the-design-role-and-the-design-gate.md"
+  ],
+  "action": "RED FIRST: in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, next to the existing design cap tests (search for the string FIX: add `bee design gate` to the cell's verify), add a test whose name starts with design_rule_ (so the verify filter runs it) that a cell whose files list only flows/signup.flow.json, and one whose files list only flow.json, in a host whose config has design.packs [\"charts\"], is refused at cap when its verify lacks bee design gate; watch it fail. Then per D10 add flow.json and *.flow.json to DEFAULT_UI_GLOBS in design_rule.rs. A host's design.ui_globs still replaces the default. Shared build unit: a compile error in a file outside this cell is another worker's edit in flight — wait and re-run, never touch it. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_rule",
+  "must_haves": {
+    "truths": [
+      "A cell that changes only a flow.json or *.flow.json file in a host that picked design packs is refused at cap unless its verify runs bee design gate"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+        "substantive": "DEFAULT_UI_GLOBS includes flow.json and *.flow.json"
+      }
+    ],
+    "key_links": [
+      "design_cap_refusal uses DEFAULT_UI_GLOBS when design.ui_globs is absent"
+    ],
+    "prohibitions": [
+      "No change to behavior in a host with no design pick"
+    ]
+  },
+  "status": "capped",
+  "trace": {
+    "worker": "w-doc-2",
+    "outcome": "DEFAULT_UI_GLOBS now counts flow.json and *.flow.json, so a flow-model-only cell in a host with design packs is refused at cap without bee design gate",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "ran the verify with PATH set to the literal cargo bin dir instead of the CARGO_HOME expansion — the worktree guard refuses a runtime variable in a cargo command — hit an unforeseen obstacle",
+      "sync-ack: cell names no affected skills; the glob change is a design cap default whose spec home is the onboarding design-packs concept, synced by its own docs cell"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T14:55:49.500Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify filter runs all 7 design_rule tests, including the new flow-model test and the no-pick test",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_rule",
+    "claimed_at": "2026-10-30T14:50:39.206Z",
+    "sync_ack": "cell names no affected skills; the glob change is a design cap default whose spec home is the onboarding design-packs concept, synced by its own docs cell",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "DEFAULT_UI_GLOBS in design_rule.rs adds flow.json and *.flow.json (D10); test design_rule_refuses_a_flow_model_cell_without_the_gate_in_a_picked_host in cells/tests.rs proves refusal for flows/signup.flow.json and flow.json under design.packs [charts]; ui_globs override path unchanged",
+      "commit": "a3ee44536abd14ddf663f03690ff9cd34c32ba99",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml design_rule — green:unit — the cell verify filter runs all 7 design_rule tests, including the new flow-model test and the no-pick test",
+      "deviations": [
+        "ran the verify with PATH set to the literal cargo bin dir instead of the CARGO_HOME expansion — the worktree guard refuses a runtime variable in a cargo command — hit an unforeseen obstacle"
+      ],
+      "mistakes": [],
+      "baseline": "same command before the glob change: 6 passed, 1 failed (the new flow-model test, expected a thrown refusal)",
+      "reaction": "confirm"
+    },
+    "baseline": "same command before the glob change: 6 passed, 1 failed (the new flow-model test, expected a thrown refusal)",
+    "reaction": "confirm",
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "A cell that changes only a flow.json or *.flow.json file in a host that picked design packs is refused at cap unless its verify runs bee design gate",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "design_cap_refusal uses DEFAULT_UI_GLOBS when design.ui_globs is absent",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/design_rule.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          }
+        ],
+        "recorded_at": "2026-10-30T14:56:13.625Z",
+        "recorded_by": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "design_rule.rs:10-11 DEFAULT_UI_GLOBS adds flow.json and *.flow.json; test design_rule_refuses_a_flow_model_cell_without_the_gate_in_a_picked_host ok (7 passed)"
+          },
+          {
+            "id": "t2-key-link",
+            "status": "PASS",
+            "evidence": "design_rule.rs:26-29 default used when design.ui_globs absent; design_rule_reads_ui_globs_from_config ok"
+          },
+          {
+            "id": "t3-prohibition",
+            "status": "PASS",
+            "evidence": "design_rule.rs:22-25 no-pick early return unchanged; design_rule_leaves_a_host_with_no_pick_exactly_as_before ok"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-10-30T15:14:23.590Z"
+      }
+    ]
+  }
+}

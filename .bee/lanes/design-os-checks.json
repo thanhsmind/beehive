@@ -8,17 +8,17 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"design-os-checks\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at d6d8ebb; reload the product and test \"design-os-checks\", then either approve uat (\"bee gate --name uat --approved true --lane design-os-checks\") or fix it in the worktree and merge again.",
+  "next_action": "Merge the worktree, then the owner tests and approves uat",
   "created_at": "2026-10-30T14:03:22.035Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "gate",
     "subject": "uat: design-os-checks",
-    "asked_at": "2026-10-30T15:18:53.808Z",
-    "session": "bee-worktree-merge-sessionless"
+    "asked_at": "2026-10-30T15:19:41.021Z",
+    "session": "5cc44af2-1258-4ffc-b5fd-d4804a0154b0"
   },
   "route": {
     "class": "feature",
