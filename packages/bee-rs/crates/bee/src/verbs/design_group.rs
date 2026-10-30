@@ -10,7 +10,8 @@ use std::process::{Command, ExitCode, Stdio};
 use std::time::Instant;
 
 const CMD: &str = "design gate";
-const PIN: &str = "ease-design@0.6.1";
+const PIN: &str = "ease-design@0.6.2";
+const OLD_FAMILIES: [&str; 6] = ["a11y", "autofix", "content", "layout", "taste", "tell"];
 const NOT_RUN: &str = "design gate: not run — Node 20 or newer is missing";
 const BASELINE: &str = ".bee/design/gate-baseline.json";
 const SKIP_DIRS: [&str; 3] = ["node_modules", "target", "dist"];
@@ -25,12 +26,21 @@ struct Run {
     status: &'static str,
     lines: Vec<String>,
     pages: Map<String, Value>,
+    artifacts: Option<Map<String, Value>>,
 }
 
 impl Run {
     fn stop(code: u8, status: &'static str, line: String) -> Run {
-        Run { code, status, lines: vec![line], pages: Map::new() }
+        Run { code, status, lines: vec![line], pages: Map::new(), artifacts: None }
     }
+}
+
+fn output(run: &Run) -> Value {
+    let mut out = json!({"status": run.status, "pages": run.pages, "lines": run.lines});
+    if let Some(artifacts) = &run.artifacts {
+        out["artifacts"] = Value::Object(artifacts.clone());
+    }
+    out
 }
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -57,8 +67,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     };
     let run = gate(&roots.work_root, &roots.root, &roots.main_root(), write, &tools);
     if use_json {
-        let out = json!({"status": run.status, "pages": run.pages, "lines": run.lines});
-        println!("{}", jsjson::stringify_pretty(&out));
+        println!("{}", jsjson::stringify_pretty(&output(&run)));
     } else if run.code == 0 {
         println!("{}", run.lines.join("\n"));
     } else {
@@ -77,20 +86,27 @@ fn node_ok(node: &OsStr) -> bool {
     out.status.success() && major.is_some_and(|m| m >= 20)
 }
 
-fn pages(work: &Path, config_root: &Path) -> Vec<String> {
+fn files(work: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    walk(work, "", &mut found);
+    found.sort();
+    found
+}
+
+fn pages(files: &[String], config_root: &Path) -> Vec<String> {
     let config = crate::state::read_config_raw(config_root);
     let globs: Vec<_> = match config.get("design").and_then(|d| d.get("pages")).and_then(Value::as_array) {
         Some(list) => list.iter().filter_map(Value::as_str).map(glob_tokens).collect(),
         None => vec![glob_tokens("**/*.html")],
     };
-    let mut found = Vec::new();
-    walk(work, "", &mut found);
-    found.retain(|page| {
-        let chars: Vec<char> = page.chars().collect();
-        globs.iter().any(|g| glob_match(g, &chars))
-    });
-    found.sort();
-    found
+    files
+        .iter()
+        .filter(|page| {
+            let chars: Vec<char> = page.chars().collect();
+            globs.iter().any(|g| glob_match(g, &chars))
+        })
+        .cloned()
+        .collect()
 }
 
 fn walk(dir: &Path, prefix: &str, out: &mut Vec<String>) {
@@ -108,7 +124,7 @@ fn walk(dir: &Path, prefix: &str, out: &mut Vec<String>) {
     }
 }
 
-fn score(work: &Path, tools: &Tools, page: &str) -> Result<Value, String> {
+fn ui<T>(work: &Path, tools: &Tools, verb: &str, args: &[&str], subject: &str, read: impl FnOnce(&Value) -> Option<T>) -> Result<T, String> {
     let mut cmd = match &tools.cli {
         Some(cli) => {
             let mut c = Command::new(&tools.node);
@@ -122,19 +138,63 @@ fn score(work: &Path, tools: &Tools, page: &str) -> Result<Value, String> {
         }
     };
     let out = cmd
-        .args(["gate", page, "--dir", ".", "--json"])
+        .args(verb.split(' '))
+        .args(args)
         .current_dir(work)
         .stdin(Stdio::null())
         .stderr(Stdio::inherit())
         .output()
-        .map_err(|e| format!("design gate: {page} — ui gate did not start: {e}"))?;
-    let malformed = || format!("design gate: {page} — ui gate output was not the expected JSON");
-    let parsed: Value = serde_json::from_slice(&out.stdout).map_err(|_| malformed())?;
-    let data = parsed.get("data").ok_or_else(malformed)?;
-    let errors = data.get("errorCount").and_then(Value::as_u64).ok_or_else(malformed)?;
-    let warnings = data.get("warningCount").and_then(Value::as_u64).ok_or_else(malformed)?;
-    let coverage = data.pointer("/tokenCoverage/overall/coverage").and_then(Value::as_f64).unwrap_or(0.0);
-    Ok(json!({"errors": errors, "warnings": warnings, "coverage": (coverage * 10000.0).round() / 10000.0}))
+        .map_err(|e| format!("design gate: {subject} — ui {verb} did not start: {e}"))?;
+    serde_json::from_slice::<Value>(&out.stdout)
+        .ok()
+        .as_ref()
+        .and_then(|parsed| parsed.get("data"))
+        .and_then(read)
+        .ok_or_else(|| format!("design gate: {subject} — ui {verb} output was not the expected JSON"))
+}
+
+fn score(work: &Path, tools: &Tools, page: &str, counted: Option<&[String]>) -> Result<(Value, Vec<String>), String> {
+    ui(work, tools, "gate", &[page, "--dir", ".", "--json"], page, |data| {
+        let total = data.get("errorCount")?.as_u64()?;
+        let warnings = data.get("warningCount")?.as_u64()?;
+        let coverage = data.pointer("/tokenCoverage/overall/coverage").and_then(Value::as_f64).unwrap_or(0.0);
+        let families = data.get("families").and_then(Value::as_object);
+        let errors = match families {
+            Some(families) => families
+                .iter()
+                .filter(|(name, _)| counted.is_none_or(|c| c.contains(name)))
+                .map(|(_, family)| family.get("errorCount")?.as_u64())
+                .sum::<Option<u64>>()?,
+            None => total,
+        };
+        let names = families.map(|f| f.keys().cloned().collect()).unwrap_or_default();
+        Some((json!({"errors": errors, "warnings": warnings, "coverage": (coverage * 10000.0).round() / 10000.0}), names))
+    })
+}
+
+fn markers(work: &Path, page: &str) -> Vec<(&'static str, &'static str)> {
+    let text = String::from_utf8_lossy(&std::fs::read(work.join(page)).unwrap_or_default()).into_owned();
+    let scrub = text.match_indices("class=").any(|(at, m)| {
+        let rest = &text[at + m.len()..];
+        let Some(quote) = rest.chars().next().filter(|q| *q == '"' || *q == '\'') else { return false };
+        text[..at].ends_with(char::is_whitespace) && rest[1..].split(quote).next().is_some_and(|v| v.split_whitespace().any(|t| t == "scrub"))
+    });
+    [
+        (text.contains(r#"data-chart-owned="true""#), ("chart", "chart lint")),
+        (text.contains(r#"data-diagram-owned="true""#), ("diagram", "diagram lint")),
+        (scrub, ("motion", "tenant-lint")),
+    ]
+    .into_iter()
+    .filter_map(|(hit, kind)| hit.then_some(kind))
+    .collect()
+}
+
+fn lint(work: &Path, tools: &Tools, kind: &str, verb: &str, path: &str) -> Result<Value, String> {
+    ui(work, tools, verb, &[path, "--json"], &format!("{kind} {path}"), |data| {
+        let errors = data.get("errorCount")?.as_u64()?;
+        let warnings = data.get("warningCount").map_or(Some(0), Value::as_u64)?;
+        Some(json!({"errors": errors, "warnings": warnings}))
+    })
 }
 
 fn regression(page: &str, now: &Value, base: Option<&Value>) -> Option<String> {
@@ -188,40 +248,92 @@ fn gate(work: &Path, config_root: &Path, cells_root: &Path, write: bool, tools: 
             Err(line) => Run::stop(1, "not-run", line),
         };
     }
-    let baseline = match read_json(&work.join(BASELINE)) {
+    let base = match read_json(&work.join(BASELINE)) {
         ReadJson::Missing => Value::Null,
-        ReadJson::Parsed(v) => v["pages"].clone(),
+        ReadJson::Parsed(v) => v,
         ReadJson::Corrupt => return Run::stop(1, "ran", format!("design gate: {BASELINE} is not valid JSON")),
     };
-    let found = pages(work, config_root);
-    let mut run = Run { code: 0, status: "ran", lines: Vec::new(), pages: Map::new() };
+    let known: Option<Vec<String>> = (!base.is_null()).then(|| match base["families"].as_array() {
+        Some(list) => list.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        None => OLD_FAMILIES.map(str::to_string).to_vec(),
+    });
+    let lenient = !base.is_null() && base.get("artifacts").is_none();
+    let all = files(work);
+    let found = pages(&all, config_root);
+    let mut run = Run { code: 0, status: "ran", lines: Vec::new(), pages: Map::new(), artifacts: None };
+    let mut families = std::collections::BTreeSet::new();
     for page in &found {
-        match score(work, tools, page) {
+        match score(work, tools, page, known.as_deref().filter(|_| !write)) {
             Err(line) => run.lines.push(line),
-            Ok(now) => {
+            Ok((now, names)) => {
+                families.extend(names);
                 if !write {
-                    run.lines.extend(regression(page, &now, baseline.get(page.as_str())));
+                    run.lines.extend(regression(page, &now, base["pages"].get(page.as_str())));
                 }
                 run.pages.insert(page.clone(), now);
             }
         }
     }
-    let (failed, total) = (run.lines.len(), found.len());
+    let flows = all.iter().filter(|f| f.rsplit('/').next().is_some_and(|n| n == "flow.json" || n.ends_with(".flow.json")));
+    let targets: Vec<(&str, &str, &str)> = found
+        .iter()
+        .flat_map(|page| markers(work, page).into_iter().map(move |(kind, verb)| (kind, verb, page.as_str())))
+        .chain(flows.map(|f| ("flow", "flow lint", f.as_str())))
+        .collect();
+    let (mut artifacts, mut uncounted) = (Map::new(), Vec::new());
+    for &(kind, verb, path) in &targets {
+        match lint(work, tools, kind, verb, path) {
+            Err(line) => run.lines.push(line),
+            Ok(now) => {
+                let errors = now["errors"].as_u64().unwrap_or(0);
+                if lenient && errors > 0 {
+                    uncounted.push(format!("{kind} {path}"));
+                } else if !lenient && !write {
+                    run.lines.extend(match base["artifacts"][kind][path]["errors"].as_u64() {
+                        Some(was) => (errors > was).then(|| format!("design gate: {kind} {path} — errors rose {was} -> {errors}")),
+                        None => (errors > 0).then(|| format!("design gate: {kind} {path} — new {kind} has {errors} errors, must have 0")),
+                    });
+                }
+                if let Value::Object(by_path) = artifacts.entry(kind).or_insert_with(|| json!({})) {
+                    by_path.insert(path.to_string(), now);
+                }
+            }
+        }
+    }
+    let new_families: Vec<&String> = families.iter().filter(|f| known.as_ref().is_some_and(|k| !k.contains(f))).collect();
+    let advisory: Vec<String> = [
+        (!new_families.is_empty()).then(|| format!("new families {}", new_families.iter().map(|f| f.as_str()).collect::<Vec<_>>().join(", "))),
+        (!uncounted.is_empty()).then(|| format!("artifacts with errors {}", uncounted.join(", "))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let (failed, total, linted) = (run.lines.len(), found.len(), targets.len());
     let written = if write && failed == 0 {
-        record(&work.join(BASELINE), &json!({"version": PIN, "pages": run.pages}))
+        record(&work.join(BASELINE), &json!({"version": PIN, "families": families, "pages": run.pages, "artifacts": artifacts}))
     } else {
         Ok(())
     };
+    if linted > 0 {
+        run.artifacts = Some(artifacts);
+    }
     let tracked = record(&last_run, &json!({"status": "ran", "pages": total, "regressions": failed}));
     let s = |n: usize| if n == 1 { "" } else { "s" };
+    let (scope, unit) = match linted {
+        0 => (format!("{total} page{}", s(total)), "page"),
+        _ => (format!("{total} page{} and {linted} artifact{}", s(total), s(linted)), "check"),
+    };
     let summary = match (write, failed) {
-        (true, 0) => written.is_ok().then(|| format!("design gate: baseline written for {total} page{} to {BASELINE}", s(total))),
-        (true, _) => Some(format!("design gate: baseline not written — {failed} page{} failed", s(failed))),
-        (false, 0) => Some(format!("design gate: no regressions on {total} page{}", s(total))),
+        (true, 0) => written.is_ok().then(|| format!("design gate: baseline written for {scope} to {BASELINE}")),
+        (true, _) => Some(format!("design gate: baseline not written — {failed} {unit}{} failed", s(failed))),
+        (false, 0) => Some(format!("design gate: no regressions on {scope}")),
         (false, _) => None,
     };
     let broken: Vec<String> = [written.err(), tracked.err()].into_iter().flatten().collect();
     run.code = u8::from(failed > 0 || !broken.is_empty());
+    if !advisory.is_empty() {
+        run.lines.push(format!("design gate: {} — not counted until a person re-records with bee design gate --write", advisory.join("; ")));
+    }
     run.lines.extend(summary);
     run.lines.extend(broken);
     run
@@ -263,7 +375,13 @@ mod tests {
             }
         }
         let cli = dir.path().join("fake-cli");
-        put(&cli, &format!("cat '{}/canned/'\"$2\"\nexit 1\n", dir.path().display()));
+        put(
+            &cli,
+            &format!(
+                "echo \"$@\" >> '{d}/calls'\ncase \"$1\" in gate|tenant-lint) k=\"$1/$2\";; *) k=\"$1-$2/$3\";; esac\ncat '{d}/canned/'\"$k\"\nexit 1\n",
+                d = dir.path().display()
+            ),
+        );
         let tools = Tools { node: node.into_os_string(), cli: Some(cli.into_os_string()) };
         Fx { dir, root, tools }
     }
@@ -271,7 +389,28 @@ mod tests {
     impl Fx {
         fn page(&self, page: &str, output: &str) {
             put(&self.root.join(page), "<!doctype html>");
-            put(&self.dir.path().join("canned").join(page), output);
+            put(&self.dir.path().join("canned/gate").join(page), output);
+        }
+
+        fn marked(&self, page: &str, html: &str, gate: &str) {
+            self.page(page, gate);
+            put(&self.root.join(page), html);
+        }
+
+        fn lint(&self, verb: &str, path: &str, output: &str) {
+            put(&self.dir.path().join("canned").join(verb).join(path), output);
+        }
+
+        fn baseline_raw(&self, value: Value) {
+            put(&self.baseline_path(), &value.to_string());
+        }
+
+        fn base(&self) -> Value {
+            serde_json::from_str(&std::fs::read_to_string(self.baseline_path()).unwrap()).unwrap()
+        }
+
+        fn calls(&self) -> String {
+            std::fs::read_to_string(self.dir.path().join("calls")).unwrap_or_default()
         }
 
         fn scored(&self, page: &str, errors: u64, coverage: f64) {
@@ -303,6 +442,210 @@ mod tests {
 
     fn entry(errors: u64, coverage: f64) -> Value {
         json!({"errors": errors, "warnings": 1, "coverage": coverage})
+    }
+
+    fn gated(families: &[(&str, u64)]) -> String {
+        let fams: Map<String, Value> = families
+            .iter()
+            .map(|(name, errors)| (name.to_string(), json!({"errorCount": errors, "warningCount": 0, "advisoryCount": 0, "findings": []})))
+            .collect();
+        let total: u64 = families.iter().map(|(_, e)| e).sum();
+        json!({"ok": true, "data": {"errorCount": total, "warningCount": 0, "families": fams, "tokenCoverage": {"overall": {"coverage": 0.5}}}})
+            .to_string()
+    }
+
+    fn linted(errors: u64) -> String {
+        json!({"ok": true, "data": {"file": "x", "findings": [], "errorCount": errors, "warningCount": 2}}).to_string()
+    }
+
+    fn page_entry(errors: u64) -> Value {
+        json!({"errors": errors, "warnings": 0, "coverage": 0.5})
+    }
+
+    fn lines(list: &[&str]) -> Vec<String> {
+        list.iter().map(|l| l.to_string()).collect()
+    }
+
+    const CHART: &str = r#"<div data-chart-owned="true"><svg></svg></div>"#;
+    const ADVICE: &str = "bee design gate --write";
+
+    #[test]
+    fn the_pin_is_ease_design_0_6_2() {
+        assert_eq!(PIN, "ease-design@0.6.2");
+    }
+
+    #[test]
+    fn an_old_baseline_counts_the_old_families_and_names_ds_usage_once() {
+        let f = fx("v22.3.0");
+        for page in ["a.html", "b.html"] {
+            f.page(page, &gated(&[("a11y", 1), ("layout", 0), ("tell", 0), ("ds-usage", 330)]));
+        }
+        f.baseline(json!({"a.html": page_entry(1), "b.html": page_entry(1)}));
+        let run = f.run(false);
+        assert_eq!((run.code, run.lines.len()), (0, 2), "{:?}", run.lines);
+        assert!(run.lines[0].contains("ds-usage") && run.lines[0].contains(ADVICE), "{:?}", run.lines);
+        assert_eq!(run.lines[1], "design gate: no regressions on 2 pages");
+        assert_eq!(f.last_run(), Some(json!({"status": "ran", "pages": 2, "regressions": 0})));
+    }
+
+    #[test]
+    fn a_baseline_that_lists_ds_usage_fails_when_ds_usage_rose() {
+        let f = fx("v22.3.0");
+        f.page("a.html", &gated(&[("a11y", 0), ("ds-usage", 5)]));
+        f.baseline_raw(json!({"version": PIN, "families": ["a11y", "ds-usage"], "pages": {"a.html": page_entry(2)}, "artifacts": {}}));
+        let run = f.run(false);
+        assert_eq!((run.code, run.lines), (1, lines(&["design gate: a.html — errors rose 2 -> 5"])));
+    }
+
+    #[test]
+    fn write_records_the_pin_the_sorted_families_and_an_artifacts_map() {
+        let f = fx("v22.3.0");
+        f.page("a.html", &gated(&[("tell", 1), ("ds-usage", 2), ("a11y", 0)]));
+        f.page("b.html", &gated(&[("layout", 0)]));
+        f.baseline(json!({}));
+        let run = f.run(true);
+        assert_eq!((run.code, run.lines.len()), (0, 2), "{:?}", run.lines);
+        assert!(run.lines[0].contains("ds-usage") && run.lines[0].contains(ADVICE), "{:?}", run.lines);
+        assert_eq!(run.lines[1], "design gate: baseline written for 2 pages to .bee/design/gate-baseline.json");
+        let base = f.base();
+        assert_eq!(base["version"], "ease-design@0.6.2", "{base}");
+        assert_eq!(base["families"], json!(["a11y", "ds-usage", "layout", "tell"]), "{base}");
+        assert_eq!(base["pages"]["a.html"]["errors"], 3, "{base}");
+        assert_eq!(base["artifacts"], json!({}), "{base}");
+    }
+
+    #[test]
+    fn a_marked_chart_page_whose_lint_errors_rose_exits_one_naming_the_page_and_the_counts() {
+        let f = fx("v22.3.0");
+        f.marked("index.html", CHART, &gated(&[("a11y", 0)]));
+        f.lint("chart-lint", "index.html", &linted(3));
+        f.baseline_raw(json!({
+            "version": PIN, "families": ["a11y"], "pages": {"index.html": page_entry(0)},
+            "artifacts": {"chart": {"index.html": {"errors": 1, "warnings": 0}}}
+        }));
+        let run = f.run(false);
+        assert_eq!((run.code, run.lines), (1, lines(&["design gate: chart index.html — errors rose 1 -> 3"])));
+        assert_eq!(f.last_run(), Some(json!({"status": "ran", "pages": 1, "regressions": 1})));
+    }
+
+    #[test]
+    fn a_flow_file_with_errors_and_no_baseline_entry_exits_one() {
+        let f = fx("v22.3.0");
+        put(&f.root.join(".bee/config.json"), r#"{"design": {"pages": ["site/*.html"]}}"#);
+        f.scored("site/index.html", 0, 0.5);
+        for flow in ["flow.json", "models/checkout.flow.json", "node_modules/x/flow.json", "models/flowchart.json"] {
+            put(&f.root.join(flow), "{}");
+        }
+        f.lint("flow-lint", "flow.json", &linted(0));
+        f.lint("flow-lint", "models/checkout.flow.json", &linted(2));
+        let run = f.run(false);
+        assert_eq!(
+            (run.code, &run.lines),
+            (1, &lines(&["design gate: flow models/checkout.flow.json — new flow has 2 errors, must have 0"]))
+        );
+        let flows = &run.artifacts.as_ref().expect("artifacts were found")["flow"];
+        assert_eq!(flows.as_object().unwrap().keys().collect::<Vec<_>>(), vec!["flow.json", "models/checkout.flow.json"]);
+    }
+
+    #[test]
+    fn a_project_with_no_artifacts_prints_the_same_lines_json_and_pages_as_before() {
+        let f = fx("v22.3.0");
+        f.scored("index.html", 2, 0.6);
+        f.baseline(json!({"index.html": entry(2, 0.6)}));
+        let run = f.run(false);
+        let said = lines(&["design gate: no regressions on 1 page"]);
+        assert_eq!((run.code, &run.lines), (0, &said));
+        assert_eq!(output(&run), json!({"status": "ran", "pages": {"index.html": entry(2, 0.6)}, "lines": said}));
+        let run = f.run(true);
+        assert_eq!(run.lines, lines(&["design gate: baseline written for 1 page to .bee/design/gate-baseline.json"]));
+        assert_eq!(f.base()["pages"], json!({"index.html": entry(2, 0.6)}));
+        assert!(f.calls().lines().all(|call| call.starts_with("gate ")), "{}", f.calls());
+    }
+
+    #[test]
+    fn the_advisory_never_counts_as_a_regression_and_never_blocks_write() {
+        let f = fx("v22.3.0");
+        f.marked("index.html", CHART, &gated(&[("a11y", 0), ("ds-usage", 7)]));
+        f.lint("chart-lint", "index.html", &linted(4));
+        f.baseline(json!({"index.html": page_entry(0)}));
+        let run = f.run(false);
+        assert_eq!((run.code, run.lines.len()), (0, 2), "{:?}", run.lines);
+        let advice = run.lines[0].clone();
+        assert!(advice.contains("ds-usage") && advice.contains("chart index.html") && advice.contains(ADVICE), "{advice}");
+        assert_eq!(run.lines[1], "design gate: no regressions on 1 page and 1 artifact");
+        assert_eq!(f.last_run(), Some(json!({"status": "ran", "pages": 1, "regressions": 0})));
+        let run = f.run(true);
+        assert_eq!(run.code, 0, "{:?}", run.lines);
+        assert_eq!(
+            run.lines,
+            vec![advice, "design gate: baseline written for 1 page and 1 artifact to .bee/design/gate-baseline.json".to_string()]
+        );
+        assert_eq!(f.base()["artifacts"], json!({"chart": {"index.html": {"errors": 4, "warnings": 2}}}));
+        assert_eq!(f.last_run(), Some(json!({"status": "ran", "pages": 1, "regressions": 0})));
+    }
+
+    #[test]
+    fn a_baseline_with_no_artifacts_key_names_a_marked_chart_with_errors_and_exits_zero() {
+        let f = fx("v22.3.0");
+        f.marked("index.html", CHART, &gated(&[("a11y", 0)]));
+        f.lint("chart-lint", "index.html", &linted(3));
+        f.baseline_raw(json!({"version": PIN, "families": ["a11y"], "pages": {"index.html": page_entry(0)}}));
+        let run = f.run(false);
+        assert_eq!((run.code, run.lines.len()), (0, 2), "{:?}", run.lines);
+        assert!(run.lines[0].contains("chart index.html") && run.lines[0].contains(ADVICE), "{:?}", run.lines);
+        assert!(!run.lines[0].contains("families"), "{:?}", run.lines);
+    }
+
+    #[test]
+    fn each_marker_runs_its_own_linter_and_scrub_lint_and_scroll_story_never_run() {
+        let f = fx("v22.3.0");
+        let zero = gated(&[("a11y", 0)]);
+        f.marked("a.html", CHART, &zero);
+        f.marked("b.html", r#"<div data-diagram-owned="true"></div>"#, &zero);
+        f.marked("c.html", r#"<section class="hero scrub"><video></video></section>"#, &zero);
+        f.marked("d.html", r#"<p data-class="scrub" class="scrubber">x</p>"#, &zero);
+        f.marked("e.html", r#"<div data-chart-owned="false"></div>"#, &zero);
+        f.lint("chart-lint", "a.html", &linted(0));
+        f.lint("diagram-lint", "b.html", &linted(1));
+        f.lint("tenant-lint", "c.html", &json!({"ok": true, "data": {"file": "c.html", "errorCount": 0, "findings": []}}).to_string());
+        f.baseline_raw(json!({
+            "version": PIN, "families": ["a11y"], "pages": {},
+            "artifacts": {"diagram": {"b.html": {"errors": 1, "warnings": 0}}}
+        }));
+        let run = f.run(false);
+        assert_eq!((run.code, &run.lines), (0, &lines(&["design gate: no regressions on 5 pages and 3 artifacts"])));
+        assert_eq!(
+            output(&run)["artifacts"],
+            json!({
+                "chart": {"a.html": {"errors": 0, "warnings": 2}},
+                "diagram": {"b.html": {"errors": 1, "warnings": 2}},
+                "motion": {"c.html": {"errors": 0, "warnings": 0}}
+            })
+        );
+        let calls = f.calls();
+        assert!(calls.contains("tenant-lint c.html --json"), "{calls}");
+        assert!(!calls.contains("lint d.html") && !calls.contains("lint e.html"), "{calls}");
+        assert!(!calls.contains("scrub-lint") && !calls.contains("scroll-story"), "{calls}");
+    }
+
+    #[test]
+    fn a_linter_that_returns_other_json_is_a_failure_naming_the_kind_and_path() {
+        let f = fx("v22.3.0");
+        f.marked("index.html", CHART, &gated(&[("a11y", 0)]));
+        f.lint("chart-lint", "index.html", "Error: the linter crashed");
+        put(&f.root.join("flow.json"), "{}");
+        f.lint("flow-lint", "flow.json", r#"{"data": {"warningCount": 0}}"#);
+        let run = f.run(false);
+        assert_eq!(
+            (run.code, run.lines),
+            (
+                1,
+                lines(&[
+                    "design gate: chart index.html — ui chart lint output was not the expected JSON",
+                    "design gate: flow flow.json — ui flow lint output was not the expected JSON",
+                ])
+            )
+        );
     }
 
     #[test]
@@ -447,7 +790,7 @@ mod tests {
         for page in ["index.html", "docs/guide.html", ".hidden/x.html", "node_modules/p/x.html", "target/x.html", "dist/x.html", "notes.txt"] {
             put(&f.root.join(page), "x");
         }
-        assert_eq!(pages(&f.root, &f.root), vec!["docs/guide.html", "index.html"]);
+        assert_eq!(pages(&files(&f.root), &f.root), vec!["docs/guide.html", "index.html"]);
     }
 
     #[test]
