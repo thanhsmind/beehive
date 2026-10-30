@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-67-0",
   "mode": "tiny",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"release-2-67-0\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"release-2-67-0\" (lane).",
+  "next_action": "close the release lane",
   "created_at": "2026-10-30T10:53:49.954Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -387,5 +387,14 @@
         }
       ]
     }
+  },
+  "last_scribing_run": {
+    "feature": "release-2-67-0",
+    "date": "2026-10-30",
+    "at": "2026-10-30T11:13:06.498Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "close the release lane"
   }
 }
