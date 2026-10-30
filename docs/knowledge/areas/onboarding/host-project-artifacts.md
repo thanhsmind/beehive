@@ -116,8 +116,9 @@ and removes the staging copy. bee never writes a hub file itself. What blocks it
 skip, one `skipped_skills` entry `{skill, target: "skillstation", reason}`, and
 the onboard still reports `applied`. What the human observes: the per-project
 copy is always written; the hub copy is the opt-in second home. Without the flag
-no item and no skip appear (decisions 6855564f, 464c2cca; the staging copy is
-decision 225775e9, which touches 6855564f and changes nothing above).
+no item and no skip appear (locked in `docs/history/bee-deploying-skill/CONTEXT.md`,
+D2 and D3; the staging copy is the execution-time decision recorded against
+that feature, which touches D2 and changes nothing above).
 
 ## Business Rules
 
