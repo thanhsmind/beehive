@@ -29,6 +29,17 @@ curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/ins
 .\install-bee.ps1 -DesignPacks web
 ```
 
+Unattended install (auto yes, no questions). Name the design packs here, because `-y`/`-Yes` adds none on its own:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y --design-packs web,charts,motion
+```
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
+.\install-bee.ps1 -Yes -DesignPacks 'web,charts,motion'
+```
+
 To target another directory instead, add `-d /path/to/project` (bash) / `-Directory C:\path\to\project` (PowerShell).
 
 From a local clone: `scripts/install.sh [-d <target>]` / `.\scripts\install.ps1 [-Directory <target>]`.
