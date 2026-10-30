@@ -66,13 +66,13 @@ the gate change, test layout.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Resolved In Planning
 
-- [ ] Core references name `ui` commands outside the core contract (`ds soul`, `vr gate`, `evidence *` and more). Out of this ask; file to the backlog.
+- [x] Core references name `ui` commands outside the core contract (`ds soul`, `vr gate`, `evidence *` and more). Out of this ask; filed as PBI `p-982de3cf`.
 
-## Deferred Ideas
+## Ideas Outside This Feature
 
-- Core contract gap above — backlog.
+- Core contract gap above — PBI `p-982de3cf`.
 - anphabe-goglbe: re-install packs, bump its own `scripts/design-gate.mjs`, and re-record its baseline at 0.6.2 — the owner's acts in that repo.
 
 ## Handoff Note
