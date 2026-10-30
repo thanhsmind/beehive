@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"bee-deploying-skill\" started at phase \"exploring\" (lane).",
   "next_action": "Merged into main at c56c7a3; reload the product and test \"bee-deploying-skill\", then either approve uat (\"bee gate --name uat --approved true --lane bee-deploying-skill\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-30T10:06:36.120Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: bee-deploying-skill",
-    "asked_at": "2026-10-30T10:51:12.666Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
