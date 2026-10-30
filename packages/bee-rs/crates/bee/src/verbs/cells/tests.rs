@@ -11843,6 +11843,18 @@ use std::time::Instant;
     }
 
     #[test]
+    fn design_rule_refuses_a_flow_model_cell_without_the_gate_in_a_picked_host() {
+        let charts = json!({"commands": {"test": "none"}, "design": {"packs": ["charts"]}});
+        for file in ["flows/signup.flow.json", "flow.json"] {
+            let refusal = thrown(design_cap(charts.clone(), json!([file]), "echo ok", "fixture", None));
+            assert!(
+                refusal.contains("FIX: add `bee design gate` to the cell's verify"),
+                "a flow model is a UI file: {file}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
     fn design_rule_accepts_a_ui_cell_with_the_gate_or_a_non_ui_cell_in_a_picked_host() {
         let gate = ".bee/bin/bee design gate && echo ok";
         let capped = design_cap(picked(), json!(["web/index.html"]), gate, "fixture", None).unwrap();

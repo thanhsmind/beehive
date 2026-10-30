@@ -2280,6 +2280,13 @@
       "packagePath": "packages/bee/design/bee-design-charts/references/chart-grammars/venn.md"
     },
     {
+      "path": "packages/bee/design/bee-design-charts/references/contract.md",
+      "sha256": "070686362f01bdcf867397978bf16333392ec53ed67ac9c73d69336500b41f95",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-charts/references/contract.md"
+    },
+    {
       "path": "packages/bee/design/bee-design-charts/references/diagram-craft.md",
       "sha256": "9d5ca2ac14d0d1f81da23480c9c827dc6a66a2cebee7a4ae50ccda0a9da90d47",
       "mode": "644",
@@ -2435,7 +2442,7 @@
     },
     {
       "path": "packages/bee/design/bee-design-charts/SKILL.md",
-      "sha256": "f79e6c73c27c99e46ca6aacea4c42c5a08ede9d7eea319d91311e4536911c991",
+      "sha256": "74cb9228d8e7b655da1c75c1a4700ee8be972f3535039ef5816c364b703e742e",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-charts/SKILL.md"
@@ -2453,6 +2460,13 @@
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-figma/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-figma/references/contract.md",
+      "sha256": "1f88e3811e0915f8aa96bd5459abd4868068386fb3fb46ec084a896fc1312276",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-figma/references/contract.md"
     },
     {
       "path": "packages/bee/design/bee-design-figma/references/figma-agent-hand.md",
@@ -2554,7 +2568,7 @@
     },
     {
       "path": "packages/bee/design/bee-design-figma/SKILL.md",
-      "sha256": "dadc3d86598bce4f544c2ba3c3c11f6395f772d3b310183aca653e5927a39567",
+      "sha256": "04a73edae12c2320c8576a0564b66aad9e2f1746aaab6b75f37241bc76616428",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-figma/SKILL.md"
@@ -2600,6 +2614,13 @@
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-motion/references/canvas-ui/README.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/references/contract.md",
+      "sha256": "ba2dfabd35fa318139fdadbbb9ec4f4fd7dcd1590636a77734727ce41f43fd99",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/references/contract.md"
     },
     {
       "path": "packages/bee/design/bee-design-motion/references/delivery-assets.md",
@@ -2659,7 +2680,7 @@
     },
     {
       "path": "packages/bee/design/bee-design-motion/SKILL.md",
-      "sha256": "04f2601e2101c81b4df89ad979cd1469a9a5c89def3a00978f93992e0c3dcf03",
+      "sha256": "9edebf83ad7a94006ec6407ef17947db4409e94cebd9223ce010cb89a0c0b1c6",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-motion/SKILL.md"
@@ -2677,6 +2698,13 @@
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-web/LICENSE.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-web/references/contract.md",
+      "sha256": "dababc6e8c919be44e6c4b70de6e123ba05e003fb1a51190baace5da79d5dbfb",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-web/references/contract.md"
     },
     {
       "path": "packages/bee/design/bee-design-web/references/designmd-format.md",
@@ -2883,7 +2911,7 @@
     },
     {
       "path": "packages/bee/design/bee-design-web/SKILL.md",
-      "sha256": "9d895cd024d260faf0f00efbb45f75d2fd422e0497af41378acc164a165d4ca5",
+      "sha256": "4014ea6f02f984a22241a65826663f8697bb0090f8e53635bc33d0836e355bfd",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-web/SKILL.md"
@@ -2995,7 +3023,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/references/ds-guidelines.md",
-      "sha256": "e417d876d76117d6c901c43042c01f87e33c02341b5cc6fbe1f5336f9d320e72",
+      "sha256": "bb2d3986f55c8da8307feb8f2098094489d361608adef1ca51db859df7eab60a",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/references/ds-guidelines.md"
@@ -3023,7 +3051,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/references/page-structures.md",
-      "sha256": "0463e8ed6eccf3ee80bc4047973c74456624580101afbd0e2b296f6f8f835254",
+      "sha256": "68ddb64fbe5e67491abd368dfbeadac56a344f03a728f7cb35f267102883a8ef",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/references/page-structures.md"
@@ -3037,7 +3065,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/references/rules.md",
-      "sha256": "2cdf14a28b9d75e4eb6e6fd45c76ff8518eaaa208bb18395996898d9b0209dce",
+      "sha256": "098cc98b010be9f7684dc38fdd91d0b22a14ae2fe2e7bc8b8c4a98f2ae510acf",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/references/rules.md"
@@ -3086,7 +3114,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "73be506b34bf2d829529c08c669247325ba6d3bee38ef97a64b09a21a0e09a35",
+      "sha256": "6df68833e37c05c0d999282ac9dd23d9551b8bd88c2a730b5c5addb1b3259f5f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"
@@ -3114,7 +3142,7 @@
     },
     {
       "path": "packages/bee/design/UPSTREAM.json",
-      "sha256": "2c95f17dd35652d27414f5154a33d509475435f68864755480797ef801ef14a6",
+      "sha256": "41bf5bb88edb2bb9133d08ccedac64a4f3393cb410587fe79e57dc0b71b48f04",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/UPSTREAM.json"

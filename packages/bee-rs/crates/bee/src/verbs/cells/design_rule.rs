@@ -7,7 +7,8 @@ const DESIGN_GATE: &str = "bee design gate";
 const DESIGN_NOT_RUN: &str = "design gate not run";
 const DESIGN_BASELINE: &str = ".bee/design/gate-baseline.json";
 const DESIGN_LAST_RUN: &str = ".bee/design/last-run.json";
-const DEFAULT_UI_GLOBS: [&str; 7] = ["*.html", "*.css", "*.scss", "*.jsx", "*.tsx", "*.vue", "*.svelte"];
+const DEFAULT_UI_GLOBS: [&str; 9] =
+    ["*.html", "*.css", "*.scss", "*.jsx", "*.tsx", "*.vue", "*.svelte", "flow.json", "*.flow.json"];
 
 fn cell_files(cell: &Map<String, Value>) -> Vec<String> {
     match cell.get("files") {

@@ -1166,6 +1166,105 @@ mod tests {
         assert_eq!(from_packs, shipped);
     }
 
+    fn contract_entries(path: &Path) -> Vec<String> {
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let mut entries = Vec::new();
+        let mut not_for_host = false;
+        for line in text.lines() {
+            if line.starts_with("## ") {
+                not_for_host = line == "## Not for host work";
+                if let Some(cmd) = line.strip_prefix("## ui ") {
+                    entries.push(cmd.trim().to_string());
+                }
+            } else if let Some(rest) = line.strip_prefix("- `ui ").filter(|_| not_for_host) {
+                if let Some((cmd, _)) = rest.split_once('`') {
+                    entries.push(cmd.trim().to_string());
+                }
+            }
+        }
+        entries
+    }
+
+    fn is_ui_word(token: &str) -> bool {
+        let mut chars = token.chars();
+        chars.next().is_some_and(|c| c.is_ascii_lowercase())
+            && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    }
+
+    fn uncovered_ui_mentions(text: &str, entries: &[String]) -> Vec<String> {
+        let mut uncovered = Vec::new();
+        for (at, _) in text.match_indices("`ui ") {
+            let span = text[at + 4..].split('`').next().unwrap_or("");
+            let mut tokens = span.split_whitespace();
+            let Some(first) = tokens.next().filter(|t| is_ui_word(t)) else { continue };
+            let second = tokens.next().filter(|t| is_ui_word(t));
+            let group = format!("{first} ");
+            let covered = entries.iter().any(|e| e == first)
+                || match second {
+                    Some(second) => entries.iter().any(|e| *e == format!("{first} {second}")),
+                    None => entries.iter().any(|e| e.starts_with(&group)),
+                };
+            if !covered {
+                uncovered.push(second.map_or(first.to_string(), |s| format!("{first} {s}")));
+            }
+        }
+        uncovered
+    }
+
+    fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let mut entries: Vec<PathBuf> =
+            std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                markdown_files(&path, out);
+            } else if path.extension().is_some_and(|x| x == "md") {
+                out.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn the_shipped_design_packs_name_only_ui_commands_their_contracts_list() {
+        let design = repo_root().join("packages").join("bee").join("design");
+        let core = contract_entries(&design.join("bee-design").join("references").join("contract.md"));
+        assert!(core.iter().any(|e| e == "gate"), "core contract lists no ui gate");
+        let mut failures = Vec::new();
+        for pack in list_bee_skill_entries(&design)
+            .into_iter()
+            .filter(|e| e.is_dir && e.name.starts_with("bee-design-"))
+        {
+            let root = design.join(&pack.name);
+            let mut entries = core.clone();
+            entries.extend(contract_entries(&root.join("references").join("contract.md")));
+            let mut files = Vec::new();
+            markdown_files(&root, &mut files);
+            for file in files {
+                let text = std::fs::read_to_string(&file).unwrap();
+                for cmd in uncovered_ui_mentions(&text, &entries) {
+                    let rel = file.strip_prefix(&root).unwrap().display();
+                    failures.push(format!("{}: {rel}: ui {cmd}", pack.name));
+                }
+            }
+        }
+        failures.dedup();
+        assert!(failures.is_empty(), "pack ui commands in no contract:\n{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn a_shipped_design_contract_check_covers_groups_leaves_and_not_for_host_bullets() {
+        let dir = tempfile::tempdir().unwrap();
+        let contract = dir.path().join("contract.md");
+        write(
+            &contract,
+            "# Generated command contract\n\n## ui chart lint\n\nUsage: `ui chart lint <f>`\n\n## ui schema\n\n## Not for host work\n\n- `ui gflow i2v` — paid\n",
+        );
+        let entries = contract_entries(&contract);
+        assert_eq!(entries, vec!["chart lint", "schema", "gflow i2v"]);
+        let text = "`ui chart lint x.html` `ui chart` `ui schema --json` `ui gflow i2v` `ui <command>` `ui chart render` `ui flow lint` `ui gflow`";
+        assert_eq!(uncovered_ui_mentions(text, &entries), vec!["chart render", "flow lint"]);
+    }
+
     #[test]
     fn identical_target_plans_nothing_and_drift_replans() {
         let dir = tempfile::tempdir().unwrap();

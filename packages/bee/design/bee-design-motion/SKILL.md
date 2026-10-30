@@ -24,4 +24,7 @@ workflow, path names and gate check apply here. When `bee-design` is not install
 | Generate video or images through Google Flow | [gflow-hand.md](references/gflow-hand.md) |
 | Resolve reproduced images to their originals | [delivery-assets.md](references/delivery-assets.md) |
 
+Commands: this pack adds the `ui` commands in [contract.md](references/contract.md) to the core contract. Call
+them only with this pack loaded. Do not run the commands in its "Not for host work" section in a host.
+
 License: the design-os taste in this skill is PolyForm Shield 1.0.0 — [LICENSE.md](LICENSE.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) in this skill; upstream https://github.com/jangtrinh/design-os.
