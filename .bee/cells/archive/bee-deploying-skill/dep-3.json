@@ -1,0 +1,169 @@
+{
+  "id": "dep-3",
+  "feature": "bee-deploying-skill",
+  "title": "Name --skillstation in every doc home of the onboard flags",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "24175c6f-5b13-4e03-b1e1-595e65d5f63f",
+    "6855564f-afea-4fd4-ae6d-9a24faec51c4"
+  ],
+  "files": [
+    "INSTALL.md",
+    "README.md",
+    "skills/bee-hive/references/onboarding.md",
+    "docs/product-description/maintenance/onboarding.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+    ".bee/verify/verify-app/features/onboard.md"
+  ],
+  "read_first": [
+    "docs/history/bee-deploying-skill/CONTEXT.md",
+    "docs/history/bee-deploying-skill/plan.md",
+    "INSTALL.md",
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "affects_skills": [
+    "skills/bee-hive/references/onboarding.md"
+  ],
+  "affects_specs": [
+    "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+  ],
+  "action": "Per D1 (store 24175c6f) and D2 (store 6855564f). In each file, wherever `--global-skills` is listed as an onboard flag, add `--skillstation` beside it with one sentence: it also publishes the bee-deploying skill into the user's skillstation hub through the skillstation CLI (commit, then activate); without the CLI the onboard still succeeds and reports one skipped entry with target skillstation. INSTALL.md: a row in the flags table at the `--global-skills` row (PowerShell column: `-Skillstation` marked as not yet wired in install.ps1), and one short paragraph under the two-layers section naming the two ways to install the deploy skill: the per-project copy every onboard writes, or the hub with `--skillstation`. README.md: the `bee onboard` usage line gains `[--skillstation]`, and the 'Useful flags' sentence names it. skills/bee-hive/references/onboarding.md: one sentence after the `--global-skills` sentence. docs/product-description/maintenance/onboarding.md: add the flag to the argv list and one line to the 'reach outside the repo' paragraph. docs/knowledge/areas/onboarding/host-project-artifacts.md: extend the existing rendered-skills entry with the hub publish fact, its plan item name publish_skillstation, the HUB_SKILLS constant, and the loud-skip shape; Pointers name onboard/plan.rs and onboard/apply.rs. .bee/verify/verify-app/features/onboard.md: add a sub-feature line `onboard-skillstation` and a short 'How to get to it' bullet. Plain English, short sentences, no new headings beyond what each file already uses.",
+  "verify": "rg -c -e --skillstation INSTALL.md README.md skills/bee-hive/references/onboarding.md docs/product-description/maintenance/onboarding.md docs/knowledge/areas/onboarding/host-project-artifacts.md .bee/verify/verify-app/features/onboard.md",
+  "must_haves": {
+    "truths": [
+      "every file that lists --global-skills as an onboard flag also lists --skillstation",
+      "the install docs state the two ways to install the deploy skill",
+      "the onboarding knowledge concept records the publish item and the loud skip"
+    ],
+    "artifacts": [
+      {
+        "path": "INSTALL.md",
+        "substantive": "flag row plus the two-ways paragraph"
+      },
+      {
+        "path": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+        "substantive": "hub publish fact with pointers"
+      }
+    ],
+    "key_links": [
+      "README.md usage line names --skillstation",
+      "onboard.md feature map lists onboard-skillstation"
+    ],
+    "prohibitions": [
+      "No edit to scripts/install.sh or install.ps1",
+      "No change to any line that does not concern onboard flags or the deploy skill"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "w-dep-3",
+    "outcome": "Named --skillstation in all six onboard doc homes and added the two-ways install paragraph",
+    "files_changed": [
+      "INSTALL.md",
+      "README.md",
+      "skills/bee-hive/references/onboarding.md",
+      "docs/product-description/maintenance/onboarding.md",
+      "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+      ".bee/verify/verify-app/features/onboard.md"
+    ],
+    "deviations": [
+      "Put the INSTALL.md flag row in the bee onboard Flags table, not the install-script table with the PowerShell column, and the two-ways paragraph says the install scripts do not pass the flag yet — scripts/install.sh:165 refuses unknown options, so a bash-column row would be false — the plan was wrong about a fact",
+      "README Useful flags sentence names --skillstation as bee onboard only, for the same reason — the plan was wrong about a fact"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T10:19:36.081Z",
+    "behavior_change": false,
+    "verification_evidence": "docs-only cell, the cell verify parity count is the proof (INSTALL.md:2 README.md:2 skills/bee-hive/references/onboarding.md:1 product onboarding.md:2 host-project-artifacts.md:2 onboard.md:2); no code ran",
+    "verify_output": "green:static",
+    "verify_passed": true,
+    "claim_session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+    "verify_command": "rg -c -e --skillstation INSTALL.md README.md skills/bee-hive/references/onboarding.md docs/product-description/maintenance/onboarding.md docs/knowledge/areas/onboarding/host-project-artifacts.md .bee/verify/verify-app/features/onboard.md",
+    "claimed_at": "2026-10-30T10:17:03.397Z",
+    "mistakes": [
+      {
+        "wrong": "First commit call passed paths without the double-dash pathspec and the concurrent-worker guard refused it",
+        "better": "use the explicit double-dash pathspec form from the start",
+        "fix_at": "none"
+      }
+    ],
+    "report": {
+      "outcome": "Named --skillstation in all six onboard doc homes and added the two-ways install paragraph",
+      "commit": "54471ecb3",
+      "files": [
+        "INSTALL.md",
+        "README.md",
+        "skills/bee-hive/references/onboarding.md",
+        "docs/product-description/maintenance/onboarding.md",
+        "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+        ".bee/verify/verify-app/features/onboard.md"
+      ],
+      "tests": "rg -c -e --skillstation INSTALL.md README.md skills/bee-hive/references/onboarding.md docs/product-description/maintenance/onboarding.md docs/knowledge/areas/onboarding/host-project-artifacts.md .bee/verify/verify-app/features/onboard.md — green:static — docs-only cell, the cell verify parity count is the proof (INSTALL.md:2 README.md:2 skills/bee-hive/references/onboarding.md:1 product onboarding.md:2 host-project-artifacts.md:2 onboard.md:2); no code ran",
+      "deviations": [
+        "Put the INSTALL.md flag row in the bee onboard Flags table, not the install-script table with the PowerShell column, and the two-ways paragraph says the install scripts do not pass the flag yet — scripts/install.sh:165 refuses unknown options, so a bash-column row would be false — the plan was wrong about a fact",
+        "README Useful flags sentence names --skillstation as bee onboard only, for the same reason — the plan was wrong about a fact"
+      ],
+      "mistakes": [
+        "First commit call passed paths without the double-dash pathspec and the concurrent-worker guard refused it — use the explicit double-dash pathspec form from the start — none"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "every file that lists --global-skills as an onboard flag also lists --skillstation",
+            "artifact": "INSTALL.md"
+          },
+          {
+            "requirement": "the install docs state the two ways to install the deploy skill",
+            "artifact": "INSTALL.md"
+          },
+          {
+            "requirement": "the onboarding knowledge concept records the publish item and the loud skip",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          },
+          {
+            "requirement": "README.md usage line names --skillstation",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "onboard.md feature map lists onboard-skillstation",
+            "artifact": ".bee/verify/verify-app/features/onboard.md"
+          },
+          {
+            "requirement": "INSTALL.md",
+            "artifact": "INSTALL.md"
+          },
+          {
+            "requirement": "README.md",
+            "artifact": "README.md"
+          },
+          {
+            "requirement": "skills/bee-hive/references/onboarding.md",
+            "artifact": "skills/bee-hive/references/onboarding.md"
+          },
+          {
+            "requirement": "docs/product-description/maintenance/onboarding.md",
+            "artifact": "docs/product-description/maintenance/onboarding.md"
+          },
+          {
+            "requirement": "docs/knowledge/areas/onboarding/host-project-artifacts.md",
+            "artifact": "docs/knowledge/areas/onboarding/host-project-artifacts.md"
+          },
+          {
+            "requirement": ".bee/verify/verify-app/features/onboard.md",
+            "artifact": ".bee/verify/verify-app/features/onboard.md"
+          }
+        ],
+        "recorded_at": "2026-10-30T10:20:04.913Z",
+        "recorded_by": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

@@ -1,0 +1,162 @@
+{
+  "id": "dep-1",
+  "feature": "bee-deploying-skill",
+  "title": "Add the bee-deploying skill with its two templates and trigger cases",
+  "lane": "standard",
+  "role": "docs",
+  "deps": [],
+  "decisions": [
+    "24175c6f-5b13-4e03-b1e1-595e65d5f63f",
+    "7d06a37d-92a1-4765-9e94-9ae65f3b48a6",
+    "5aa29e26-430d-42d0-bb54-9bb8d8c92fa8"
+  ],
+  "files": [
+    "skills/bee-deploying/SKILL.md",
+    "skills/bee-deploying/references/DEPLOY.template.md",
+    "skills/bee-deploying/references/deploy.sh.template",
+    "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+  ],
+  "read_first": [
+    "docs/history/bee-deploying-skill/CONTEXT.md",
+    "docs/history/bee-deploying-skill/plan.md",
+    "skills/bee-grooming/SKILL.md",
+    "packages/bee-rs/crates/bee/tests/skill_triggers.rs"
+  ],
+  "affects_skills": [
+    "skills/bee-deploying/SKILL.md",
+    "skills/bee-deploying/references/DEPLOY.template.md",
+    "skills/bee-deploying/references/deploy.sh.template"
+  ],
+  "affects_specs": [],
+  "action": "Per D1 (store 24175c6f) and D4 (store 7d06a37d): create skills/bee-deploying/SKILL.md with front matter `name: bee-deploying` and a quoted one-line `description:` (the routing surface: learn, record and replay how one project deploys or releases; use when the user says deploy, release, ship, or asks to record how this project deploys; not for the bee repo's own release, which scripts/release.sh owns, and not for a server a project-specific deploy skill already owns). Body, in this order: Step 0 Find the record (docs/DEPLOY.md; a `## Deploy` or `## Release` section in CLAUDE.md or AGENTS.md naming a script; scripts/deploy.sh or scripts/release.sh) — found → Branch A Replay, none → Branch B Learn; a project-specific deploy skill or release script beats this skill and is pointed at, never duplicated. Branch A: read the record, note its date, flag drift against CI/container/package/platform files, run Preconditions (a red one stops), run Steps in order with every `LIVE` step shown and waiting for the user's yes for that exact command, run Verify, and fix the record in the same turn when reality disagreed. Branch B: B1 read before you ask (a table of files: CI workflows, Dockerfile and compose, package scripts and Makefile, platform files such as fly.toml or vercel.json, .env.example names only, README and docs, scripts/, top git tags; never open .env, *.pem, *.key, credentials*, secrets*); B2 ask one round for only the gaps (target, environments, trigger, secrets by name and place, manual steps, rollback, done check); B3 walk one deploy with the user, LIVE steps per-command yes, record each step as it succeeds, or write the record UNTESTED when the user wants no deploy now; B4 write docs/DEPLOY.md from references/DEPLOY.template.md, scripts/deploy.sh from references/deploy.sh.template for the automatable steps (set -euo pipefail; env and version as args; refuse a dirty tree unless --allow-dirty; LIVE commands print and ask Continue? unless --yes), and a short `## Deploy` section appended to CLAUDE.md or AGENTS.md pointing at the record; report the three paths; do not commit unless asked. Hard rules: LIVE never without a fresh yes; secret values never read or printed; never deploy a dirty or unpushed tree unless told for that run; the record is the single source of truth; report what ran, what was skipped, what is UNTESTED; close with a capture line (`bee decisions log` for a settled deploy fact when the project runs bee, otherwise a Gotchas line in the record). Keep the whole SKILL.md under 140 lines, plain English, no code comments in the templates beyond the `#!` line. references/DEPLOY.template.md: header with Recorded date, Status TESTED|UNTESTED, Last verified by; sections Target, Preconditions (commands plus required inputs by name), Steps table (# | Kind SAFE|LIVE | Command or action | Expected result), Verify, Rollback, Gotchas. references/deploy.sh.template: the bash skeleton described in B4 with a `live` function, the dirty-tree refusal, and == section echoes for preconditions, build, test, deploy, verify. Then add to packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json a block for bee-deploying: 3 briefs with expect [\"bee-deploying\"] (one in Vietnamese, e.g. deploy dự án này lên production / ghi lại cách deploy để lần sau khỏi mò lại / how does this service get shipped? write it down and run it), and 2 near-miss briefs with expect [] or another skill and near bee-deploying (e.g. a request to release the bee repo itself, and a request to set up a CI pipeline from scratch). Mirror the existing block shape exactly.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+  "must_haves": {
+    "truths": [
+      "skills/bee-deploying/SKILL.md has a one-line description and the Replay and Learn branches with the LIVE rule",
+      "both reference templates exist and the SKILL.md names them",
+      "the trigger fixture holds 3 opening briefs and 2 near misses for bee-deploying and the skill_triggers test is green"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-deploying/SKILL.md",
+        "substantive": "Step 0, Branch A, Branch B with B1-B4, Hard rules"
+      },
+      {
+        "path": "skills/bee-deploying/references/DEPLOY.template.md",
+        "substantive": "the record template"
+      },
+      {
+        "path": "skills/bee-deploying/references/deploy.sh.template",
+        "substantive": "the script skeleton"
+      }
+    ],
+    "key_links": [
+      "SKILL.md B4 names references/DEPLOY.template.md and references/deploy.sh.template",
+      "skill-triggers.json names bee-deploying in expect and near"
+    ],
+    "prohibitions": [
+      "No edit to any other skill",
+      "No edit to skill_triggers.rs",
+      "No code comments in the templates beyond the #! line",
+      "No hub or skillstation logic inside the skill text"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "w-dep-1",
+    "outcome": "bee-deploying skill, its record and script templates, and 5 trigger cases added",
+    "files_changed": [
+      "skills/bee-deploying/SKILL.md",
+      "skills/bee-deploying/references/DEPLOY.template.md",
+      "skills/bee-deploying/references/deploy.sh.template",
+      "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+    ],
+    "deviations": [
+      "The draft templates carried hash comment lines in the script and in the record code blocks; the script now holds bare placeholder lines and the record shows Preconditions and Verify as Command | Must show tables — the cell forbids comments beyond the shebang line — the plan was wrong about a fact",
+      "Committed with a path-scoped commit after an intent-to-add stage, not a plain add — the concurrent-worker guard refused staging into the shared index — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T10:16:12.390Z",
+    "behavior_change": false,
+    "verification_evidence": "the cell verify, run with the cargo binary at /home/thanhsmind/.cargo/bin; fixture completeness test passed, the paid real-agent eval is ignored and was not run",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers",
+    "claimed_at": "2026-10-30T10:12:18.525Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee-deploying skill added: Step 0, Branch A Replay, Branch B B1-B4, Hard rules in skills/bee-deploying/SKILL.md (126 lines); B4 names references/DEPLOY.template.md and references/deploy.sh.template; fixture block after bee-capturing holds 3 expect and 2 near cases",
+      "commit": "62ae6ce2715221b939291f2f932aa2324cba10ac",
+      "files": [
+        "skills/bee-deploying/SKILL.md",
+        "skills/bee-deploying/references/DEPLOY.template.md",
+        "skills/bee-deploying/references/deploy.sh.template",
+        "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee --test skill_triggers — green:unit — the cell verify, run with the cargo binary at /home/thanhsmind/.cargo/bin; fixture completeness test passed, the paid real-agent eval is ignored and was not run",
+      "deviations": [
+        "The draft templates carried hash comment lines in the script and in the record code blocks; the script now holds bare placeholder lines and the record shows Preconditions and Verify as Command | Must show tables — the cell forbids comments beyond the shebang line — the plan was wrong about a fact",
+        "Committed with a path-scoped commit after an intent-to-add stage, not a plain add — the concurrent-worker guard refused staging into the shared index — hit an unforeseen obstacle"
+      ],
+      "mistakes": [],
+      "skipped": [
+        "skill_triggers_real_agent_eval: ignored by default, needs BEE_SKILL_TRIGGER_EVAL and a paid agent",
+        "bee dev regen: wave-barrier, left to the leader"
+      ]
+    },
+    "skipped": [
+      "skill_triggers_real_agent_eval: ignored by default, needs BEE_SKILL_TRIGGER_EVAL and a paid agent",
+      "bee dev regen: wave-barrier, left to the leader"
+    ],
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "skills/bee-deploying/SKILL.md has a one-line description and the Replay and Learn branches with the LIVE rule",
+            "artifact": "skills/bee-deploying/SKILL.md"
+          },
+          {
+            "requirement": "both reference templates exist and the SKILL.md names them",
+            "artifact": "skills/bee-deploying/references/DEPLOY.template.md"
+          },
+          {
+            "requirement": "the trigger fixture holds 3 opening briefs and 2 near misses for bee-deploying and the skill_triggers test is green",
+            "artifact": "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+          },
+          {
+            "requirement": "SKILL.md B4 names references/DEPLOY.template.md and references/deploy.sh.template",
+            "artifact": "skills/bee-deploying/SKILL.md"
+          },
+          {
+            "requirement": "skill-triggers.json names bee-deploying in expect and near",
+            "artifact": "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+          },
+          {
+            "requirement": "skills/bee-deploying/SKILL.md",
+            "artifact": "skills/bee-deploying/SKILL.md"
+          },
+          {
+            "requirement": "skills/bee-deploying/references/DEPLOY.template.md",
+            "artifact": "skills/bee-deploying/references/DEPLOY.template.md"
+          },
+          {
+            "requirement": "skills/bee-deploying/references/deploy.sh.template",
+            "artifact": "skills/bee-deploying/references/deploy.sh.template"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json",
+            "artifact": "packages/bee-rs/crates/bee/tests/fixtures/skill-triggers.json"
+          }
+        ],
+        "recorded_at": "2026-10-30T10:17:00.074Z",
+        "recorded_by": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+        "commit_diff": "checked"
+      }
+    ]
+  },
+  "status": "capped"
+}

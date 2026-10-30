@@ -1753,5 +1753,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-29T15:51:52.259Z"
+  },
+  "bee-deploying-skill": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-10-30T10:52:19.065Z"
   }
 }

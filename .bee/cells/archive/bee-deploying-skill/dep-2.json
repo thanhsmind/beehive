@@ -1,0 +1,222 @@
+{
+  "id": "dep-2",
+  "feature": "bee-deploying-skill",
+  "title": "Add bee onboard --skillstation that publishes bee-deploying to the hub with a loud skip",
+  "lane": "standard",
+  "role": "code",
+  "deps": [],
+  "decisions": [
+    "6855564f-afea-4fd4-ae6d-9a24faec51c4",
+    "464c2cca-c7a9-4893-aa3f-8fc94cfd2fd6",
+    "f4db9d7b-dbbb-466f-b32f-a2a65051ba6a"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/bee-deploying-skill/CONTEXT.md",
+    "docs/history/bee-deploying-skill/plan.md",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Per D2 (store 6855564f), D3 (store 464c2cca) and contract onboard-skillstation (store f4db9d7b). mod.rs: add `skillstation: bool` to Args (default false), parse `--skillstation` in the else-if chain beside `} else if arg == \"--global-skills\" {`, and copy it into Options beside `global_skills: args.global_skills,`. plan.rs: add `pub skillstation: bool` to Options; add `pub const HUB_SKILLS: [&str; 1] = [\"bee-deploying\"];`; in compute_plan right after the section-7 skill-sync items are extended (after `let skill_sync = if opts.sync_skills {` block), when `opts.skillstation && opts.sync_skills && skill_sync.blocked.is_none()`, push one item per HUB_SKILLS entry: {action: \"publish_skillstation\", skill: <name>, path: \".claude/skills/<name>\", target: \"skillstation\"}; the path is the repo-claude rendered root joined with the skill (take the segments from the `repo-claude` entry of skill_sync_targets, never a hard-coded string twice). apply.rs: add an arm `\"publish_skillstation\"` beside `\"sync_skill\" => {`: resolve the absolute folder (repo_root joined with item.path); if the folder is not a directory push a skipped_skills entry {skill, target: \"skillstation\", reason: \"rendered skill folder is absent — run the skill sync first\"} and continue; run `skillstation skill commit <folder> --yes --json` with std::process::Command; a spawn error (binary not on PATH) or a non-zero exit pushes {skill, target: \"skillstation\", reason: <\"skillstation is not on PATH\" or the first 200 chars of stderr/stdout>} and continues; on success parse stdout as JSON, and unless it reports `\"activated\": true` run `skillstation skill activate <skill> --json`, read its top-level `cli` string, split it on whitespace and run it (first token is the program); any failure there is the same loud skip with the step named; on full success push the item into applied with an added `hub_commit` field holding the commit hash when present. Never read, print or write any file under the hub; never pass --approve-content or --force. Keep every refusal reason one line. router.rs: add `[--skillstation]` to the onboard usage string beside `[--global-skills]`. generated/registry_payload.json: add a `skillstation` boolean property to the onboard command's parameters beside `global-skills`, description: \"Also publish the bee-deploying skill into the user's skillstation hub through the skillstation CLI (skill commit, then activate). Absent CLI or a failed call is a loud skipped entry, never a red onboard.\" (declared by hand in the same change, like the other onboard flags). tests.rs: extend parse_args_mirrors_the_engine_flag_set with `--skillstation` → true and default false; add a plan test: with skillstation true the plan holds exactly one publish_skillstation item for bee-deploying with target skillstation, and with it false none; add an apply test with the flag set and PATH pointed at an empty temp dir so the binary is absent: status applied, skipped_skills carries one entry with target skillstation and a reason naming PATH. Run the onboard tests. No code comments.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee onboard::",
+  "must_haves": {
+    "truths": [
+      "parse_args accepts --skillstation and defaults it to false",
+      "compute_plan emits exactly one publish_skillstation item for bee-deploying only when the flag is set and sync_skills is on",
+      "apply with the flag and no skillstation binary on PATH reports applied with one skipped_skills entry whose target is skillstation",
+      "without the flag no item and no skip appear"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "substantive": "the publish_skillstation arm with commit, activate, bound confirm, and the loud skip"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "substantive": "HUB_SKILLS and the publish item"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "substantive": "the four contract truths as tests"
+      }
+    ],
+    "key_links": [
+      "mod.rs copies args.skillstation into Options.skillstation",
+      "router.rs usage names --skillstation",
+      "registry_payload.json declares skillstation on onboard"
+    ],
+    "prohibitions": [
+      "No change to the sync_skill, refresh_legacy_global_skill or remove_skill arms",
+      "No write under the skillstation hub by bee itself",
+      "No --approve-content or --force on any skillstation call",
+      "No code comments"
+    ]
+  },
+  "trace": {
+    "worker": "w-dep-2",
+    "outcome": "bee onboard --skillstation added end to end with a loud skip when the CLI is absent",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "The apply stages a copy of the rendered skill under .bee/tmp/skillstation-publish and points the CLI at the copy instead of at .claude/skills/<name> — skillstation 0.9.0 skill commit --yes closes and unlinks the folder it is given, which would delete the per-project copy — the plan was wrong about a fact",
+      "The paseo worker hit the 1800s ceiling before capping; the leader stripped the comments it had written, re-ran the proof, committed and capped on its behalf — hit an unforeseen obstacle"
+    ],
+    "friction": null,
+    "capped_at": "2026-10-30T10:47:06.625Z",
+    "behavior_change": true,
+    "verification_evidence": "the cell verify; 239 passed, 1 ignored, after the wave-close regen cleared the opencode projection drift",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee onboard::",
+    "claimed_at": "2026-10-30T10:11:30.888Z",
+    "mistakes": [
+      {
+        "wrong": "The worker wrote /// and // comments in apply.rs, plan.rs and tests.rs against the no-comments rule",
+        "better": "the brief should name the no_code_comments rule as a hard prohibition in its first lines",
+        "fix_at": "doctrine"
+      }
+    ],
+    "report": {
+      "outcome": "bee onboard --skillstation parses (mod.rs parse_args), plans one publish_skillstation item per HUB_SKILLS entry (plan.rs compute_plan step after the skill sync), applies through apply_publish_skillstation in apply.rs with the loud skip, is named in router.rs usage and the registry payload, and the four contract truths are tests in onboard/tests.rs",
+      "commit": "dce1a94c6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+        "packages/bee-rs/crates/bee/src/router.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --manifest-path packages/bee-rs/Cargo.toml -p bee onboard:: — green:unit — the cell verify; 239 passed, 1 ignored, after the wave-close regen cleared the opencode projection drift",
+      "deviations": [
+        "The apply stages a copy of the rendered skill under .bee/tmp/skillstation-publish and points the CLI at the copy instead of at .claude/skills/<name> — skillstation 0.9.0 skill commit --yes closes and unlinks the folder it is given, which would delete the per-project copy — the plan was wrong about a fact",
+        "The paseo worker hit the 1800s ceiling before capping; the leader stripped the comments it had written, re-ran the proof, committed and capped on its behalf — hit an unforeseen obstacle"
+      ],
+      "mistakes": [
+        "The worker wrote /// and // comments in apply.rs, plan.rs and tests.rs against the no-comments rule — the brief should name the no_code_comments rule as a hard prohibition in its first lines — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "parse_args accepts --skillstation and defaults it to false",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "compute_plan emits exactly one publish_skillstation item for bee-deploying only when the flag is set and sync_skills is on",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "apply with the flag and no skillstation binary on PATH reports applied with one skipped_skills entry whose target is skillstation",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "without the flag no item and no skip appear",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "mod.rs copies args.skillstation into Options.skillstation",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "router.rs usage names --skillstation",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "registry_payload.json declares skillstation on onboard",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/plan.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/router.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/router.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          }
+        ],
+        "recorded_at": "2026-10-30T10:47:20.359Z",
+        "recorded_by": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7",
+        "commit_diff": "checked"
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "onboard::tests::parse_args_mirrors_the_engine_flag_set asserts --skillstation false by default and true when passed"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "onboard::tests::the_plan_publishes_exactly_the_hub_skills_and_only_when_asked and the_plan_withholds_the_publish_when_the_skill_sync_is_off"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "onboard::tests::an_absent_skillstation_cli_is_a_loud_skip_and_the_onboard_still_applies: status applied, one skipped entry target skillstation, reason names PATH"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "same test, second apply without the flag: no skillstation skip; plan test: no item without the flag"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "cargo test -p bee onboard:: 239 passed 0 failed after regen; leader read apply.rs publish arm and plan.rs HUB_SKILLS"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "hive/deepseek-ai/deepseek-v4.1-flash",
+        "judge_model": "claude-fable-5-1",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-10-30T10:48:29.680Z"
+      }
+    ]
+  },
+  "status": "capped"
+}
