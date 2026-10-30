@@ -116,7 +116,8 @@ Risk map:
     {"stage": "deploy", "classification": "not-applicable", "role": "deploy", "reason": "no release in this feature"},
     {"stage": "blind-lane-1", "classification": "not-applicable", "role": "lane-1", "reason": "no blind lanes: precedent for every part"},
     {"stage": "blind-lane-2", "classification": "not-applicable", "role": "lane-2", "reason": "no blind lanes"},
-    {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "no blind lanes"}
+    {"stage": "blind-lane-3", "classification": "not-applicable", "role": "lane-3", "reason": "no blind lanes"},
+    {"stage": "design", "classification": "not-applicable", "role": "design", "reason": "no rendered UI in this feature"}
   ]
 }
 ```
