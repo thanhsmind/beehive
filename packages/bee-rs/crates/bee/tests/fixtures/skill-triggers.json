@@ -5,6 +5,12 @@
   {"brief": "Take the ranked friction you collected and improve yourself from it.", "expect": ["bee-evolving"], "near": "bee-capturing"},
   {"brief": "Run your own self-improvement pass over the feedback digest.", "expect": ["bee-evolving"], "near": "bee-capturing"},
 
+  {"brief": "Deploy dự án này lên production.", "expect": ["bee-deploying"]},
+  {"brief": "Ghi lại cách deploy để lần sau khỏi mò lại.", "expect": ["bee-deploying"]},
+  {"brief": "How does this service get shipped? Write it down and run it.", "expect": ["bee-deploying"]},
+  {"brief": "Cut the next bee release, tag it and publish the binaries.", "expect": [], "near": "bee-deploying"},
+  {"brief": "Set up a CI pipeline from scratch that runs the tests on every push.", "expect": [], "near": "bee-deploying"},
+
   {"brief": "Improve yourself from the feedback I have been giving you.", "expect": ["bee-evolving"]},
   {"brief": "Chạy vòng tự cải thiện từ phản hồi đã thu thập được.", "expect": ["bee-evolving"]},
   {"brief": "Go through your collected friction reports and fix your own rules.", "expect": ["bee-evolving"]},
