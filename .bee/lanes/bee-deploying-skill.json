@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"bee-deploying-skill\" started at phase \"exploring\" (lane).",
-  "next_action": "merge the worktree, then hand main to the user for uat",
+  "next_action": "Merged into main at c56c7a3; reload the product and test \"bee-deploying-skill\", then either approve uat (\"bee gate --name uat --approved true --lane bee-deploying-skill\") or fix it in the worktree and merge again.",
   "created_at": "2026-10-30T10:06:36.120Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Khi test xanh, tôi merge vào main và dừng ở cửa `uat` để bạn thử.",
-    "asked_at": "2026-10-30T10:48:40.638Z",
-    "session": "7390b258-d1a6-462b-af53-ae4dbe6c1cc7"
+    "kind": "gate",
+    "subject": "uat: bee-deploying-skill",
+    "asked_at": "2026-10-30T10:51:12.666Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
@@ -702,16 +702,6 @@
         }
       ]
     }
-  },
-  "merge_ready": {
-    "since": "2026-10-30T10:47:06.708Z",
-    "branch": "wt/bee-deploying-skill",
-    "worktree_id": "beehive--wt--bee-deploying-skill",
-    "uat": "pending",
-    "blocked_by": [
-      "scribing-debt",
-      "judge-debt"
-    ]
   },
   "last_scribing_run": {
     "feature": "bee-deploying-skill",
