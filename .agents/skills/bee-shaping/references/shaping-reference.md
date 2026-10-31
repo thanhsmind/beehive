@@ -5,12 +5,23 @@ shows the moves; this file carries the craft and judgment detail.
 
 ## Interview craft
 
-- **Play the goal back first.** When an interview question is about to
-  follow, one line in your own words says what the user is after and
-  whether the ask is missing detail or already full. Choices that are
-  the user's to make stay open; no rewritten request comes back, and the
-  line is never a question. A clear ask that locks from one confirmation
-  gets no playback line. A wrong reading caught here costs one line;
+- **Sharpen the ask.** For any ask above `tiny`, before the playback,
+  answer four things to yourself: what a top professional would do here
+  that the user did not ask for; the rawest material they would start
+  from, not what is already digested; the specific methods and tools
+  they would use; and what, other than you or the user, would show the
+  result is right. Fold the answers into the playback as a sharpened
+  ask — deeper, not bigger — that the user can confirm or correct in a
+  word. Choices that are the user's stay open. The fourth answer seeds
+  the plan's proof. A deeper ask costs one line at intake; a shallow one
+  costs the rework.
+- **Play the goal back first.** On the first reply of every routed task,
+  one line in your own words says the goal, the problem it solves, and
+  the smallest change you expect to meet it, carrying the sharpened ask
+  when one was made. When the evidence rules out the change the user
+  asked for, show that evidence and stop. Do not wait for confirmation;
+  the line is never a question, and the playback plus sharpened ask stay
+  at most three lines. A wrong reading caught here costs one line;
   caught at the gate, it costs the plan.
 - **One question per turn.** Each answer reframes what is worth asking
   next; a batch buries the reframe. Broad questions lead — they are the
