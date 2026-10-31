@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "pstack-0-15-36-port",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pstack-0-15-36-port\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-10-31T15:27:02.158Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "doctrine-only port, 4 skill prose files plus regen; one file over the small cap, named deviation: zero flags, no runtime code, one cell",
+    "updated_at": "2026-10-31T15:27:02.217Z",
+    "feature": "pstack-0-15-36-port"
+  },
+  "merge_ready": {
+    "since": "2026-10-31T15:30:32.572Z",
+    "branch": "wt/pstack-0-15-36-port",
+    "worktree_id": "beehive--wt--pstack-0-15-36-port",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

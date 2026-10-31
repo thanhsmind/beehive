@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The first try failed. My local opencode is newer than the version CI uses, so one test went red. Nothing was published. I am trying again wi",
-    "asked_at": "2026-10-30T16:39:18.772Z",
-    "session": "c42c0036-26ef-4cbb-8902-4306b6016e5d"
+    "subject": "(turn ended)",
+    "asked_at": "2026-10-31T15:22:27.829Z",
+    "session": "d8eceeb6-0939-41e1-ac3b-7b5e489e4127"
   }
 }
