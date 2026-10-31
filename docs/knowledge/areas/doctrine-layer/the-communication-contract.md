@@ -113,12 +113,16 @@ where more words are warranted, never elsewhere.
    dump (ec9a60ae).
 6. **Questions are scarce and unmistakable.** One question at a time, set apart from progress
    narration, phrased so the reader can restate what they are deciding in their own words
-   (ec9a60ae). At shaping intake the restating runs the other way first: when an interview
-   question is about to follow, one line in the agent's own words plays back what the user is
-   after and whether the ask is missing detail or already full, leaves the user's own choices
-   open, returns no rewritten request, and is never itself a question; a clear ask that locks
-   from one confirmation gets no playback line (pstack-0-15-port D6, cell p15-3, 2026-10-16;
-   the move lives in `skills/bee-shaping/references/shaping-reference.md` "Interview craft").
+   (ec9a60ae). At shaping intake the restating runs the other way first: for any ask above
+   `tiny` the agent sharpens it — what a top professional would do that was not asked, the
+   rawest material, the methods and tools, and what outside check would show the result is
+   right — and on the first reply of every routed task one line in its own words plays back
+   the goal, the problem, and the smallest change expected, carrying the sharpened ask; it
+   leaves the user's own choices open, does not wait for confirmation, is never itself a
+   question, and stops with the evidence when that evidence rules out the asked change
+   (pstack-0-15-36-port D3 and D5, which retire the no-rewritten-request clause of
+   pstack-0-15-port D6; the move lives in `skills/bee-shaping/references/shaping-reference.md`
+   "Interview craft").
 7. **Tangents survive as one line, after the main thread closes.** A side issue is filed and
    mentioned once at the close, never expanded mid-task (ec9a60ae).
 8. **Evidence accompanies every claim of completion.** "Done"/"fixed"/"green" appear only beside
