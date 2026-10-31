@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-10-31T15:22:27.829Z",
+    "subject": "Lần trước leader chạy script trực tiếp với mã quyền này, vì worker deploy chỉ có 30 phút mà bộ test chạy lâu hơn. Tôi làm giống vậy.",
+    "asked_at": "2026-10-31T15:37:54.529Z",
     "session": "d8eceeb6-0939-41e1-ac3b-7b5e489e4127"
   }
 }

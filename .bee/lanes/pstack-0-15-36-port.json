@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "pstack-0-15-36-port",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"pstack-0-15-36-port\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 9709ea1; capture what settled, then bee close --feature pstack-0-15-36-port.",
+  "next_action": "bee close finished \"pstack-0-15-36-port\" — feature is closed.",
   "created_at": "2026-10-31T15:27:02.158Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
