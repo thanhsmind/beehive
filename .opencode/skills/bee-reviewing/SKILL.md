@@ -76,6 +76,15 @@ preference with no named failure, or one that the missing context
 answers goes to Dismissed with what was checked. A reviewer whose
 findings are all nits is reported as `lens clean`.
 
+**A behavior finding survives only on a run.** It carries the exact
+command, the output it printed, and the output the intent requires.
+Before severity the lead reruns that command and keeps the finding only
+when the output shows the failure and the failure breaks the intent. A
+finding no run can show — a doc line the change made wrong, a spec-axis
+mismatch — carries its file:line instead. Everything else goes to
+Dismissed, and the synthesis report gives each reviewer's dropped count
+with the reason — a finding argued but never shown buries the real ones.
+
 Then severity: deduplicate, independent corroboration promotes one
 level — independent only across different models or disjoint lenses —
 disagreement takes the conservative route, uncertain lands at P2 —

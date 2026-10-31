@@ -48,7 +48,10 @@ Lead with findings. Do not rewrite code.
    before reporting"; what qualifies as a finding at all — "What a
    finding is". Name the one fact the change's safety rests on and the
    rung it reached — "Label uncertainty exactly"; a P1 whose fact stands
-   below rung 4 (ran it) is labelled unproven.
+   below rung 4 (ran it) is labelled unproven. File a behavior finding
+   with the command that shows it and that command's output, because
+   the lead reruns it and drops what does not reproduce — bee-reviewing
+   SKILL.md, "A behavior finding survives only on a run".
 4. Set severity by consequence, not offense — "Severity calibration";
    torn between two levels, take the lower and name the condition for
    the higher — "Severity is a spent signal".
@@ -143,6 +146,9 @@ File: `path`
 Line(s): <line>
 Snippet: <small relevant snippet>
 Why this proves the issue: <one sentence>
+Command: <exact command that shows the failure, or none for a doc or spec finding>
+Output: <what it printed>
+Expected: <what the intent requires>
 
 ## Proposed Fix
 Recommended: <smallest credible fix>
