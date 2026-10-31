@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Lỗi lần này là do tôi commit sau khi lấy mã quyền. Tôi làm lại theo đúng thứ tự: commit, lấy mã, chạy ngay.",
-    "asked_at": "2026-10-31T15:39:57.698Z",
+    "subject": "✓ Test này đã xanh (`cargo test --release -p fleet --test manifest_boundary`: 6 passed). Giờ tôi chạy lại release.",
+    "asked_at": "2026-10-31T15:46:16.983Z",
     "session": "d8eceeb6-0939-41e1-ac3b-7b5e489e4127"
   }
 }
