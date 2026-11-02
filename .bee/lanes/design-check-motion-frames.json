@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "design-check-motion-frames",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"design-check-motion-frames\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at b0cf7db; capture what settled, then bee close --feature design-check-motion-frames.",
+  "next_action": "bee close finished \"design-check-motion-frames\" — feature is closed.",
   "created_at": "2026-11-02T09:53:38.249Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
