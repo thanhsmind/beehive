@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "question",
-    "subject": "Chọn ý stageshow để mang vào bee-design",
-    "asked_at": "2026-11-02T09:17:14.606Z",
+    "subject": "Có cho bước kiểm tra design tự chạy script khung hình không",
+    "asked_at": "2026-11-02T09:51:32.408Z",
     "session": "dab040c2-2713-4466-9404-80365ecb2aae"
   }
 }
