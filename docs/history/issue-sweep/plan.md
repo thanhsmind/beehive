@@ -45,7 +45,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
 ```json
 [
   {
-    "id": "isw-1",
+    "id": "swp-1",
     "feature": "issue-sweep",
     "title": "Let the plan-freeze guard allow staging an unchanged plan.md",
     "lane": "standard",
@@ -65,7 +65,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #149 #146 #142 (read them with `gh issue view <n>`). The Bash write guard treats `git add <path>/plan.md` (and add then commit) as an edit of a frozen plan.md. Staging does not change bytes: the guard must let a VCS add/commit of plan.md pass, in main and inside a feature worktree, while a real write (redirect, sed -i, Edit/Write tool) to a frozen plan.md stays refused. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-1`.",
+    "action": "Fix GitHub issue(s) #149 #146 #142 (read them with `gh issue view <n>`). The Bash write guard treats `git add <path>/plan.md` (and add then commit) as an edit of a frozen plan.md. Staging does not change bytes: the guard must let a VCS add/commit of plan.md pass, in main and inside a feature worktree, while a real write (redirect, sed -i, Edit/Write tool) to a frozen plan.md stays refused. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-1`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- write_guard",
     "must_haves": {
       "truths": [
@@ -89,7 +89,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-2",
+    "id": "swp-2",
     "feature": "issue-sweep",
     "title": "Accept leader-check artifacts that start with a changed path plus evidence",
     "lane": "standard",
@@ -107,7 +107,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #143 #138 (read them with `gh issue view <n>`). recordLeaderCheck compares the whole artifact string to each trace.files_changed path (leader_check.rs:272). Accept an artifact whose leading path token (up to the first whitespace, ' (' or ' —') equals a files_changed path, so evidence text may follow the path. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-2`.",
+    "action": "Fix GitHub issue(s) #143 #138 (read them with `gh issue view <n>`). recordLeaderCheck compares the whole artifact string to each trace.files_changed path (leader_check.rs:272). Accept an artifact whose leading path token (up to the first whitespace, ' (' or ' —') equals a files_changed path, so evidence text may follow the path. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-2`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- leader_check",
     "must_haves": {
       "truths": [
@@ -131,7 +131,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-3",
+    "id": "swp-3",
     "feature": "issue-sweep",
     "title": "Accept a bare --detached flag on worktree merge",
     "lane": "standard",
@@ -151,7 +151,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #137 (read them with `gh issue view <n>`). `bee worktree merge --id X --detached` is refused as an unsupported argument shape while `--detached true` works. Make the bare boolean flag parse as true, matching how other boolean flags parse. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-3`.",
+    "action": "Fix GitHub issue(s) #137 (read them with `gh issue view <n>`). `bee worktree merge --id X --detached` is refused as an unsupported argument shape while `--detached true` works. Make the bare boolean flag parse as true, matching how other boolean flags parse. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-3`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- worktree",
     "must_haves": {
       "truths": [
@@ -175,7 +175,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-4",
+    "id": "swp-4",
     "feature": "issue-sweep",
     "title": "Hash the lane worktree plan.md at gate --merge approval",
     "lane": "standard",
@@ -193,7 +193,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #148 (read them with `gh issue view <n>`). bee gate --preview hashes the feature worktree's plan.md but approval (plan_packets.rs around lines 605 and 702) hashes the control-root copy, so approval refuses a fresh preview as stale. Resolve plan.md for approval the same way preview does (lane worktree_root when the lane has a granted worktree). Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-4`.",
+    "action": "Fix GitHub issue(s) #148 (read them with `gh issue view <n>`). bee gate --preview hashes the feature worktree's plan.md but approval (plan_packets.rs around lines 605 and 702) hashes the control-root copy, so approval refuses a fresh preview as stale. Resolve plan.md for approval the same way preview does (lane worktree_root when the lane has a granted worktree). Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-4`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- plan_packets",
     "must_haves": {
       "truths": [
@@ -217,7 +217,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-5",
+    "id": "swp-5",
     "feature": "issue-sweep",
     "title": "Mark the workflow record closed when bee close finishes a lane",
     "lane": "standard",
@@ -235,7 +235,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #140 (read them with `gh issue view <n>`). A green bee close on a lane feature sets the lane phase to idle (close.rs:3336) but leaves the workflow record status active. Close the workflow record as part of the terminal write, reusing close_workflow_records in verbs/state_group/workflows.rs. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-5`.",
+    "action": "Fix GitHub issue(s) #140 (read them with `gh issue view <n>`). A green bee close on a lane feature sets the lane phase to idle (close.rs:3336) but leaves the workflow record status active. Close the workflow record as part of the terminal write, reusing close_workflow_records in verbs/state_group/workflows.rs. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-5`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- close",
     "must_haves": {
       "truths": [
@@ -259,13 +259,13 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-6",
+    "id": "swp-6",
     "feature": "issue-sweep",
     "title": "Refresh the shared index after the temp-index commit recipe",
     "lane": "standard",
     "role": "code",
     "deps": [
-      "isw-1"
+      "swp-1"
     ],
     "decisions": [
       "4cb2e63a-7396-4a5d-9bec-dd2a4386a642"
@@ -280,7 +280,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #144 (read them with `gh issue view <n>`). The concurrent-worker git guard prints a GIT_INDEX_FILE temp-index recipe (paths.rs) that advances HEAD without updating the shared index, so the next shared-index commit reverts sibling commits. Make the recipe end by refreshing the shared index for the committed paths, and let the guard allow that path-scoped refresh while workers are live. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-6`.",
+    "action": "Fix GitHub issue(s) #144 (read them with `gh issue view <n>`). The concurrent-worker git guard prints a GIT_INDEX_FILE temp-index recipe (paths.rs) that advances HEAD without updating the shared index, so the next shared-index commit reverts sibling commits. Make the recipe end by refreshing the shared index for the committed paths, and let the guard allow that path-scoped refresh while workers are live. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-6`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- write_guard",
     "must_haves": {
       "truths": [
@@ -304,13 +304,13 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-7",
+    "id": "swp-7",
     "feature": "issue-sweep",
     "title": "Do not read bee-written cell snapshots as a dirty worktree at merge",
     "lane": "standard",
     "role": "code",
     "deps": [
-      "isw-3"
+      "swp-3"
     ],
     "decisions": [
       "4cb2e63a-7396-4a5d-9bec-dd2a4386a642"
@@ -325,7 +325,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #141 (read them with `gh issue view <n>`). bee cells add from main mirrors .bee/cells/<id>.json into a granted feature worktree where they are untracked, so worktree merge refuses WORKTREE_MERGE_WORKTREE_DIRTY (phases.rs:556) and no CLI verb removes them. Treat bee-written .bee/ store files as part of the bootstrapped store under decision D8a in the dirty check. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-7`.",
+    "action": "Fix GitHub issue(s) #141 (read them with `gh issue view <n>`). bee cells add from main mirrors .bee/cells/<id>.json into a granted feature worktree where they are untracked, so worktree merge refuses WORKTREE_MERGE_WORKTREE_DIRTY (phases.rs:556) and no CLI verb removes them. Treat bee-written .bee/ store files as part of the bootstrapped store under decision D8a in the dirty check. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-7`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- worktree",
     "must_haves": {
       "truths": [
@@ -349,7 +349,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-8",
+    "id": "swp-8",
     "feature": "issue-sweep",
     "title": "Resolve the implicit lane the same way for plan-conflicts derive and its lock",
     "lane": "standard",
@@ -368,7 +368,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #139 (read them with `gh issue view <n>`). plan-conflicts derive without --lane from a session bound to a lane resolves the workflow id from a stale binding while the lock resolves the live lane record, so it refuses 'workflow changed' on every retry (plan_conflicts.rs:523). Resolve both from the same live lane record. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-8`.",
+    "action": "Fix GitHub issue(s) #139 (read them with `gh issue view <n>`). plan-conflicts derive without --lane from a session bound to a lane resolves the workflow id from a stale binding while the lock resolves the live lane record, so it refuses 'workflow changed' on every retry (plan_conflicts.rs:523). Resolve both from the same live lane record. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-8`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- plan_conflicts",
     "must_haves": {
       "truths": [
@@ -392,14 +392,14 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     "behavior_change": true
   },
   {
-    "id": "isw-9",
+    "id": "swp-9",
     "feature": "issue-sweep",
     "title": "Add an attach alias for state session bind and print it in FIX lines",
     "lane": "standard",
     "role": "code",
     "deps": [
-      "isw-3",
-      "isw-8"
+      "swp-3",
+      "swp-8"
     ],
     "decisions": [
       "4cb2e63a-7396-4a5d-9bec-dd2a4386a642"
@@ -418,7 +418,7 @@ guard, not bee; the bee-side fix is an alias verb without the refused word.
     ],
     "affects_skills": [],
     "affects_specs": [],
-    "action": "Fix GitHub issue(s) #147 (read them with `gh issue view <n>`). The host worktree guard refuses any shell text holding the word for the session binding verb. Add `bee state session attach` as an alias of that verb (same flags, same effect), list it in the catalog, and make every FIX line bee prints name `attach`. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: isw-9`.",
+    "action": "Fix GitHub issue(s) #147 (read them with `gh issue view <n>`). The host worktree guard refuses any shell text holding the word for the session binding verb. Add `bee state session attach` as an alias of that verb (same flags, same effect), list it in the catalog, and make every FIX line bee prints name `attach`. Red first: add a unit test that reproduces the reported behavior and watch it fail, then fix, then run verify. No code comments. One commit with the trailer `cell: swp-9`.",
     "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- sessions",
     "must_haves": {
       "truths": [
