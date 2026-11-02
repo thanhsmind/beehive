@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"design-check-motion-frames\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at b0cf7db; capture what settled, then bee close --feature design-check-motion-frames.",
   "created_at": "2026-11-02T09:53:38.249Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -23,14 +23,5 @@
     "rationale": "One SKILL.md paragraph plus a hand-over field; the regen manifest is bookkeeping.",
     "updated_at": "2026-11-02T09:53:38.299Z",
     "feature": "design-check-motion-frames"
-  },
-  "merge_ready": {
-    "since": "2026-11-02T09:54:06.328Z",
-    "branch": "wt/design-check-motion-frames",
-    "worktree_id": "beehive--wt--design-check-motion-frames",
-    "uat": "pending",
-    "blocked_by": [
-      "leader-check"
-    ]
   }
 }
