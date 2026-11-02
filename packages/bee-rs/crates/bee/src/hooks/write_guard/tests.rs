@@ -5804,6 +5804,75 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    #[test]
+    fn plan_md_staging_it_unchanged_is_not_a_write() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "git add docs/history/demo/plan.md",
+            "git add -- docs/history/demo/plan.md",
+            "git add -A docs/history/demo/plan.md",
+            "git add docs/history/demo/plan.md && git commit -m plan",
+            "git commit -m plan -- docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn plan_md_real_bash_writes_stay_refused() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "echo x > docs/history/demo/plan.md",
+            "echo x >> docs/history/demo/plan.md",
+            "sed -i s/a/b/ docs/history/demo/plan.md",
+            "cp other.md docs/history/demo/plan.md",
+            "mv other.md docs/history/demo/plan.md",
+            "tee docs/history/demo/plan.md < payload.md",
+            "git checkout -- docs/history/demo/plan.md",
+            "git restore docs/history/demo/plan.md",
+            "git rm docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+        }
+        for cmd in [
+            "git add docs/history/demo/plan.md; echo x > docs/history/demo/plan.md",
+            "echo x > docs/history/demo/plan.md && git add docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn plan_md_staging_it_unchanged_is_not_a_write_inside_a_worktree_session() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join("docs/history/demo")).unwrap();
+        std::fs::write(wtf.wt_root.join("docs/history/demo/plan.md"), "# plan\n").unwrap();
+        let e = expect_done(bash("git add docs/history/demo/plan.md"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("git add docs/history/demo/plan.md && git commit -m plan"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("sed -i s/a/b/ docs/history/demo/plan.md"), &wtf.wt_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn stage_only_target_covers_a_frozen_plan_md_and_leaves_real_writes_alone() {
+        assert!(stage_only_target("docs/history/demo/plan.md"));
+        assert!(!stage_only_target("src/app.js"));
+        assert!(extract_bash_targets("git add docs/history/demo/plan.md").paths.is_empty());
+        assert_eq!(
+            extract_bash_targets("sed -i s/a/b/ docs/history/demo/plan.md").paths,
+            vec!["docs/history/demo/plan.md"]
+        );
+    }
+
+
     // ── write-guard-hardening D4: brace expansion and cd opacity are
     // unresolvable; globs stay untouched ────────────────────────────────────
 
