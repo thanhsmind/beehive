@@ -773,6 +773,7 @@
     "contract:design-gate-artifacts",
     "contract:design-gate-families",
     "statechart",
-    "perf"
+    "perf",
+    "contract:rehearse-cli"
   ]
 }
