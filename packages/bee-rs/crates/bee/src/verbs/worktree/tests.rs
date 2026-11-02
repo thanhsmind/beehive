@@ -5408,6 +5408,31 @@ use std::time::Instant;
         assert!(!bool_flag_ok(&bad, "skip-uat"), "a non-boolean --skip-uat must refuse outright");
     }
 
+    #[test]
+    fn detached_flag_parses_as_a_bare_boolean_and_keeps_the_valued_shapes() {
+        let (bare, _) = parse_merge_flags(&["--id", "wt-demo", "--detached"])
+            .expect("a trailing bare --detached parses");
+        assert!(bool_flag_ok(&bare, "detached"), "a bare --detached must validate");
+        assert!(bool_flag_true(&bare, "detached"), "a bare --detached must read as true");
+
+        let (leading, use_json) = parse_merge_flags(&["--detached", "--id", "wt-demo", "--json"])
+            .expect("a leading bare --detached parses");
+        assert!(bool_flag_true(&leading, "detached"));
+        assert!(use_json, "--detached must not swallow the --json after it");
+        assert!(matches!(leading.get("id"), Some(FlagV::S(s)) if s == "wt-demo"));
+
+        let (valued, _) = parse_merge_flags(&["--id", "wt-demo", "--detached", "true"]).unwrap();
+        assert!(bool_flag_ok(&valued, "detached"));
+        assert!(bool_flag_true(&valued, "detached"));
+
+        let (explicit_false, _) = parse_merge_flags(&["--id", "wt-demo", "--detached=false"]).unwrap();
+        assert!(bool_flag_ok(&explicit_false, "detached"));
+        assert!(!bool_flag_true(&explicit_false, "detached"));
+
+        let (bad, _) = parse_merge_flags(&["--id", "wt-demo", "--detached=yes"]).unwrap();
+        assert!(!bool_flag_ok(&bad, "detached"), "a non-boolean --detached must refuse outright");
+    }
+
     // ── uat-stop-placement D4: the merge side of D4.1-D4.3 ──────────────────
     // D4.1's precondition and D4.2's post-merge lane write both branch on
     // the SAME resolved `uat_stop`, now exercised through the new key
