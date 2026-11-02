@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "stageshow-frame-rehearsal",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"stageshow-frame-rehearsal\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 245849c; capture what settled, then bee close --feature stageshow-frame-rehearsal.",
+  "next_action": "bee close finished \"stageshow-frame-rehearsal\" — feature is closed.",
   "created_at": "2026-11-02T09:23:47.284Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "feature",
