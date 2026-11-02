@@ -3191,7 +3191,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "e02619e8fbba17192d299438f80c872ff99e0c59e6369abea118fdda80ca5f3d",
+      "sha256": "c7d91b6558d3dad4abc17a83f4d5e494d604511459b53e20f4c0839deb6ea41a",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"

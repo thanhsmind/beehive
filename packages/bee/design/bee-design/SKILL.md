@@ -102,6 +102,14 @@ a fresh-context critic the rubric and the page; the critic works from the brief 
 [additions/frame-review.md](additions/frame-review.md). Machine checks do not grade clarity, taste or
 conformance to WCAG.
 
+A page that moves (an animation, a transition, scroll-driven motion or a hover state) also gets a frame
+check, because a still shot cannot show a jump. When `bee-design-motion` is installed, a browser is
+available and the project has `playwright-core`, run its `additions/rehearse/sheet.mjs` and
+`additions/rehearse/jumps.mjs --strict` on the page, as
+[frame-rehearsal.md](../bee-design-motion/additions/frame-rehearsal.md) describes. Look at every frame of
+the sheet, and fix every jump before you hand over. When any of the three is missing, do not install
+anything: list motion under NOT_VERIFIED and name what was missing.
+
 ## 4. Hand over
 
 Use these fields, keeping failures and missing checks visible:
@@ -111,6 +119,7 @@ EVIDENCE: <absolute page folder>
 GATE: <the gate command, its exit and errorCount, or NOT RUN and the reason>
 LOOK: <what you saw at 375, 768 and 1440 px for L1-L5, or NOT CHECKED>
 EYE_ITEMS: <L6-L10: what you saw, per width, or NOT CHECKED>
+MOTION: <the sheet path, what the frames showed and the jumps result, NO MOTION, or NOT CHECKED and what was missing>
 CRITIC: <which separate subagent or session scored it, or NOT CHECKED>
 NOT_VERIFIED: <screen readers, real devices, states not built, anything skipped>
 ```
