@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"stageshow-frame-rehearsal\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 245849c; capture what settled, then bee close --feature stageshow-frame-rehearsal.",
   "created_at": "2026-11-02T09:23:47.284Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": "Additive opt-in rehearsal scripts and two bee-owned additions docs; no existing behavior changes. Named deviation: 12 product files exceed the small cap of 3, but each is new or a one-row SKILL.md link, so the risk is small-lane risk.",
     "updated_at": "2026-11-02T09:23:47.342Z",
     "feature": "stageshow-frame-rehearsal"
-  },
-  "merge_ready": {
-    "since": "2026-11-02T09:42:38.760Z",
-    "branch": "wt/stageshow-frame-rehearsal",
-    "worktree_id": "beehive--wt--stageshow-frame-rehearsal",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
