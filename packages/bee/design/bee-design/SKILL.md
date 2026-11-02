@@ -98,7 +98,8 @@ bee does not carry upstream's `build.mjs`, `validate.mjs` or `look.mjs`. In [rul
 read "validate" as the gate above. Rules 2 and 3 bind upstream's build evidence folder and do not apply.
 The look items `L1`-`L5` are not measured: when a browser is available, open the page at 375, 768 and
 1440 px and check them by eye; otherwise list them under NOT_VERIFIED. Judge `L6`-`L10` yourself, or give
-a fresh-context critic the rubric and the page. Machine checks do not grade clarity, taste or
+a fresh-context critic the rubric and the page; the critic works from the brief in
+[additions/frame-review.md](additions/frame-review.md). Machine checks do not grade clarity, taste or
 conformance to WCAG.
 
 ## 4. Hand over
@@ -168,6 +169,7 @@ critic is never the builder. A runtime with no second model uses a fresh subagen
 | Weak prompt to evidence-qualified delivery: typed brief, contract, curator | [qualified-delivery.md](references/qualified-delivery.md) |
 | Grounding design in real user evidence; the anti-fabrication gate | [user-evidence.md](references/user-evidence.md) |
 | Git-native design review and engineering handoff | [design-review.md](references/design-review.md) |
+| The critic's brief: frames only, beside the closest gold example, ranked findings, five quick tells | [additions/frame-review.md](additions/frame-review.md) |
 | What a visual regression gate catches that a code diff cannot | [visual-regression.md](references/visual-regression.md) |
 | Why a false pass costs more than a crash; the four honesty rules | [verification-honesty.md](references/verification-honesty.md) |
 | Domain vocabulary for lakehouse data platforms | [domain-packs/lakehouse.md](references/domain-packs/lakehouse.md) |

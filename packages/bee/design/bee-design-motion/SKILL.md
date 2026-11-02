@@ -23,6 +23,7 @@ workflow, path names and gate check apply here. When `bee-design` is not install
 | Order and gate a multi-asset production run | [asset-production-orchestration.md](references/asset-production-orchestration.md) |
 | Generate video or images through Google Flow | [gflow-hand.md](references/gflow-hand.md) |
 | Resolve reproduced images to their originals | [delivery-assets.md](references/delivery-assets.md) |
+| Rehearse a moving page frame by frame: contact sheet, jump and drift scan, box-fit snapshot | [additions/frame-rehearsal.md](additions/frame-rehearsal.md) |
 
 Commands: this pack adds the `ui` commands in [contract.md](references/contract.md) to the core contract. Call
 them only with this pack loaded. Do not run the commands in its "Not for host work" section in a host.
