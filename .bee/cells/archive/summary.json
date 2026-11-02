@@ -1788,5 +1788,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-11-02T09:43:18.184Z"
+  },
+  "design-check-motion-frames": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-02T09:54:17.600Z"
   }
 }
