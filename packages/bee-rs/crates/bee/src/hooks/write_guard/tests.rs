@@ -1471,6 +1471,54 @@ use std::process::ExitCode;
         assert_eq!(scoped.code, 0, "{}", scoped.stderr);
     }
 
+    /// Issue #144: the temp-index recipe advances HEAD without touching the
+    /// shared index, so the committed paths read as staged reversals and the
+    /// next shared-index commit reverts them. The recipe ends by refreshing
+    /// the shared index for exactly those paths, and the guard must let that
+    /// path-scoped refresh through while siblings are live — otherwise the
+    /// only repair the refusal prescribes is itself refused.
+    #[test]
+    fn concurrent_tree_guard_allows_a_path_scoped_index_refresh_with_siblings_live() {
+        let fx = build_git_fixture("swarming");
+        add_live_session(&fx.root, "sib-a");
+        add_live_session(&fx.root, "sib-b");
+        for cmd in ["git reset -q -- src/mine.rs", "git reset -- src/mine.rs"] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        // Every spelling that reaches past the named paths stays refused.
+        for cmd in [
+            "git reset --hard",
+            "git reset",
+            "git reset -q",
+            "git reset HEAD~1",
+            "git reset -- .",
+            "git reset -- 'src/*'",
+            "git reset --soft HEAD~1",
+            "git reset --keep HEAD",
+            "git reset --merge -- src/mine.rs",
+            "git reset --hard -- src/mine.rs",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "{cmd}: {}", e.stderr);
+            assert!(e.stderr.contains("bee concurrent-worker git guard"), "{cmd}: {}", e.stderr);
+        }
+    }
+
+    /// The refresh step is the half the recipe was missing; a refusal that
+    /// omits it leaves the reader with the stale shared index #144 reported.
+    #[test]
+    fn concurrent_tree_guard_remedy_names_the_shared_index_refresh() {
+        let fx = build_git_fixture("swarming");
+        add_live_session(&fx.root, "sib-a");
+        add_live_session(&fx.root, "sib-b");
+        let e = expect_done(bash("git stash"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("git update-ref HEAD <commit>"), "{}", e.stderr);
+        assert!(e.stderr.contains("git reset -q -- <your paths>"), "{}", e.stderr);
+        assert!(e.stderr.contains("SHARED index"), "{}", e.stderr);
+    }
+
     /// Deny-more only. The very same ledger read from the MAIN checkout is
     /// worth nothing to it — those holds belong to the worktree's index, not
     /// main's — so main's verdict is unchanged.
@@ -5872,6 +5920,22 @@ use std::process::ExitCode;
         );
     }
 
+
+
+    #[test]
+    fn zz_probe4() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "git checkout docs/history/demo/plan.md",
+            "git checkout HEAD docs/history/demo/plan.md",
+            "git restore docs/history/demo/plan.md",
+            "git checkout -- docs/history/demo/plan.md",
+            "git add docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            println!("PROBE {cmd:?} => code {} targets {:?}", e.code, extract_bash_targets(cmd).paths);
+        }
+    }
 
     // ── write-guard-hardening D4: brace expansion and cd opacity are
     // unresolvable; globs stay untouched ────────────────────────────────────
