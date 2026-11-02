@@ -77,5 +77,7 @@ frames you looked at.
 
 ## Source
 
-Adapted from Stageshow (MIT), its `references/review.md`, rewritten in bee's words for rendered UI
-in general. The scene kit, the filming scripts and the device rules of that skill were not taken here.
+Adapted from Stageshow by Benji Taylor (MIT, https://github.com/benjitaylor/skills), its
+`references/review.md`, rewritten in bee's words for rendered UI in general. The scene kit and the
+device rules of that skill were not taken; its frame scripts live in the motion pack, at
+`bee-design-motion/additions/frame-rehearsal.md`.

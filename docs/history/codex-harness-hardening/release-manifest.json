@@ -2581,6 +2581,76 @@
       "packagePath": "packages/bee/design/bee-design-figma/THIRD_PARTY_LICENSES.md"
     },
     {
+      "path": "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+      "sha256": "44708b9360b30b5db68f8f44955fd2a1e42711c4b49c611e25c12439b74900c1",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs",
+      "sha256": "f470b24d5f751470a91660bb7d8e0b38dc725b9a0f8dd39fccb19cd052f17aea",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs",
+      "sha256": "148a6e2a54a86d939f164c1c1eaf3cb3dfcccf430d4572496b3127402fbb228f",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs",
+      "sha256": "e9691c15976f16ffab35abbd3791ff89fa8032b0daa47bf485137a023ae8b07a",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs",
+      "sha256": "62e56cec229f77359e0716a9a3d6ecfd55334d7945151d3ca3c11083f225a323",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs",
+      "sha256": "d1834fa450288ceea9477e781356e3a410ad1543693a6e48ff86b55883a8d2f4",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md",
+      "sha256": "8897e2f62fe1b68ac5ec3eef3e5006f8c7d4247abd865d68cc14033372ba91b5",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+      "sha256": "89a0d2e52c45990f40ec5573139cf0ba816ba66bc0bac0c9ecf707a015a08419",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+      "sha256": "5f5072eed92f69570714f2b1779e2208286202a37de9074935e9376e9fd11491",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs"
+    },
+    {
+      "path": "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs",
+      "sha256": "0a65045930d11fde394634f8c470db13eb1013a45496bd010050a6f667b45dd8",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs"
+    },
+    {
       "path": "packages/bee/design/bee-design-motion/LICENSE.md",
       "sha256": "e6ced2fe294959066d7da64b8a5aa7d9add0494d2a0cc9b352094d39cf5e58c6",
       "mode": "644",
@@ -2680,7 +2750,7 @@
     },
     {
       "path": "packages/bee/design/bee-design-motion/SKILL.md",
-      "sha256": "9edebf83ad7a94006ec6407ef17947db4409e94cebd9223ce010cb89a0c0b1c6",
+      "sha256": "147338490e2a0e3b534dfe701365e6502434cb597c3b50490fb83921460b6d34",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design-motion/SKILL.md"
@@ -2924,6 +2994,13 @@
       "packagePath": "packages/bee/design/bee-design-web/THIRD_PARTY_LICENSES.md"
     },
     {
+      "path": "packages/bee/design/bee-design/additions/frame-review.md",
+      "sha256": "f56f793b325ee1a06ebefcbf3387f936fe7958b0b49a5d00d05ab33e0b7199cf",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/design/bee-design/additions/frame-review.md"
+    },
+    {
       "path": "packages/bee/design/bee-design/additions/wcag-2-2.md",
       "sha256": "e4662f71fa848d236eb65d2fbdc6aa413555a28033a6510dc656d363e3cc7751",
       "mode": "644",
@@ -3114,7 +3191,7 @@
     },
     {
       "path": "packages/bee/design/bee-design/SKILL.md",
-      "sha256": "6df68833e37c05c0d999282ac9dd23d9551b8bd88c2a730b5c5addb1b3259f5f",
+      "sha256": "e02619e8fbba17192d299438f80c872ff99e0c59e6369abea118fdda80ca5f3d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/design/bee-design/SKILL.md"
