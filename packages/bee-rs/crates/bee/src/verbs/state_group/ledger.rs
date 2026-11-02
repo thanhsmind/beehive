@@ -236,6 +236,15 @@ pub(crate) fn resolve_mutation_lock_scope(
     lane_feature: Option<&str>,
     no_lane: bool,
 ) -> Ex<Scope> {
+    resolve_mutation_lock_scope_in(root, lane_feature, no_lane, || calling_worktree_feature(root))
+}
+
+pub(crate) fn resolve_mutation_lock_scope_in(
+    root: &Path,
+    lane_feature: Option<&str>,
+    no_lane: bool,
+    worktree_feature: impl FnOnce() -> Option<String>,
+) -> Ex<Scope> {
     if let Some(f) = lane_feature {
         return Ok(Scope { feature: Some(f.to_string()), lane: true });
     }
@@ -245,6 +254,11 @@ pub(crate) fn resolve_mutation_lock_scope(
     let (_sid, bound) = session_binding(None, root)?;
     if let Some(bound) = bound {
         return Ok(Scope { feature: Some(bound), lane: true });
+    }
+    if let Some(wt_feature) = worktree_feature() {
+        if read_lane_strict(root, &wt_feature)?.is_some() {
+            return Ok(Scope { feature: Some(wt_feature), lane: true });
+        }
     }
     // Fail-open peek; readStateStrict's throw still happens in the target.
     let state = read_state_peek(root)?;
@@ -613,6 +627,45 @@ mod tests {
             resolve_mutation_target_in(tmp.path(), Some("wt-feature"), "state.gate", false, wt),
             Ok(Target::Lane { .. })
         ));
+    }
+
+    fn worktree_scope_resolve(root: &Path, wt: Option<&str>) -> Scope {
+        let wt = wt.map(str::to_string);
+        match resolve_mutation_lock_scope_in(root, None, false, move || wt) {
+            Ok(s) => s,
+            Err(_) => panic!("the fail-open scope peek never errors on a readable store"),
+        }
+    }
+
+    #[test]
+    fn worktree_scope_and_target_resolve_the_same_lane() {
+        let tmp = worktree_state_record_store("other-feature", Some("wt-feature"));
+        let scope = worktree_scope_resolve(tmp.path(), Some("wt-feature"));
+        assert_eq!(scope.feature.as_deref(), Some("wt-feature"));
+        assert!(scope.lane);
+        assert_eq!(
+            projection_lock_name(scope.lane, scope.feature.as_deref()),
+            "lane:wt-feature"
+        );
+        match worktree_state_record_resolve(tmp.path(), Some("wt-feature")) {
+            Ok(Target::Lane { lane, .. }) => assert_eq!(lane, scope.feature.unwrap()),
+            other => panic!(
+                "scope and target must name one lane; target said {:?}",
+                other.map(|t| t.lane().map(str::to_string)).ok()
+            ),
+        }
+    }
+
+    #[test]
+    fn worktree_scope_without_a_lane_record_keeps_the_default_feature() {
+        let tmp = worktree_state_record_store("other-feature", None);
+        let scope = worktree_scope_resolve(tmp.path(), Some("wt-feature"));
+        assert_eq!(scope.feature.as_deref(), Some("other-feature"));
+        assert!(!scope.lane);
+        let tmp = worktree_state_record_store("other-feature", Some("wt-feature"));
+        let scope = worktree_scope_resolve(tmp.path(), None);
+        assert_eq!(scope.feature.as_deref(), Some("other-feature"));
+        assert!(!scope.lane);
     }
 
     #[test]
