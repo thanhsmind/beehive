@@ -1783,5 +1783,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-10-31T15:55:28.816Z"
+  },
+  "stageshow-frame-rehearsal": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-11-02T09:43:18.184Z"
   }
 }

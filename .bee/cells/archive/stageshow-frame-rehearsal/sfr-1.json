@@ -1,0 +1,193 @@
+{
+  "id": "sfr-1",
+  "feature": "stageshow-frame-rehearsal",
+  "title": "Add frame-rehearsal scripts to the bee-design-motion pack",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "48a24e05-6e75-4546-a09b-1ab363a3d94b",
+    "e37c2be9-86e8-4cf3-8bfc-e09f73087045",
+    "967bd7a2-fbd8-4709-ac32-368571b04449",
+    "f55afb46-1b3a-4ec5-82a4-64fd2314e73e"
+  ],
+  "files": [
+    "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+    "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md",
+    "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+    "packages/bee/design/bee-design-motion/SKILL.md"
+  ],
+  "read_first": [
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/jumps-core.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/layout-core.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/verification.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/jumps.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/layout.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/browser.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/film.mjs",
+    "/mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src/rehearse.md",
+    "packages/bee/design/bee-design-motion/SKILL.md",
+    "packages/bee/design/bee-design/additions/wcag-2-2.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Port the generic stageshow scripts (MIT, github.com/benjitaylor/skills, folder stageshow/scripts; local copy in /mnt/data/Projects/goglbe/beehive/.bee/tmp/stageshow-src) into packages/bee/design/bee-design-motion/additions/rehearse/: browser.mjs, verification.mjs, jumps-core.mjs, jumps.mjs, layout-core.mjs, layout.mjs. Keep their logic and the CLI contract in decision f55afb46. Make them work on any page: the stage selector comes from --select (default body), never only .ss-stage/.ss-fit; keep stageshow kit class names only as harmless skips. Remove every code comment (repo rule: no comments in code, keep #! lines); move the why those comments carried into frame-rehearsal.md. Write a new sheet.mjs: open <url> at --width, wait for --select, take --count screenshots of that element every --every ms at device scale 2, compose them into one grid PNG (render an HTML grid of the frames in the same browser and screenshot it), label each frame with its time, write to --out and print the absolute path. Write rehearse.test.mjs with node:test that imports the pure functions and asserts behavior on synthetic frame data: analyse() reports a box that moves more than 2px in one frame while still the frame before and after, does not report a smooth glide or an element that appears, and layoutResult() maps findings and errors to the exit codes in the contract. Write LICENSE-stageshow.md with the MIT text and copyright line from upstream. Write additions/frame-rehearsal.md: what each script checks, how to run it (npx playwright-core install is not needed: Chrome via CHROME_PATH or the installed channel; playwright-core added with npm i -D playwright-core in the host), flags, exit codes, what it cannot see, and the attribution. Add one row to the SKILL.md reference table of bee-design-motion pointing at additions/frame-rehearsal.md, worded like the wcag-2-2 row in bee-design SKILL.md.",
+  "verify": "node --test packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+  "must_haves": {
+    "truths": [
+      "node --test on rehearse.test.mjs passes",
+      "A box that jumps more than 2px in one frame is reported by analyse() and a smooth glide is not",
+      "No .mjs file in additions/rehearse carries a code comment other than a #! line",
+      "bee-design-motion SKILL.md links additions/frame-rehearsal.md"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+        "substantive": "captures --count frames every --every ms and writes one grid PNG"
+      },
+      {
+        "path": "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+        "substantive": "usage, checks, exit codes, limits, MIT attribution"
+      }
+    ],
+    "key_links": [
+      "jumps.mjs and sheet.mjs import launch from browser.mjs"
+    ],
+    "prohibitions": [
+      "No file written under packages/bee/design/*/references/",
+      "No port of film.mjs, film-checks.mjs or motion-watch.mjs"
+    ]
+  },
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "sfr-1-worker",
+    "outcome": "Ported the six generic stageshow scripts comment-free into bee-design-motion/additions/rehearse, added a new sheet.mjs grid capture, a node:test suite, the MIT license file and additions/frame-rehearsal.md, and linked it from the pack SKILL.md — commit 167c1249f, cell sfr-1.",
+    "files_changed": [
+      "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+      "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md",
+      "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+      "packages/bee/design/bee-design-motion/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-11-02T09:42:38.732Z",
+    "behavior_change": false,
+    "verification_evidence": "node --test packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs — green:unit — 8/8 pass over the pure functions (jump vs glide vs appear, late-frame skip, layoutResult exit-code map); live smoke of all three CLIs against a scratch page in a throwaway playwright-core project: sheet wrote a 2808x1016 labelled grid PNG exit 0, jumps reported the stepping box and exited 1 under --strict, layout flagged the undersized button, every incomplete path exited 2; cargo test --release --no-fail-fast leaves only two failures, both proven not mine (release-manifest count is red with my files removed, opencode test refuses on a wrapper-script binary).",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "dab040c2-2713-4466-9404-80365ecb2aae",
+    "verify_command": "node --test packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+    "claimed_at": "2026-11-02T09:25:25.463Z",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "Ported the six generic stageshow scripts comment-free into bee-design-motion/additions/rehearse, added a new sheet.mjs grid capture, a node:test suite, the MIT license file and additions/frame-rehearsal.md, and linked it from the pack SKILL.md — commit 167c1249f, cell sfr-1.",
+      "commit": "167c1249feece6e0fbe620db2509a1e571f507fb",
+      "files": [
+        "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+        "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md",
+        "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+        "packages/bee/design/bee-design-motion/SKILL.md"
+      ],
+      "tests": "node --test packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs — green:unit — node --test packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs — green:unit — 8/8 pass over the pure functions (jump vs glide vs appear, late-frame skip, layoutResult exit-code map); live smoke of all three CLIs against a scratch page in a throwaway playwright-core project: sheet wrote a 2808x1016 labelled grid PNG exit 0, jumps reported the stepping box and exited 1 under --strict, layout flagged the undersized button, every incomplete path exited 2; cargo test --release --no-fail-fast leaves only two failures, both proven not mine (release-manifest count is red with my files removed, opencode test refuses on a wrapper-script binary).",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "node --test on rehearse.test.mjs passes",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs"
+          },
+          {
+            "requirement": "A box that jumps more than 2px in one frame is reported by analyse() and a smooth glide is not",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs"
+          },
+          {
+            "requirement": "No .mjs file in additions/rehearse carries a code comment other than a #! line",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs"
+          },
+          {
+            "requirement": "bee-design-motion SKILL.md links additions/frame-rehearsal.md",
+            "artifact": "packages/bee/design/bee-design-motion/SKILL.md"
+          },
+          {
+            "requirement": "jumps.mjs and sheet.mjs import launch from browser.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/browser.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/verification.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/jumps-core.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/jumps.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/layout-core.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/layout.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/sheet.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/rehearse.test.mjs"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md",
+            "artifact": "packages/bee/design/bee-design-motion/additions/rehearse/LICENSE-stageshow.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md",
+            "artifact": "packages/bee/design/bee-design-motion/additions/frame-rehearsal.md"
+          },
+          {
+            "requirement": "packages/bee/design/bee-design-motion/SKILL.md",
+            "artifact": "packages/bee/design/bee-design-motion/SKILL.md"
+          }
+        ],
+        "recorded_at": "2026-11-02T09:42:47.946Z",
+        "recorded_by": "dab040c2-2713-4466-9404-80365ecb2aae",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}
