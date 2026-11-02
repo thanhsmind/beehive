@@ -542,13 +542,17 @@ pub(crate) fn merge_stage(
     // the marker, unlike the rest of a bootstrapped `.bee` store, is not
     // gitignored either) — either alone would trip this check, so both are
     // excluded by git pathspec rather than by deletion-before-check.
-    let worktree_dirty = match &companion_marker {
-        Some(marker) => is_tree_dirty_excluding(
-            &worktree_root,
-            &[companion_mount_path(marker)?, companion_marker_rel()],
-        ),
-        None => is_tree_dirty(&worktree_root),
-    };
+    //
+    // `.bee/cells` is excluded unconditionally: `bee cells add` run from main
+    // mirrors cell snapshots into the granted worktree, and a host repo that
+    // tracks `.bee/cells` leaves them untracked there with no CLI verb able to
+    // remove them (issue #141). They are bee's own store, not the user's dirt.
+    let mut dirty_exclusions = vec![".bee/cells".to_string()];
+    if let Some(marker) = &companion_marker {
+        dirty_exclusions.push(companion_mount_path(marker)?);
+        dirty_exclusions.push(companion_marker_rel());
+    }
+    let worktree_dirty = is_tree_dirty_excluding(&worktree_root, &dirty_exclusions);
     if worktree_dirty.map_err(MErr::Thrown)? {
         return Err(refuse_merge(
             "WORKTREE_MERGE_WORKTREE_DIRTY",
