@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"wave-run\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"wave-run\" (lane).",
+  "next_action": "Merged into main at 914cf28; capture what settled, then bee close --feature wave-run.",
   "created_at": "2026-11-03T02:08:43.286Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -25,12 +25,5 @@
     "rationale": null,
     "updated_at": "2026-11-03T02:08:46.468Z",
     "feature": "wave-run"
-  },
-  "merge_ready": {
-    "since": "2026-11-03T03:02:43.067Z",
-    "branch": "wt/wave-run",
-    "worktree_id": "beehive--wt--wave-run",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
