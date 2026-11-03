@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"wave-run\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 914cf28; capture what settled, then bee close --feature wave-run.",
+  "next_action": "Merged into main at c0ef542; capture what settled, then bee close --feature wave-run.",
   "created_at": "2026-11-03T02:08:43.286Z",
   "run_state": null,
   "waiting_on": null,
