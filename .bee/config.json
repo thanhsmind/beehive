@@ -26,27 +26,27 @@
     "pi": {
       "code": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "author or repair tests, red-first"
       },
       "docs": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "doc edits and parity sweeps"
       },
       "deploy": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
@@ -56,12 +56,12 @@
       },
       "extraction": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -76,7 +76,7 @@
       },
       "supervisor": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
@@ -91,7 +91,7 @@
       },
       "lane-3": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "blind-lane seat 3 — isolated design proposal; three seats run three different brains on one identical brief"
       },
       "hat-facts-gaps": {
@@ -128,12 +128,12 @@
     "claude": {
       "code": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "write the cell's Rust code and its tests"
       },
       "read": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "read-only lookups from known locations; a bare --kind gather also runs here"
       },
       "test": {
@@ -148,7 +148,7 @@
       },
       "deploy": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "publish an approved release from main, wait for CI, and verify release assets"
       },
       "plan": {
@@ -158,12 +158,12 @@
       },
       "extraction": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "narrow fact lookups from known locations"
       },
       "generation": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "fall-through tail: default writer role"
       },
       "review": {
@@ -178,7 +178,7 @@
       },
       "supervisor": {
         "kind": "herding",
-        "agent": "paseo-pi-flash",
+        "agent": "paseo-pi-agy-flash",
         "description": "cold observer tick — structured observation on a cheap model; decides nothing, escalation rides the advisor role"
       },
       "lane-1": {
