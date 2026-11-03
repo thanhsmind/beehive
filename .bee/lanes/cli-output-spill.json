@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "feature": "cli-output-spill",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"cli-output-spill\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"cli-output-spill\" (lane).",
+  "created_at": "2026-11-03T02:04:35.598Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "cross-platform"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-11-03T02:05:37.416Z",
+    "feature": "cli-output-spill",
+    "demoted_at": "2026-11-03T02:05:37.464Z"
+  },
+  "merge_ready": {
+    "since": "2026-11-03T02:47:13.835Z",
+    "branch": "wt/cli-output-spill",
+    "worktree_id": "beehive--wt--cli-output-spill",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

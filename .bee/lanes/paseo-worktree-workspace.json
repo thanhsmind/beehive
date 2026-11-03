@@ -15,9 +15,9 @@
   "created_at": "2026-10-15T03:15:25.803Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Tôi đã có giấy phép phát hành. Một worker đang chạy `scripts/release.sh 2.70.0`. Việc này mất một lúc vì script phải chạy test và chờ CI.",
-    "asked_at": "2026-11-02T10:14:44.767Z",
-    "session": "dab040c2-2713-4466-9404-80365ecb2aae"
+    "kind": "question",
+    "subject": "Chọn món hiệu quả từ DeepSeek Harness để làm",
+    "asked_at": "2026-11-03T01:42:54.055Z",
+    "session": "1b77b574-ae50-4682-98ca-66bf154a613e"
   }
 }

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "wave-run",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"wave-run\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"wave-run\" (lane).",
+  "created_at": "2026-11-03T02:08:43.286Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-11-03T02:08:46.468Z",
+    "feature": "wave-run"
+  }
+}

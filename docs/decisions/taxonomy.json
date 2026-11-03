@@ -774,6 +774,9 @@
     "contract:design-gate-families",
     "statechart",
     "perf",
-    "contract:rehearse-cli"
+    "contract:rehearse-cli",
+    "contract:issue-sweep-fixes",
+    "contract:output-spill",
+    "contract:wave-run"
   ]
 }
