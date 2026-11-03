@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "paseo-wait-deadline",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"paseo-wait-deadline\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 79d46c2; capture what settled, then bee close --feature paseo-wait-deadline.",
+  "next_action": "bee close finished \"paseo-wait-deadline\" — feature is closed.",
   "created_at": "2026-11-03T03:56:14.134Z",
-  "run_state": null,
+  "run_state": "awaiting-approval",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
