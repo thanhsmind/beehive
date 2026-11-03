@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "paseo-wait-deadline",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"paseo-wait-deadline\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"paseo-wait-deadline\" (lane).",
+  "created_at": "2026-11-03T03:56:14.134Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-11-03T03:56:14.190Z",
+    "feature": "paseo-wait-deadline"
+  },
+  "merge_ready": {
+    "since": "2026-11-03T04:11:52.015Z",
+    "branch": "wt/paseo-wait-deadline",
+    "worktree_id": "beehive--wt--paseo-wait-deadline",
+    "uat": "pending",
+    "blocked_by": []
+  }
+}

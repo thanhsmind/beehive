@@ -777,6 +777,7 @@
     "contract:rehearse-cli",
     "contract:issue-sweep-fixes",
     "contract:output-spill",
-    "contract:wave-run"
+    "contract:wave-run",
+    "contract:paseo-wait-deadline"
   ]
 }
