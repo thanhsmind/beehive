@@ -1245,6 +1245,64 @@ mod documented_invocations {
         r#"bee backlog pbi add --brief-file with the reason and cost in the cost paragraph""#,
     ];
 
+    #[cfg(test)]
+    fn join_continued(block: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut continued = String::new();
+        for line in block.lines() {
+            match line.trim_end().strip_suffix('\\') {
+                Some(head) => {
+                    if !continued.is_empty() {
+                        continued.push(' ');
+                    }
+                    continued.push_str(head.trim_end());
+                }
+                None if continued.is_empty() => out.push(line.to_string()),
+                None => {
+                    out.push(format!("{} {}", std::mem::take(&mut continued), line.trim_start()))
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn continued_invocation_is_checked_as_one_command() {
+        let block = "bee decisions log --decision \"x\" \\\n  --rationale \"y\" \\\n  --relation none";
+        let joined = join_continued(block);
+        assert_eq!(joined.len(), 1, "the three physical lines are one command: {joined:?}");
+        for command in invocations(&joined[0]) {
+            assert!(
+                check_cli_shape(&command).is_none(),
+                "a complete multi-line invocation must pass: {command}"
+            );
+        }
+        let first_only = "bee decisions log --decision \"x\"";
+        let refused: Vec<String> =
+            invocations(first_only).into_iter().filter(|c| check_cli_shape(c).is_some()).collect();
+        assert!(!refused.is_empty(), "the first line alone should still be refusable");
+    }
+
+    #[test]
+    fn malformed_multi_line_invocation_is_still_refused() {
+        let block = "bee decisions log --decision \"x\" \\\n  --tags a,b";
+        let joined = join_continued(block);
+        assert_eq!(joined.len(), 1, "{joined:?}");
+        let refused: Vec<String> =
+            invocations(&joined[0]).into_iter().filter(|c| check_cli_shape(c).is_some()).collect();
+        assert!(
+            !refused.is_empty(),
+            "a joined invocation still missing --rationale/--relation must be refused: {joined:?}"
+        );
+    }
+
+    #[test]
+    fn a_dangling_continuation_does_not_leak_past_its_block() {
+        let block = "bee decisions log --decision \"x\" \\";
+        let joined = join_continued(block);
+        assert!(joined.is_empty(), "an unterminated continuation yields no command: {joined:?}");
+    }
+
     #[test]
     fn no_shipped_command_spelling_is_refused_by_the_widened_guard() {
         let root = repo_root();
@@ -1265,14 +1323,31 @@ mod documented_invocations {
         for f in &files {
             let Ok(text) = std::fs::read_to_string(f) else { continue };
             let mut fenced = false;
+            let mut continued = String::new();
             for line in text.lines() {
                 if line.trim_start().starts_with("```") {
                     fenced = !fenced;
+                    continued.clear();
                     continue;
                 }
                 if !fenced {
                     continue;
                 }
+                let joined_owned;
+                let line = match line.trim_end().strip_suffix('\\') {
+                    Some(head) => {
+                        if !continued.is_empty() {
+                            continued.push(' ');
+                        }
+                        continued.push_str(head.trim_end());
+                        continue;
+                    }
+                    None if continued.is_empty() => line,
+                    None => {
+                        joined_owned = format!("{} {}", std::mem::take(&mut continued), line.trim_start());
+                        joined_owned.as_str()
+                    }
+                };
                 for command in invocations(line) {
                     checked += 1;
                     if let Some(reason) = check_cli_shape(&command) {
