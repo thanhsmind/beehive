@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "paseo-wait-deadline",
+  "closed_at": "2026-11-03T04:12:41.209Z",
+  "sessions": [
+    {
+      "session_id": "1b77b574-ae50-4682-98ca-66bf154a613e",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 502,
+          "output": 112045,
+          "cache_write": 337004,
+          "cache_read": 52336324,
+          "new": 449551,
+          "cached": 52336324,
+          "total": 52785875
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1793669267803,
+      "ended_ms": 1793679159914,
+      "totals": {
+        "new": 449551,
+        "cached": 52336324,
+        "total": 52785875
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 449551,
+      "cached": 52336324,
+      "total": 52785875
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 449551,
+      "cached": 52336324,
+      "total": 52785875
+    }
+  }
+}

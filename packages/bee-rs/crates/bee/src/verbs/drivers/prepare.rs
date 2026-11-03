@@ -4178,7 +4178,7 @@ pub(crate) fn unwind_wave_claim(root: &Path, topo: Option<(&Path, &str)>, worker
 pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["runtime", "feature", "session-id", "limit"],
+        &["runtime", "feature", "session-id", "limit", "run"],
     ) {
         return None;
     }
@@ -4196,6 +4196,13 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         None => None,
         Some(FlagV::S(s)) => Some(s.clone()),
         Some(FlagV::Present) => return None,
+    };
+    let run_flag = match flags.get("run") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
     };
 
     let cwd = std::env::current_dir().ok()?;
@@ -4291,7 +4298,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
     }
 
     let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-    let mut wave_payloads: Vec<Value> = Vec::new();
+    let mut wave_items: Vec<(String, Value)> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
     let mut economics: Vec<Value> = Vec::new();
 
@@ -4382,7 +4389,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                             // (either the full payload or a typed refusal);
                             // this arm is unreached in practice.
                             other => {
-                                wave_payloads.push(other);
+                                wave_items.push((id.clone(), other));
                                 continue;
                             }
                         };
@@ -4397,7 +4404,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                             e.insert("id".into(), Value::String(id.clone()));
                             economics.push(Value::Object(e));
                         }
-                        wave_payloads.push(Value::Object(m));
+                        wave_items.push((id.clone(), Value::Object(m)));
                     }
                     Ok(Prepared::Thrown(msg)) => {
                         let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
@@ -4422,8 +4429,17 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         }
     }
 
+    if run_flag {
+        let (value, code) = wave_run::run_wave(&ctx.root, &wave_items, &skipped);
+        let text = jsjson::stringify_pretty(&value);
+        return finish(&ctx, Ok(Out::Emit(value, text, code)));
+    }
+
     let mut result = Map::new();
-    result.insert("wave".into(), Value::Array(wave_payloads));
+    result.insert(
+        "wave".into(),
+        Value::Array(wave_items.into_iter().map(|(_, item)| item).collect()),
+    );
     result.insert("skipped".into(), Value::Array(skipped));
     result.insert("economics".into(), Value::Array(economics));
     let result = Value::Object(result);

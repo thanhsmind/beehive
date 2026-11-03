@@ -1,0 +1,161 @@
+{
+  "id": "wvr-1",
+  "feature": "wave-run",
+  "title": "Run the herding part of a dispatch wave in one call",
+  "lane": "small",
+  "role": "code",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "fb99f277",
+    "39f4fbcf"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/shell.rs",
+    "docs/knowledge/areas/workflow-state/dispatch.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/rust-runtime/command-surface.md"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Add an additive boolean flag --run to bee dispatch wave (per fb99f277). In prepare.rs run_dispatch_wave, accept the key run in the keys_known list (today: runtime, feature, session-id, limit) and, only when --run is set, hand the finished {wave, skipped, economics} value to a new module verbs/drivers/wave_run.rs (register it in verbs/drivers/mod.rs) instead of emitting it; without --run the output stays byte-identical. Declare the flag on every registry entry that answers to dispatch wave in generated/registry_payload.json (search the file for the string Maximum number of this wave's cells to find the entry and copy the shape of the limit flag), per command-surface R10. wave_run: split the wave items into herding items (tool Bash and payload.command contains `bee herding run`) and native items (everything else, returned unchanged). Run every herding item at the same time, one std::thread each, through the shell resolver in shell.rs, with cwd the main root and payload.stdin piped to the child's stdin; wait for all. Save each child's full stdout to .bee/workers/<cell id>-wave-run.json under the main root. Parse that stdout as the herding run JSON envelope and print one value {ran, native, skipped} where each ran row is {id, exit, outcome, job_id, report_path, head_sha, changed_paths (a count of the envelope's git changed_paths), retryable, envelope_path}, a field missing from the envelope rendered as null (per 39f4fbcf). Exit 0 only when every ran row's outcome is done; print every row on any exit. No retry, no cap, no edit to cells. Keep the spawn behind a function that takes the item list and a runner closure so tests can pass a fake runner. No code comments of any kind (repo rule no_code_comments). Tests, all named with the prefix dispatch_wave_run_: in wave_run.rs a unit test with a fake runner over two herding items (one done, one blocked) asserting the rows, the counts, the saved files and the non-zero exit; in verbs/cells/tests.rs, next to dispatch_wave_returns_a_payload_per_disjoint_ready_cell and reusing wfl4_wave_root and wfl4_dispatch_wave_run, a test that --run over two Agent-tool cells returns both under native, ran empty, and exit success.",
+  "must_haves": {
+    "truths": [
+      "bee dispatch wave without --run prints the same bytes as before",
+      "bee dispatch wave --run returns one JSON value with ran, native and skipped, where Agent-tool items appear unchanged under native and are never executed",
+      "Each herding item runs in parallel and yields one compact ran row while its full envelope is saved under .bee/workers/<cell id>-wave-run.json",
+      "The verb exits 0 only when every ran row's outcome is done"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+        "substantive": "herding/native split, parallel runner, compact rows, envelope files, exit rule, unit test"
+      }
+    ],
+    "key_links": [
+      "run_dispatch_wave hands its result to wave_run only when --run is set",
+      "registry_payload.json declares --run on every dispatch wave entry"
+    ],
+    "prohibitions": [
+      "No change to dispatch wave output without --run",
+      "No retry and no cell cap inside wave_run",
+      "No code comments"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch_wave && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+  "trace": {
+    "worker": "leader",
+    "outcome": "bee dispatch wave gains --run: the herding half of a prepared wave now executes in parallel in one call and returns {ran, native, skipped}, while the prepare-only path stays byte-identical (commit 64fb311a4).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "touched reservations/flags.rs (FLAG_ALONE_BOOLEANS gets run) and catalog.rs (PINNED_FLAG_COUNT 234 to 235), both required by any new boolean flag",
+      "sync-ack: the bee-swarming line that teaches dispatch wave --run lands with the knowledge sync of this feature, after the code merge"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-03T03:02:43.042Z",
+    "behavior_change": true,
+    "verification_evidence": "9 dispatch_wave tests incl. 2 new dispatch_wave_run tests and 12 registry_contracts, rerun by the leader",
+    "verify_output": "green:unit",
+    "verify_passed": true,
+    "claim_session": "1b77b574-ae50-4682-98ca-66bf154a613e",
+    "verify_command": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch_wave && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts",
+    "claimed_at": "2026-11-03T02:09:19.439Z",
+    "sync_ack": "the bee-swarming line that teaches dispatch wave --run lands with the knowledge sync of this feature, after the code merge",
+    "no_mistakes": true,
+    "report": {
+      "outcome": "bee dispatch wave gains --run: the herding half of a prepared wave now executes in parallel in one call and returns {ran, native, skipped}, while the prepare-only path stays byte-identical (commit 64fb311a4).",
+      "commit": "64fb311a461591d62cde70a403903a59030c055a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee dispatch_wave && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts — green:unit — 9 dispatch_wave tests incl. 2 new dispatch_wave_run tests and 12 registry_contracts, rerun by the leader",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "bee dispatch wave without --run prints the same bytes as before",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "bee dispatch wave --run returns one JSON value with ran, native and skipped, where Agent-tool items appear unchanged under native and are never executed",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "Each herding item runs in parallel and yields one compact ran row while its full envelope is saved under .bee/workers/<cell id>-wave-run.json",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "The verb exits 0 only when every ran row's outcome is done",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "run_dispatch_wave hands its result to wave_run only when --run is set",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "registry_payload.json declares --run on every dispatch wave entry",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+            "artifact": "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs"
+          },
+          {
+            "requirement": "packages/bee-rs/crates/bee/src/catalog.rs",
+            "artifact": "packages/bee-rs/crates/bee/src/catalog.rs"
+          }
+        ],
+        "recorded_at": "2026-11-03T03:02:53.786Z",
+        "recorded_by": "1b77b574-ae50-4682-98ca-66bf154a613e",
+        "commit_diff": "checked"
+      }
+    ]
+  }
+}

@@ -1793,5 +1793,25 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-02T09:54:17.600Z"
+  },
+  "cli-output-spill": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T02:59:45.244Z"
+  },
+  "wave-run": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T03:14:47.838Z"
+  },
+  "paseo-wait-deadline": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T04:12:41.159Z"
+  },
+  "release-2-71-0": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T04:35:27.929Z"
   }
 }

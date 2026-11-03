@@ -1,0 +1,133 @@
+{
+  "id": "rel710-1",
+  "feature": "release-2-71-0",
+  "title": "Publish release 2.71.0 through the sanctioned script",
+  "lane": "tiny",
+  "role": "deploy",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/release-2-71-0/CONTEXT.md",
+    "scripts/release.sh"
+  ],
+  "affects_skills": [],
+  "affects_specs": [],
+  "action": "Run `scripts/release.sh 2.71.0` with BEE_DISPATCH_ID set to an authorized deployment dispatch and the CI-pinned opencode-ai 1.18.16 (/tmp/oc11816/node_modules/.bin) first on PATH, as the 2.68.0 re-run did. The script bumps both plugin manifests, runs the regen chain (render-skill-trees, onboard --apply, release-manifest --write), runs the declared test suite before tagging, makes the release commit, tags v2.71.0, pushes main and the tag, waits for the release-binaries workflow and verifies the published assets. Never walk those steps by hand. Re-running at a version already committed is idempotent — it resumes the tail. The regen obligation on .claude-plugin/plugin.json is discharged INSIDE the script's own regen chain, which is why the release manifest rides this cell's files.",
+  "verify": "bash scripts/release.sh 2.71.0 && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests report 2.71.0",
+      "tag v2.71.0 exists locally and on the remote",
+      "the GitHub release for v2.71.0 carries the binaries and SHA256SUMS",
+      "the script printed its final OK line"
+    ],
+    "artifacts": [
+      {
+        "path": ".claude-plugin/plugin.json",
+        "substantive": "version 2.71.0"
+      },
+      {
+        "path": ".codex-plugin/plugin.json",
+        "substantive": "version 2.71.0"
+      }
+    ],
+    "key_links": [
+      "the pushed tag is what triggers release-binaries.yml"
+    ],
+    "prohibitions": [
+      "Do not hand-walk bump, tag or push",
+      "Do not skip the test gate"
+    ]
+  },
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "leader",
+    "outcome": "Released 2.71.0: tag pushed, release-binaries green, assets published",
+    "files_changed": [],
+    "deviations": [
+      "the leader ran the script inline under deploy dispatch e0d32069 instead of a herding worker, because a herded worker may not push; the first permit 450cee7a carried no release version and was refused before any change"
+    ],
+    "friction": null,
+    "capped_at": "2026-11-03T04:35:13.047Z",
+    "behavior_change": false,
+    "verification_evidence": "full declared suite ran before tagging; CI https://github.com/thanhsmind/beehive/actions/runs/41578503377 green; release https://github.com/thanhsmind/beehive/releases/tag/v2.71.0 carries 5 binaries plus SHA256SUMS; manifest check matched 593 files",
+    "verify_output": "green:live",
+    "verify_passed": true,
+    "claim_session": "1b77b574-ae50-4682-98ca-66bf154a613e",
+    "verify_command": "bash scripts/release.sh 2.71.0 && bee dev release-manifest --check",
+    "claimed_at": "2026-11-03T04:25:51.486Z",
+    "mistakes": [
+      {
+        "wrong": "prepared the deploy permit as a cell dispatch without --release-version, so the script refused it",
+        "better": "prepare it as --kind gather --role deploy --stage deployment --release-version <v>, as 2.70.0 did",
+        "fix_at": "doctrine"
+      }
+    ],
+    "commit_pending": "the release commit 3173e36f7 is the script's own and carries no cell trailer by design",
+    "report": {
+      "outcome": "Released 2.71.0 through scripts/release.sh; final line release OK bee 2.71.0 is live",
+      "commit": "3173e36f7",
+      "files": [
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bash scripts/release.sh 2.71.0 && bee dev release-manifest --check — green:live — full declared suite ran before tagging; CI https://github.com/thanhsmind/beehive/actions/runs/41578503377 green; release https://github.com/thanhsmind/beehive/releases/tag/v2.71.0 carries 5 binaries plus SHA256SUMS; manifest check matched 593 files",
+      "deviations": [
+        "the leader ran the script inline under deploy dispatch e0d32069 instead of a herding worker, because a herded worker may not push; the first permit 450cee7a carried no release version and was refused before any change"
+      ],
+      "mistakes": [
+        "prepared the deploy permit as a cell dispatch without --release-version, so the script refused it — prepare it as --kind gather --role deploy --stage deployment --release-version <v>, as 2.70.0 did — doctrine"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "leader_check": [
+      {
+        "verdict": "ok",
+        "answers": [
+          {
+            "requirement": "both plugin manifests report 2.71.0",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": "tag v2.71.0 exists locally and on the remote",
+            "artifact": ".bee/workers/release-2-71-0.log"
+          },
+          {
+            "requirement": "the GitHub release for v2.71.0 carries the binaries and SHA256SUMS",
+            "artifact": ".bee/workers/release-2-71-0.log"
+          },
+          {
+            "requirement": "the script printed its final OK line",
+            "artifact": ".bee/workers/release-2-71-0.log"
+          },
+          {
+            "requirement": "the pushed tag is what triggers release-binaries.yml",
+            "artifact": ".bee/workers/release-2-71-0.log"
+          },
+          {
+            "requirement": ".claude-plugin/plugin.json",
+            "artifact": ".claude-plugin/plugin.json"
+          },
+          {
+            "requirement": ".codex-plugin/plugin.json",
+            "artifact": ".codex-plugin/plugin.json"
+          },
+          {
+            "requirement": "docs/history/codex-harness-hardening/release-manifest.json",
+            "artifact": "docs/history/codex-harness-hardening/release-manifest.json"
+          }
+        ],
+        "recorded_at": "2026-11-03T04:35:26.908Z",
+        "recorded_by": "1b77b574-ae50-4682-98ca-66bf154a613e"
+      }
+    ]
+  }
+}
