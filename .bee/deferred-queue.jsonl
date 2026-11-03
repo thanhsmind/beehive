@@ -1092,3 +1092,4 @@
 {"ts":"2026-11-02T10:43:41.734Z","event":"complete","id":"7907258b-d4af-4412-a829-6417d91a22f2"}
 {"ts":"2026-11-02T10:43:47.985Z","event":"complete","id":"cf047671-4af4-4330-a7f2-e8123e5c05af"}
 {"ts":"2026-11-02T10:43:52.384Z","event":"complete","id":"2063bc36-cb3d-4df9-96da-fca3833efb93"}
+{"ts":"2026-11-03T02:47:38.606Z","event":"add","id":"066cbe96-85b2-49f9-b6c6-2a5920558775","kind":"worktree-cleanup","feature":"cli-output-spill","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--cli-output-spill"],"reason":"Worktree beehive--wt--cli-output-spill (branch wt/cli-output-spill) merged into main at 3a3c1c26ecb68d3427f4812968c5cae5e13b89aa and kept per default (D1) — remove it with `bee worktree prune`."}

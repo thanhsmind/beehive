@@ -1,4 +1,5 @@
 {
+  "output_spill_bytes": 8000,
   "hooks": {
     "session-init": true,
     "prompt-context": true,
