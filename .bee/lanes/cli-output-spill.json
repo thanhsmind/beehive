@@ -11,9 +11,9 @@
     "uat": false
   },
   "summary": "Feature \"cli-output-spill\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"cli-output-spill\" (lane).",
+  "next_action": "Merged into main at 3a3c1c2; capture what settled, then bee close --feature cli-output-spill.",
   "created_at": "2026-11-03T02:04:35.598Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
@@ -26,12 +26,5 @@
     "updated_at": "2026-11-03T02:05:37.416Z",
     "feature": "cli-output-spill",
     "demoted_at": "2026-11-03T02:05:37.464Z"
-  },
-  "merge_ready": {
-    "since": "2026-11-03T02:47:13.835Z",
-    "branch": "wt/cli-output-spill",
-    "worktree_id": "beehive--wt--cli-output-spill",
-    "uat": "pending",
-    "blocked_by": []
   }
 }
