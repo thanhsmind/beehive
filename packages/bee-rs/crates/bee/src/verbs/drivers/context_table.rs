@@ -148,26 +148,37 @@ pub(crate) fn context_table_covers_d_id(text: &str, feature: &str, d_num: u32) -
     false
 }
 
-/// `D<digits>` at `start`, then zero or more `[-/]D<digits>` continuations.
-/// Returns the numbers in order, the separators between them (same length
-/// as `nums.len() - 1`), and the index just past the last digit.
+/// `D<digits>` at `start`, then zero or more continuations: `[-/]D<digits>`
+/// directly, or `,` plus optional spaces before `D<digits>`. Returns the
+/// numbers, the separators between them, and the index past the last digit.
 fn parse_d_sequence(chars: &[char], start: usize) -> Option<(Vec<u32>, Vec<char>, usize)> {
     let (first, mut end) = parse_one_d(chars, start)?;
     let mut nums = vec![first];
     let mut seps = Vec::new();
-    loop {
-        if end < chars.len() && matches!(chars[end], '-' | '/') && end + 1 < chars.len() && chars[end + 1] == 'D' {
-            let sep = chars[end];
-            if let Some((n, e)) = parse_one_d(chars, end + 1) {
-                seps.push(sep);
-                nums.push(n);
-                end = e;
-                continue;
-            }
-        }
-        break;
+    while let Some((sep, next)) = continuation(chars, end) {
+        let Some((n, e)) = parse_one_d(chars, next) else { break };
+        seps.push(sep);
+        nums.push(n);
+        end = e;
     }
     Some((nums, seps, end))
+}
+
+fn continuation(chars: &[char], end: usize) -> Option<(char, usize)> {
+    let sep = *chars.get(end)?;
+    if matches!(sep, '-' | '/') && chars.get(end + 1) == Some(&'D') {
+        return Some((sep, end + 1));
+    }
+    if sep == ',' {
+        let mut j = end + 1;
+        while chars.get(j) == Some(&' ') {
+            j += 1;
+        }
+        if chars.get(j) == Some(&'D') {
+            return Some((',', j));
+        }
+    }
+    None
 }
 
 /// `D<digits>` at `start` (start is the index of `D`) -> the number and the

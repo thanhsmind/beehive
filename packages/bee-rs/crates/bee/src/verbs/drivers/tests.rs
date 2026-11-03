@@ -6231,6 +6231,14 @@ exit 0
         assert!(context_table_covers_d_id(text, "demo", 3));
     }
 
+    #[test]
+    fn context_table_covers_d_id_matches_the_comma_form() {
+        let text = "prose then demo D1, D3 lives here\n";
+        assert!(context_table_covers_d_id(text, "demo", 1));
+        assert!(!context_table_covers_d_id(text, "demo", 2));
+        assert!(context_table_covers_d_id(text, "demo", 3));
+    }
+
     fn write_locked_decisions_table(root: &Path, feature: &str, ids: &[&str]) {
         let mut body = "# Demo — Context\n\n## Locked Decisions\n\n| ID | Decision | Rationale (only if it changes implementation) |\n|----|----------|-----------------------------------------------|\n".to_string();
         for id in ids {
@@ -6293,6 +6301,49 @@ exit 0
         let door = build_routing_door(root, "demo").unwrap();
         assert!(!door.blocking, "{}", door.detail);
         assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_routes_every_id_in_a_feature_local_slash_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D2", "D3", "D4"]);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"s1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"demo D2/D3/D4 are feature-local, no separate area yet\",\"rationale\":\"r\",\"tags\":[\"feature-local\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_routes_every_id_in_a_feature_local_comma_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1", "D2", "D3", "D4"]);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"c2\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"demo D1, D2, D3, D4 are feature-local, no separate area yet\",\"rationale\":\"r\",\"tags\":[\"feature-local\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_routes_a_bundle_files_comma_list_exactly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1", "D2", "D3"]);
+        w(root, "docs/knowledge/areas/a/comma.md", "demo D1, D3 live here\n");
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("D2"), "{}", door.detail);
+        assert!(!door.detail.contains("D1,"), "{}", door.detail);
+        assert!(!door.detail.contains("D3)"), "{}", door.detail);
     }
 
     #[test]
