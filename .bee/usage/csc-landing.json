@@ -1,0 +1,48 @@
+{
+  "schema": "bee-usage/v1",
+  "feature": "csc-landing",
+  "closed_at": "2026-11-03T07:35:54.382Z",
+  "sessions": [
+    {
+      "session_id": "1b77b574-ae50-4682-98ca-66bf154a613e",
+      "models": {
+        "claude-opus-5-5": {
+          "input": 716,
+          "output": 156574,
+          "cache_write": 780606,
+          "cache_read": 91760782,
+          "new": 937896,
+          "cached": 91760782,
+          "total": 92698678
+        }
+      },
+      "subagent_models": {},
+      "subagent_count": 0,
+      "started_ms": 1793669267803,
+      "ended_ms": 1793691352957,
+      "totals": {
+        "new": 937896,
+        "cached": 91760782,
+        "total": 92698678
+      }
+    }
+  ],
+  "skipped": 0,
+  "totals": {
+    "main": {
+      "new": 937896,
+      "cached": 91760782,
+      "total": 92698678
+    },
+    "subagents": {
+      "new": 0,
+      "cached": 0,
+      "total": 0
+    },
+    "total": {
+      "new": 937896,
+      "cached": 91760782,
+      "total": 92698678
+    }
+  }
+}
