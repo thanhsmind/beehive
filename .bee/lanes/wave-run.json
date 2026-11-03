@@ -25,5 +25,12 @@
     "rationale": null,
     "updated_at": "2026-11-03T02:08:46.468Z",
     "feature": "wave-run"
+  },
+  "merge_ready": {
+    "since": "2026-11-03T03:02:43.067Z",
+    "branch": "wt/wave-run",
+    "worktree_id": "beehive--wt--wave-run",
+    "uat": "pending",
+    "blocked_by": []
   }
 }
