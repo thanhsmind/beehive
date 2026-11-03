@@ -67,6 +67,7 @@ use super::wave_ledger::{self, WaveRow, WorkerRow};
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
 const DEFAULT_CEILING_SECS: u64 = 21_600; // 6 hours, the busy-loop backstop
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
+const WAIT_DEADLINE_GRACE_SECS: u64 = 30;
 
 /// Case-insensitive substrings that signal a usage limit pause in a worker pane.
 /// Extensible per agent kind in future iterations (D1).
@@ -4410,6 +4411,7 @@ fn wait_for_round_paseo_driven(
     let mut last_inspect_full: Option<paseo::PaseoInspect> = None;
 
     let mut wait_active = false;
+    let mut wait_deadline_ms: Option<i64> = None;
     let mut last_wait_returned_at_ms: Option<i64> = None;
     let mut is_blocked = false;
     let mut in_error_fallback = false;
@@ -4526,6 +4528,9 @@ fn wait_for_round_paseo_driven(
                     cancel_guard.0.cancel();
                     cancel_guard.0.arm(wait_timeout);
                     wait_active = true;
+                    wait_deadline_ms = Some(
+                        current_time_ms + (wait_timeout as i64 + WAIT_DEADLINE_GRACE_SECS as i64) * 1000,
+                    );
                     can_rearm = false;
                 }
             } else if is_blocked || in_error_fallback {
@@ -4661,6 +4666,11 @@ fn wait_for_round_paseo_driven(
                                 last_inspect_ms = Some(current_time_ms);
                             }
                         }
+                    } else if wait_deadline_ms.is_some_and(|deadline| current_time_ms >= deadline) {
+                        cancel_guard.0.cancel();
+                        wait_active = false;
+                        in_error_fallback = true;
+                        last_inspect_ms = None;
                     }
                 }
 
@@ -4677,6 +4687,9 @@ fn wait_for_round_paseo_driven(
                     cancel_guard.0.cancel();
                     cancel_guard.0.arm(wait_timeout);
                     wait_active = true;
+                    wait_deadline_ms = Some(
+                        current_time_ms + (wait_timeout as i64 + WAIT_DEADLINE_GRACE_SECS as i64) * 1000,
+                    );
                     can_rearm = false;
                 }
             }
@@ -13394,6 +13407,62 @@ mod tests {
 
         assert_eq!(decision, PollDecision::ResultReady);
         assert!(!silent_idle_cell.get());
+    }
+
+    #[test]
+    fn wait_for_round_paseo_hung_wait_falls_back_to_inspect_and_keeps_a_running_agent_alive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        let job_id = "job-hung-wait";
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let fake = FakePaseoCli::new(
+            Ok("0.12.0\n".to_string()),
+            Ok("{\"agentId\":\"agent-hw\"}\n".to_string()),
+            Ok("{\"Status\":\"running\"}\n".to_string()),
+            Ok("archived\n".to_string()),
+        );
+
+        let mut wait_src = FakeWaitSource::new(vec![]);
+
+        let mut clock = 0i64;
+        let mut ticks = 0u32;
+        let silent_idle_cell = std::cell::Cell::new(false);
+
+        let decision = wait_for_round_paseo_driven(
+            &bee_dir,
+            job_id,
+            "agent-hw",
+            1,
+            0,
+            120,
+            3600,
+            &fake,
+            None,
+            &silent_idle_cell,
+            &mut wait_src,
+            Duration::from_millis(200),
+            |_| {},
+            || {
+                ticks += 1;
+                if ticks == 400 {
+                    std::fs::write(
+                        dir.join("result-1.json"),
+                        r#"{"status":"done","summary":"ok","files_changed":[],"proof":"test"}"#,
+                    )
+                    .unwrap();
+                }
+                let current = clock;
+                clock += 1000;
+                current
+            },
+        );
+
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert!(wait_src.cancel_count > 1, "cancels: {}", wait_src.cancel_count);
+        assert!(wait_src.armed_timeouts.len() > 1, "arms: {:?}", wait_src.armed_timeouts);
     }
 
     #[test]
