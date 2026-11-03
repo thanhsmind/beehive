@@ -1105,3 +1105,5 @@
 {"ts":"2026-11-03T06:29:32.745Z","event":"complete","id":"98d3b0b6-7e23-4487-8e5c-7604f9e4ac42"}
 {"ts":"2026-11-03T06:29:36.298Z","event":"complete","id":"bc35fdad-3013-4edc-bead-16a60a9cef82"}
 {"ts":"2026-11-03T06:29:36.298Z","event":"complete","id":"056da5aa-309b-4d32-abb0-b8e346c84cea"}
+{"ts":"2026-11-03T07:11:30.889Z","event":"add","id":"42580757-d494-46df-afe8-9a231e72f6f1","kind":"worktree-cleanup","feature":"isw-landing","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--isw-landing"],"reason":"Worktree beehive--wt--isw-landing (branch wt/isw-landing) merged into main at 26015561388f8b63cb1b0581f2693a49e4aa9ed0 and kept per default (D1) — remove it with `bee worktree prune`."}
+{"ts":"2026-11-03T07:11:38.850Z","event":"add","id":"dd12bc49-c5ba-4590-bf66-015c8e8eed52","kind":"promote","feature":"isw-landing","cells":[],"areas":[],"files":["docs/history/isw-landing/promote-proposals.md"],"reason":"Promote proposal for \"isw-landing\" awaiting apply — docs/history/isw-landing/promote-proposals.md."}
