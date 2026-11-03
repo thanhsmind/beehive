@@ -1245,9 +1245,6 @@ mod documented_invocations {
         r#"bee backlog pbi add --brief-file with the reason and cost in the cost paragraph""#,
     ];
 
-    /// The same joining the docs scan does: strip a trailing `\`, join with
-    /// one space. Kept beside the tests that use it so the join under test is
-    /// the join that ships, rather than a second idea of it.
     #[cfg(test)]
     fn join_continued(block: &str) -> Vec<String> {
         let mut out = Vec::new();
@@ -1269,10 +1266,6 @@ mod documented_invocations {
         out
     }
 
-    /// A correct invocation split across continuations must pass once joined —
-    /// the false positive this fix removes. Reading only the first physical
-    /// line reports --rationale and --relation as MISSING against an example
-    /// that carries both.
     #[test]
     fn continued_invocation_is_checked_as_one_command() {
         let block = "bee decisions log --decision \"x\" \\\n  --rationale \"y\" \\\n  --relation none";
@@ -1284,18 +1277,12 @@ mod documented_invocations {
                 "a complete multi-line invocation must pass: {command}"
             );
         }
-        // And the first line ALONE — what the scan used to check — is refused,
-        // which is the defect this test exists to pin.
         let first_only = "bee decisions log --decision \"x\"";
         let refused: Vec<String> =
             invocations(first_only).into_iter().filter(|c| check_cli_shape(c).is_some()).collect();
         assert!(!refused.is_empty(), "the first line alone should still be refusable");
     }
 
-    /// The join must never become a way past the guard: a multi-line
-    /// invocation that is genuinely missing a required flag stays refused
-    /// after joining. This is the constraint that makes the fix safe — it
-    /// only ever lets the guard see MORE of a command, never less.
     #[test]
     fn malformed_multi_line_invocation_is_still_refused() {
         let block = "bee decisions log --decision \"x\" \\\n  --tags a,b";
@@ -1309,8 +1296,6 @@ mod documented_invocations {
         );
     }
 
-    /// A dangling continuation at the end of a fenced block must not glue
-    /// itself to whatever follows the fence.
     #[test]
     fn a_dangling_continuation_does_not_leak_past_its_block() {
         let block = "bee decisions log --decision \"x\" \\";
@@ -1338,23 +1323,10 @@ mod documented_invocations {
         for f in &files {
             let Ok(text) = std::fs::read_to_string(f) else { continue };
             let mut fenced = false;
-            // A shell line ending in `\` continues onto the next one, so a
-            // documented multi-line invocation must be JOINED before it is
-            // checked. Reading only the first physical line reported every
-            // flag written below it as MISSING — against an example that was
-            // already correct, which is a refusal its reader cannot act on.
-            // Live case (2026-08-26): a three-line `bee decisions log` whose
-            // --rationale and --relation both sat on continuations.
-            //
-            // This join only ever makes the guard see MORE of a command, never
-            // less: a genuinely malformed invocation stays malformed once
-            // joined, which `malformed_multi_line_invocation_is_still_refused`
-            // pins.
             let mut continued = String::new();
             for line in text.lines() {
                 if line.trim_start().starts_with("```") {
                     fenced = !fenced;
-                    // A dangling continuation never leaks past its own block.
                     continued.clear();
                     continue;
                 }
@@ -1368,7 +1340,7 @@ mod documented_invocations {
                             continued.push(' ');
                         }
                         continued.push_str(head.trim_end());
-                        continue; // keep accumulating; never check a partial line
+                        continue;
                     }
                     None if continued.is_empty() => line,
                     None => {
