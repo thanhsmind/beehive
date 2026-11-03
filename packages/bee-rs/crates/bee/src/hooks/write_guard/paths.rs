@@ -365,6 +365,22 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
             why: "it rewrites tree content wholesale, and reservations cannot protect a tree.",
         });
     }
+    if sub == "reset" {
+        if let Some(idx) = rest.iter().position(|t| t == "--") {
+            let pathspecs: Vec<String> = rest[idx + 1..].to_vec();
+            let whole_tree = rest[..idx]
+                .iter()
+                .any(|t| matches!(t.as_str(), "--hard" | "--keep" | "--merge" | "--soft"));
+            if !whole_tree
+                && !pathspecs.is_empty()
+                && !pathspecs
+                    .iter()
+                    .any(|p| GIT_BROAD_PATHSPECS.contains(&p.as_str()) || p.contains('*'))
+            {
+                return None;
+            }
+        }
+    }
     if matches!(sub, "reset" | "clean" | "checkout" | "restore" | "revert" | "rebase" | "cherry-pick" | "merge") {
         return Some(TreeVerbClass {
             verb: sub.to_string(),
@@ -374,17 +390,19 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
     None
 }
 
-/// The `count > 1` arm's remedy — byte-identical to the text this function
-/// used to hard-code for both arms, now that each arm supplies its own via
-/// `concurrent_tree_refusal`'s `remedy` parameter.
+/// The `count > 1` arm's remedy: the temp-index recipe, plus the shared-index
+/// refresh that keeps the next shared-index commit from reverting this one.
 pub(crate) const CONCURRENT_TREE_TEMP_INDEX_REMEDY: &str =
     "FIX: inspection is always allowed — git status / git diff / git log. To land your own work, make ONE path-scoped \
 commit through your OWN temp index instead of the shared one: \
 GIT_INDEX_FILE=<tmp> git read-tree HEAD, then GIT_INDEX_FILE=<tmp> git update-index --add <your paths>, \
-GIT_INDEX_FILE=<tmp> git write-tree, git commit-tree <tree> -p HEAD -m \"<msg>\", git update-ref HEAD <commit>. \
+GIT_INDEX_FILE=<tmp> git write-tree, git commit-tree <tree> -p HEAD -m \"<msg>\", git update-ref HEAD <commit>, \
+then refresh the SHARED index for exactly those paths with git reset -q -- <your paths> (index only, working \
+tree untouched) — the update-ref moved HEAD but left the shared index at the old tree, so skipping this step \
+makes the next shared-index commit revert what you just committed. \
 For a path git does not track yet, `git add -N <path>` first (intent-to-add stages no content). \
 A genuinely path-scoped `git commit -- <your paths>` is allowed too. Never reset / stash / checkout / clean / \
-restore / revert across the shared tree while a sibling worker holds work in it — a file reservation cannot protect a tree.";
+restore / revert the whole tree while a sibling worker holds work in it — a file reservation cannot protect a tree.";
 
 pub(crate) fn concurrent_tree_refusal(verb: &str, why: &str, worker_clause: &str, remedy: &str) -> String {
     format!("bee concurrent-worker git guard: `git {verb}` is refused because {worker_clause}. {why} {remedy}")

@@ -66,6 +66,10 @@ impl Entry {
             .and_then(Value::as_str)
             .unwrap_or("value")
     }
+
+    pub fn is_boolean(&self, param: &str) -> bool {
+        self.type_of(param) == "boolean"
+    }
 }
 
 fn parse() -> Vec<Entry> {
