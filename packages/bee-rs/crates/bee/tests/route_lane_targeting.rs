@@ -140,8 +140,8 @@ fn an_unbound_set_against_the_default_record_is_refused_while_lanes_are_live() {
     );
     // BOTH exits, so the caller never has to guess which one applies.
     assert!(
-        out.contains("bee state session bind --lane"),
-        "the refusal must name the bind fix: {out}"
+        out.contains("bee state session attach --lane"),
+        "the refusal must name the attach fix: {out}"
     );
     assert!(
         out.contains("--no-lane"),
@@ -390,7 +390,7 @@ fn a_featureless_default_record_is_refused_without_inventing_a_feature_to_protec
         "the refusal must say what is actually true of the default record: {out}"
     );
     // BOTH exits stay, unchanged — they are still the real ways out.
-    assert!(out.contains("bee state session bind --lane"), "{out}");
+    assert!(out.contains("bee state session attach --lane"), "{out}");
     assert!(
         out.contains("pass --no-lane to write the default record on purpose"),
         "{out}"

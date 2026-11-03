@@ -69,7 +69,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["compounding-run", ..] => ("compounding-run", 1),
         ["lanes", ..] => ("lanes", 1),
         ["session", "list", ..] => ("session.list", 2),
-        ["session", "bind", ..] => ("session.bind", 2),
+        ["session", "bind", ..] | ["session", "attach", ..] => ("session.bind", 2),
         ["session", "unbind", ..] => ("session.unbind", 2),
         ["session", "release", ..] => ("session.release", 2),
         ["handoff", "write", ..] => ("handoff.write", 2),
@@ -1145,7 +1145,7 @@ pub(crate) fn run_plan_rev_bump(flags: Flags, use_json: bool, t0: Instant) -> Op
             resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "plan-rev bump", no_lane)?;
         let Some(lane) = target.lane() else {
             return Ok(Out::Thrown(
-                "plan-rev bump: refused \u{2014} resolution landed on the default (non-lane) record. plan_rev bumping is scoped to lanes only, by design (nothing else ever reads or bumps the default pipeline's plan_rev, so stamping it would be meaningless). FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first (\"state session bind --session-id <id> --lane <feature>\").".to_string(),
+                "plan-rev bump: refused \u{2014} resolution landed on the default (non-lane) record. plan_rev bumping is scoped to lanes only, by design (nothing else ever reads or bumps the default pipeline's plan_rev, so stamping it would be meaningless). FIX: target a lane explicitly with --lane <feature>, or attach the calling session to one first (\"state session attach --session-id <id> --lane <feature>\").".to_string(),
             ));
         };
         let live = list_workflows(&ctx.root)?;

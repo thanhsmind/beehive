@@ -507,7 +507,7 @@ where
     let target = resolve_mutation_target(&ctx.root, lane_feature.as_deref(), verb, no_lane)?;
     let Some(lane) = target.lane() else {
         return Ok(Out::Thrown(format!(
-            "{verb}: refused \u{2014} resolution landed on the default (non-lane) record. conflict_review lives on a lane's workflow record only, exactly like plan_rev. FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first (\"state session bind --session-id <id> --lane <feature>\")."
+            "{verb}: refused \u{2014} resolution landed on the default (non-lane) record. conflict_review lives on a lane's workflow record only, exactly like plan_rev. FIX: target a lane explicitly with --lane <feature>, or attach the calling session to one first (\"state session attach --session-id <id> --lane <feature>\")."
         )));
     };
     let lane = lane.to_string();
