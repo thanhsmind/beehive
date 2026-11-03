@@ -1,0 +1,324 @@
+---
+artifact_contract: bee-plan/v2
+mode: standard
+---
+
+# Plan: Issue sweep 2
+
+## Summary
+
+Fix the three open bee-report issues issue-sweep did not reach, one cell each,
+red then green: #147 (an attach alias for the session binding verb), #150
+(slash, range and comma D-ID lists in feature-local decisions at close), and
+#151 with its duplicate #152 (synced bee-* skill trees read as merge dirt).
+The cells touch disjoint files.
+
+Mode: `standard` — 2 risk flags: public-contracts, multi-domain
+Playbook: bugfix — `.claude/skills/bee-planning/playbooks/bugfix.md`
+Deviation: the plan-step hat wave is skipped, as issue-sweep did. Every cell
+fixes a reported, traced defect whose fix shape the report names; the
+red-then-green tests are the check.
+
+## Requirements (from CONTEXT.md)
+
+- D1 (`ab1c51bb`): one cell per issue cluster; red-then-green proof per fix.
+
+## Discovery
+
+Each issue's text was traced to live code on main (claims below). #153
+duplicates #137 and #148 no longer reproduces; issue-sweep settled both.
+
+## Load-bearing claims
+
+| # | Claim | Label | Anchor | Verbatim evidence |
+|---|-------|-------|--------|-------------------|
+| 1 | session bind routes through one match arm | ran | packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:72 | `["session", "bind", ..] => ("session.bind", 2),` |
+| 2 | start-feature FIX names the bind verb | ran | packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs:311 | `FIX: bee state session bind --lane {feature} --session-id <session id>.` |
+| 3 | feature-local decisions match one plain token | ran | packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1269 | `let feature_local_hit = local_decisions.iter().any(` |
+| 4 | a D-ID list continues only on dash or slash | ran | packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs:159 | `matches!(chars[end], '-' ` |
+| 5 | merge dirty exclusions start with .bee/cells only | ran | packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:550 | `let mut dirty_exclusions = vec![".bee/cells".to_string()];` |
+| 6 | worktree new syncs every bee-* skill dir | ran | packages/bee-rs/crates/bee/src/verbs/worktree/git.rs:430 | `name.starts_with("bee-")` |
+
+## Cells (current slice)
+
+```json
+[
+  {
+    "feature": "issue-sweep-2",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": [
+      "ab1c51bb"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "id": "is2-1",
+    "title": "Add bee state session attach and name it in FIX lines",
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "docs/knowledge/areas/rust-runtime/command-surface.md"
+    ],
+    "action": "Fix GitHub issue #147 (read it with gh issue view 147), per ab1c51bb. A host worktree guard refuses any shell text holding the word bind, so the remedy bee prints cannot be followed from a worktree session. Red first: in verbs/state_group/tests.rs add a test that runs state session attach --lane <f> --session-id <id> against a fixture lane and asserts the same session record result state session bind gives; watch it fail. Then route [\"session\", \"attach\", ..] to the same handler as [\"session\", \"bind\", ..] in set_gate.rs (search for the line [\"session\", \"bind\", ..] => (\"session.bind\", 2)), declare a state session attach entry in generated/registry_payload.json with the same flags as state session bind (command-surface R10), and bump PINNED_FLAG_COUNT in catalog.rs or any other count the catalog tests demand. Replace bind with attach in every FIX line under verbs/state_group that names bee state session bind (search: rg -n \"state session bind\" packages/bee-rs/crates/bee/src/verbs/state_group). Keep state session bind working unchanged. No code comments of any kind.",
+    "must_haves": {
+      "truths": [
+        "bee state session attach --lane X --session-id Y gives the same result as bee state session bind with the same flags",
+        "Every FIX line under verbs/state_group names bee state session attach",
+        "bee state session bind still works unchanged"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+          "substantive": "attach routed to the session bind handler"
+        }
+      ],
+      "key_links": [
+        "the new test fails before the alias exists and passes after"
+      ],
+      "prohibitions": [
+        "Do not weaken an existing assertion",
+        "No code comments"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee --test registry_contracts"
+  },
+  {
+    "feature": "issue-sweep-2",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": [
+      "ab1c51bb"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "id": "is2-2",
+    "title": "Read slash, range and comma D-ID lists in feature-local decisions at close",
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs"
+    ],
+    "action": "Fix GitHub issue #150 (read it with gh issue view 150), per ab1c51bb. In close.rs the feature_local_hit check (search: let feature_local_hit = local_decisions.iter().any) matches only the plain token feature D<n>, so a decision naming feature D2/D3/D4 or feature D1, D2, D3 routes only the first id. Red first: add tests in verbs/drivers/tests.rs, named with the word routing, that log one feature-local decision naming admin D2/D3/D4 and one naming admin D1, D2, D3, D4 and assert the routing door reports none of those ids unrouted; watch them fail. Then make feature_local_hit also accept context_table_covers_d_id over the decision text, and extend parse_d_sequence in context_table.rs (search: matches!(chars[end], '-' | '/')) so a comma plus optional spaces before D<digits> continues the list as exactly the named ids, the same as a slash. Ranges keep their meaning. No code comments of any kind.",
+    "must_haves": {
+      "truths": [
+        "A feature-local decision naming feature D2/D3/D4 routes D2, D3 and D4",
+        "A feature-local decision naming feature D1, D2, D3, D4 routes all four",
+        "A bundle file citing feature D1, D3 covers exactly D1 and D3"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+          "substantive": "comma continuation in parse_d_sequence"
+        }
+      ],
+      "key_links": [
+        "close.rs feature_local_hit uses context_table_covers_d_id"
+      ],
+      "prohibitions": [
+        "Do not weaken an existing assertion",
+        "No code comments"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee routing"
+  },
+  {
+    "feature": "issue-sweep-2",
+    "lane": "standard",
+    "role": "code",
+    "deps": [],
+    "decisions": [
+      "ab1c51bb"
+    ],
+    "affects_skills": [],
+    "affects_specs": [],
+    "id": "is2-3",
+    "title": "Do not read synced bee-* skill trees as a dirty worktree at merge",
+    "files": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "read_first": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs"
+    ],
+    "action": "Fix GitHub issues #151 and #152 (read them with gh issue view), per ab1c51bb. worktree new copies every bee-* directory under each skill root of the main checkout into the new worktree (git.rs, search: if !is_dir || !name.starts_with(\"bee-\")); in a repo where those trees are untracked, worktree merge then refuses WORKTREE_MERGE_WORKTREE_DIRTY on them (phases.rs, search: let mut dirty_exclusions = vec). Red first: in verbs/worktree/tests.rs add a test with a host-shaped main where .claude/skills is untracked and holds bee-x, a worktree with that synced copy, and assert merge does not refuse dirty; add a second test where an untracked .claude/skills/bee-new exists only in the worktree and assert merge still refuses dirty. Watch the first fail. Then add to the dirty exclusions exactly the bee-* skill directories that are untracked in the worktree AND exist under the same root in the main checkout, using the same skill-root list worktree new uses. No code comments of any kind.",
+    "must_haves": {
+      "truths": [
+        "An untracked bee-* skill directory that also exists in main no longer makes worktree merge refuse as dirty",
+        "An untracked skill directory that exists only in the worktree still makes worktree merge refuse as dirty"
+      ],
+      "artifacts": [
+        {
+          "path": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+          "substantive": "synced skill directories join the dirty exclusions"
+        }
+      ],
+      "key_links": [
+        "the exclusion uses the same skill roots worktree new syncs"
+      ],
+      "prohibitions": [
+        "Do not weaken an existing assertion",
+        "No code comments"
+      ]
+    },
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee worktree"
+  }
+]
+```
+
+## Role assignments
+
+```json
+{
+  "schema_version": "1.0",
+  "runtime": "claude",
+  "roster_sha256": "094d64e24e68c0b6fabaed19ae6619f3ac5e32bac9e9da2ab51728125c724d9b",
+  "stages": [
+    {
+      "stage": "implementation",
+      "classification": "required",
+      "role": "code",
+      "reason": "Each cell is a code fix in bee-rs."
+    },
+    {
+      "stage": "deployment",
+      "classification": "not-applicable",
+      "role": "deploy",
+      "reason": "No release rides this lane."
+    },
+    {
+      "stage": "planning",
+      "classification": "not-applicable",
+      "role": "plan",
+      "reason": "The plan is this page."
+    },
+    {
+      "stage": "test-and-live-proof",
+      "classification": "not-applicable",
+      "role": "test",
+      "reason": "Each code cell carries its own red-then-green unit test."
+    },
+    {
+      "stage": "documentation-and-capture",
+      "classification": "not-applicable",
+      "role": "docs",
+      "reason": "Capture runs at close by the leader."
+    },
+    {
+      "stage": "read-only-gather",
+      "classification": "not-applicable",
+      "role": "read",
+      "reason": "The leader traced each issue already."
+    },
+    {
+      "stage": "fact-extraction",
+      "classification": "not-applicable",
+      "role": "extraction",
+      "reason": "No narrow lookup is needed."
+    },
+    {
+      "stage": "generation-fallback",
+      "classification": "not-applicable",
+      "role": "generation",
+      "reason": "Every job has a specific role."
+    },
+    {
+      "stage": "independent-review",
+      "classification": "not-applicable",
+      "role": "review",
+      "reason": "Independent review stays user-invoked."
+    },
+    {
+      "stage": "generic-advisor",
+      "classification": "not-applicable",
+      "role": "advisor",
+      "reason": "Not high-risk."
+    },
+    {
+      "stage": "supervision",
+      "classification": "not-applicable",
+      "role": "supervisor",
+      "reason": "No unattended loop."
+    },
+    {
+      "stage": "blind-lane-1",
+      "classification": "not-applicable",
+      "role": "lane-1",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-2",
+      "classification": "not-applicable",
+      "role": "lane-2",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "blind-lane-3",
+      "classification": "not-applicable",
+      "role": "lane-3",
+      "reason": "No competing designs."
+    },
+    {
+      "stage": "design-ui",
+      "classification": "not-applicable",
+      "role": "design",
+      "reason": "No rendered UI."
+    },
+    {
+      "stage": "hat-facts-gaps",
+      "classification": "not-applicable",
+      "role": "hat-facts-gaps",
+      "reason": "Hat wave skipped: each cell fixes a reported, traced bug with the fix shape in the report."
+    },
+    {
+      "stage": "hat-risks",
+      "classification": "not-applicable",
+      "role": "hat-risks",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-value",
+      "classification": "not-applicable",
+      "role": "hat-value",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-alternatives",
+      "classification": "not-applicable",
+      "role": "hat-alternatives",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    },
+    {
+      "stage": "hat-user-impact",
+      "classification": "not-applicable",
+      "role": "hat-user-impact",
+      "reason": "Hat wave skipped: see hat-facts-gaps."
+    }
+  ]
+}
+```
+
+## Proof
+
+- Each cell: its verify command green after a recorded red.
+- The leader re-runs every verify serially and the full declared suite before merge.
