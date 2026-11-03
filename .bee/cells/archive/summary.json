@@ -1803,5 +1803,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-11-03T03:14:47.838Z"
+  },
+  "paseo-wait-deadline": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-11-03T04:12:41.159Z"
   }
 }
