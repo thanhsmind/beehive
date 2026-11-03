@@ -496,6 +496,50 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     Ok(DebtSummary { count: ids.len(), ids })
 }
 
+fn close_lane_workflow_records(root: &Path, feature: &str, lines: &mut Vec<String>) {
+    let live: Vec<String> = match crate::verbs::workflow_store::list_workflows(root) {
+        Ok(records) => {
+            let want = Value::String(feature.to_string());
+            records
+                .iter()
+                .filter(|r| {
+                    r.get("feature").unwrap_or(&Value::Null) == &want
+                        && r.get("status").unwrap_or(&Value::Null) != &json!("closed")
+                })
+                .map(crate::verbs::workflow_store::wf_id)
+                .collect()
+        }
+        Err(_) => {
+            lines.push(format!(
+                "Warning: could not read the workflow records for \"{feature}\" to close them."
+            ));
+            return;
+        }
+    };
+    if live.is_empty() {
+        return;
+    }
+    match crate::verbs::state_group::close_workflow_records(root, &live) {
+        Ok(closed) if !closed.is_empty() => {
+            let ids: Vec<String> = closed
+                .iter()
+                .map(|r| crate::verbs::reservations::js_disp_opt(r.get("id")))
+                .collect();
+            lines.push(format!(
+                "Workflow record closed for \"{feature}\": {}.",
+                ids.join(", ")
+            ));
+        }
+        Ok(_) => {}
+        Err(Err2::Msg(msg)) => lines.push(format!(
+            "Warning: could not close the workflow record for \"{feature}\": {msg}"
+        )),
+        Err(Err2::Ex) => lines.push(format!(
+            "Warning: could not close the workflow record for \"{feature}\": workflow store lock or read failed."
+        )),
+    }
+}
+
 /// wl-3 (docs/history/workflow-lessons/plan.md): the closing feature's
 /// route — read via `route.lane`, the SAME field the write-guard and
 /// orient doors already key off (hooks/write_guard/hook_local.rs:524-530,
@@ -3353,6 +3397,7 @@ pub(crate) fn close_handler(
                     }
                 }
             }
+            close_lane_workflow_records(root, feature, &mut lines);
         }
         Ok(None) => {}
         Err(_) => {
@@ -4820,6 +4865,52 @@ mod tests {
         assert!(text.starts_with("Tests GREEN for \"demo\""), "text: {text}");
         let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
         assert_eq!(after, r#"{"feature":"demo","phase":"frobnicating"}"#);
+    }
+
+    fn write_live_workflow(root: &Path, id: &str, feature: &str, status: &str) {
+        w(
+            root,
+            &format!(".bee/runtime/workflows/{id}/state.json"),
+            &format!(r#"{{"id":"{id}","feature":"{feature}","status":"{status}"}}"#),
+        );
+    }
+
+    fn workflow_status(root: &Path, id: &str) -> String {
+        let ReadJson::Parsed(v) =
+            read_json(&root.join(".bee/runtime/workflows").join(id).join("state.json"))
+        else {
+            panic!("workflow record {id} must still parse")
+        };
+        v["status"].as_str().unwrap_or_default().to_string()
+    }
+
+    #[test]
+    fn a_green_close_on_a_lane_marks_its_workflow_record_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop": "off"}"#);
+        w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"swarming"}"#);
+        write_live_workflow(root, "wf-demo", "demo", "active");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
+        assert_eq!(code, 0);
+        assert!(text.contains("Workflow record closed for \"demo\": wf-demo"), "text: {text}");
+        assert_eq!(workflow_status(root, "wf-demo"), "closed");
+    }
+
+    #[test]
+    fn a_green_close_with_no_lane_record_leaves_the_workflow_record_active() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop": "off"}"#);
+        write_live_workflow(root, "wf-demo", "demo", "active");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
+        assert_eq!(code, 0);
+        assert!(!text.contains("Workflow record closed"), "text: {text}");
+        assert_eq!(workflow_status(root, "wf-demo"), "active");
     }
 
     // ─── tests: uat-stop-placement D4.4/D2 close-time uat door ─────────────

@@ -3724,6 +3724,76 @@ use std::time::Instant;
         );
     }
 
+    fn main_repo_tracking_cells(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/state.json\n.bee/runtime/\n.bee/bin/\n",
+        )
+        .unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        main
+    }
+
+    #[test]
+    fn cell_snapshots_alone_never_refuse_a_merge_as_dirty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_cells(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let wt = created.worktree_root.clone();
+
+        let cells = wt.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        for id in ["x-1", "x-2"] {
+            std::fs::write(
+                cells.join(format!("{id}.json")),
+                format!("{{\"id\":\"{id}\",\"feature\":\"demo\",\"status\":\"open\"}}\n"),
+            )
+            .unwrap();
+        }
+        assert!(
+            git_status_porcelain_str(&wt).contains("?? .bee/cells"),
+            "the snapshots are genuine untracked dirt in this fixture: {}",
+            git_status_porcelain_str(&wt)
+        );
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!(
+                    "bee-written .bee/cells snapshots alone must never refuse the merge: {m}"
+                ),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    #[test]
+    fn an_untracked_product_file_still_refuses_the_merge_as_dirty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_cells(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let wt = created.worktree_root.clone();
+
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        std::fs::write(wt.join("src").join("new.rs"), "fn x() {}\n").unwrap();
+
+        let err = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .err()
+            .unwrap_or_else(|| panic!("an untracked product file must still refuse"));
+        let MErr::Thrown(message) = err else {
+            panic!("expected a typed refusal, got MErr::Ex")
+        };
+        assert!(message.contains("WORKTREE_MERGE_WORKTREE_DIRTY"), "{message}");
+    }
+
     /// With no `commands.worktree_companion_end` configured, teardown still
     /// removes the mount (so the merge is never blocked) but says so LOUDLY.
     #[test]
@@ -5406,6 +5476,31 @@ use std::time::Instant;
         assert!(!bool_flag_true(&explicit_false, "skip-uat"));
         let (bad, _) = parse_flags(&["--skip-uat=yes"]).unwrap();
         assert!(!bool_flag_ok(&bad, "skip-uat"), "a non-boolean --skip-uat must refuse outright");
+    }
+
+    #[test]
+    fn detached_flag_parses_as_a_bare_boolean_and_keeps_the_valued_shapes() {
+        let (bare, _) = parse_merge_flags(&["--id", "wt-demo", "--detached"])
+            .expect("a trailing bare --detached parses");
+        assert!(bool_flag_ok(&bare, "detached"), "a bare --detached must validate");
+        assert!(bool_flag_true(&bare, "detached"), "a bare --detached must read as true");
+
+        let (leading, use_json) = parse_merge_flags(&["--detached", "--id", "wt-demo", "--json"])
+            .expect("a leading bare --detached parses");
+        assert!(bool_flag_true(&leading, "detached"));
+        assert!(use_json, "--detached must not swallow the --json after it");
+        assert!(matches!(leading.get("id"), Some(FlagV::S(s)) if s == "wt-demo"));
+
+        let (valued, _) = parse_merge_flags(&["--id", "wt-demo", "--detached", "true"]).unwrap();
+        assert!(bool_flag_ok(&valued, "detached"));
+        assert!(bool_flag_true(&valued, "detached"));
+
+        let (explicit_false, _) = parse_merge_flags(&["--id", "wt-demo", "--detached=false"]).unwrap();
+        assert!(bool_flag_ok(&explicit_false, "detached"));
+        assert!(!bool_flag_true(&explicit_false, "detached"));
+
+        let (bad, _) = parse_merge_flags(&["--id", "wt-demo", "--detached=yes"]).unwrap();
+        assert!(!bool_flag_ok(&bad, "detached"), "a non-boolean --detached must refuse outright");
     }
 
     // ── uat-stop-placement D4: the merge side of D4.1-D4.3 ──────────────────

@@ -1471,6 +1471,45 @@ use std::process::ExitCode;
         assert_eq!(scoped.code, 0, "{}", scoped.stderr);
     }
 
+    #[test]
+    fn concurrent_tree_guard_allows_a_path_scoped_index_refresh_with_siblings_live() {
+        let fx = build_git_fixture("swarming");
+        add_live_session(&fx.root, "sib-a");
+        add_live_session(&fx.root, "sib-b");
+        for cmd in ["git reset -q -- src/mine.rs", "git reset -- src/mine.rs"] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "{cmd}: {}", e.stderr);
+        }
+        for cmd in [
+            "git reset --hard",
+            "git reset",
+            "git reset -q",
+            "git reset HEAD~1",
+            "git reset -- .",
+            "git reset -- 'src/*'",
+            "git reset --soft HEAD~1",
+            "git reset --keep HEAD",
+            "git reset --merge -- src/mine.rs",
+            "git reset --hard -- src/mine.rs",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "{cmd}: {}", e.stderr);
+            assert!(e.stderr.contains("bee concurrent-worker git guard"), "{cmd}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn concurrent_tree_guard_remedy_names_the_shared_index_refresh() {
+        let fx = build_git_fixture("swarming");
+        add_live_session(&fx.root, "sib-a");
+        add_live_session(&fx.root, "sib-b");
+        let e = expect_done(bash("git stash"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("git update-ref HEAD <commit>"), "{}", e.stderr);
+        assert!(e.stderr.contains("git reset -q -- <your paths>"), "{}", e.stderr);
+        assert!(e.stderr.contains("SHARED index"), "{}", e.stderr);
+    }
+
     /// Deny-more only. The very same ledger read from the MAIN checkout is
     /// worth nothing to it — those holds belong to the worktree's index, not
     /// main's — so main's verdict is unchanged.
@@ -5802,6 +5841,91 @@ use std::process::ExitCode;
         write_lane(&fx.root, "demo", false);
         let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn plan_md_staging_it_unchanged_is_not_a_write() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "git add docs/history/demo/plan.md",
+            "git add -- docs/history/demo/plan.md",
+            "git add -A docs/history/demo/plan.md",
+            "git add docs/history/demo/plan.md && git commit -m plan",
+            "git commit -m plan -- docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn plan_md_real_bash_writes_stay_refused() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "echo x > docs/history/demo/plan.md",
+            "echo x >> docs/history/demo/plan.md",
+            "sed -i s/a/b/ docs/history/demo/plan.md",
+            "cp other.md docs/history/demo/plan.md",
+            "mv other.md docs/history/demo/plan.md",
+            "tee docs/history/demo/plan.md < payload.md",
+            "git checkout -- docs/history/demo/plan.md",
+            "git restore docs/history/demo/plan.md",
+            "git rm docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+        }
+        for cmd in [
+            "git add docs/history/demo/plan.md; echo x > docs/history/demo/plan.md",
+            "echo x > docs/history/demo/plan.md && git add docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn plan_md_staging_it_unchanged_is_not_a_write_inside_a_worktree_session() {
+        let wtf = build_worktree_first("swarming", "standard", false);
+        std::fs::create_dir_all(wtf.wt_root.join("docs/history/demo")).unwrap();
+        std::fs::write(wtf.wt_root.join("docs/history/demo/plan.md"), "# plan\n").unwrap();
+        let e = expect_done(bash("git add docs/history/demo/plan.md"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("git add docs/history/demo/plan.md && git commit -m plan"), &wtf.wt_root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e = expect_done(bash("sed -i s/a/b/ docs/history/demo/plan.md"), &wtf.wt_root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee plan-freeze guard"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn stage_only_target_covers_a_frozen_plan_md_and_leaves_real_writes_alone() {
+        assert!(stage_only_target("docs/history/demo/plan.md"));
+        assert!(!stage_only_target("src/app.js"));
+        assert!(extract_bash_targets("git add docs/history/demo/plan.md").paths.is_empty());
+        assert_eq!(
+            extract_bash_targets("sed -i s/a/b/ docs/history/demo/plan.md").paths,
+            vec!["docs/history/demo/plan.md"]
+        );
+    }
+
+
+
+    #[test]
+    fn zz_probe4() {
+        let fx = plan_freeze_fixture("demo", true);
+        for cmd in [
+            "git checkout docs/history/demo/plan.md",
+            "git checkout HEAD docs/history/demo/plan.md",
+            "git restore docs/history/demo/plan.md",
+            "git checkout -- docs/history/demo/plan.md",
+            "git add docs/history/demo/plan.md",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            println!("PROBE {cmd:?} => code {} targets {:?}", e.code, extract_bash_targets(cmd).paths);
+        }
     }
 
     // ── write-guard-hardening D4: brace expansion and cd opacity are

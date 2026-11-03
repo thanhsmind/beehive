@@ -35,6 +35,21 @@ pub(crate) fn bool_flag_true(flags: &Flags, name: &str) -> bool {
     }
 }
 
+pub(crate) fn parse_merge_flags(tokens: &[&str]) -> Option<(Flags, bool)> {
+    let entry = crate::catalog::resolve(&["worktree", "merge"])?.0;
+    let mut filled: Vec<&str> = Vec::with_capacity(tokens.len() + 1);
+    for (i, token) in tokens.iter().enumerate() {
+        filled.push(token);
+        let Some(name) = token.strip_prefix("--") else { continue };
+        let alone = crate::verbs::reservations::FLAG_ALONE_BOOLEANS.contains(&name);
+        let has_value = tokens.get(i + 1).is_some_and(|next| !next.starts_with("--"));
+        if !alone && !has_value && entry.is_boolean(name) {
+            filled.push("true");
+        }
+    }
+    parse_flags(&filled)
+}
+
 pub(crate) fn canonical_path_str(path: &Path) -> Result<String, String> {
     dunce::canonicalize(path)
         .map(|c| c.to_string_lossy().into_owned())
@@ -1598,7 +1613,11 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if toks.iter().any(|t| *t == "--help") {
         return None; // Node renders command-scoped help
     }
-    let (flags, use_json) = parse_flags(&toks)?;
+    let (flags, use_json) = if verb == "merge" {
+        parse_merge_flags(&toks)?
+    } else {
+        parse_flags(&toks)?
+    };
     match verb {
         "list" => run_list(flags, use_json, t0),
         "register" => run_register(flags, use_json, t0),

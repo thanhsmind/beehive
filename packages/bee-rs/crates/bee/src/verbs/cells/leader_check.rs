@@ -265,12 +265,14 @@ pub(crate) fn record_leader_check(
         // (b) and at least one answer per cell MUST name a path present in that cell's trace.files_changed.
         // Refuse, naming the offending artifact, otherwise.
         if !files_changed.is_empty() {
-            let has_overlap = answers
-                .iter()
-                .any(|a| {
-                    let artifact = relative_artifact(&a.artifact);
-                    files_changed.iter().any(|fc| normalize_cell_path(fc) == artifact)
-                });
+            let names_changed_path = |candidate: &str| {
+                let artifact = relative_artifact(candidate);
+                files_changed.iter().any(|fc| normalize_cell_path(fc) == artifact)
+            };
+            let has_overlap = answers.iter().any(|a| {
+                let leading = a.artifact.split_whitespace().next().unwrap_or(&a.artifact);
+                names_changed_path(leading) || names_changed_path(&a.artifact)
+            });
             if !has_overlap {
                 let offending = answers
                     .iter()
@@ -646,6 +648,65 @@ mod tests {
         let msg = thrown(err);
         assert!(msg.contains("answers name no path present in trace.files_changed"));
         assert!(msg.contains("other/file.rs"));
+    }
+
+    #[test]
+    fn artifact_starting_with_a_changed_path_plus_evidence_is_accepted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        write_cell_fixture(
+            root,
+            "c-emdash",
+            &make_capped_cell("c-emdash", &["Truth A"], &["assets/js/content-tasks.js"], None),
+        );
+        let emdash = json!({
+            "schema": "leader-check/1",
+            "answers": [{
+                "requirement": "Truth A",
+                "artifact": "assets/js/content-tasks.js — tfCalendarGridHtml opts.quickAdd was wired"
+            }]
+        });
+        record_leader_check(root, "c-emdash", "ok", &emdash, None, false).unwrap();
+
+        write_cell_fixture(
+            root,
+            "c-paren",
+            &make_capped_cell(
+                "c-paren",
+                &["Truth A"],
+                &["code/html/sites/all/themes/custom_customer/css/imexpharm-survey-custom.css"],
+                None,
+            ),
+        );
+        let paren = json!({
+            "schema": "leader-check/1",
+            "answers": [{
+                "requirement": "Truth A",
+                "artifact": "code/html/sites/all/themes/custom_customer/css/imexpharm-survey-custom.css (commit 58a153d): style.js after run: hiddenHigh true"
+            }]
+        });
+        record_leader_check(root, "c-paren", "ok", &paren, None, false).unwrap();
+    }
+
+    #[test]
+    fn artifact_with_evidence_naming_no_changed_path_is_still_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(
+            root,
+            "c-1",
+            &make_capped_cell("c-1", &["Truth A"], &["assets/js/content-tasks.js"], None),
+        );
+        let payload = json!({
+            "schema": "leader-check/1",
+            "answers": [{
+                "requirement": "Truth A",
+                "artifact": "assets/js/content-tasks.js.bak — the old copy, not the changed file"
+            }]
+        });
+        let msg = thrown(record_leader_check(root, "c-1", "ok", &payload, None, false));
+        assert!(msg.contains("answers name no path present in trace.files_changed"), "{msg}");
     }
 
     #[test]

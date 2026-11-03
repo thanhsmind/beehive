@@ -89,7 +89,9 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
 
 pub(crate) fn stage_only_target(rel: &str) -> bool {
     let normalized = normalize_rel(rel);
-    direct_edit_verb(&normalized).is_some() || normalized == ".bee/config.json"
+    direct_edit_verb(&normalized).is_some()
+        || normalized == ".bee/config.json"
+        || plan_freeze_feature(&normalized).is_some()
 }
 
 pub(crate) fn git_content_pathspecs(verb: &str, rest: &[String]) -> Vec<String> {
