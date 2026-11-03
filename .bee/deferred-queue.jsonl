@@ -1111,3 +1111,4 @@
 {"ts":"2026-11-03T07:35:54.330Z","event":"add","id":"0eef8ab1-afbb-4041-b8e4-960beb83ce25","kind":"promote","feature":"csc-landing","cells":[],"areas":[],"files":["docs/history/csc-landing/promote-proposals.md"],"reason":"Promote proposal for \"csc-landing\" awaiting apply — docs/history/csc-landing/promote-proposals.md."}
 {"ts":"2026-11-03T07:36:04.576Z","event":"complete","id":"a9c9f918-3e52-4964-b055-b9eb89231a07"}
 {"ts":"2026-11-03T07:36:12.167Z","event":"complete","id":"42580757-d494-46df-afe8-9a231e72f6f1"}
+{"ts":"2026-11-03T09:20:13.271Z","event":"add","id":"ffd505b2-a7e3-432b-a85f-dac28470d08b","kind":"worktree-cleanup","feature":"issue-sweep-2","cells":[],"areas":[],"files":["/mnt/data/Projects/goglbe/beehive--wt--issue-sweep-2"],"reason":"Worktree beehive--wt--issue-sweep-2 (branch wt/issue-sweep-2) merged into main at 8e6151d848bf149dea04d9ebc5de22b0697d935a and kept per default (D1) — remove it with `bee worktree prune`."}

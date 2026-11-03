@@ -287,9 +287,11 @@ canonical `## Locked Decisions` pipe table only; a legacy-form CONTEXT
 (bullet list, split sub-tables) degrades to a loud report-only notice
 naming the historical campaign row — the door's teeth apply to every
 post-door shaping, never retroactively. Routed means the bundle carries
-`<slug> D<n>` (plain, range `D1-D3`, or slash `D1/D3` form) or the
-decision's logged short8; a D-ID cited in more than one area is a
-report-only duplication warning. Escape: `routing-deferral`.
+`<slug> D<n>` (plain, range `D1-D3`, slash `D1/D3`, or comma `D1, D3`
+form) or the decision's logged short8; a D-ID cited in more than one area
+is a report-only duplication warning. A feature-local decision is read with
+the same forms, so one decision naming `<slug> D2/D3/D4` routes all three
+(issue-sweep-2 D1, issue #150). Escape: `routing-deferral`.
 
 **A doc-deferral door blocks close when deferral-shaped prose in the
 feature's touched docs names no registered trigger (doc-impact-synthesis

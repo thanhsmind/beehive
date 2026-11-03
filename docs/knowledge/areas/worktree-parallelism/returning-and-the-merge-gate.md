@@ -50,7 +50,10 @@ worktree to emit exit-before-merge transition intent (c47fa930, 85d85ede, 0b4ff5
 - Typed zero-mutation refusals first: unknown/ungranted id, dirty MAIN tree, dirty WORKTREE
   tree, detached HEAD or branch mismatch in the worktree. **Dirty** (D8a) =
   `git status --porcelain` without `--ignored`: the worktree's gitignored `.bee` store never
-  counts as dirt.
+  counts as dirt. Two more bee-written paths are excluded: `.bee/cells` (issue #141), and
+  any untracked `bee-*` skill directory that also exists under the same skill root in the
+  main checkout, which is the copy `worktree new` synced (issue-sweep-2 D1, issues #151 and
+  #152). An untracked skill directory that only the worktree holds still counts as dirt.
 - **The last zero-mutation refusal is the user's acceptance stop (uat-gate-before-merge D1,
   cells ug-1..3, 2026-08-17).** A standard or high-risk feature whose `uat` gate is
   unapproved refuses `WORKTREE_MERGE_UAT_PENDING` before any mutation, the message naming
