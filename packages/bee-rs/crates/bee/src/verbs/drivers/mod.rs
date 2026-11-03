@@ -209,6 +209,7 @@ mod prompt;
 mod models;
 mod guard;
 mod prepare;
+mod wave_run;
 mod brief_lint;
 mod context_table;
 mod close;
