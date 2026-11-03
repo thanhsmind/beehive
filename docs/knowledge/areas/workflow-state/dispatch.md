@@ -64,6 +64,27 @@ worker row `dp-r1` registered for it — before its cell lands in `skipped`; an
 unwind that itself fails earns its own `unwind_failed` reason rather than
 folding into `reservation_conflict`.
 
+**`--run` executes the herding half of the wave (wave-run D1, D2,
+2026-11-03).** Without `--run` the output is unchanged. With it, bee runs
+every wave item whose tool is `Bash` and whose command is a `bee herding run`
+invocation, all at the same time — one thread each, through the `shell.rs`
+resolver, from the main root, with the item's `stdin` piped in — and waits
+for all of them. It prints one value `{ran, native, skipped}`. Each `ran` row
+holds `id`, `exit`, `outcome`, `job_id`, `report_path`, `head_sha`,
+`changed_paths` (a count), `retryable` and `envelope_path`; a field the
+envelope lacks is `null`. The full stdout of each run goes to
+`.bee/workers/<cell id>-wave-run.json` and is never printed. Items with tool
+`Agent` are not run: they come back unchanged under `native` for the leader
+to launch, because bee cannot start a host subagent. The verb exits 0 only
+when every `ran` row's outcome is `done`. bee never retries and never caps a
+cell here; the leader still caps each one. A new boolean flag also needs its
+`FLAG_ALONE_BOOLEANS` entry in `verbs/reservations/flags.rs` and a
+`PINNED_FLAG_COUNT` bump in `catalog.rs`, or a bare `--run` swallows the next
+token and the catalog ratchet goes red. Pointers:
+`packages/bee-rs/crates/bee/src/verbs/drivers/wave_run.rs`,
+`packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`
+(`run_dispatch_wave`).
+
 **A cell dispatch names its cell on the herding command (dispatch-cell-id-flag,
 `3aa96ff2`).** When the door prepares a cell for a herding worker, the command
 it returns carries `--cell-id "<id>"`. Gather, reviewer and advisor commands
