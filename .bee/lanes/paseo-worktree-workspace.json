@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "question",
-    "subject": "Merge issue-sweep và cli-shape-continuation vào main?",
-    "asked_at": "2026-11-03T06:56:12.689Z",
+    "subject": "cli-shape-continuation: sửa comment rồi merge, hay xóa nhánh",
+    "asked_at": "2026-11-03T07:12:55.285Z",
     "session": "1b77b574-ae50-4682-98ca-66bf154a613e"
   }
 }
