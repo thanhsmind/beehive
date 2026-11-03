@@ -1269,7 +1269,10 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
         let feature_local_hit = local_decisions.iter().any(|d| {
             d.get("decision")
                 .and_then(Value::as_str)
-                .map(|t| crate::verbs::decisions::matches_whole_token(&[t.to_string()], &plain_token))
+                .map(|t| {
+                    crate::verbs::decisions::matches_whole_token(&[t.to_string()], &plain_token)
+                        || context_table_covers_d_id(t, feature, d_num)
+                })
                 .unwrap_or(false)
         });
         if !feature_local_hit {
@@ -1307,7 +1310,7 @@ pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
         door: "routing",
         blocking: true,
         detail: format!(
-            "{} unrouted locked D-ID(s) in docs/history/{feature}/CONTEXT.md ({}) — remedy: cite \"{feature} <D-id>\" (plain, a range, a slash-list, or the decision's own short8) in a docs/knowledge/ bundle file, or log a decision tagged feature-local naming \"{feature} <D-id>\" to record it as feature-local",
+            "{} unrouted locked D-ID(s) in docs/history/{feature}/CONTEXT.md ({}) — remedy: cite \"{feature} <D-id>\" (plain, a range, a slash-list, a comma-list, or the decision's own short8) in a docs/knowledge/ bundle file, or log a decision tagged feature-local naming \"{feature} <D-id>\" to record it as feature-local",
             unrouted.len(),
             unrouted.join(", ")
         ),

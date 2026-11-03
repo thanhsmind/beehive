@@ -548,6 +548,7 @@ pub(crate) fn merge_stage(
     // tracks `.bee/cells` leaves them untracked there with no CLI verb able to
     // remove them (issue #141). They are bee's own store, not the user's dirt.
     let mut dirty_exclusions = vec![".bee/cells".to_string()];
+    dirty_exclusions.extend(synced_skill_tree_exclusions(main_root, &worktree_root));
     if let Some(marker) = &companion_marker {
         dirty_exclusions.push(companion_mount_path(marker)?);
         dirty_exclusions.push(companion_marker_rel());

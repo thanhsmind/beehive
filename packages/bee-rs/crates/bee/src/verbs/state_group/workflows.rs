@@ -828,7 +828,7 @@ pub(crate) fn unbound_default_route_refusal(
         None => "the default record (.bee/state.json) holds no active feature at all, so this route would have no feature to belong to.".to_string(),
     };
     Some(format!(
-        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), pass --lane-record <feature> to name the lane record to write, or pass --no-lane to write the default record on purpose.",
+        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: attach this session to its lane (bee state session attach --lane <feature>), pass --lane-record <feature> to name the lane record to write, or pass --no-lane to write the default record on purpose.",
         live_lanes.len()
     ))
 }

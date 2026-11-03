@@ -230,7 +230,7 @@ use std::time::Instant;
         assert_eq!(check_no_live_workflow_for_feature(&workflows, "done"), None);
         assert_eq!(
             check_no_live_workflow_for_feature(&workflows, "taken").unwrap(),
-            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: bee state session bind --lane taken --session-id <session id>."
+            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: bee state session attach --lane taken --session-id <session id>."
         );
 
         let cells = vec![
@@ -3452,5 +3452,95 @@ use std::time::Instant;
             other => panic!("a mid-flight lane must refuse, got {:?}", other.map(|r| r.is_ok())),
         };
         assert!(refusal.contains("is mid-flight at phase \"swarming\""), "{refusal}");
-        assert!(refusal.contains("FIX: bee state session bind --lane busy --session-id <session id>."), "{refusal}");
+        assert!(refusal.contains("FIX: bee state session attach --lane busy --session-id <session id>."), "{refusal}");
+    }
+
+    struct AttachCwdGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        orig: PathBuf,
+    }
+
+    impl AttachCwdGuard {
+        fn enter(target: &Path) -> Self {
+            let lock =
+                crate::verbs::drivers::TEST_CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let orig = std::env::current_dir().unwrap();
+            std::env::set_current_dir(target).unwrap();
+            Self { _lock: lock, orig }
+        }
+    }
+
+    impl Drop for AttachCwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.orig);
+        }
+    }
+
+    fn run_session_verb_on(root: &Path, verb: &str, lane: &str, session: &str) -> Option<ExitCode> {
+        let _cwd = AttachCwdGuard::enter(root);
+        try_native(
+            &[
+                OsString::from("state"),
+                OsString::from("session"),
+                OsString::from(verb),
+                OsString::from("--lane"),
+                OsString::from(lane),
+                OsString::from("--session-id"),
+                OsString::from(session),
+                OsString::from("--json"),
+            ],
+            Instant::now(),
+        )
+    }
+
+    fn session_record(root: &Path, id: &str) -> Value {
+        std::fs::read_to_string(sessions_dir(root).join(format!("{id}.json")))
+            .map(|raw| serde_json::from_str(&raw).unwrap())
+            .unwrap()
+    }
+
+    fn seeded_session(root: &Path, id: &str) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            r#"{"id":"sess-attach","last_heartbeat":"2026-01-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn session_attach_writes_the_same_record_as_session_bind() {
+        let tmp = tmp_root();
+        let bound_root = tmp.path().join("bound");
+        let attached_root = tmp.path().join("attached");
+        for root in [&bound_root, &attached_root] {
+            std::fs::create_dir_all(root.join(".bee")).unwrap();
+            std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+            write_lane_file(
+                root,
+                "attach-lane",
+                r#"{"feature":"attach-lane","phase":"idle"}"#,
+            );
+            seeded_session(root, "sess-attach");
+        }
+
+        assert_eq!(
+            run_session_verb_on(&bound_root, "bind", "attach-lane", "sess-attach"),
+            Some(ExitCode::SUCCESS),
+            "the proven verb must keep working"
+        );
+        assert_eq!(
+            run_session_verb_on(&attached_root, "attach", "attach-lane", "sess-attach"),
+            Some(ExitCode::SUCCESS),
+            "state session attach must reach the session bind handler"
+        );
+
+        let bound = session_record(&bound_root, "sess-attach");
+        assert_eq!(bound["lane"], json!("attach-lane"), "{bound}");
+        assert_eq!(
+            session_record(&attached_root, "sess-attach"),
+            bound,
+            "attach must leave exactly the record bind leaves"
+        );
     }

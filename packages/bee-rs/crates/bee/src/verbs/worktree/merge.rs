@@ -115,6 +115,36 @@ pub(crate) fn is_tree_dirty_excluding(cwd: &Path, exclude_paths: &[String]) -> R
     Ok(!js_trim(&git_status_porcelain_excluding(cwd, exclude_paths)?).is_empty())
 }
 
+pub(crate) fn synced_skill_tree_exclusions(
+    main_root: &Path,
+    worktree_root: &Path,
+) -> Vec<String> {
+    let mut excluded: Vec<String> = Vec::new();
+    for rel in skill_sync_roots().iter().map(String::as_str) {
+        let Ok(entries) = std::fs::read_dir(worktree_root.join(rel)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                || !name.starts_with("bee-")
+            {
+                continue;
+            }
+            if !main_root.join(rel).join(&name).is_dir() {
+                continue;
+            }
+            let rel_path = format!("{rel}/{name}").replace('\\', "/");
+            let tracked = run_git(worktree_root, &["ls-files", "--", &rel_path]);
+            if !js_trim(&tracked.stdout.unwrap_or_default()).is_empty() {
+                continue;
+            }
+            excluded.push(rel_path);
+        }
+    }
+    excluded
+}
+
 /// The MAIN checkout's leftover dirt, split by the ONE thing that decides
 /// whether the merge can harm it: is the path TRACKED, or UNTRACKED?
 ///

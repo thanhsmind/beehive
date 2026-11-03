@@ -3794,6 +3794,75 @@ use std::time::Instant;
         assert!(message.contains("WORKTREE_MERGE_WORKTREE_DIRTY"), "{message}");
     }
 
+    fn main_repo_with_untracked_skill_trees(tmp: &Path, dirs: &[&str]) -> PathBuf {
+        let main = main_repo_tracking_cells(tmp);
+        for rel in dirs {
+            let dir = main.join(rel);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("SKILL.md"), "# seeded\n").unwrap();
+        }
+        main
+    }
+
+    #[test]
+    fn a_synced_bee_skill_tree_alone_never_refuses_a_merge_as_dirty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_with_untracked_skill_trees(
+            tmp.path(),
+            &[".claude/skills/bee-x", ".agents/skills/bee-y"],
+        );
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let wt = created.worktree_root.clone();
+
+        for rel in [".claude/skills/bee-x", ".agents/skills/bee-y"] {
+            assert!(
+                wt.join(rel).join("SKILL.md").exists(),
+                "worktree new syncs the untracked bee-* skill tree {rel} into the worktree"
+            );
+        }
+        assert!(
+            is_tree_dirty(&wt).unwrap(),
+            "the synced trees are genuine untracked dirt in this fixture: {}",
+            git_status_porcelain_str(&wt)
+        );
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!(
+                    "a bee-* skill tree worktree new itself synced must never refuse the merge: {m}"
+                ),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    #[test]
+    fn an_untracked_skill_tree_main_never_had_still_refuses_the_merge_as_dirty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_cells(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let wt = created.worktree_root.clone();
+
+        let orphan = wt.join(".claude").join("skills").join("bee-new");
+        std::fs::create_dir_all(&orphan).unwrap();
+        std::fs::write(orphan.join("SKILL.md"), "# only here\n").unwrap();
+        assert!(
+            !main.join(".claude").exists(),
+            "the tree exists in the worktree ALONE — main never had it to sync"
+        );
+
+        let err = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .err()
+            .unwrap_or_else(|| {
+                panic!("an untracked skill tree main never had must still refuse")
+            });
+        let MErr::Thrown(message) = err else {
+            panic!("expected a typed refusal, got MErr::Ex")
+        };
+        assert!(message.contains("WORKTREE_MERGE_WORKTREE_DIRTY"), "{message}");
+    }
+
     /// With no `commands.worktree_companion_end` configured, teardown still
     /// removes the mount (so the merge is never blocked) but says so LOUDLY.
     #[test]
